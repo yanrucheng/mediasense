@@ -1,0 +1,62 @@
+schema_version: 1
+fixture_id: ai-album-hk-representative-v1
+status: active
+classification: internal
+purpose:
+  - legacy-replay
+  - migration-comparison
+  - stage-contract-design
+source:
+  system: ai_album
+  repository: /Users/chengyanru/repos/personal/photo/ai_album
+  repository_commit: c90aa8f04fd0d3348284e0ad19e18462987b1af2
+  docker_image: chengyanru/ai-album:3.0.0
+  dataset_name: 260501-HK美食之旅
+  production_run_date: "2026-05-09"
+local_package:
+  preferred_path: /Users/chengyanru/Datasets/mediasense/fixtures/ai-album-hk-representative-v1
+  logical_bytes: 1759421497
+  file_count: 10608
+  integrity_manifest: manifests/SHA256SUMS
+  integrity_manifest_sha256: f56caa6b1f1dd56e1b02850a5bfc17567d11f5617899db166eb8d670889d67fe
+transport_archive:
+  preferred_path: /Users/chengyanru/Datasets/mediasense/archives/ai-album-hk-representative-v1.tar.gz
+  bytes: 1676248534
+  sha256: 89a66c4693125f342ec68a03aad03f16090b7fb289df1ced053fbb25af40d14c
+inventory:
+  media_count: 2134
+  valid_media_count: 2133
+  invalid_media_fixture_count: 1
+  image_count: 1851
+  video_count: 283
+  legacy_bundle_count: 168
+  legacy_representative_count: 168
+  legacy_representative_image_count: 71
+  legacy_representative_video_count: 97
+  legacy_representative_gps_count: 148
+legacy_cached_replay:
+  status: passed
+  validated_at: "2026-08-23"
+  output_file_count: 168
+  terminal_group_count: 73
+  normalized_output_matches_production: true
+  llm_request_count: 0
+privacy:
+  policy: internal-use-no-redaction-authorized
+  contains_private_media: true
+  contains_location_metadata: true
+  redistribution_requires_review: true
+integrity:
+  verify_command: ./scripts/verify.zsh
+  deep_verify_command: ./scripts/verify.zsh --deep
+immutability: modifications-require-new-fixture-version
+limitations:
+  - not-a-multitib-throughput-test
+  - proxy-videos-do-not-preserve-full-stream-audio-hdr-bitrate-or-dji-telemetry
+  - does-not-test-physical-device-disconnect-or-cross-filesystem-apply
+  - legacy-groups-and-names-are-historical-observations-not-ground-truth
+  - does-not-reconstruct-exact-historical-token-cost-or-retries
+documentation:
+  mediasense_usage: docs/eval/eval-260823-1918-ai-album-migration-baseline/eval-260823-1918C-fixture-coverage.md
+  package_readme: README.md
+  package_handoff: docs/RESEARCH-AND-HANDOFF.zh-CN.md
