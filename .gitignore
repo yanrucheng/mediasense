@@ -1,0 +1,50 @@
+# Operating-system metadata
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+.fseventsd
+Thumbs.db
+Desktop.ini
+
+# Editor backup and swap files
+.idea/
+*.swp
+*.swo
+*~
+
+# Secrets and machine-local configuration
+.env
+.env.*
+!.env.example
+!.env.*.example
+/.local/
+
+# Repository-local scratch and process state
+/.cache/
+/.tmp/
+/tmp/
+/logs/
+*.log
+*.log.*
+*.pid
+*.tmp
+
+# Bulk source media and externally managed datasets
+/data/
+/datasets/
+/media/
+/archives/
+
+# MediaSense runtime and evaluation artifacts
+/workspace/
+/workspaces/
+/runs/
+/checkpoints/
+/outputs/
+eval/**/.cache/
+eval/**/logs/
+eval/**/outputs/
+eval/**/runs/
