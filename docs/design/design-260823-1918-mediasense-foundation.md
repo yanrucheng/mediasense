@@ -4,7 +4,7 @@ title: "MediaSense Foundation"
 type: design
 status: active
 created: 2026-08-23
-updated: 2026-08-23
+updated: 2026-08-25
 timezone: "Asia/Shanghai"
 parent: "index-design"
 depends-on: []
@@ -75,6 +75,18 @@ It must keep these meanings separate:
 A map, tree, or mind-map UI is a view of the evolving organization plan, not a second source of truth. The Agent should ask about high-impact uncertainty rather than every uncertain item. A confirmation has an explicit scope; confirming one restaurant event must not silently label a day, neighborhood, or unrelated assets.
 
 The stage ends only when every in-scope asset has an explicit disposition, conflicts have been resolved, remaining uncertainty is accepted or deferred explicitly, and the exact plan version is frozen. Planning never reorganizes source media.
+
+## Evidence acquisition and downstream policy
+
+`precheck` owns evidence acquisition; `plan` owns the policy for interpreting and using that evidence. A downstream policy's current choice not to consume an observation is not, by itself, a reason to remove an independently useful upstream evidence capability.
+
+- `precheck` may produce local, source-derived candidate signals, including content-sensitivity observations. Such signals must retain their producer, effective profile, score or quality where available, completion or failure state, and other provenance needed to challenge or regenerate them. They are evidence, not semantic truth, user authorization, or a routing decision.
+- The exact detector, model, labels, thresholds, and implementation remain replaceable. The stage boundary preserves the evidence capability and its traceability, not one historical classifier or taxonomy.
+- `plan` may use or ignore sensitivity evidence according to an explicit policy. Valid policies may include all-local processing, all-remote processing, signal-informed routing, warnings before remote use, user confirmation, or future mechanisms. No one mechanism is part of the stage contract.
+- VLM providers expose their locality and data-egress effects; `plan` selects and invokes them under the applicable user policy and authorization. A provider must not silently change locality or fall back from local to remote execution.
+- `precheck` does not choose a local or remote VLM path from sensitivity signals. Local evidence acquisition does not relax its source-read-only, offline-by-default, or explicit remote-call and cost-reporting guarantees.
+
+This separation lets evidence collection improve independently from planning policy, while allowing stronger future Agents and providers to replace today's interpretation and routing methods without changing the precheck handoff boundary.
 
 ### `mediasense.apply`: safe and faithful
 
