@@ -4,7 +4,7 @@ title: "AI Album Migration Baseline"
 type: eval
 status: active
 created: 2026-08-23
-updated: 2026-08-23
+updated: 2026-08-25
 timezone: "Asia/Shanghai"
 parent: "index-eval"
 depends-on:
@@ -50,6 +50,11 @@ This distinction explains both what should be migrated and why simply wrapping t
 - [Legacy system and HK run](eval-260823-1918A-legacy-system.md) records the observed pipeline, quantitative funnel, inferred model use, and failure modes.
 - [Migration capability ledger](eval-260823-1918B-capability-ledger.md) assigns legacy capabilities to MediaSense stages and records intended parity or change.
 - [Representative fixture coverage](eval-260823-1918C-fixture-coverage.md) explains what the 1.7 GB package can and cannot establish.
+- [AI Album stored information inventory](eval-260823-1918D-ai-album-stored-information.md) inventories native persisted artifacts, package-added evidence, in-memory gaps, dependencies, consumers, invalidation, and uncertainty without assigning MediaSense stage ownership.
+
+Read the modules in order: A establishes the historical run, B records migration intent, C bounds the portable fixture, and D provides the stage-neutral information inventory required before any MediaSense information-domain mapping.
+
+The inventory boundary in module D was accepted by human review on 2026-08-25. Later design may map or reject its evidence, but should reopen the historical inventory only under module D's stated reopening conditions.
 
 ## Current confidence and remaining uncertainty
 
