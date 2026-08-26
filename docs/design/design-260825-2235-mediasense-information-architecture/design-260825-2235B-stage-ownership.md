@@ -2,9 +2,9 @@
 id: "design-260825-2235B-stage-ownership"
 title: "MediaSense Stage Ownership"
 type: design
-status: review
+status: active
 created: 2026-08-25
-updated: 2026-08-25
+updated: 2026-08-26
 timezone: "Asia/Shanghai"
 parent: "design-260825-2235-mediasense-information-architecture"
 depends-on:
@@ -38,7 +38,7 @@ This document does not define:
 - a Diagnostic Package contract;
 - physical storage, retention, garbage collection, or migration mechanisms.
 
-The three handoff boundaries below are candidate business-content boundaries. Their formal contracts still require human-reviewed reference examples and runtime/failure semantics.
+The three handoff boundaries below define business-content ownership. The PreCheck read boundary now has a formal [machine-facing contract](../../spec/spec-260826-1546-precheck-read/); Plan and Apply contracts still require their own reviewed examples and runtime/failure semantics.
 
 ## Backward Compatibility Policy
 
@@ -70,7 +70,7 @@ For cross-cutting semantics such as provenance or availability, the authoritativ
 mediasense.precheck
   mutable Working Run
     -> source accounting + local evidence + coverage
-    -> sealed, valid, plan-ready PreCheck Result
+    -> sealed, trustworthy PreCheck Result
           |
           | read, challenge, and locally expand existing evidence
           v
@@ -86,7 +86,7 @@ mediasense.apply
     -> sealed Apply Receipt
 ```
 
-The flow has three invariants:
+The flow has four invariants:
 
 1. PreCheck is entirely local and offline. A remote-model, online-map, billable, or data-egress operation belongs outside this stage and cannot be legitimized by marking a result partial or blocked.
 2. Plan does not replace PreCheck's source facts, candidate evidence, coverage, or declared omissions. It may interpret, ignore, challenge, or request replacement of them.
@@ -101,21 +101,20 @@ No stage may depend on another stage's hidden mutable working state.
 
 | Concept | Authoritative owner | Producer | Consumers | Challenger / validator | Seal and formal handoff | Mutation and failure route |
 | --- | --- | --- | --- | --- | --- | --- |
-| Collection | PreCheck owns the stable workflow reference; the user supplies its recognizable subject. | PreCheck at workflow initiation from user input. | Plan and Apply reference it. | Plan may challenge mistaken identity; Apply validates only the bound reference. | PreCheck seals the reference in the PreCheck Result; later handoffs cite it. | Never silently rebound. A wrong collection returns to PreCheck and requires new downstream handoffs. |
-| Source State | PreCheck. | PreCheck observes the bounded source. | Plan uses its identity and limits; Apply validates the plan's bound source facts. | Plan challenges incomplete or stale evidence; Apply checks current compatibility. | PreCheck Result. | Immutable after seal. Source change or inadequate identity returns to PreCheck for a new Source State. |
-| Source Item | PreCheck. | PreCheck discovery and validation. | Plan assigns organization intent; Apply resolves only the exact planned item reference. | Plan challenges missing or contradictory facts; Apply validates existence and compatibility. | PreCheck Result, then referenced by Frozen Plan and Apply Receipt. | Facts are not edited downstream. Missing or misidentified items return to PreCheck; changed plan disposition returns to Plan. |
+| Dataset | The user or owning product maintains its continuing identity; PreCheck owns its use within the stage. | Created from user or product intent and referenced by PreCheck. | Plan and Apply reference it. | Plan may challenge mistaken identity; Apply validates only the bound reference. | Each PreCheck Result carries the exact Dataset reference; later handoffs cite it. | Never silently rebound. Source changes do not create a new Dataset, but a wrong Dataset binding requires new downstream handoffs. |
+| Source Item | PreCheck within one Result. | PreCheck discovery and validation. | Plan assigns organization intent; Apply resolves only the exact planned item reference. | Plan challenges missing or contradictory facts; Apply validates existence and compatibility. | Directly accounted for by the PreCheck Result, then referenced by Frozen Plan and Apply Receipt. | Result-local facts are immutable. Source change or a missing or misidentified item requires a new Result, while unaffected internal work may be reused. |
 | Scope Discovery | PreCheck. | PreCheck traversal and discovery. | Plan reads the declared boundary and discovered population. | Plan may challenge unexplained omissions; PreCheck validates discovery accounting. | PreCheck Result. | Mutable only during the Working Run. Undiscovered or ambiguously skipped material returns to PreCheck. |
-| Scope Decision | PreCheck, including any Agent/user scope choice made within that stage. | PreCheck stage from rules, evidence, and necessary confirmation. | Plan accepts the declared planning scope; Apply acts only on items represented in the plan. | Plan may challenge a consequential exclusion; Apply validates that no out-of-scope effect is requested. | PreCheck Result. | Changed scope requires a new PreCheck Result; Plan cannot silently add source items. |
-| Accounting Closure | PreCheck. | PreCheck reconciles discovery and dispositions. | Plan uses it as the denominator for completeness; Apply relies on the plan's complete in-scope disposition. | Plan validates the declared closure and may expose contradictions. | PreCheck Result. | Unreconciled items block sealing as plan-ready or return to PreCheck. |
+| Scope Decision | PreCheck, including any Agent/user scope choice made within that stage. | PreCheck stage from rules, evidence, and necessary confirmation. | Plan accepts the declared planning scope; Apply acts only on items represented in the plan. | Plan may challenge a consequential exclusion; Apply validates that no out-of-scope effect is requested. | The Result's `accounts_for` member records `scope` independently from processing `condition`. | Changed scope requires a new PreCheck Result; Plan cannot silently add source items. |
+| Accounting Closure | PreCheck. | PreCheck reconciles discovery and dispositions. | Plan uses it to determine whether source material silently disappeared; Apply relies on the plan's complete in-scope disposition. | Plan validates the declared closure and may expose contradictions. | PreCheck Result. | Unreconciled items prevent a trustworthy cross-stage handoff or return to PreCheck. |
 
 ### Evidence and compression
 
 | Concept | Authoritative owner | Producer | Consumers | Challenger / validator | Seal and formal handoff | Mutation and failure route |
 | --- | --- | --- | --- | --- | --- | --- |
 | Observation | PreCheck for source-derived and local observations. | PreCheck local extraction or measurement. | Plan may use or ignore it. Apply does not reinterpret it. | Plan may challenge provenance, availability, or reliability. | PreCheck Result. | A corrected or newly acquired observation requires a new PreCheck Result. A semantic interpretation remains Plan-owned instead. |
-| Derived Evidence | PreCheck for reusable source-derived evidence. | PreCheck local computation. | Plan reads, expands, transforms into temporary review views, or ignores it. | Plan challenges validity or fitness; PreCheck validates dependencies before seal. | PreCheck Result. | Existing evidence is immutable after seal. New decoding, extraction, or reusable evidence generation returns to PreCheck. |
-| Candidate Relation | PreCheck. | PreCheck local comparison or grouping. | Plan uses or rejects the candidate while deciding final organization. | Plan may challenge membership, alternatives, or confidence. | PreCheck Result. | Plan never rewrites the candidate into a fact. Missing or materially misleading candidates return to PreCheck; final grouping remains Plan-owned. |
-| Coverage Relationship | PreCheck. | PreCheck evidence-compression work, including the default representative, boundary, outlier, and conflict evidence frontier prepared for planning. | Plan normally starts from this compressed evidence and may traverse it to reach existing detail, while retaining full control over what it actually reads. | Plan tests whether representatives hide material differences; PreCheck validates representativeness, traceability, covered sets, and planning sufficiency. | PreCheck Result. | A broken or materially inadequate relation requires a new PreCheck Result. Plan-specific reading choices do not mutate it. |
+| Evidence | PreCheck for source-derived material exposed through the compressed result. | PreCheck local computation or direct reuse of a Source Item. | Plan reads, expands, transforms into temporary review views, or ignores it. | Plan challenges validity or fitness; PreCheck validates dependencies before seal. | PreCheck Result. | Existing Evidence is immutable after seal. New decoding, extraction, or reusable evidence generation returns to PreCheck. |
+| Candidate Relation | PreCheck when retained as evidence content; it is not a sixth universal Tool relationship. | PreCheck local comparison or grouping. | Plan uses or rejects the candidate while deciding final organization. | Plan may challenge membership, alternatives, or confidence. | Exposed through Evidence, observations, basis, or qualifications in the PreCheck Result when material. | Plan never rewrites the candidate into a fact. Missing or materially misleading candidates return to PreCheck; final grouping remains Plan-owned. |
+| Coverage Relationship | PreCheck. | PreCheck compression work connects lower-cost Evidence to the Source Items it represents and keeps production lineage and expansion navigation distinct. | Plan can begin from entry Evidence and traverse existing detail while retaining full control over what it actually reads. | Plan may challenge hidden material differences; PreCheck validates declared coverage, traceability, expansion, and limits. | PreCheck Result. | A broken or materially inadequate relation requires a new PreCheck Result. Plan-specific reading choices do not mutate it. |
 | Evidence Sufficiency | PreCheck owns the claim that the result is sufficient for planning within its stated boundary. | PreCheck evaluates accounting, evidence, coverage, and residual uncertainty. | Plan uses it as an entry claim, not as a guarantee of correct semantic judgment. | Plan is the principal downstream challenger. | PreCheck Result. | If challenged successfully, Plan issues a Reopen Signal and PreCheck produces a new result. Complete accounting alone cannot silently restore sufficiency. |
 | Reopen Signal | The detecting stage owns each signal; PreCheck owns resolution of signals targeting evidence preparation. | PreCheck may record known triggers before seal; Plan may issue a new signal during planning. | PreCheck consumes Plan-issued signals; Plan consumes known triggers in the result. | The target stage validates whether the trigger is material and records its resolution. | Known triggers are in the PreCheck Result. A Plan-issued signal is a routing record, not a fourth formal handoff. | Immutable once issued. It is resolved by continuing PreCheck work and sealing a new result, never by editing the old result. |
 
@@ -142,7 +141,7 @@ No stage may depend on another stage's hidden mutable working state.
 | Concept | Authoritative owner | Producer | Consumers | Challenger / validator | Seal and formal handoff | Mutation and failure route |
 | --- | --- | --- | --- | --- | --- | --- |
 | Processing Profile | The stage owning the qualified result. | Each stage records effective choices that materially affect interpretation or validity. | Downstream consumers and validators of that result. | The consumer may reject an unknown, incomplete, or incompatible profile. | Included in the corresponding handoff when needed to interpret or validate it. | Immutable with the qualified record. Material profile change produces a new result, plan, or receipt as applicable. |
-| Derivation Provenance | The owner of the Observation, Derived Evidence, planning result, or execution evidence it qualifies. | The stage producing that information. | Downstream consumers, evaluators, and regeneration logic. | Consumers challenge missing inputs, producer identity, dependencies, or lineage. | Travels with the qualified information in its formal handoff when retained. | Never repaired out of band. Missing material provenance invalidates or blocks the qualified information at its owner. |
+| Derivation Provenance | The owner of the Observation, Evidence, planning result, or execution evidence it qualifies. | The stage producing that information. | Downstream consumers, evaluators, and regeneration logic. | Consumers challenge missing inputs, producer identity, dependencies, or lineage. | Travels with the qualified information in its formal handoff when retained. | Never repaired out of band. Missing material provenance invalidates or blocks the qualified information at its owner. |
 | Epistemic State | The owner of the qualified statement. | The stage producing or retaining the statement. | Every downstream reader. | Consumers validate that fact, candidate, judgment, confirmation, intent, and outcome remain distinguishable. | Travels with the qualified information. | Cannot be promoted silently. A changed epistemic status requires a new owned statement or handoff version. |
 | Availability State | The owner of the qualified information. | The stage attempting or deciding whether to produce it. | Every consumer of that information. | Consumers challenge ambiguous absence or empty values. | Travels with the qualified information. | `Not-requested`, unavailable, partial, and error remain distinct. Resolution occurs in the owning stage and yields a new sealed version when already handed off. |
 | Confidence and Quality | The owner of the qualified evidence or claim. | The relevant producer using a declared meaning or method. | Downstream reasoning and evaluation. | Consumers challenge calibration, provenance, or unsupported precision. | Travels with the qualified information when available and material. | No universal score is invented. Recalculation or changed meaning belongs to the owner and creates a new version. |
@@ -161,42 +160,44 @@ Diagnostic material:
 - may be incomplete without invalidating an already valid Frozen Plan;
 - remains without a formal package, capture, redaction, retention, or completeness contract in this stage.
 
-## Candidate formal handoff boundaries
+## Formal handoff boundaries
 
-These are business-content candidates, not schemas.
+These define business-content responsibility rather than physical storage. The active PreCheck read specification formalizes only the first boundary; Plan and Apply still require their own reviewed contracts.
 
 ### PreCheck Result
 
-PreCheck seals one immutable result containing the following responsibility groups:
+PreCheck seals one immutable compression result. Its accepted conceptual model is defined by [PreCheck Compression Boundary](design-260825-2235D-precheck-compression-boundary.md):
 
 ```text
-PreCheck Result
-├── Result Manifest
-├── Source Account
-├── Evidence Base
-└── Coverage Map
+Dataset
+└── referenced by an immutable PreCheck Result
+      ├── accounts for Source Items
+      ├── exposes lower-cost entry Evidence
+      └── lets Evidence represent, derive from, and expand toward
+          Source Items or other Evidence
 ```
 
-The handoff candidate must carry or bind:
+These are logical concepts, not required files, tables, or serialized components. The handoff must carry or make available enough stable semantics to establish:
 
-- Collection, Source State, Source Items, discovery boundary, Scope Decisions, and Accounting Closure;
-- Observations, Derived Evidence, Candidate Relations, and their profiles, provenance, epistemic and availability states, quality, validity, and reusable-artifact lifecycle;
-- Coverage Relationships, the default representative/boundary/outlier/conflict evidence frontier prepared for planning, expansion links, Evidence Sufficiency, residual uncertainty, and known Reopen Signals;
-- immutable result identity and integrity;
-- complete or explicitly partial coverage, `plan-ready` or blocked readiness, and valid or invalid integrity as separate axes;
-- local resource facts and the PreCheck offline proof boundary.
+- immutable result identity, its Dataset reference, and the Source Items directly accounted for within its declared boundary;
+- lower-cost entry Evidence that materially reduces default inspection cost for that purpose;
+- what each relevant Evidence item represents, what it derives from, and where existing detail expands next;
+- bidirectional traceability between in-boundary Source Items and the compressed result;
+- an explicit path for every in-boundary Source Item, including exceptions, exclusions, failures, and unknowns rather than silent disappearance;
+- material compression loss, hidden variation, uncertainty, basis, and other limits at the Result, Source Item, Evidence, or relationship where each consequence belongs;
+- enough integrity and trust-boundary evidence to rely on the sealed result without mutable Working Run state.
 
-A result is eligible for `plan-ready` only when it proves, within the declared MediaSense control boundary, zero media upload, zero metadata, coordinate, or feature-artifact egress, zero remote-model and online-map calls, and zero billable requests. Configuration intent, enforced network policy, observed zero-request audit evidence, and unobserved external processes remain distinguishable.
+Within the declared MediaSense control boundary, a trustworthy PreCheck handoff must establish zero media upload, zero metadata, coordinate, or feature-artifact egress, zero remote-model and online-map calls, and zero billable requests. Configuration intent, enforced network policy, observed zero-request audit evidence, and unobserved external processes remain distinguishable.
 
-Content-sensitivity probing may be explicitly `not-requested`; capability does not imply mandatory invocation. The state must remain honest and must not be interpreted as a negative signal.
+Content-sensitivity probing may be explicitly `not_checked`; capability does not imply mandatory invocation. The state must remain honest and must not be interpreted as a negative signal.
 
-The default evidence frontier is a PreCheck coverage responsibility, not a command about Plan attention. Plan decides what it actually reads, but should normally be able to reach an effective decision from the compressed evidence without taking over full preprocessing.
+Providing a low-cost, traceable compression entry is a PreCheck responsibility, not a command about Plan attention. Plan owns its reading and reasoning methods. The PreCheck Result describes its own Evidence, relationships, limits, and trust boundary; it does not prescribe Plan behavior.
 
 ### Frozen Organization Plan
 
 Plan seals the primary organization outcome. The handoff candidate must carry or bind:
 
-- exact compatible PreCheck Result, Collection, and Source State identities;
+- exact compatible PreCheck Result and Dataset identities, plus the Source Items from that Result used by the plan;
 - the complete disposition of every item in its planning scope;
 - final organization units, membership, naming, ordering, and intended operations;
 - target identities or deterministic target rules sufficient for Apply without semantic invention;
@@ -235,7 +236,7 @@ After sealing, the same activities do not mutate the result. They occur in a new
 Plan may, without reopening PreCheck:
 
 - follow existing coverage and expansion links;
-- inspect more Source Items, Observations, Derived Evidence, Candidate Relations, or known conflicts already contained in or bound by the sealed result;
+- inspect more Source Items, Observations, Evidence, candidate information, or known conflicts already contained in or bound by the sealed result;
 - derive temporary review views from existing evidence;
 - crop, scale, compose, or re-encode existing evidence for an actual VLM request;
 - choose to use or ignore any available evidence, including content-sensitivity candidates.
@@ -247,13 +248,13 @@ This is normal progressive use. Plan owns the reading strategy and does not writ
 Plan must issue a Reopen Signal when the needed corrective action would create or change upstream evidence authority, including:
 
 - a material source region is absent or unaccounted;
-- default representatives or coverage relationships hide a major difference;
+- compressed Evidence or its relationships hide a major difference;
 - an expansion path is missing or does not reach the claimed covered set;
 - a necessary observation or reusable evidence artifact was not requested, is unavailable, invalid, or failed and must now be acquired;
 - candidate membership, provenance, validity, or quality is materially unreliable;
 - source change makes the sealed result incompatible.
 
-Reopening creates a new PreCheck Result. Plan then re-evaluates compatibility and, if necessary, produces a new Frozen Plan. Reopen is not proof that the earlier result was dishonest: an explicit partial result or an optional `not-requested` observation may have been valid for its original declared purpose.
+Reopening creates a new PreCheck Result. Plan then re-evaluates compatibility and, if necessary, produces a new Frozen Plan. Reopen is not proof that the earlier result was dishonest: an explicit partial result or an optional `not_checked` observation may have been valid for its original declared purpose.
 
 ## Cross-stage validation and compatibility
 
@@ -262,13 +263,13 @@ Reopening creates a new PreCheck Result. Plan then re-evaluates compatibility an
 Plan validates, without re-performing PreCheck:
 
 - result identity and integrity;
-- `plan-ready` readiness;
-- stated source and discovery boundary;
-- Accounting Closure within that boundary;
-- complete or explicitly partial coverage and its limits;
-- Evidence Sufficiency for the stated planning purpose;
-- required profiles, provenance, availability, and validity declarations;
-- the fully offline proof and its observation boundary.
+- the bound Dataset and directly accounted Source Items within the declared purpose and boundary;
+- availability of lower-cost entry Evidence;
+- reachability of every in-boundary Source Item through a normal compressed path or explicit exception path;
+- resolvable representation, derivation, expansion, and reverse-lookup relationships over Evidence and Source Items;
+- visible material compression loss, uncertainty, provenance, and limits;
+- independence from mutable Working Run state;
+- the fully offline and source-read-only proof within its observation boundary.
 
 A readable result is not automatically compatible. Missing integrity, stale dependencies, an unsupported declared boundary, or material insufficiency blocks planning and routes to PreCheck.
 
@@ -277,7 +278,7 @@ A readable result is not automatically compatible. Missing integrity, stale depe
 Apply validates, without semantic reinterpretation:
 
 - plan identity, integrity, freeze state, and exact authorization;
-- the compatible PreCheck Result and Source State binding declared by the plan;
+- the compatible PreCheck Result and Dataset binding declared by the plan;
 - current source compatibility required by the planned operations;
 - complete item disposition and operation accounting;
 - deterministic targets, collision decisions, and safety preconditions;
@@ -294,7 +295,7 @@ Apply may seal a receipt only when every planned operation is accounted for, inc
 | Condition | Continue or return to | Required effect |
 | --- | --- | --- |
 | PreCheck Working Run is paused, interrupted, or recoverably incomplete | PreCheck | Resume from working state; do not present it as a sealed result. |
-| Source accounting, evidence validity, coverage, sufficiency, or offline proof cannot support `plan-ready` | PreCheck | Continue preparation or seal an honest blocked result. |
+| Source binding, compression coverage, traceability, material-loss disclosure, integrity, or offline proof cannot support a trustworthy handoff | PreCheck | Continue preparation; do not present mutable or insufficient work as the cross-stage result. |
 | Plan needs more detail already present behind coverage/expansion links | Plan | Locally expand the sealed result; no reopen. |
 | Plan wants a different review view or VLM composition from existing evidence | Plan | Create temporary Plan-owned working material; no upstream mutation. |
 | Plan discovers missing source items, material hidden variation, broken coverage, or necessary absent/invalid evidence | PreCheck | Issue Reopen Signal; produce a new PreCheck Result. |
@@ -314,7 +315,7 @@ AI Album remains evidence only. The ownership split preserves useful capability 
 | --- | --- |
 | Recursive inventory, ignore/scope behavior, discovered GPX inputs, and validation | PreCheck owns discovery, Scope Decisions, Source Items, and Accounting Closure. |
 | Same-stem/sidecar association, temporal chaining, weights, and representative selection | PreCheck owns inspectable Candidate and Coverage Relationships; Plan owns the final organization decision. |
-| Metadata, timestamp candidates, video sampling, visual renditions, local embeddings, and local content-sensitivity signals | PreCheck owns local Observations and Derived Evidence with provenance, status, validity, and replaceable methods. |
+| Metadata, timestamp candidates, video sampling, visual renditions, local embeddings, and local content-sensitivity signals | PreCheck owns local Observations and Evidence with basis, status, validity, and replaceable methods. |
 | Date/location/content clustering | PreCheck may produce local candidates and coverage evidence; Plan alone decides final grouping and semantics. |
 | Captioning, visual place inference, title generation, translation, and coherent naming | Plan-owned open interpretation methods; only accepted final effects enter the Frozen Plan. |
 | Sensitivity-informed local/remote routing | Intentionally changed: PreCheck owns candidate signals; Plan owns explicit VLM policy, provider choice, authorization, egress, and cost. |
@@ -329,8 +330,8 @@ This allocation preserves the historical compression and reuse capabilities whil
 
 The following decisions remain open by design:
 
-- exact fields, schemas, serialization, filenames, and physical locations of all three handoffs;
-- Collection, Source State, Source Item, handoff, and authorization identity mechanisms;
+- exact fields, schemas, serialization, filenames, and physical locations of the Plan and Apply handoffs, plus PreCheck's internal storage;
+- Dataset, Source Item, handoff, and authorization identity mechanisms;
 - PreCheck profiles, sufficiency measures, representative/coverage algorithms, and artifact invalidation implementation;
 - which optional observations are requested by a particular PreCheck profile;
 - Plan evidence-selection methods, VLM payload construction, provider interface, policy representation, and budget controls;
@@ -338,7 +339,7 @@ The following decisions remain open by design:
 - whether and when diagnostic material is captured, plus its privacy, redaction, retention, deletion, completeness, and binding rules;
 - Apply transaction, journal, fault recovery, and cross-filesystem contract details beyond the Foundation invariants;
 - storage lifecycle, retention, garbage collection, database, and directory design;
-- all Tool, Skill, and implementation choices.
+- Plan and Apply Tool and Skill choices, plus all implementation choices behind the PreCheck read boundary.
 
 These questions require reviewed handoff examples, runtime/failure semantics, or discriminating experiments. They are not prerequisites for assigning business authority.
 

@@ -8,7 +8,7 @@ The product is organized around three user-facing skills:
 - `mediasense.plan` lets an agent and user iteratively turn static evidence into a complete, reviewable organization plan.
 - `mediasense.apply` validates and safely applies a frozen plan without making new semantic decisions.
 
-The three durable handoff roles are the precheck result, the frozen organization plan, and the apply receipt. Their exact file formats are intentionally not specified yet: each contract will be derived from a manually reviewed, realistic example before its Tool and Skill are implemented.
+The three durable handoff roles are the precheck result, the frozen organization plan, and the apply receipt. The sealed PreCheck result is consumed through the formal [PreCheck Read Contract](docs/spec/spec-260826-1546-precheck-read/); Plan and Apply contracts remain to be derived from manually reviewed examples before their Tools and Skills are implemented.
 
 ## Start here
 
@@ -18,6 +18,6 @@ The three durable handoff roles are the precheck result, the frozen organization
 
 ## Current phase
 
-This repository currently establishes the authoritative product direction and migration evidence. It does not yet contain final stage schemas, the three Skill implementations, or production Tools. Those will be created only after the corresponding handoff examples and runtime/failure semantics are reviewed by a human.
+This repository establishes the authoritative product direction, migration evidence, and the formal PreCheck read contract used for Plan development. It does not yet contain PreCheck's internal implementation, the Plan or Apply contracts, the three Skill implementations, or production Tools.
 
 The former implementation remains in `/Users/chengyanru/repos/personal/photo/ai_album` as historical evidence. MediaSense is a new project and must not take a runtime dependency on that repository.

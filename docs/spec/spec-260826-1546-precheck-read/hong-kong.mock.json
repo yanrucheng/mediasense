@@ -1,0 +1,615 @@
+{
+  "mock_kind": "human-authored development mock",
+  "contract": "mediasense.precheck.read",
+  "authority": "illustrative only; not MediaSense runtime output",
+  "result_ref": "precheck-result:hk-review-slice-002",
+  "exchanges": [
+    {
+      "name": "inspect immutable result",
+      "request": {
+        "result_ref": "precheck-result:hk-review-slice-002",
+        "action": "inspect"
+      },
+      "response": {
+        "outcome": "ok",
+        "result_ref": "precheck-result:hk-review-slice-002",
+        "action": "inspect",
+        "target": {
+          "kind": "result",
+          "ref": "precheck-result:hk-review-slice-002",
+          "dataset_ref": "dataset:hong-kong-food-trip",
+          "coverage": "partial",
+          "readiness": "plan_ready",
+          "integrity": "valid",
+          "qualifications": [
+            {
+              "code": "selected_slice_only",
+              "effect": "limits_interpretation",
+              "message": "This Mock accounts for the selected 224-path review slice, not all 2,136 fixture source-media items.",
+              "basis": "The selected-items review ledger contains 224 paths; the verified fixture manifest contains 2,136 source-media paths."
+            },
+            {
+              "code": "fixture_proxy_fidelity",
+              "effect": "limits_interpretation",
+              "message": "Most media are fixture proxies rather than the original full-fidelity source.",
+              "basis": "The verified fixture handoff documents image proxies and sparse video timelines derived from the unavailable original source."
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "inspect dataset",
+      "request": {
+        "result_ref": "precheck-result:hk-review-slice-002",
+        "action": "inspect",
+        "target": {
+          "kind": "dataset",
+          "ref": "dataset:hong-kong-food-trip"
+        }
+      },
+      "response": {
+        "outcome": "ok",
+        "result_ref": "precheck-result:hk-review-slice-002",
+        "action": "inspect",
+        "target": {
+          "kind": "dataset",
+          "ref": "dataset:hong-kong-food-trip",
+          "name": "Hong Kong food-trip media",
+          "context": [
+            {
+              "content": "Development evaluation subject backed by the Hong Kong representative fixture.",
+              "provided_by": "MediaSense fixture descriptor",
+              "qualifications": [
+                {
+                  "code": "fixture_not_original_dataset",
+                  "effect": "limits_interpretation",
+                  "message": "The fixture is evidence for the Dataset, not a perfect substitute for the unavailable original source."
+                }
+              ]
+            }
+          ],
+          "qualifications": []
+        }
+      }
+    },
+    {
+      "name": "page through accounted source items",
+      "request": {
+        "result_ref": "precheck-result:hk-review-slice-002",
+        "action": "traverse",
+        "relation": "accounts_for",
+        "direction": "outbound",
+        "page": {
+          "limit": 2
+        }
+      },
+      "response": {
+        "outcome": "ok",
+        "result_ref": "precheck-result:hk-review-slice-002",
+        "action": "traverse",
+        "origin": {
+          "kind": "result",
+          "ref": "precheck-result:hk-review-slice-002"
+        },
+        "relation": "accounts_for",
+        "direction": "outbound",
+        "basis": "The sealed 224-path review ledger defines this Mock's bounded accounting population.",
+        "items": [
+          {
+            "target": {
+              "kind": "source_item",
+              "ref": "source-item:13"
+            },
+            "scope": "source_media",
+            "condition": "usable"
+          },
+          {
+            "target": {
+              "kind": "source_item",
+              "ref": "source-item:215"
+            },
+            "scope": "source_media",
+            "condition": "invalid",
+            "qualifications": [
+              {
+                "code": "invalid_media_container",
+                "effect": "limits_interpretation",
+                "message": "The item remains accounted for although its media container cannot be decoded.",
+                "basis": "The fixture media manifest and verifier classify this path as the intentional truncated MP4."
+              }
+            ]
+          }
+        ],
+        "page": {
+          "returned": 2,
+          "total": 224,
+          "complete": false,
+          "next_cursor": "mock:accounts-for:after-source-item-215"
+        }
+      }
+    },
+    {
+      "name": "list attention items as a derived view",
+      "request": {
+        "result_ref": "precheck-result:hk-review-slice-002",
+        "action": "traverse",
+        "relation": "accounts_for",
+        "direction": "outbound",
+        "filter": {
+          "attention_only": true
+        }
+      },
+      "response": {
+        "outcome": "ok",
+        "result_ref": "precheck-result:hk-review-slice-002",
+        "action": "traverse",
+        "origin": {
+          "kind": "result",
+          "ref": "precheck-result:hk-review-slice-002"
+        },
+        "relation": "accounts_for",
+        "direction": "outbound",
+        "derived_view": "attention_items",
+        "basis": "Derived from non-usable accounting conditions or material member qualifications; it is not a second authoritative relationship.",
+        "items": [
+          {
+            "target": {
+              "kind": "source_item",
+              "ref": "source-item:215"
+            },
+            "scope": "source_media",
+            "condition": "invalid",
+            "qualifications": [
+              {
+                "code": "invalid_media_container",
+                "effect": "limits_interpretation",
+                "message": "The truncated MP4 has no directly readable content."
+              }
+            ]
+          }
+        ],
+        "page": {
+          "returned": 1,
+          "total": 1,
+          "complete": true
+        }
+      }
+    },
+    {
+      "name": "list default evidence",
+      "request": {
+        "result_ref": "precheck-result:hk-review-slice-002",
+        "action": "traverse",
+        "relation": "entry_evidence",
+        "direction": "outbound",
+        "page": {
+          "limit": 3
+        }
+      },
+      "response": {
+        "outcome": "ok",
+        "result_ref": "precheck-result:hk-review-slice-002",
+        "action": "traverse",
+        "origin": {
+          "kind": "result",
+          "ref": "precheck-result:hk-review-slice-002"
+        },
+        "relation": "entry_evidence",
+        "direction": "outbound",
+        "items": [
+          {
+            "target": {
+              "kind": "evidence",
+              "ref": "evidence:normal-jpeg"
+            }
+          },
+          {
+            "target": {
+              "kind": "evidence",
+              "ref": "evidence:bundle61-entry"
+            }
+          },
+          {
+            "target": {
+              "kind": "evidence",
+              "ref": "evidence:repair-patched"
+            },
+            "qualifications": [
+              {
+                "code": "repair_family_candidate",
+                "effect": "limits_interpretation",
+                "message": "This evidence helps inspect an invalid-item region, but the repair-family association is not proven identity."
+              }
+            ]
+          }
+        ],
+        "page": {
+          "returned": 3,
+          "total": 14,
+          "complete": false,
+          "next_cursor": "mock:entry-evidence:after-3"
+        }
+      }
+    },
+    {
+      "name": "inspect bundle 61 entry evidence",
+      "request": {
+        "result_ref": "precheck-result:hk-review-slice-002",
+        "action": "inspect",
+        "target": {
+          "kind": "evidence",
+          "ref": "evidence:bundle61-entry"
+        }
+      },
+      "response": {
+        "outcome": "ok",
+        "result_ref": "precheck-result:hk-review-slice-002",
+        "action": "inspect",
+        "target": {
+          "kind": "evidence",
+          "ref": "evidence:bundle61-entry",
+          "access": {
+            "kind": "source_item",
+            "source_item_ref": "source-item:13"
+          },
+          "observations": [
+            {
+              "name": "covered_item_count",
+              "status": "available",
+              "value": 201,
+              "basis": "Count of the sealed represents relationship for this evidence."
+            }
+          ],
+          "qualifications": [
+            {
+              "code": "hidden_within_group_variation",
+              "effect": "limits_interpretation",
+              "message": "The food-only entry does not expose the person and wider restaurant context available through expansion.",
+              "basis": "Local review of DSC00594.JPG, C0561.MP4, and DJI_20260503215611_0014_D.MP4."
+            },
+            {
+              "code": "historical_group_candidate",
+              "effect": "limits_interpretation",
+              "message": "The 201-item membership is retained as a reviewable compression claim, not MediaSense semantic ground truth.",
+              "basis": "The membership is reconstructed from verified historical AI Album bundle 61."
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "expand bundle 61 evidence",
+      "request": {
+        "result_ref": "precheck-result:hk-review-slice-002",
+        "action": "traverse",
+        "target": {
+          "kind": "evidence",
+          "ref": "evidence:bundle61-entry"
+        },
+        "relation": "expands_to",
+        "direction": "outbound"
+      },
+      "response": {
+        "outcome": "ok",
+        "result_ref": "precheck-result:hk-review-slice-002",
+        "action": "traverse",
+        "origin": {
+          "kind": "evidence",
+          "ref": "evidence:bundle61-entry"
+        },
+        "relation": "expands_to",
+        "direction": "outbound",
+        "basis": "Sealed navigation to already-prepared detail.",
+        "items": [
+          {
+            "target": {
+              "kind": "evidence",
+              "ref": "evidence:bundle61-outlier"
+            }
+          },
+          {
+            "target": {
+              "kind": "evidence",
+              "ref": "evidence:bundle61-boundary"
+            }
+          }
+        ],
+        "page": {
+          "returned": 2,
+          "total": 2,
+          "complete": true
+        }
+      }
+    },
+    {
+      "name": "page through bundle 61 represented source items",
+      "request": {
+        "result_ref": "precheck-result:hk-review-slice-002",
+        "action": "traverse",
+        "target": {
+          "kind": "evidence",
+          "ref": "evidence:bundle61-entry"
+        },
+        "relation": "represents",
+        "direction": "outbound",
+        "page": {
+          "limit": 3
+        }
+      },
+      "response": {
+        "outcome": "ok",
+        "result_ref": "precheck-result:hk-review-slice-002",
+        "action": "traverse",
+        "origin": {
+          "kind": "evidence",
+          "ref": "evidence:bundle61-entry"
+        },
+        "relation": "represents",
+        "direction": "outbound",
+        "basis": "Historical AI Album bundle 61 membership is retained as a challengeable PreCheck compression claim.",
+        "qualifications": [
+          {
+            "code": "historical_group_candidate",
+            "effect": "limits_interpretation",
+            "message": "Membership supports navigation and review but does not establish a correct semantic group."
+          }
+        ],
+        "items": [
+          {
+            "target": {
+              "kind": "source_item",
+              "ref": "source-item:13"
+            }
+          },
+          {
+            "target": {
+              "kind": "source_item",
+              "ref": "source-item:14"
+            }
+          },
+          {
+            "target": {
+              "kind": "source_item",
+              "ref": "source-item:15"
+            }
+          }
+        ],
+        "page": {
+          "returned": 3,
+          "total": 201,
+          "complete": false,
+          "next_cursor": "mock:bundle61:after-source-item-15"
+        }
+      }
+    },
+    {
+      "name": "reverse lookup hidden-person source item",
+      "request": {
+        "result_ref": "precheck-result:hk-review-slice-002",
+        "action": "traverse",
+        "target": {
+          "kind": "source_item",
+          "ref": "source-item:211"
+        },
+        "relation": "represents",
+        "direction": "inbound"
+      },
+      "response": {
+        "outcome": "ok",
+        "result_ref": "precheck-result:hk-review-slice-002",
+        "action": "traverse",
+        "origin": {
+          "kind": "source_item",
+          "ref": "source-item:211"
+        },
+        "relation": "represents",
+        "direction": "inbound",
+        "basis": "Reverse lookup over the same sealed coverage claims.",
+        "items": [
+          {
+            "target": {
+              "kind": "evidence",
+              "ref": "evidence:bundle61-entry"
+            },
+            "qualifications": [
+              {
+                "code": "hidden_within_group_variation",
+                "effect": "limits_interpretation",
+                "message": "The default entry hides a person visible in this source item.",
+                "basis": "Local inspection of C0561.MP4 compared with the food-only entry."
+              }
+            ]
+          },
+          {
+            "target": {
+              "kind": "evidence",
+              "ref": "evidence:bundle61-outlier"
+            }
+          }
+        ],
+        "page": {
+          "returned": 2,
+          "total": 2,
+          "complete": true
+        }
+      }
+    },
+    {
+      "name": "inspect invalid source item",
+      "request": {
+        "result_ref": "precheck-result:hk-review-slice-002",
+        "action": "inspect",
+        "target": {
+          "kind": "source_item",
+          "ref": "source-item:215"
+        }
+      },
+      "response": {
+        "outcome": "ok",
+        "result_ref": "precheck-result:hk-review-slice-002",
+        "action": "inspect",
+        "target": {
+          "kind": "source_item",
+          "ref": "source-item:215",
+          "locator": {
+            "kind": "fixture_relative_path",
+            "value": "dataset/260501-HK美食之旅/0504/DJI_001-action-sd-amber/DJI_20260504202728_0029_D.MP4"
+          },
+          "observations": [
+            {
+              "name": "media_type",
+              "status": "available",
+              "value": "video/mp4",
+              "basis": "Fixture media manifest."
+            },
+            {
+              "name": "media_readability",
+              "status": "failed",
+              "basis": "The verified fixture preserves this as the intentional one-MiB truncated MP4 without a usable moov atom."
+            },
+            {
+              "name": "create_date",
+              "status": "missing",
+              "basis": "No readable metadata is available for the truncated media item."
+            }
+          ],
+          "qualifications": [
+            {
+              "code": "invalid_media_container",
+              "effect": "limits_interpretation",
+              "message": "This remains a distinct accounted Source Item; readable alternatives do not silently replace it."
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "find evidence representing invalid source item",
+      "request": {
+        "result_ref": "precheck-result:hk-review-slice-002",
+        "action": "traverse",
+        "target": {
+          "kind": "source_item",
+          "ref": "source-item:215"
+        },
+        "relation": "represents",
+        "direction": "inbound"
+      },
+      "response": {
+        "outcome": "ok",
+        "result_ref": "precheck-result:hk-review-slice-002",
+        "action": "traverse",
+        "origin": {
+          "kind": "source_item",
+          "ref": "source-item:215"
+        },
+        "relation": "represents",
+        "direction": "inbound",
+        "basis": "Human review of the fixture construction history, shared stem, metadata, partial hashes, and local renditions.",
+        "qualifications": [
+          {
+            "code": "repair_family_candidate",
+            "effect": "limits_interpretation",
+            "message": "The association is useful for inspecting the invalid region but does not prove byte or content identity."
+          }
+        ],
+        "items": [
+          {
+            "target": {
+              "kind": "evidence",
+              "ref": "evidence:repair-patched"
+            }
+          }
+        ],
+        "page": {
+          "returned": 1,
+          "total": 1,
+          "complete": true
+        }
+      }
+    },
+    {
+      "name": "trace repair evidence production source",
+      "request": {
+        "result_ref": "precheck-result:hk-review-slice-002",
+        "action": "traverse",
+        "target": {
+          "kind": "evidence",
+          "ref": "evidence:repair-patched"
+        },
+        "relation": "derived_from",
+        "direction": "outbound"
+      },
+      "response": {
+        "outcome": "ok",
+        "result_ref": "precheck-result:hk-review-slice-002",
+        "action": "traverse",
+        "origin": {
+          "kind": "evidence",
+          "ref": "evidence:repair-patched"
+        },
+        "relation": "derived_from",
+        "direction": "outbound",
+        "basis": "The displayed local rendition was extracted from the separately addressed patched-full media item.",
+        "items": [
+          {
+            "target": {
+              "kind": "source_item",
+              "ref": "source-item:216"
+            }
+          }
+        ],
+        "page": {
+          "returned": 1,
+          "total": 1,
+          "complete": true
+        }
+      }
+    },
+    {
+      "name": "inspect readable missing-time source item",
+      "request": {
+        "result_ref": "precheck-result:hk-review-slice-002",
+        "action": "inspect",
+        "target": {
+          "kind": "source_item",
+          "ref": "source-item:217"
+        }
+      },
+      "response": {
+        "outcome": "ok",
+        "result_ref": "precheck-result:hk-review-slice-002",
+        "action": "inspect",
+        "target": {
+          "kind": "source_item",
+          "ref": "source-item:217",
+          "locator": {
+            "kind": "fixture_relative_path",
+            "value": "dataset/260501-HK美食之旅/0504/DJI_001-action-sd-amber/DJI_20260504202728_0029_D.remux-faststart.MP4"
+          },
+          "observations": [
+            {
+              "name": "media_type",
+              "status": "available",
+              "value": "video/mp4",
+              "basis": "Fixture media manifest."
+            },
+            {
+              "name": "media_readability",
+              "status": "available",
+              "value": "readable",
+              "basis": "Fixture verification and media manifest."
+            },
+            {
+              "name": "create_date",
+              "status": "missing",
+              "basis": "The fixture metadata snapshot records create_date as null for this readable remux item."
+            }
+          ],
+          "qualifications": []
+        }
+      }
+    }
+  ]
+}

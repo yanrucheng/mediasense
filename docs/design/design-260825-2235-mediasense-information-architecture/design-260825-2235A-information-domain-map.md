@@ -4,7 +4,7 @@ title: "MediaSense Information Domain Map"
 type: design
 status: active
 created: 2026-08-25
-updated: 2026-08-25
+updated: 2026-08-26
 timezone: "Asia/Shanghai"
 parent: "design-260825-2235-mediasense-information-architecture"
 depends-on:
@@ -79,23 +79,22 @@ The sections below define business concepts, not storage entities. A concept bec
 
 | Concept | Business meaning and purpose | Authority and indispensable semantics | Loss consequence and relations |
 | --- | --- | --- | --- |
-| Collection | The continuing media-organization subject across source observations, plans, and executions. It is not a directory path. | Stable identity and human-recognizable subject. Current paths, evidence, and organization intent are referenced rather than copied into it. | Without it, successive source states and outcomes cannot be understood as work on the same collection. It relates to Source States, Frozen Plans, and execution history. |
-| Source State | A bounded claim about the source media observed at a particular time. | Source boundaries, observation time, identity evidence and its strength, known limits, and complete or explicitly partial coverage. Original media remains the factual source. | Without it, evidence and plans cannot be tied to a particular source reality or invalidated after change. |
-| Source Item | One discovered object within a Source State. Media, sidecars, GPX inputs, unsupported objects, and other discovered entries use one identity model with different roles and dispositions. | Snapshot-local identity, observed location, physical facts, media/type observations, support/readability state, and source-media, auxiliary, or other role. | Without one identity, observations, relations, coverage, and plan dispositions cannot refer to the same object reliably. |
-| Scope Discovery | The factual record of what was found within a declared discovery boundary. | Discovery source, observed entry, traversal result, and error or unavailable state. It does not itself decide inclusion. | Without it, exclusions and omissions cannot be distinguished from undiscovered content. It supplies Scope Decisions and Accounting Closure. |
-| Scope Decision | The explicit decision to include, exclude, defer, or use a discovered item as auxiliary input. | Decision, reason, applicable rule or confirmation, and the Source State to which it applies. It remains distinct from discovery facts. | Without it, files disappear from processing without an accountable reason. |
+| Dataset | The continuing media-organization subject across source changes, plans, and executions. It is not a directory path or one frozen content version. | Stable identity, optional human-recognizable name, and attributable long-lived context. Current locations, discovered membership, evidence, and organization intent are referenced rather than copied into it. | Without it, successive results and outcomes cannot be understood as work on the same dataset or inherit its user-supplied context. It relates to PreCheck Results, Frozen Plans, and execution history. |
+| Source Item | One concrete source object directly accounted for by an immutable PreCheck Result. Media, sidecars, GPX inputs, unsupported objects, and other discovered entries use one identity model with different scope and condition values. | Result-local identity, current locator, open observations, and material qualifications. A path or fingerprint may support access or reuse but is not fixed as permanent identity. | Without one identity, observations, compression relations, coverage, and plan dispositions cannot refer to the same object reliably. |
+| Scope Discovery | The factual record of what was found within a declared discovery boundary while preparing a Result. | Discovery source, observed entry, traversal result, and error or unavailable state. It does not itself decide inclusion and is not a whole-Dataset cache key. | Without it, exclusions and omissions cannot be distinguished from undiscovered content. It supplies Scope Decisions and Accounting Closure. |
+| Scope Decision | The explicit decision to treat a discovered item as source media, auxiliary input, or excluded, separately from its usable, unsupported, invalid, error, or unresolved condition. | Decision, reason, applicable rule or confirmation, and the PreCheck Result in which it applies. It remains distinct from discovery facts and from the item's processing condition. | Without it, files disappear from processing without an accountable reason. |
 | Accounting Closure | The claim that every discovered item has a disposition and that counts and unresolved items reconcile within the stated boundary. | Included, auxiliary, excluded, unsupported, invalid, error, and unresolved populations, with honest partiality. | Without it, completeness cannot be checked and later coverage claims have no reliable denominator. |
 
-Scope Discovery, Scope Decision, and Accounting Closure are statement types over Source State and Source Items, not three required databases or file types.
+Scope Discovery, Scope Decision, and Accounting Closure are statement types over Dataset preparation, a Result, and its Source Items, not three required databases or file types. A Result's `accounts_for` relation is the immutable cross-stage expression of this accounting; it does not require a separate Source State entity.
 
 ### Evidence and compression
 
 | Concept | Business meaning and purpose | Authority and indispensable semantics | Loss consequence and relations |
 | --- | --- | --- | --- |
 | Observation | A source-derived or locally measured statement about a Source Item, such as a time candidate, coordinate, duration, orientation, decodability result, or content-sensitivity signal. | Subject, observation kind, raw and normalized values where relevant, candidates, producer, field-level provenance, confidence or quality, and explicit completion/error/omission state. It is evidence, not corrected world truth. | Without it, planning must rescan source media or trust flattened values whose origin and failures are unknowable. |
-| Derived Evidence | A reviewable or machine-usable result derived from Source Items or other evidence. | Input references, processing profile, derivation provenance, integrity, quality, completion, validity dependencies, and regeneration conditions. | Without it, expensive local work cannot be reused or challenged. It may support Candidate Relations and Coverage Relationships. |
+| Evidence | A reviewable or machine-usable expression that Plan can inspect directly as part of a compressed PreCheck Result. It may directly reuse a Source Item or be derived from Source Items or other Evidence. | Access, derivation and representation relations, observations, material qualifications, and an expansion path where more prepared detail exists. Internal validity dependencies and regeneration conditions remain PreCheck-owned. | Without it, Plan cannot begin from a cheaper surface or challenge what the compression hides. |
 | Candidate Relation | A challengeable claim that Source Items or Evidence may belong together or differ materially. | Endpoints or members, relation type, supporting evidence, score or basis, span or boundary, alternatives, conflicts, profile, and state. | Without it, a final group is opaque and over-merge or under-merge errors cannot be localized. |
-| Coverage Relationship | A claim that selected Evidence represents, bounds, conflicts with, or exposes a wider set of Source Items or Candidate Relations. | Covered set, evidence role, basis, extent or weight, quality, known exclusions, and expansion links. | Without it, evidence compression becomes untraceable sampling and cannot support economical downstream reasoning. |
+| Coverage Relationship | A challengeable `represents` claim connecting Evidence to the Source Items whose direct reading may be deferred. | Covered set, shared or exceptional basis, material qualifications, and reverse lookup. Entry selection, production lineage, and next-step navigation remain distinct relationships. | Without it, evidence compression becomes untraceable sampling and cannot support economical downstream reasoning. |
 | Evidence Sufficiency | A bounded judgment about whether available evidence and coverage can support a stated downstream purpose. | Purpose, current coverage, residual uncertainty, blocking gaps, and reasons for sufficiency or insufficiency. | Without it, complete accounting can be mistaken for adequate evidence. It produces Reopen Signals when material gaps remain. |
 | Reopen Signal | An explicit reason to acquire or recompute evidence rather than treating ordinary downstream exploration as a substitute for missing preparation. | Trigger, affected scope, missing or misleading evidence, and expected corrective action. | Without it, systematic upstream defects become repeated downstream work. |
 
@@ -145,9 +144,9 @@ These meanings attach to the information they qualify; they are not general-purp
 - **Resource and External-effect Facts:** local compute, I/O, storage and time; remote requests, data egress, tokens, fees, authorization, provider locality, and fallback where applicable.
 - **Lifecycle Role:** mutable working state, reusable artifact, immutable sealed result, or regenerable derived view.
 
-For a PreCheck projection, an interrupted Working Run is not a sealed result. A sealed result separately expresses complete or explicitly partial coverage, plan-ready or blocked readiness, and valid or invalid integrity. Partial does not automatically mean blocked, and complete does not automatically mean plan-ready. A new run produces a new sealed result rather than modifying an old one.
+For a PreCheck Result, an interrupted Working Run is not an immutable result. A Result separately expresses complete or explicitly partial coverage, plan-ready or blocked readiness, and valid or invalid integrity. Partial does not automatically mean blocked, and complete does not automatically mean plan-ready. Continued work produces a new Result rather than modifying an old one.
 
-A future PreCheck projection may claim `plan-ready` only when it can show, within the stated MediaSense control boundary, zero media upload, zero metadata, coordinate, or feature-artifact egress, zero remote-model and online-map calls, and zero billable requests. It must distinguish an offline configuration claim, enforced network policy, observed zero-request audit evidence, and external processes outside the proof boundary.
+A PreCheck Result may claim `plan-ready` only when it can show, within the stated MediaSense control boundary, zero media upload, zero metadata, coordinate, or feature-artifact egress, zero remote-model and online-map calls, and zero billable requests. It must distinguish an offline configuration claim, enforced network policy, observed zero-request audit evidence, and external processes outside the proof boundary.
 
 ### Diagnostic responsibility
 
@@ -161,10 +160,10 @@ The following identifiers are historical evaluation references only.
 
 | Historical evidence | MediaSense business disposition | Migration boundary |
 | --- | --- | --- |
-| `AA-STORED-IDENT-001` | Supports Source State and Source Item identity evidence, Derivation Provenance, and validity. | The old namespace, partial-hash key, filename pattern, and relocation behavior do not migrate. |
+| `AA-STORED-IDENT-001` | Supports Source Item identity evidence, derivation basis, and internal reuse validation. | The old namespace, partial-hash key, filename pattern, and relocation behavior do not migrate. |
 | `AA-STORED-CACHE-001` | Supports field-level Observations for time, camera, photo, lens, coordinates, and geographic candidates. The embedded path becomes a Source Item reference. | The flat YAML and provenance-free final values do not migrate. |
-| `AA-STORED-CACHE-002` | Supports Derived Evidence in a lower-cost visual profile. | The historical dimensions, JPEG choice, and cache filename do not become contract. |
-| `AA-STORED-CACHE-003` | Supports Derived Evidence in a higher-detail visual profile. | It is not a separate permanent entity, and the historical `1080p` behavior is not standardized. |
+| `AA-STORED-CACHE-002` | Supports Evidence in a lower-cost visual profile. | The historical dimensions, JPEG choice, and cache filename do not become contract. |
+| `AA-STORED-CACHE-003` | Supports Evidence in a higher-detail visual profile. | It is not a separate permanent entity, and the historical `1080p` behavior is not standardized. |
 | `AA-STORED-CACHE-004` | Supports reusable method artifacts and comparative evidence used to propose Candidate Relations. | ChineseCLIP, float32 `(1024,)`, cosine distance, and the array format remain replaceable. |
 | `AA-STORED-CACHE-005` | Supports local content-sensitivity Observations with per-detector provenance, quality, and state. | The capability is preserved; NudeNet/NSFW models, labels, thresholds, and direct routing behavior are not. |
 | `AA-STORED-CACHE-006` | Supports the distinction between a Semantic Claim and source evidence, and may inform future diagnostic material. | Captions are not required PreCheck evidence or a mandatory planning intermediate. |
@@ -176,7 +175,7 @@ The following identifiers are historical evaluation references only.
 | `AA-STORED-OUTPUT-001` | Supports the necessary separation among Frozen Organization Plan, Execution Outcome, Verification Evidence, and Derived View. | The historical directory tree, counts, and names are evaluation evidence, not a plan or receipt. |
 | `AA-STORED-AUDIT-001` | Supports Resource and External-effect Facts and the secondary diagnostic responsibility. | The optional JSON log, static prices, excerpts, and incomplete attribution do not migrate. |
 | `AA-STORED-CONFIG-001` | Supports Processing Profiles and Derivation Provenance. | Per-user mutable configuration files do not become authoritative run records or product entities. |
-| `AA-STORED-FIXTURE-001` | Supports Source State, Source Items, Accounting Closure, Evidence derivation, and historical traceability. | The package JSONL schema, proxy transforms, and sampled source hash are evaluation mechanisms. |
+| `AA-STORED-FIXTURE-001` | Supports Dataset context, Result-accounted Source Items, Accounting Closure, Evidence derivation, and historical traceability. | The package JSONL schema, proxy transforms, and sampled source hash are evaluation mechanisms. |
 | `AA-STORED-FIXTURE-002` | Supports Candidate Relations, candidate groups, representative roles, and Coverage Relationships. | The historical bundle index and grouping rules are not MediaSense identities or truth labels. |
 | `AA-STORED-FIXTURE-003` | Provides evaluation-only integrity, replay, and provenance evidence. | The package audit set does not enter the product information model. |
 
@@ -185,11 +184,11 @@ The following identifiers are historical evaluation references only.
 | Historical gap | New business destination |
 | --- | --- |
 | Complete scan, ignore decisions, unsupported/skipped paths, and validation outcomes | Scope Discovery, Scope Decision, Source Items, and Accounting Closure |
-| Strong source identity and cache-wide manifest | Source State identity evidence and sealed-result integrity; exact mechanism remains deferred |
+| Strong source identity and cache-wide manifest | Source Item identity evidence, Result accounting, and integrity; exact mechanism remains deferred |
 | Same-stem/sidecar and temporal edges, membership, weights, spans, and representative rationale | Candidate Relations and Coverage Relationships |
 | Config, timezone, GPX, model, prompt, language, rendition, library, and threshold dependencies | Processing Profile and Derivation Provenance |
 | Field-level metadata provenance and confidence | Observation |
-| Complete, partial, not-requested, unavailable, and error states | Availability State attached to the affected information |
+| Available, missing, failed, not-checked, and not-applicable states | Availability State attached to the affected information |
 | Intermediate local candidates, distances, merge reasons, and alternatives | Candidate Relations; semantic naming work remains method-open |
 | Frozen source-to-output mapping and collision decisions | Frozen Organization Plan |
 | Operation journal, restart state, and post-verification | Execution Outcome, Verification Evidence, and Apply Receipt |
@@ -201,9 +200,9 @@ The following identifiers are historical evaluation references only.
 
 | New concept family | Origin |
 | --- | --- |
-| Collection, Source State, Source Item, Scope Decision, Accounting Closure | Historical inventory and manifest evidence, explicit scan/accounting gaps, and MediaSense source-integrity invariants |
+| Dataset, Source Item, Scope Decision, Accounting Closure | Historical inventory and manifest evidence, explicit scan/accounting gaps, and MediaSense source-integrity invariants |
 | Observation | Historical metadata and local-analysis capabilities plus missing field-level provenance and state |
-| Derived Evidence | Historical renditions, frames, embeddings, and the MediaSense requirement for reusable local evidence |
+| Evidence | Historical renditions, frames, embeddings, and the MediaSense requirement for reusable local evidence |
 | Content-sensitivity Observation | Historical local classifier evidence plus the product decision to preserve upstream evidence while separating downstream policy |
 | Candidate Relation | Historical grouping/clustering behavior and missing stored edges, reasons, spans, and alternatives |
 | Coverage Relationship and Evidence Sufficiency | Historical representative compression and failure modes plus the new requirement for coverage-constrained, expandable evidence |
@@ -240,7 +239,7 @@ No conclusion in this map is more specific than these evidence levels support.
 This map is sufficient to proceed to Stage Ownership because:
 
 - source identity, scope, evidence, compression, intent, and execution facts have distinct business meanings;
-- evidence can remain traceable from compressed representations to source items;
+- Evidence can remain traceable through compression relationships to Source Items;
 - observed facts, candidates, Agent judgment, user confirmation, frozen intent, and actual effects cannot silently overwrite one another;
 - all 18 historical entries and the important unpersisted information have explicit dispositions;
 - new concepts are traceable to evidence, a known historical gap, or a MediaSense invariant;
