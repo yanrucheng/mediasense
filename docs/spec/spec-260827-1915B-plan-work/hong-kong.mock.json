@@ -1,0 +1,636 @@
+{
+  "mock_kind": "mediasense.plan.work.hong-kong-review-slice",
+  "contract": "mediasense.plan.work",
+  "authority": "Human-authored review example; not runtime output or actual Human confirmation.",
+  "bound_precheck_result_ref": "precheck-result:hk-review-slice-002",
+  "organization_preference_semantics": {
+    "omitted_on_update": "preserve_current_snapshot",
+    "object_on_update": "replace_entire_snapshot",
+    "empty_object_on_update": "replace_with_no_preferences"
+  },
+  "exchanges": [
+    {
+      "request": {
+        "action": "create",
+        "result_ref": "precheck-result:hk-review-slice-002",
+        "organization_preferences": {
+          "default_hierarchy": "time_place_event",
+          "maximum_depth": 3,
+          "keep_related_raw_and_jpeg_together": true
+        },
+        "request_id": "request:plan-hk-001"
+      },
+      "response": {
+        "outcome": "ok",
+        "action": "create",
+        "work_ref": "plan-work:hk-001",
+        "result_ref": "precheck-result:hk-review-slice-002",
+        "revision": "work-revision:hk-001",
+        "state": "open",
+        "organization_preferences": {
+          "default_hierarchy": "time_place_event",
+          "maximum_depth": 3,
+          "keep_related_raw_and_jpeg_together": true
+        }
+      }
+    },
+    {
+      "request": {
+        "action": "update",
+        "work_ref": "plan-work:hk-001",
+        "base_revision": "work-revision:hk-001",
+        "candidate_content": {
+          "result_ref": "precheck-result:hk-review-slice-002",
+          "scope": {
+            "kind": "union",
+            "sets": [
+              {
+                "kind": "precheck_relation",
+                "origin": "evidence:bundle61-boundary",
+                "relation": "represents",
+                "direction": "outbound"
+              },
+              {
+                "kind": "explicit",
+                "source_item_refs": ["source-item:215", "source-item:217"]
+              }
+            ]
+          },
+          "logical_root": "Hong Kong review slice",
+          "groups": [
+            {
+              "relative_path": ["Illustrative bundle 61 subset"],
+              "members": {
+                "kind": "precheck_relation",
+                "origin": "evidence:bundle61-boundary",
+                "relation": "represents",
+                "direction": "outbound"
+              },
+              "source_naming": {
+                "default": "preserve_source_basename",
+                "overrides": [
+                  { "source_item_ref": "source-item:13", "name": "item-013.jpg" },
+                  { "source_item_ref": "source-item:14", "name": "item-014.jpg" },
+                  { "source_item_ref": "source-item:15", "name": "item-015.jpg" }
+                ]
+              }
+            },
+            {
+              "relative_path": ["Readable recovery candidate"],
+              "members": {
+                "kind": "explicit",
+                "source_item_refs": ["source-item:217"]
+              },
+              "source_naming": { "default": "preserve_source_basename" }
+            }
+          ],
+          "other_outcomes": [
+            {
+              "members": {
+                "kind": "explicit",
+                "source_item_refs": ["source-item:215"]
+              },
+              "outcome": "exclude_from_logical_organization",
+              "reason": "The media container is unreadable; keep the Source Item accounted and do not substitute a repaired candidate.",
+              "evidence_refs": ["evidence:repair-patched"]
+            }
+          ],
+          "decision_notes": [
+            {
+              "applies_to": {
+                "kind": "precheck_relation",
+                "origin": "evidence:bundle61-boundary",
+                "relation": "represents",
+                "direction": "outbound"
+              },
+              "summary": "Illustrative final grouping decision: reuse the complete PreCheck membership without treating that membership as semantic truth.",
+              "evidence_refs": ["evidence:bundle61-boundary"]
+            },
+            {
+              "applies_to": {
+                "kind": "explicit",
+                "source_item_refs": ["source-item:215"]
+              },
+              "summary": "The repair association is useful evidence but does not prove identity and must not replace the invalid Source Item.",
+              "evidence_refs": ["evidence:repair-patched"]
+            }
+          ]
+        },
+        "request_id": "request:plan-update-hk-001"
+      },
+      "response": {
+        "outcome": "ok",
+        "action": "update",
+        "work_ref": "plan-work:hk-001",
+        "result_ref": "precheck-result:hk-review-slice-002",
+        "revision": "work-revision:hk-002",
+        "state": "open"
+      }
+    },
+    {
+      "request": {
+        "action": "inspect",
+        "work_ref": "plan-work:hk-001"
+      },
+      "response": {
+        "outcome": "ok",
+        "action": "inspect",
+        "work_ref": "plan-work:hk-001",
+        "result_ref": "precheck-result:hk-review-slice-002",
+        "revision": "work-revision:hk-002",
+        "state": "open",
+        "returned_sections": ["overview", "preferences", "content", "validation"],
+        "sections": {
+          "overview": { "state": "open" },
+          "preferences": {
+            "default_hierarchy": "time_place_event",
+            "maximum_depth": 3,
+            "keep_related_raw_and_jpeg_together": true
+          },
+          "content": {
+            "mode": "complete",
+            "value": {
+              "contract": "mediasense.frozen-plan",
+              "plan_ref": "frozen-plan:hk-review-slice-reference-001",
+              "result_ref": "precheck-result:hk-review-slice-002",
+              "scope": {
+                "kind": "union",
+                "sets": [
+                  {
+                    "kind": "precheck_relation",
+                    "origin": "evidence:bundle61-boundary",
+                    "relation": "represents",
+                    "direction": "outbound"
+                  },
+                  {
+                    "kind": "explicit",
+                    "source_item_refs": ["source-item:215", "source-item:217"]
+                  }
+                ]
+              },
+              "logical_root": "Hong Kong review slice",
+              "groups": [
+                {
+                  "relative_path": ["Illustrative bundle 61 subset"],
+                  "members": {
+                    "kind": "precheck_relation",
+                    "origin": "evidence:bundle61-boundary",
+                    "relation": "represents",
+                    "direction": "outbound"
+                  },
+                  "source_naming": {
+                    "default": "preserve_source_basename",
+                    "overrides": [
+                      { "source_item_ref": "source-item:13", "name": "item-013.jpg" },
+                      { "source_item_ref": "source-item:14", "name": "item-014.jpg" },
+                      { "source_item_ref": "source-item:15", "name": "item-015.jpg" }
+                    ]
+                  }
+                },
+                {
+                  "relative_path": ["Readable recovery candidate"],
+                  "members": {
+                    "kind": "explicit",
+                    "source_item_refs": ["source-item:217"]
+                  },
+                  "source_naming": { "default": "preserve_source_basename" }
+                }
+              ],
+              "other_outcomes": [
+                {
+                  "members": {
+                    "kind": "explicit",
+                    "source_item_refs": ["source-item:215"]
+                  },
+                  "outcome": "exclude_from_logical_organization",
+                  "reason": "The media container is unreadable; keep the Source Item accounted and do not substitute a repaired candidate.",
+                  "evidence_refs": ["evidence:repair-patched"]
+                }
+              ],
+              "decision_notes": [
+                {
+                  "applies_to": {
+                    "kind": "precheck_relation",
+                    "origin": "evidence:bundle61-boundary",
+                    "relation": "represents",
+                    "direction": "outbound"
+                  },
+                  "summary": "Illustrative final grouping decision: reuse the complete PreCheck membership without treating that membership as semantic truth.",
+                  "evidence_refs": ["evidence:bundle61-boundary"]
+                },
+                {
+                  "applies_to": {
+                    "kind": "explicit",
+                    "source_item_refs": ["source-item:215"]
+                  },
+                  "summary": "The repair association is useful evidence but does not prove identity and must not replace the invalid Source Item.",
+                  "evidence_refs": ["evidence:repair-patched"]
+                }
+              ]
+            }
+          },
+          "validation": { "seal_ready": true, "issues": [] }
+        },
+        "candidate_content_identity": "sha256:9bf2f04a79aaf245143cfcb295c3a732575269c9aa1340edc78c3da167ffe006"
+      }
+    },
+    {
+      "request": {
+        "action": "inspect",
+        "work_ref": "plan-work:hk-001",
+        "revision": "work-revision:hk-002",
+        "sections": ["content"],
+        "page": { "collection": "groups", "limit": 1 }
+      },
+      "response": {
+        "outcome": "ok",
+        "action": "inspect",
+        "work_ref": "plan-work:hk-001",
+        "result_ref": "precheck-result:hk-review-slice-002",
+        "revision": "work-revision:hk-002",
+        "state": "open",
+        "returned_sections": ["content"],
+        "sections": {
+          "content": {
+            "mode": "page",
+            "header": {
+              "contract": "mediasense.frozen-plan",
+              "plan_ref": "frozen-plan:hk-review-slice-reference-001",
+              "result_ref": "precheck-result:hk-review-slice-002",
+              "scope": {
+                "kind": "union",
+                "sets": [
+                  {
+                    "kind": "precheck_relation",
+                    "origin": "evidence:bundle61-boundary",
+                    "relation": "represents",
+                    "direction": "outbound"
+                  },
+                  {
+                    "kind": "explicit",
+                    "source_item_refs": ["source-item:215", "source-item:217"]
+                  }
+                ]
+              },
+              "logical_root": "Hong Kong review slice"
+            },
+            "collection": "groups",
+            "items": [
+              {
+                "relative_path": ["Illustrative bundle 61 subset"],
+                "members": {
+                  "kind": "precheck_relation",
+                  "origin": "evidence:bundle61-boundary",
+                  "relation": "represents",
+                  "direction": "outbound"
+                },
+                "source_naming": {
+                  "default": "preserve_source_basename",
+                  "overrides": [
+                    { "source_item_ref": "source-item:13", "name": "item-013.jpg" },
+                    { "source_item_ref": "source-item:14", "name": "item-014.jpg" },
+                    { "source_item_ref": "source-item:15", "name": "item-015.jpg" }
+                  ]
+                }
+              }
+            ],
+            "page": {
+              "collection": "groups",
+              "returned": 1,
+              "complete": false,
+              "next_cursor": "plan-cursor:hk-groups-002"
+            }
+          }
+        },
+        "candidate_content_identity": "sha256:9bf2f04a79aaf245143cfcb295c3a732575269c9aa1340edc78c3da167ffe006"
+      }
+    },
+    {
+      "request": {
+        "action": "inspect",
+        "work_ref": "plan-work:hk-001",
+        "revision": "work-revision:hk-002",
+        "sections": ["content"],
+        "page": {
+          "collection": "groups",
+          "cursor": "plan-cursor:hk-groups-002"
+        }
+      },
+      "response": {
+        "outcome": "ok",
+        "action": "inspect",
+        "work_ref": "plan-work:hk-001",
+        "result_ref": "precheck-result:hk-review-slice-002",
+        "revision": "work-revision:hk-002",
+        "state": "open",
+        "returned_sections": ["content"],
+        "sections": {
+          "content": {
+            "mode": "page",
+            "header": {
+              "contract": "mediasense.frozen-plan",
+              "plan_ref": "frozen-plan:hk-review-slice-reference-001",
+              "result_ref": "precheck-result:hk-review-slice-002",
+              "scope": {
+                "kind": "union",
+                "sets": [
+                  {
+                    "kind": "precheck_relation",
+                    "origin": "evidence:bundle61-boundary",
+                    "relation": "represents",
+                    "direction": "outbound"
+                  },
+                  {
+                    "kind": "explicit",
+                    "source_item_refs": ["source-item:215", "source-item:217"]
+                  }
+                ]
+              },
+              "logical_root": "Hong Kong review slice"
+            },
+            "collection": "groups",
+            "items": [
+              {
+                "relative_path": ["Readable recovery candidate"],
+                "members": {
+                  "kind": "explicit",
+                  "source_item_refs": ["source-item:217"]
+                },
+                "source_naming": { "default": "preserve_source_basename" }
+              }
+            ],
+            "page": { "collection": "groups", "returned": 1, "complete": true }
+          }
+        },
+        "candidate_content_identity": "sha256:9bf2f04a79aaf245143cfcb295c3a732575269c9aa1340edc78c3da167ffe006"
+      }
+    },
+    {
+      "context": {
+        "human_confirmation": {
+          "principal_ref": "user:illustrative-reviewer",
+          "content_identity": "sha256:9bf2f04a79aaf245143cfcb295c3a732575269c9aa1340edc78c3da167ffe006"
+        }
+      },
+      "request": {
+        "action": "seal",
+        "work_ref": "plan-work:hk-001",
+        "revision": "work-revision:hk-002",
+        "candidate_content_identity": "sha256:9bf2f04a79aaf245143cfcb295c3a732575269c9aa1340edc78c3da167ffe006",
+        "request_id": "request:plan-seal-hk-001"
+      },
+      "response": {
+        "outcome": "ok",
+        "action": "seal",
+        "work_ref": "plan-work:hk-001",
+        "revision": "work-revision:hk-002",
+        "state": "closed",
+        "plan_ref": "frozen-plan:hk-review-slice-reference-001",
+        "result_ref": "precheck-result:hk-review-slice-002",
+        "content_identity": "sha256:9bf2f04a79aaf245143cfcb295c3a732575269c9aa1340edc78c3da167ffe006",
+        "frozen_plan": {
+          "sealed_content": {
+            "contract": "mediasense.frozen-plan",
+            "plan_ref": "frozen-plan:hk-review-slice-reference-001",
+            "result_ref": "precheck-result:hk-review-slice-002",
+            "scope": {
+              "kind": "union",
+              "sets": [
+                {
+                  "kind": "precheck_relation",
+                  "origin": "evidence:bundle61-boundary",
+                  "relation": "represents",
+                  "direction": "outbound"
+                },
+                {
+                  "kind": "explicit",
+                  "source_item_refs": ["source-item:215", "source-item:217"]
+                }
+              ]
+            },
+            "logical_root": "Hong Kong review slice",
+            "groups": [
+              {
+                "relative_path": ["Illustrative bundle 61 subset"],
+                "members": {
+                  "kind": "precheck_relation",
+                  "origin": "evidence:bundle61-boundary",
+                  "relation": "represents",
+                  "direction": "outbound"
+                },
+                "source_naming": {
+                  "default": "preserve_source_basename",
+                  "overrides": [
+                    { "source_item_ref": "source-item:13", "name": "item-013.jpg" },
+                    { "source_item_ref": "source-item:14", "name": "item-014.jpg" },
+                    { "source_item_ref": "source-item:15", "name": "item-015.jpg" }
+                  ]
+                }
+              },
+              {
+                "relative_path": ["Readable recovery candidate"],
+                "members": {
+                  "kind": "explicit",
+                  "source_item_refs": ["source-item:217"]
+                },
+                "source_naming": { "default": "preserve_source_basename" }
+              }
+            ],
+            "other_outcomes": [
+              {
+                "members": {
+                  "kind": "explicit",
+                  "source_item_refs": ["source-item:215"]
+                },
+                "outcome": "exclude_from_logical_organization",
+                "reason": "The media container is unreadable; keep the Source Item accounted and do not substitute a repaired candidate.",
+                "evidence_refs": ["evidence:repair-patched"]
+              }
+            ],
+            "decision_notes": [
+              {
+                "applies_to": {
+                  "kind": "precheck_relation",
+                  "origin": "evidence:bundle61-boundary",
+                  "relation": "represents",
+                  "direction": "outbound"
+                },
+                "summary": "Illustrative final grouping decision: reuse the complete PreCheck membership without treating that membership as semantic truth.",
+                "evidence_refs": ["evidence:bundle61-boundary"]
+              },
+              {
+                "applies_to": {
+                  "kind": "explicit",
+                  "source_item_refs": ["source-item:215"]
+                },
+                "summary": "The repair association is useful evidence but does not prove identity and must not replace the invalid Source Item.",
+                "evidence_refs": ["evidence:repair-patched"]
+              }
+            ]
+          },
+          "seal": {
+            "encoding_profile": "mediasense-json-strings-sha256-v1",
+            "content_identity": "sha256:9bf2f04a79aaf245143cfcb295c3a732575269c9aa1340edc78c3da167ffe006",
+            "final_confirmation": {
+              "confirmed_content_identity": "sha256:9bf2f04a79aaf245143cfcb295c3a732575269c9aa1340edc78c3da167ffe006",
+              "confirmed_at": "2026-08-27T11:38:00+08:00",
+              "confirmed_by": "user:illustrative-reviewer"
+            }
+          }
+        }
+      }
+    },
+    {
+      "context": {
+        "human_confirmation": {
+          "principal_ref": "user:illustrative-reviewer",
+          "content_identity": "sha256:9bf2f04a79aaf245143cfcb295c3a732575269c9aa1340edc78c3da167ffe006"
+        }
+      },
+      "request": {
+        "action": "seal",
+        "work_ref": "plan-work:hk-001",
+        "revision": "work-revision:hk-002",
+        "candidate_content_identity": "sha256:9bf2f04a79aaf245143cfcb295c3a732575269c9aa1340edc78c3da167ffe006",
+        "request_id": "request:plan-seal-hk-001"
+      },
+      "response": {
+        "outcome": "ok",
+        "action": "seal",
+        "work_ref": "plan-work:hk-001",
+        "revision": "work-revision:hk-002",
+        "state": "closed",
+        "plan_ref": "frozen-plan:hk-review-slice-reference-001",
+        "result_ref": "precheck-result:hk-review-slice-002",
+        "content_identity": "sha256:9bf2f04a79aaf245143cfcb295c3a732575269c9aa1340edc78c3da167ffe006",
+        "frozen_plan": {
+          "sealed_content": {
+            "contract": "mediasense.frozen-plan",
+            "plan_ref": "frozen-plan:hk-review-slice-reference-001",
+            "result_ref": "precheck-result:hk-review-slice-002",
+            "scope": {
+              "kind": "union",
+              "sets": [
+                {
+                  "kind": "precheck_relation",
+                  "origin": "evidence:bundle61-boundary",
+                  "relation": "represents",
+                  "direction": "outbound"
+                },
+                {
+                  "kind": "explicit",
+                  "source_item_refs": ["source-item:215", "source-item:217"]
+                }
+              ]
+            },
+            "logical_root": "Hong Kong review slice",
+            "groups": [
+              {
+                "relative_path": ["Illustrative bundle 61 subset"],
+                "members": {
+                  "kind": "precheck_relation",
+                  "origin": "evidence:bundle61-boundary",
+                  "relation": "represents",
+                  "direction": "outbound"
+                },
+                "source_naming": {
+                  "default": "preserve_source_basename",
+                  "overrides": [
+                    { "source_item_ref": "source-item:13", "name": "item-013.jpg" },
+                    { "source_item_ref": "source-item:14", "name": "item-014.jpg" },
+                    { "source_item_ref": "source-item:15", "name": "item-015.jpg" }
+                  ]
+                }
+              },
+              {
+                "relative_path": ["Readable recovery candidate"],
+                "members": {
+                  "kind": "explicit",
+                  "source_item_refs": ["source-item:217"]
+                },
+                "source_naming": { "default": "preserve_source_basename" }
+              }
+            ],
+            "other_outcomes": [
+              {
+                "members": {
+                  "kind": "explicit",
+                  "source_item_refs": ["source-item:215"]
+                },
+                "outcome": "exclude_from_logical_organization",
+                "reason": "The media container is unreadable; keep the Source Item accounted and do not substitute a repaired candidate.",
+                "evidence_refs": ["evidence:repair-patched"]
+              }
+            ],
+            "decision_notes": [
+              {
+                "applies_to": {
+                  "kind": "precheck_relation",
+                  "origin": "evidence:bundle61-boundary",
+                  "relation": "represents",
+                  "direction": "outbound"
+                },
+                "summary": "Illustrative final grouping decision: reuse the complete PreCheck membership without treating that membership as semantic truth.",
+                "evidence_refs": ["evidence:bundle61-boundary"]
+              },
+              {
+                "applies_to": {
+                  "kind": "explicit",
+                  "source_item_refs": ["source-item:215"]
+                },
+                "summary": "The repair association is useful evidence but does not prove identity and must not replace the invalid Source Item.",
+                "evidence_refs": ["evidence:repair-patched"]
+              }
+            ]
+          },
+          "seal": {
+            "encoding_profile": "mediasense-json-strings-sha256-v1",
+            "content_identity": "sha256:9bf2f04a79aaf245143cfcb295c3a732575269c9aa1340edc78c3da167ffe006",
+            "final_confirmation": {
+              "confirmed_content_identity": "sha256:9bf2f04a79aaf245143cfcb295c3a732575269c9aa1340edc78c3da167ffe006",
+              "confirmed_at": "2026-08-27T11:38:00+08:00",
+              "confirmed_by": "user:illustrative-reviewer"
+            }
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "action": "update",
+        "work_ref": "plan-work:hk-001",
+        "base_revision": "work-revision:hk-002",
+        "candidate_content": {
+          "result_ref": "precheck-result:hk-review-slice-002",
+          "scope": {
+            "kind": "explicit",
+            "source_item_refs": ["source-item:215"]
+          },
+          "logical_root": "Too late",
+          "groups": [],
+          "other_outcomes": [
+            {
+              "members": {
+                "kind": "explicit",
+                "source_item_refs": ["source-item:215"]
+              },
+              "outcome": "retain_current_organization"
+            }
+          ]
+        },
+        "request_id": "request:plan-update-after-seal"
+      },
+      "response": {
+        "outcome": "error",
+        "action": "update",
+        "work_ref": "plan-work:hk-001",
+        "revision": "work-revision:hk-002",
+        "error": {
+          "code": "work_closed",
+          "message": "The Working State was closed by a successful seal.",
+          "current_revision": "work-revision:hk-002"
+        }
+      }
+    }
+  ]
+}

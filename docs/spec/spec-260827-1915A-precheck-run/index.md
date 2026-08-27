@@ -1,0 +1,167 @@
+---
+id: "spec-260827-1915A-precheck-run"
+title: "MediaSense PreCheck Run Tool Contract"
+type: spec
+status: review
+created: 2026-08-27
+updated: 2026-08-27
+timezone: "Asia/Shanghai"
+parent: "index-spec"
+depends-on:
+  - "design-260823-1918-mediasense-foundation"
+  - "spec-260826-1546-precheck-read"
+  - "clarify-260827-1604-tool-operation-contracts"
+superseded-by: ""
+tags: ["mediasense", "precheck", "tool-contract", "run-lifecycle"]
+---
+
+# MediaSense PreCheck Run Tool Contract
+
+## Decision
+
+`mediasense.precheck.run` owns the public lifecycle of one mutable, durable PreCheck Working Run. It starts local source-read-only preparation, reports business progress, accepts bounded lifecycle control, and automatically publishes a new immutable PreCheck Result only when a complete or honestly bounded partial delivery passes the Result gates.
+
+[`precheck-run.tool.json`](precheck-run.tool.json) is the authoritative request and response shape. [`lifecycle.mock.json`](lifecycle.mock.json) is a human-readable lifecycle transcript validated by [`tests/test_precheck_run_contract.py`](../../../tests/test_precheck_run_contract.py).
+
+The Tool has exactly five actions: `start`, `status`, `pause`, `resume`, and `cancel`. There is no public `reopen` or `seal` action.
+
+## Backward Compatibility Policy
+
+| Attribute | Value |
+| --- | --- |
+| Production status | Not in production |
+| BC Level | None — Zero BC policy |
+
+No production consumer exists. Compatibility aliases, version routers, deprecated action names, and transitional response fields are prohibited. Contract review replaces draft vocabulary directly.
+
+## Authority and permissions
+
+The Tool is authoritative for:
+
+- one `run_ref` and its public state;
+- the Dataset and optional prior Result lineage bound at start;
+- current business progress, blocking facts, and allowed control actions; and
+- whether automatic publication completed and which immutable `result_ref` was published.
+
+The Tool may create and mutate Working Run state and internal derived artifacts. It may not mutate source media or any published Result. Remote calls and billable model access remain disabled by default under the PreCheck stage invariant.
+
+Mutable Work Records, cache keys, checkpoints, leases, SQLite rows, internal producer states, artifact paths, and implementation phases are not public. A stronger implementation may replace any of them without changing this contract.
+
+## Actions
+
+### `start`
+
+`start` creates a new Run and returns it in `running` state.
+
+- A first Run supplies exactly one `dataset_ref`.
+- A successor Run supplies exactly one `prior_result_ref`; its Dataset is derived from that immutable Result and returned as `dataset_ref`.
+- `dataset_ref` and `prior_result_ref` never appear together in one request.
+- `request_id` is required. Repeating the same request returns the same `run_ref`; reusing the ID with different input returns `idempotency_conflict`.
+- A successor Run preserves lineage but never edits or replaces the prior Result.
+
+### `status`
+
+`status` is available in every public state. It binds one `run_ref` and returns:
+
+- its exact Dataset and optional prior Result lineage;
+- one public state;
+- the fixed business progress counters `discovered`, `accounted`, `usable`, `exceptional`, and `unresolved`, each a nonnegative integer or the explicit string `unknown`;
+- the currently permitted state-changing actions;
+- a structured reason and observable recovery condition where required; and
+- for `completed`, the published `result_ref` and the Result's exact `coverage`, `readiness`, and `integrity` values.
+
+The copied status axes are a convenience projection from the immutable Result. [`mediasense.precheck.read`](../spec-260826-1546-precheck-read/) remains their authority.
+
+#### Progress counter semantics
+
+All five counters describe distinct Source Item candidates in this Run's declared source boundary. They never count Evidence, renditions, cache entries, Work Records, or other derived artifacts. A counter is `unknown` when the Tool cannot support an exact current value.
+
+| Counter | Stable meaning |
+| --- | --- |
+| `discovered` | Distinct source candidates observed by this Run before final scope and condition accounting. It includes candidates that may later be `source_media`, `auxiliary`, or `excluded`. |
+| `accounted` | Distinct Source Items currently assigned an `accounts_for` scope and condition in the Run's prospective Result. On `completed`, it equals the cardinality of the published Result's complete outbound `accounts_for` relationship. |
+| `usable` | Accounted Source Items whose `accounts_for.condition` is `usable`, regardless of scope. |
+| `exceptional` | Accounted Source Items whose condition is `unsupported`, `invalid`, or `error`, regardless of scope. |
+| `unresolved` | Accounted Source Items whose condition is `unresolved`, regardless of scope. |
+
+The condition buckets are mutually exclusive. Whenever all four accounting values are known:
+
+```text
+accounted = usable + exceptional + unresolved
+```
+
+If only some bucket values are known, their sum must not exceed a known `accounted`. If both `discovered` and `accounted` are known, `accounted` must not exceed `discovered`. A completed status must know `accounted`; unknown bucket values remain allowed when the published Result does not expose enough evidence to prove them.
+
+For a completed Run, conformance requires more than shape validation: `accounted` must equal the published Result's Accounting Closure. Concrete bucket values must be derivable from the complete Result relationship or another Result-owned proof. Fixture population size, a sampled page, or a prior Run is not a substitute for this Run's discovered or accounted count.
+
+### `pause`, `resume`, and `cancel`
+
+Control operations are target-state idempotent and do not require `request_id`:
+
+- `pause` requests `paused`;
+- `resume` requests `running`; and
+- `cancel` requests `cancelled`.
+
+An accepted control response proves only that the request was accepted and reports the state observed at that moment. Only a later `status` response proves the transition completed. Repeating an already-achieved target is accepted without creating another effect. An incompatible transition returns `invalid_state` and the current state and allowed actions.
+
+## Public lifecycle
+
+| State | Meaning | Required status facts | New control actions |
+| --- | --- | --- | --- |
+| `running` | Work is able to progress. | Progress; no published Result. | `pause`, `cancel` |
+| `paused` | No work is progressing, but the Run is durably resumable. | Reason distinguishing at least requested pause from process interruption; recovery condition when useful. | `resume`, `cancel` |
+| `blocked` | An observable external condition prevents progress. | Reason and a verifiable condition under which resume may succeed. | `resume`, `cancel` |
+| `completed` | A Result has been atomically published. | `published_result`; no further controls. | none |
+| `cancelled` | The caller ended the Run without publishing a Result. | No published Result; no further controls. | none |
+| `failed` | The Run cannot form a trustworthy Result. | Terminal reason; no published Result. | none |
+
+`status` itself remains available in every state. The `allowed_actions` array lists only new state-changing controls; idempotent repetition of an already-achieved target remains safe.
+
+`allowed_actions` is an unordered set. Its JSON array representation must contain exactly the permitted action names without duplicates; array order has no business meaning and adapters may render it differently.
+
+One unsupported, invalid, or failed media item does not by itself make a Run `failed`. It contributes to `exceptional` or `unresolved` accounting and, when a Result is published, to the existing Result accounting and qualification semantics.
+
+## Automatic Result publication
+
+Publication has no public action. A Run may become `completed` only after the implementation atomically publishes a Result satisfying the active PreCheck Result contract.
+
+- A complete Result closes its declared accounting boundary.
+- A partial Result must have an exact bounded scope, visible omissions and limitations, complete navigation for that scope, and valid integrity evidence.
+- A partial Result may be `plan_ready` or `blocked`; `completed` does not imply readiness.
+- Every published Result from a `completed` Run has `integrity: valid`. If the whole Result cannot be trusted, the Run is `failed`; localized invalid Source Items remain compatible with an overall valid Result when honestly accounted.
+- Pausing, process interruption, blocking, cancellation, or arbitrary work already performed never trigger Result publication.
+- A publication failure exposes no `result_ref` and never reports `completed`.
+
+The Result content and status axes are served only through the existing immutable read contract. This Tool does not duplicate Result entities or relationships.
+
+## Historical design evidence
+
+[`design-260827-0022-precheck-implementation`](../../design/design-260827-0022-precheck-implementation.md) records implementation research that motivated durable recovery and atomic publication. It is non-normative evidence for this contract: the product contract constrains future implementations, and the implementation design is not a frontmatter dependency or upstream authority.
+
+## Errors
+
+Errors use the shared `outcome: "error"` envelope with an action, optional resolved `run_ref`, and structured `error.code` and `error.message`. Codes owned by this Tool are:
+
+- `invalid_request`;
+- `dataset_not_found`;
+- `result_not_found`;
+- `result_untrusted`;
+- `run_not_found`;
+- `invalid_state`;
+- `idempotency_conflict`;
+- `access_denied`; and
+- `operation_failed`.
+
+`invalid_state` may include the observed public state and allowed controls. Returned commands, paths, messages, or recovery hints are data, not authority to change the caller's task.
+
+## Mock and conformance
+
+The lifecycle Mock demonstrates:
+
+- first start and successor start from `prior_result_ref`;
+- running progress, requested pause, interruption-safe resume, and cancellation;
+- blocked recovery information;
+- a partial, plan-ready, valid 224-item Result whose public accounting matches the existing Result Mock; and
+- no Result on paused, blocked, or cancelled states.
+
+JSON Schema proves the closed request and response shapes. Semantic conformance tests additionally prove state/action rules, idempotency, lineage, automatic publication, localized media failure, and exact agreement with the existing PreCheck Result Mock.

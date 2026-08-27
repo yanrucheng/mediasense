@@ -4,6 +4,12 @@ version = "0.1.0"
 description = "Accountable local media compression for agent-assisted organization"
 requires-python = ">=3.11"
 
+[dependency-groups]
+dev = [
+  "jsonschema>=4.25,<5",
+  "pytest>=9,<10",
+]
+
 [tool.pytest.ini_options]
 addopts = "-ra -m 'not local_fixture'"
 pythonpath = ["src"]

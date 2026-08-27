@@ -1,0 +1,198 @@
+{
+  "mock_kind": "mediasense.precheck.run.lifecycle",
+  "contract": "mediasense.precheck.run",
+  "authority": "Human-authored review example; not runtime output.",
+  "exchanges": [
+    {
+      "request": {
+        "action": "start",
+        "dataset_ref": "dataset:hong-kong-food-trip",
+        "request_id": "request:precheck-hk-001"
+      },
+      "response": {
+        "outcome": "ok",
+        "action": "start",
+        "run_ref": "precheck-run:hk-001",
+        "dataset_ref": "dataset:hong-kong-food-trip",
+        "state": "running"
+      }
+    },
+    {
+      "request": {
+        "action": "status",
+        "run_ref": "precheck-run:hk-001"
+      },
+      "response": {
+        "outcome": "ok",
+        "action": "status",
+        "run_ref": "precheck-run:hk-001",
+        "dataset_ref": "dataset:hong-kong-food-trip",
+        "state": "running",
+        "progress": {
+          "discovered": "unknown",
+          "accounted": "unknown",
+          "usable": "unknown",
+          "exceptional": "unknown",
+          "unresolved": "unknown"
+        },
+        "allowed_actions": ["cancel", "pause"]
+      }
+    },
+    {
+      "request": {
+        "action": "pause",
+        "run_ref": "precheck-run:hk-001"
+      },
+      "response": {
+        "outcome": "accepted",
+        "action": "pause",
+        "run_ref": "precheck-run:hk-001",
+        "observed_state": "running",
+        "target_state": "paused"
+      }
+    },
+    {
+      "request": {
+        "action": "status",
+        "run_ref": "precheck-run:hk-001"
+      },
+      "response": {
+        "outcome": "ok",
+        "action": "status",
+        "run_ref": "precheck-run:hk-001",
+        "dataset_ref": "dataset:hong-kong-food-trip",
+        "state": "paused",
+        "progress": {
+          "discovered": "unknown",
+          "accounted": "unknown",
+          "usable": "unknown",
+          "exceptional": "unknown",
+          "unresolved": "unknown"
+        },
+        "allowed_actions": ["resume", "cancel"],
+        "reason": {
+          "code": "user_requested",
+          "message": "The caller requested a durable pause.",
+          "resume_when": "The caller chooses to continue this Run."
+        }
+      }
+    },
+    {
+      "request": {
+        "action": "resume",
+        "run_ref": "precheck-run:hk-001"
+      },
+      "response": {
+        "outcome": "accepted",
+        "action": "resume",
+        "run_ref": "precheck-run:hk-001",
+        "observed_state": "paused",
+        "target_state": "running"
+      }
+    },
+    {
+      "request": {
+        "action": "status",
+        "run_ref": "precheck-run:hk-001"
+      },
+      "response": {
+        "outcome": "ok",
+        "action": "status",
+        "run_ref": "precheck-run:hk-001",
+        "dataset_ref": "dataset:hong-kong-food-trip",
+        "state": "completed",
+        "progress": {
+          "discovered": "unknown",
+          "accounted": 224,
+          "usable": 223,
+          "exceptional": 1,
+          "unresolved": 0
+        },
+        "allowed_actions": [],
+        "published_result": {
+          "result_ref": "precheck-result:hk-review-slice-002",
+          "coverage": "partial",
+          "readiness": "plan_ready",
+          "integrity": "valid"
+        }
+      }
+    },
+    {
+      "request": {
+        "action": "start",
+        "prior_result_ref": "precheck-result:hk-review-slice-002",
+        "request_id": "request:precheck-hk-002"
+      },
+      "response": {
+        "outcome": "ok",
+        "action": "start",
+        "run_ref": "precheck-run:hk-002",
+        "dataset_ref": "dataset:hong-kong-food-trip",
+        "prior_result_ref": "precheck-result:hk-review-slice-002",
+        "state": "running"
+      }
+    },
+    {
+      "request": {
+        "action": "status",
+        "run_ref": "precheck-run:hk-002"
+      },
+      "response": {
+        "outcome": "ok",
+        "action": "status",
+        "run_ref": "precheck-run:hk-002",
+        "dataset_ref": "dataset:hong-kong-food-trip",
+        "prior_result_ref": "precheck-result:hk-review-slice-002",
+        "state": "blocked",
+        "progress": {
+          "discovered": "unknown",
+          "accounted": "unknown",
+          "usable": "unknown",
+          "exceptional": "unknown",
+          "unresolved": "unknown"
+        },
+        "allowed_actions": ["cancel", "resume"],
+        "reason": {
+          "code": "source_unavailable",
+          "message": "The source volume is not currently available.",
+          "resume_when": "The same compatible source is available again."
+        }
+      }
+    },
+    {
+      "request": {
+        "action": "cancel",
+        "run_ref": "precheck-run:hk-002"
+      },
+      "response": {
+        "outcome": "accepted",
+        "action": "cancel",
+        "run_ref": "precheck-run:hk-002",
+        "observed_state": "blocked",
+        "target_state": "cancelled"
+      }
+    },
+    {
+      "request": {
+        "action": "status",
+        "run_ref": "precheck-run:hk-002"
+      },
+      "response": {
+        "outcome": "ok",
+        "action": "status",
+        "run_ref": "precheck-run:hk-002",
+        "dataset_ref": "dataset:hong-kong-food-trip",
+        "prior_result_ref": "precheck-result:hk-review-slice-002",
+        "state": "cancelled",
+        "progress": {
+          "discovered": "unknown",
+          "accounted": "unknown",
+          "usable": "unknown",
+          "exceptional": "unknown",
+          "unresolved": "unknown"
+        },
+        "allowed_actions": []
+      }
+    }
+  ]
+}
