@@ -68,8 +68,7 @@
                 }
               ]
             }
-          ],
-          "qualifications": []
+          ]
         }
       }
     },
@@ -88,27 +87,18 @@
         "outcome": "ok",
         "result_ref": "precheck-result:hk-review-slice-002",
         "action": "traverse",
-        "origin": {
-          "kind": "result",
-          "ref": "precheck-result:hk-review-slice-002"
-        },
+        "origin": "precheck-result:hk-review-slice-002",
         "relation": "accounts_for",
         "direction": "outbound",
         "basis": "The sealed 224-path review ledger defines this Mock's bounded accounting population.",
         "items": [
           {
-            "target": {
-              "kind": "source_item",
-              "ref": "source-item:13"
-            },
+            "target": "source-item:13",
             "scope": "source_media",
             "condition": "usable"
           },
           {
-            "target": {
-              "kind": "source_item",
-              "ref": "source-item:215"
-            },
+            "target": "source-item:215",
             "scope": "source_media",
             "condition": "invalid",
             "qualifications": [
@@ -144,20 +134,14 @@
         "outcome": "ok",
         "result_ref": "precheck-result:hk-review-slice-002",
         "action": "traverse",
-        "origin": {
-          "kind": "result",
-          "ref": "precheck-result:hk-review-slice-002"
-        },
+        "origin": "precheck-result:hk-review-slice-002",
         "relation": "accounts_for",
         "direction": "outbound",
         "derived_view": "attention_items",
         "basis": "Derived from non-usable accounting conditions or material member qualifications; it is not a second authoritative relationship.",
         "items": [
           {
-            "target": {
-              "kind": "source_item",
-              "ref": "source-item:215"
-            },
+            "target": "source-item:215",
             "scope": "source_media",
             "condition": "invalid",
             "qualifications": [
@@ -191,30 +175,18 @@
         "outcome": "ok",
         "result_ref": "precheck-result:hk-review-slice-002",
         "action": "traverse",
-        "origin": {
-          "kind": "result",
-          "ref": "precheck-result:hk-review-slice-002"
-        },
+        "origin": "precheck-result:hk-review-slice-002",
         "relation": "entry_evidence",
         "direction": "outbound",
         "items": [
           {
-            "target": {
-              "kind": "evidence",
-              "ref": "evidence:normal-jpeg"
-            }
+            "target": "evidence:normal-jpeg"
           },
           {
-            "target": {
-              "kind": "evidence",
-              "ref": "evidence:bundle61-entry"
-            }
+            "target": "evidence:bundle61-entry"
           },
           {
-            "target": {
-              "kind": "evidence",
-              "ref": "evidence:repair-patched"
-            },
+            "target": "evidence:repair-patched",
             "qualifications": [
               {
                 "code": "repair_family_candidate",
@@ -283,10 +255,7 @@
       "request": {
         "result_ref": "precheck-result:hk-review-slice-002",
         "action": "traverse",
-        "target": {
-          "kind": "evidence",
-          "ref": "evidence:bundle61-entry"
-        },
+        "target": "evidence:bundle61-entry",
         "relation": "expands_to",
         "direction": "outbound"
       },
@@ -294,10 +263,7 @@
         "outcome": "ok",
         "result_ref": "precheck-result:hk-review-slice-002",
         "action": "traverse",
-        "origin": {
-          "kind": "evidence",
-          "ref": "evidence:bundle61-entry"
-        },
+        "origin": "evidence:bundle61-entry",
         "relation": "expands_to",
         "direction": "outbound",
         "basis": "Sealed navigation to already-prepared detail.",
@@ -323,14 +289,53 @@
       }
     },
     {
+      "name": "resolve complete bundle 61 boundary subset",
+      "request": {
+        "result_ref": "precheck-result:hk-review-slice-002",
+        "action": "traverse",
+        "target": "evidence:bundle61-boundary",
+        "relation": "represents",
+        "direction": "outbound"
+      },
+      "response": {
+        "outcome": "ok",
+        "result_ref": "precheck-result:hk-review-slice-002",
+        "action": "traverse",
+        "origin": "evidence:bundle61-boundary",
+        "relation": "represents",
+        "direction": "outbound",
+        "basis": "This prepared detail preserves a three-item boundary subset of verified bundle 61 membership for exact downstream reuse.",
+        "qualifications": [
+          {
+            "code": "historical_group_candidate",
+            "effect": "limits_interpretation",
+            "message": "The complete relationship establishes membership and traceability, not a final semantic grouping."
+          }
+        ],
+        "items": [
+          {
+            "target": "source-item:13"
+          },
+          {
+            "target": "source-item:14"
+          },
+          {
+            "target": "source-item:15"
+          }
+        ],
+        "page": {
+          "returned": 3,
+          "total": 3,
+          "complete": true
+        }
+      }
+    },
+    {
       "name": "page through bundle 61 represented source items",
       "request": {
         "result_ref": "precheck-result:hk-review-slice-002",
         "action": "traverse",
-        "target": {
-          "kind": "evidence",
-          "ref": "evidence:bundle61-entry"
-        },
+        "target": "evidence:bundle61-entry",
         "relation": "represents",
         "direction": "outbound",
         "page": {
@@ -341,10 +346,7 @@
         "outcome": "ok",
         "result_ref": "precheck-result:hk-review-slice-002",
         "action": "traverse",
-        "origin": {
-          "kind": "evidence",
-          "ref": "evidence:bundle61-entry"
-        },
+        "origin": "evidence:bundle61-entry",
         "relation": "represents",
         "direction": "outbound",
         "basis": "Historical AI Album bundle 61 membership is retained as a challengeable PreCheck compression claim.",
@@ -357,22 +359,13 @@
         ],
         "items": [
           {
-            "target": {
-              "kind": "source_item",
-              "ref": "source-item:13"
-            }
+            "target": "source-item:13"
           },
           {
-            "target": {
-              "kind": "source_item",
-              "ref": "source-item:14"
-            }
+            "target": "source-item:14"
           },
           {
-            "target": {
-              "kind": "source_item",
-              "ref": "source-item:15"
-            }
+            "target": "source-item:15"
           }
         ],
         "page": {
@@ -388,10 +381,7 @@
       "request": {
         "result_ref": "precheck-result:hk-review-slice-002",
         "action": "traverse",
-        "target": {
-          "kind": "source_item",
-          "ref": "source-item:211"
-        },
+        "target": "source-item:211",
         "relation": "represents",
         "direction": "inbound"
       },
@@ -399,19 +389,13 @@
         "outcome": "ok",
         "result_ref": "precheck-result:hk-review-slice-002",
         "action": "traverse",
-        "origin": {
-          "kind": "source_item",
-          "ref": "source-item:211"
-        },
+        "origin": "source-item:211",
         "relation": "represents",
         "direction": "inbound",
         "basis": "Reverse lookup over the same sealed coverage claims.",
         "items": [
           {
-            "target": {
-              "kind": "evidence",
-              "ref": "evidence:bundle61-entry"
-            },
+            "target": "evidence:bundle61-entry",
             "qualifications": [
               {
                 "code": "hidden_within_group_variation",
@@ -422,10 +406,7 @@
             ]
           },
           {
-            "target": {
-              "kind": "evidence",
-              "ref": "evidence:bundle61-outlier"
-            }
+            "target": "evidence:bundle61-outlier"
           }
         ],
         "page": {
@@ -489,10 +470,7 @@
       "request": {
         "result_ref": "precheck-result:hk-review-slice-002",
         "action": "traverse",
-        "target": {
-          "kind": "source_item",
-          "ref": "source-item:215"
-        },
+        "target": "source-item:215",
         "relation": "represents",
         "direction": "inbound"
       },
@@ -500,10 +478,7 @@
         "outcome": "ok",
         "result_ref": "precheck-result:hk-review-slice-002",
         "action": "traverse",
-        "origin": {
-          "kind": "source_item",
-          "ref": "source-item:215"
-        },
+        "origin": "source-item:215",
         "relation": "represents",
         "direction": "inbound",
         "basis": "Human review of the fixture construction history, shared stem, metadata, partial hashes, and local renditions.",
@@ -516,10 +491,7 @@
         ],
         "items": [
           {
-            "target": {
-              "kind": "evidence",
-              "ref": "evidence:repair-patched"
-            }
+            "target": "evidence:repair-patched"
           }
         ],
         "page": {
@@ -534,10 +506,7 @@
       "request": {
         "result_ref": "precheck-result:hk-review-slice-002",
         "action": "traverse",
-        "target": {
-          "kind": "evidence",
-          "ref": "evidence:repair-patched"
-        },
+        "target": "evidence:repair-patched",
         "relation": "derived_from",
         "direction": "outbound"
       },
@@ -545,10 +514,7 @@
         "outcome": "ok",
         "result_ref": "precheck-result:hk-review-slice-002",
         "action": "traverse",
-        "origin": {
-          "kind": "evidence",
-          "ref": "evidence:repair-patched"
-        },
+        "origin": "evidence:repair-patched",
         "relation": "derived_from",
         "direction": "outbound",
         "basis": "The displayed local rendition was extracted from the separately addressed patched-full media item.",
@@ -606,8 +572,7 @@
               "status": "missing",
               "basis": "The fixture metadata snapshot records create_date as null for this readable remux item."
             }
-          ],
-          "qualifications": []
+          ]
         }
       }
     }

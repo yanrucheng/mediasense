@@ -19,7 +19,10 @@
         "enum": ["inspect", "traverse"]
       },
       "target": {
-        "$ref": "#/$defs/target_ref"
+        "oneOf": [
+          {"$ref": "#/$defs/target_ref"},
+          {"$ref": "#/$defs/opaque_ref"}
+        ]
       },
       "relation": {
         "$ref": "#/$defs/relation"
@@ -42,6 +45,7 @@
         },
         "then": {
           "properties": {
+            "target": {"$ref": "#/$defs/target_ref"},
             "relation": false,
             "direction": false,
             "filter": false,
@@ -85,14 +89,6 @@
             },
             {
               "properties": {
-                "relation": {"const": "accounts_for"},
-                "direction": {"const": "inbound"},
-                "target": {"$ref": "#/$defs/source_item_ref"}
-              },
-              "required": ["relation", "direction", "target"]
-            },
-            {
-              "properties": {
                 "relation": {"const": "entry_evidence"},
                 "direction": {"const": "outbound"},
                 "target": false
@@ -101,17 +97,9 @@
             },
             {
               "properties": {
-                "relation": {"const": "entry_evidence"},
-                "direction": {"const": "inbound"},
-                "target": {"$ref": "#/$defs/evidence_ref"}
-              },
-              "required": ["relation", "direction", "target"]
-            },
-            {
-              "properties": {
                 "relation": {"const": "represents"},
                 "direction": {"const": "outbound"},
-                "target": {"$ref": "#/$defs/evidence_ref"}
+                "target": {"$ref": "#/$defs/opaque_ref"}
               },
               "required": ["relation", "direction", "target"]
             },
@@ -119,7 +107,7 @@
               "properties": {
                 "relation": {"const": "represents"},
                 "direction": {"const": "inbound"},
-                "target": {"$ref": "#/$defs/source_item_ref"}
+                "target": {"$ref": "#/$defs/opaque_ref"}
               },
               "required": ["relation", "direction", "target"]
             },
@@ -127,20 +115,7 @@
               "properties": {
                 "relation": {"enum": ["derived_from", "expands_to"]},
                 "direction": {"const": "outbound"},
-                "target": {"$ref": "#/$defs/evidence_ref"}
-              },
-              "required": ["relation", "direction", "target"]
-            },
-            {
-              "properties": {
-                "relation": {"enum": ["derived_from", "expands_to"]},
-                "direction": {"const": "inbound"},
-                "target": {
-                  "oneOf": [
-                    {"$ref": "#/$defs/source_item_ref"},
-                    {"$ref": "#/$defs/evidence_ref"}
-                  ]
-                }
+                "target": {"$ref": "#/$defs/opaque_ref"}
               },
               "required": ["relation", "direction", "target"]
             }
@@ -149,6 +124,10 @@
       }
     ],
     "$defs": {
+      "opaque_ref": {
+        "type": "string",
+        "minLength": 1
+      },
       "dataset_ref": {
         "type": "object",
         "additionalProperties": false,
@@ -239,6 +218,10 @@
       {"$ref": "#/$defs/error_response"}
     ],
     "$defs": {
+      "opaque_ref": {
+        "type": "string",
+        "minLength": 1
+      },
       "json_value": {
         "description": "A JSON value whose domain meaning is named by its containing record.",
         "oneOf": [
@@ -305,6 +288,12 @@
           {"$ref": "#/$defs/evidence_target_ref"}
         ]
       },
+      "source_or_evidence_target_ref": {
+        "oneOf": [
+          {"$ref": "#/$defs/source_item_target_ref"},
+          {"$ref": "#/$defs/evidence_target_ref"}
+        ]
+      },
       "relation": {
         "enum": [
           "accounts_for",
@@ -347,7 +336,7 @@
             "minLength": 1
           },
           "effect": {
-            "enum": ["informational", "limits_interpretation", "blocks_use"]
+            "enum": ["limits_interpretation", "blocks_use"]
           },
           "message": {
             "type": "string",
@@ -383,6 +372,7 @@
           },
           "qualifications": {
             "type": "array",
+            "minItems": 1,
             "items": {"$ref": "#/$defs/qualification"}
           }
         },
@@ -397,7 +387,7 @@
                 "value": true,
                 "basis": true
               },
-              "required": ["value", "basis"]
+              "required": ["value"]
             }
           },
           {
@@ -489,6 +479,7 @@
           },
           "qualifications": {
             "type": "array",
+            "minItems": 1,
             "items": {"$ref": "#/$defs/qualification"}
           }
         }
@@ -518,6 +509,7 @@
           },
           "qualifications": {
             "type": "array",
+            "minItems": 1,
             "items": {"$ref": "#/$defs/qualification"}
           }
         }
@@ -542,6 +534,7 @@
           },
           "qualifications": {
             "type": "array",
+            "minItems": 1,
             "items": {"$ref": "#/$defs/qualification"}
           }
         }
@@ -563,6 +556,7 @@
           },
           "qualifications": {
             "type": "array",
+            "minItems": 1,
             "items": {"$ref": "#/$defs/qualification"}
           }
         }
@@ -584,6 +578,7 @@
           },
           "qualifications": {
             "type": "array",
+            "minItems": 1,
             "items": {"$ref": "#/$defs/qualification"}
           }
         }
@@ -601,7 +596,12 @@
         "additionalProperties": false,
         "required": ["target"],
         "properties": {
-          "target": {"$ref": "#/$defs/target_ref"},
+          "target": {
+            "oneOf": [
+              {"$ref": "#/$defs/opaque_ref"},
+              {"$ref": "#/$defs/source_or_evidence_target_ref"}
+            ]
+          },
           "scope": {
             "enum": ["source_media", "auxiliary", "excluded"]
           },
@@ -611,6 +611,7 @@
           "basis": {"$ref": "#/$defs/basis"},
           "qualifications": {
             "type": "array",
+            "minItems": 1,
             "items": {"$ref": "#/$defs/qualification"}
           }
         }
@@ -677,7 +678,7 @@
             "minLength": 1
           },
           "action": {"const": "traverse"},
-          "origin": {"$ref": "#/$defs/target_ref"},
+          "origin": {"$ref": "#/$defs/opaque_ref"},
           "relation": {"$ref": "#/$defs/relation"},
           "direction": {
             "enum": ["outbound", "inbound"]
@@ -688,6 +689,7 @@
           "basis": {"$ref": "#/$defs/basis"},
           "qualifications": {
             "type": "array",
+            "minItems": 1,
             "items": {"$ref": "#/$defs/qualification"}
           },
           "items": {
@@ -764,29 +766,13 @@
                 "properties": {
                   "relation": {"const": "accounts_for"},
                   "direction": {"const": "outbound"},
-                  "origin": {"$ref": "#/$defs/result_target_ref"},
+                  "origin": {"$ref": "#/$defs/opaque_ref"},
                   "items": {
                     "type": "array",
                     "items": {
                       "type": "object",
                       "properties": {
-                        "target": {"$ref": "#/$defs/source_item_target_ref"}
-                      }
-                    }
-                  }
-                }
-              },
-              {
-                "properties": {
-                  "relation": {"const": "accounts_for"},
-                  "direction": {"const": "inbound"},
-                  "origin": {"$ref": "#/$defs/source_item_target_ref"},
-                  "items": {
-                    "type": "array",
-                    "items": {
-                      "type": "object",
-                      "properties": {
-                        "target": {"$ref": "#/$defs/result_target_ref"}
+                        "target": {"$ref": "#/$defs/opaque_ref"}
                       }
                     }
                   }
@@ -796,29 +782,13 @@
                 "properties": {
                   "relation": {"const": "entry_evidence"},
                   "direction": {"const": "outbound"},
-                  "origin": {"$ref": "#/$defs/result_target_ref"},
+                  "origin": {"$ref": "#/$defs/opaque_ref"},
                   "items": {
                     "type": "array",
                     "items": {
                       "type": "object",
                       "properties": {
-                        "target": {"$ref": "#/$defs/evidence_target_ref"}
-                      }
-                    }
-                  }
-                }
-              },
-              {
-                "properties": {
-                  "relation": {"const": "entry_evidence"},
-                  "direction": {"const": "inbound"},
-                  "origin": {"$ref": "#/$defs/evidence_target_ref"},
-                  "items": {
-                    "type": "array",
-                    "items": {
-                      "type": "object",
-                      "properties": {
-                        "target": {"$ref": "#/$defs/result_target_ref"}
+                        "target": {"$ref": "#/$defs/opaque_ref"}
                       }
                     }
                   }
@@ -828,13 +798,13 @@
                 "properties": {
                   "relation": {"const": "represents"},
                   "direction": {"const": "outbound"},
-                  "origin": {"$ref": "#/$defs/evidence_target_ref"},
+                  "origin": {"$ref": "#/$defs/opaque_ref"},
                   "items": {
                     "type": "array",
                     "items": {
                       "type": "object",
                       "properties": {
-                        "target": {"$ref": "#/$defs/source_item_target_ref"}
+                        "target": {"$ref": "#/$defs/opaque_ref"}
                       }
                     }
                   }
@@ -844,13 +814,13 @@
                 "properties": {
                   "relation": {"const": "represents"},
                   "direction": {"const": "inbound"},
-                  "origin": {"$ref": "#/$defs/source_item_target_ref"},
+                  "origin": {"$ref": "#/$defs/opaque_ref"},
                   "items": {
                     "type": "array",
                     "items": {
                       "type": "object",
                       "properties": {
-                        "target": {"$ref": "#/$defs/evidence_target_ref"}
+                        "target": {"$ref": "#/$defs/opaque_ref"}
                       }
                     }
                   }
@@ -860,39 +830,15 @@
                 "properties": {
                   "relation": {"enum": ["derived_from", "expands_to"]},
                   "direction": {"const": "outbound"},
-                  "origin": {"$ref": "#/$defs/evidence_target_ref"},
+                  "origin": {"$ref": "#/$defs/opaque_ref"},
                   "items": {
                     "type": "array",
                     "items": {
                       "type": "object",
                       "properties": {
                         "target": {
-                          "oneOf": [
-                            {"$ref": "#/$defs/source_item_target_ref"},
-                            {"$ref": "#/$defs/evidence_target_ref"}
-                          ]
+                          "$ref": "#/$defs/source_or_evidence_target_ref"
                         }
-                      }
-                    }
-                  }
-                }
-              },
-              {
-                "properties": {
-                  "relation": {"enum": ["derived_from", "expands_to"]},
-                  "direction": {"const": "inbound"},
-                  "origin": {
-                    "oneOf": [
-                      {"$ref": "#/$defs/source_item_target_ref"},
-                      {"$ref": "#/$defs/evidence_target_ref"}
-                    ]
-                  },
-                  "items": {
-                    "type": "array",
-                    "items": {
-                      "type": "object",
-                      "properties": {
-                        "target": {"$ref": "#/$defs/evidence_target_ref"}
                       }
                     }
                   }
@@ -909,7 +855,7 @@
               "properties": {
                 "relation": {"const": "accounts_for"},
                 "direction": {"const": "outbound"},
-                "origin": {"$ref": "#/$defs/result_target_ref"}
+                "origin": {"$ref": "#/$defs/opaque_ref"}
               }
             }
           }
@@ -949,6 +895,7 @@
               },
               "qualifications": {
                 "type": "array",
+                "minItems": 1,
                 "items": {"$ref": "#/$defs/qualification"}
               }
             }

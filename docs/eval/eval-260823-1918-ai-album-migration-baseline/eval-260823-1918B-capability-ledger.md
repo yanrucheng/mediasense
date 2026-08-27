@@ -4,7 +4,7 @@ title: "Migration Capability Ledger"
 type: eval
 status: active
 created: 2026-08-23
-updated: 2026-08-25
+updated: 2026-08-27
 timezone: "Asia/Shanghai"
 parent: "eval-260823-1918-ai-album-migration-baseline"
 depends-on:
@@ -19,7 +19,7 @@ tags: ["migration", "capability", "parity"]
 
 This ledger is the authoritative place to decide whether each material AI Album capability is preserved, intentionally changed, regressed, or not comparable in MediaSense. It prevents both accidental feature loss and blind reproduction of known legacy defects.
 
-The table records current intent, not implementation completion. Update the status and evidence when a MediaSense capability is built and evaluated.
+The capability inventory records target intent. The implementation-status table below separately records what has actually been delivered and evaluated; intent must never be reported as implementation completion.
 
 ## Difference classes
 
@@ -27,6 +27,14 @@ The table records current intent, not implementation completion. Update the stat
 - `intentionally_changed`: behavior differs for a stated product, correctness, cost, or safety reason.
 - `regression`: a useful legacy capability is unexpectedly missing or materially worse.
 - `not_comparable`: MediaSense changes the problem boundary, so equality is not meaningful; evaluation uses a different criterion.
+
+Implementation status is independent of the difference class:
+
+- `implemented`: the stated capability unit is wired into the current MediaSense path and covered by the cited evidence;
+- `characterized_only`: legacy or desired behavior is captured, but no production path consumes it yet;
+- `deferred`: the capability unit is intentionally not implemented and remains a gate for dependent work.
+
+`pending implementation comparison` is not a fifth difference class; it means there is not yet enough MediaSense implementation evidence to assign one of the four migration judgments.
 
 ## Capability inventory
 
@@ -53,6 +61,27 @@ The table records current intent, not implementation completion. Update the stat
 | Thumbnail/copy/link/move modes | File-operation layer supported all modes; original mode moved files | `apply` | Preserve useful modes with stronger authorization and safety contracts | No overwrite/loss, same-filesystem behavior, receipts |
 | Per-stage cache | Many results were reusable by flags and hashes | `precheck` | Preserve and strengthen: checkpointing, atomic writes, provenance, dependency-aware invalidation | Resume work, cache hits, interrupted equivalence |
 | Usage monitoring | Optional log, absent from final production run | all | Intentionally change: relevant cost/operation accounting is part of stage results | Zero remote precheck calls, plan visual cost, apply operations |
+
+## Current MediaSense implementation status
+
+This table is deliberately narrower than the inventory above. A row marked `implemented` proves only the stated unit, not the whole legacy capability family or a complete PreCheck stage.
+
+| Capability unit | Implementation status | Migration judgment | Current evidence | Remaining gate |
+| --- | --- | --- | --- | --- |
+| Recursive path discovery and extension classification | `implemented` | `preserved` | `src/mediasense/precheck/discovery.py`; fast discovery tests; verified Hong Kong package with 2,140 signed paths plus two explicit local `.DS_Store` items | Generated hundred-thousand-path throughput profile |
+| Local discovery failure and symlink accounting | `implemented` | `intentionally_changed` | `tests/test_discovery.py` covers failed `scandir`, disappearing entries, loops, and boundary escape | Filesystem capability matrix and production fault injection |
+| `.albumignore` observation and path accounting | `implemented` | `intentionally_changed` | Marker and descendants remain visible with `albumignore_*_observed` basis; Hong Kong RAW/DNG and GPX paths remain accounted | Compression-scope effect is `deferred`; marker presence alone is not exclusion authorization |
+| RAW/DNG, GPX, sidecar, and AppleDouble discovery roles | `implemented` | `intentionally_changed` | Characterization tests and Hong Kong local-fixture assertions | Metadata/sidecar interpretation and GPX matching are `deferred` |
+| Same-stem and M01/M02 filename association candidates | `characterized_only` | pending implementation comparison | `association_key` and `group_filename_candidates` characterization tests reproduce c90 filename rules | No accounting, Work, Evidence, or compression producer consumes these candidates yet |
+| Resumable batched Working Run accounting | `implemented` | `intentionally_changed` | SQLite batch/checkpoint tests cover interruption, restart, localized failures, add/change reuse, and unavailable roots | Run-level cancellation, database fault injection, and scale profile remain `deferred` |
+| Run-scoped source attachment and safe remount | `implemented` | `intentionally_changed` | AI Album c90 `argparser.py` expands input paths and `cache_manager.py` derives path/hash cache locations but has no durable run attachment or remount identity check. `source_attachment.py` and accounting tests bind locator plus observed root/volume identity to each Working Run; compatible relocation is audited, identity mismatch blocks, and operator-confirmed rebinding starts a new reuse domain | Replace session-local `st_dev`/inode evidence with the strongest supported platform volume identity where available; validate removable-volume behavior on the platform matrix |
+| Filesystem capability observation | `implemented` | `not_comparable` | No equivalent source/workspace capability record was found in AI Album c90. Attachment tests persist observed mount writability, process writability, workspace replace behavior, same-filesystem status, case behavior, and symlink policy without probing writes on the source | SQLite durability/locking certification, Unicode normalization behavior, read-only mount enforcement, and non-POSIX platform coverage remain `deferred` |
+| Normal-path removal detection | `implemented` | `intentionally_changed` | Run-owned removal facts retain the previous revision before the current source view becomes absent; tests cover deletion, rename, non-repetition, and deletion beside an unrelated unreadable subtree | Dependency propagation into future Work and Artifact records is `deferred` |
+| Fast source-change candidate fingerprint | `implemented` | `intentionally_changed` | Small files are fully hashed; large files use five samples plus stat evidence and are explicitly labeled candidate-only | Exact Artifact-validity proof is `deferred` |
+| Exact large-file content validity | `characterized_only` | pending implementation comparison | Negative test proves an unsampled middle-byte rewrite with restored size and mtime can retain the same candidate fingerprint | Strong producer-appropriate verification is mandatory before Artifact reuse or Result sealing |
+| Semantic Work identity and direct dependency records | `implemented` | `intentionally_changed` | AI Album c90 `cache_manager.py` reuses path/hash-addressed files and eight cache flags, but has no dependency-complete Work identity. `work.py`, `_work_types.py`, and Work tests cover canonical order-independent descriptors, narrow producer identity, source revision inputs, exact upstream Work references, cross-run reuse, and transitive invalidation without an application-wide version key | Connect source change/removal facts and later Artifact integrity to dependency invalidation before real producers consume the substrate |
+| Durable Work attempts, leases, retry, and checkpoints | `implemented` | `intentionally_changed` | AI Album c90 `clustering_engine.py`, `cluster/linear.py`, and metadata batching use fixed semaphores/batches and eagerly materialized coroutine lists but retain no durable attempt or lease. Work tests cover atomic cross-run claiming, restart recovery, stale-token refusal, renewal, bounded retry/backoff, terminal blocking, and retained attempt history | Run cancellation, database-lock fault injection, scheduler resource admission, and production throughput remain `deferred` |
+| Immutable Artifact cache and publication | `deferred` | pending implementation comparison | Work success currently commits only bounded inline JSON plus an integrity digest; no Artifact table, file publication, or garbage collection exists | Exact source validity, atomic-or-equivalent publication, corruption recovery, and reachability-based cleanup must pass before Artifact-backed success |
 
 ## Acceptance dimensions
 
@@ -88,7 +117,7 @@ The three stage tracks may develop concurrently using manually approved fixtures
 - Quantify bundle purity and missed grouping on high-weight bundles.
 - Compare representative strategies at 32, 64, 128, and 256-image planning budgets.
 - Measure whether contact sheets reduce API turns, visual tokens, user effort, or only request overhead.
-- Define precheck checkpoint and invalidation semantics through interruption experiments.
+- Extend the implemented discovery checkpoint and removal facts into Work/Artifact dependency invalidation and fault-injection experiments.
 - Define plan completeness, freeze, amendment, and approval semantics through a manual example.
 - Define apply transaction, recovery, same-filesystem move, and cross-filesystem refusal through a manual example and generated fault fixtures.
 

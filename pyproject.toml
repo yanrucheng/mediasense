@@ -1,0 +1,14 @@
+[project]
+name = "mediasense"
+version = "0.1.0"
+description = "Accountable local media compression for agent-assisted organization"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+addopts = "-ra -m 'not local_fixture'"
+pythonpath = ["src"]
+testpaths = ["tests"]
+markers = [
+  "characterization: behavior captured from the AI Album production baseline",
+  "local_fixture: opt-in tests that require a fixture outside the repository",
+]

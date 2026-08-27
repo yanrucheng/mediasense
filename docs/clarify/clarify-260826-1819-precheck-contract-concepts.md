@@ -4,7 +4,7 @@ title: "PreCheck 接口概念、命名与字段澄清"
 type: clarify
 status: active
 created: 2026-08-26
-updated: 2026-08-26
+updated: 2026-08-27
 timezone: "Asia/Shanghai"
 parent: "index-clarify"
 depends-on:
@@ -20,6 +20,8 @@ tags: ["mediasense", "precheck", "contract", "concept-model"]
 
 下面的 JSON 用“一个视频 + 三张连拍”做具体例子，让人直接判断每个实体和字段是否合理。它不是正式 schema，也不是 runtime 输出；嵌套只是为了阅读方便，不代表最终存储或接口一定嵌套。问卷已经确认的名称现由正式 PreCheck Read Contract 固化。
 
+2026-08-27 开始的第 3 轮复审重新检查这些公共语义是否真的值得长期存在。复审采用更严格的标准：AI Album 没有某项结构，不自动证明业务有缺口；“更完整”“更可审计”也不能单独证明值得增加永久契约。只有删除后会损害已经确认的业务目标、造成已有证据支持的损失，或放弃一个用户明确要求的高后果保证，才应保留为稳定语义。
+
 ```json
 {
   "dataset": {
@@ -30,8 +32,7 @@ tags: ["mediasense", "precheck", "contract", "concept-model"]
         "content": "家庭旅行媒体；整理时优先保留人物与事件差异",
         "provided_by": "user"
       }
-    ],
-    "qualifications": []
+    ]
   },
   "precheck_result": {
     "ref": "precheck-result:A-003",
@@ -59,8 +60,7 @@ tags: ["mediasense", "precheck", "contract", "concept-model"]
               "method": "local_media_probe"
             }
           }
-        ],
-        "qualifications": []
+        ]
       },
       {
         "ref": "source-item:burst-001",
@@ -71,9 +71,7 @@ tags: ["mediasense", "precheck", "contract", "concept-model"]
         "accounting": {
           "scope": "source_media",
           "condition": "usable"
-        },
-        "observations": [],
-        "qualifications": []
+        }
       },
       {
         "ref": "source-item:burst-002",
@@ -84,9 +82,7 @@ tags: ["mediasense", "precheck", "contract", "concept-model"]
         "accounting": {
           "scope": "source_media",
           "condition": "usable"
-        },
-        "observations": [],
-        "qualifications": []
+        }
       },
       {
         "ref": "source-item:burst-003",
@@ -97,9 +93,7 @@ tags: ["mediasense", "precheck", "contract", "concept-model"]
         "accounting": {
           "scope": "source_media",
           "condition": "usable"
-        },
-        "observations": [],
-        "qualifications": []
+        }
       }
     ],
     "entry_evidence": [
@@ -119,9 +113,7 @@ tags: ["mediasense", "precheck", "contract", "concept-model"]
           "evidence:video-frame-002",
           "evidence:video-frame-003",
           "source-item:video-001"
-        ],
-        "observations": [],
-        "qualifications": []
+        ]
       },
       {
         "ref": "evidence:burst-representative",
@@ -141,15 +133,6 @@ tags: ["mediasense", "precheck", "contract", "concept-model"]
           "source-item:burst-001",
           "source-item:burst-002",
           "source-item:burst-003"
-        ],
-        "observations": [],
-        "qualifications": [
-          {
-            "code": "representative_may_hide_variation",
-            "effect": "limits_interpretation",
-            "message": "默认只看 burst-002；另外两张仍可直接展开。",
-            "basis": "三张照片相似，但并非完全相同。"
-          }
         ]
       }
     ],
@@ -166,7 +149,7 @@ tags: ["mediasense", "precheck", "contract", "concept-model"]
       "qualifications": [
         {
           "code": "representative_may_hide_variation",
-          "effect": "review_more_if_material",
+          "effect": "limits_interpretation",
           "message": "这是一项可质疑的压缩主张，不是来源媒体真值。"
         }
       ],
@@ -181,8 +164,7 @@ tags: ["mediasense", "precheck", "contract", "concept-model"]
           "target": "source-item:burst-003"
         }
       ]
-    },
-    "qualifications": []
+    }
   },
   "precheck_internal_working_state": {
     "delivered_to_plan": false,
@@ -220,6 +202,20 @@ burst-003.jpg（1 个 Source Item） ┘
 - 当前确认五种权威关系语义：Result 核算 Source Item、Result 指定默认 Evidence、Evidence 代表 Source Item、Evidence 来源于 Source Item/Evidence、Evidence 展开到 Source Item/Evidence。`dataset_ref` 是 Result 的必填字段，不重复表达为关系；`attention_items` 是从核算状态派生的快捷视图，不是第二份权威关系。
 - `relationship_query_example` 展示关系查询的最小响应：查询外层只写一次 `origin/relation/direction`，成员只返回 `target`；共享依据和限制放在外层，个别成员仅在不同时覆盖。
 
+### 第 3 轮复审后的当前判断
+
+- 保留精确但按需可查询的核算，不要求把所有 Source Items 平铺进一个交付文件。
+- 已交付 Result 保持不可变；内部缓存、依赖追踪、增量复用和精确失效继续属于 PreCheck 实现。
+- PreCheck Tool 可以提供与 Result 绑定的最小 Dataset view，但不接管 Dataset 的完整生命周期。
+- 默认 Evidence 入口是 PreCheck 的交付承诺，不是对 Plan 阅读顺序的命令；Plan 可以忽略它或按需展开。
+- `represents`、`derived_from`、`expands_to` 保持独立，因为它们分别表达压缩主张、生成来源和已有展开路径。
+- 保留 `inspect / traverse` 两个动作，但不扩张为任意图查询语言。查询方向不追求形式对称：`accounts_for`、`entry_evidence`、`derived_from`、`expands_to` 保证既有业务所需的正向读取；`represents` 额外保证从 Source Item 反查 Evidence。其他反向能力需要新的业务证据后再增加。
+- `attention_items` 保持为由 `accounts_for` 派生的高效异常查询，不形成第二份权威数据。
+- 保留 coverage、readiness、integrity 三轴和 Observation 五种状态；Observation 只在确实要表达该观察时出现。
+- Qualification 只放在实际影响发生的最近层级，相同内容可以由查询页共享，不输出无意义的空数组。稳定 effect 只需 `limits_interpretation` 和 `blocks_use`；没有实际影响的普通提示不建立 Qualification。
+- `basis` 表示“这项结论凭什么成立”的最小可追溯出处。只有可质疑的压缩主张、推导结果和失败必须能找到 basis；相同依据可以继承或共享，直接事实不必逐条重复包装。
+- 保留不透明引用和分页；cursor 不暴露内部格式，`kind` 只在缺失时会混淆对象类型的位置出现。
+
 当前模型保留长期 Dataset，但不再用整个 Dataset 的 `Source Snapshot` 作为主要复用和失效边界。Result 直接核算一组 Source Items；PreCheck 内部按更小的信息单元复用、局部失效和增量补全，这种内部单元不进入 Plan 接口。
 
 ## 证据
@@ -227,8 +223,10 @@ burst-003.jpg（1 个 Source Item） ┘
 - 用户业务场景：同一 1.5T 数据集可反复得到约 500、3、200 张不同压缩结果；补入少量数据后应复用未受影响工作，而不是全量重算。
 - AI Album 的历史实现以单媒体 partial hash 参与多类缓存寻址，并支持按缓存类别清理；这证明细粒度复用有业务价值，也暴露了依赖维度缺失和失效范围偏粗的问题。详见 [AI Album 持久化信息清单](../eval/eval-260823-1918-ai-album-migration-baseline/eval-260823-1918D-ai-album-stored-information.md)。
 - [MediaSense Foundation](../design/design-260823-1918-mediasense-foundation.md) 已要求 PreCheck 可恢复、可增量复用、局部失败不污染无关完成工作，并保持具体算法可替换。
-- [PreCheck Compression Boundary](../design/design-260825-2235-mediasense-information-architecture/design-260825-2235D-precheck-compression-boundary.md) 已确认压缩、双向溯源、渐进展开和无静默消失是稳定责任；其中 `Source State` 及四概念结构现因本轮反馈重新打开审查。
+- [PreCheck Compression Boundary](../design/design-260825-2235-mediasense-information-architecture/design-260825-2235D-precheck-compression-boundary.md) 已确认压缩、业务所需方向的溯源、渐进展开和无静默消失是稳定责任；其中 `Source State` 及四概念结构现因本轮反馈重新打开审查。
 - [PreCheck Read Contract](../spec/spec-260826-1546-precheck-read/index.md) 与 [香港 Mock](../spec/spec-260826-1546-precheck-read/hong-kong.mock.json) 最初是待修材料；现已依据本记录完成 Zero BC 重写，正式约束以 specification 为准。
+- 用户在 Plan Frozen 契约讨论中指出：AI Album 没有持久化某种结构，只能证明历史实现没有该结构，不能直接证明用户失去了业务能力。AI Album 已经在多 TB 数据上完成过实际工作，这种成功经验本身也是设计证据。
+- 本轮因此把既有 PreCheck 契约分成两类重新检查：直接服务于压缩、低成本入口、渐进展开、双向溯源和无静默消失的核心语义；以及可能只是为了通用性、整齐或审计便利而加入的接口包装。
 
 ## 已确认决策
 
@@ -251,8 +249,24 @@ burst-003.jpg（1 个 Source Item） ┘
 17. 关系查询在外层声明 `origin`、`relation` 和 `direction`；返回成员只保留 `target` 及该成员特有的信息，不设置关系 ID，也不重复 `type/from/to`。
 18. 不为所有关系强制统一 `epistemic_state`。每种关系由自身语义确定权威性质；`represents` 是可质疑的 PreCheck 压缩主张，不冒充来源真值。
 19. 关系共享的 `basis` 与 `qualifications` 放在查询外层，个别成员仅在内容不同时覆盖。`represents` 必须能查到选择或覆盖依据，其他关系只在有重要限制时提供。
-20. Observation 最小字段为 `name`、`status`、按需 `value` 和可追溯 `basis`；`status` 采用 `available`、`missing`、`failed`、`not_checked`、`not_applicable`。`confidence` 与 qualification 仅在确有意义时出现。
+20. Observation 最小字段为 `name`、`status` 和按需 `value`；可质疑的推导结果与失败必须能追溯到 `basis`，相同依据可以继承或共享，直接事实不必逐条重复。`status` 采用 `available`、`missing`、`failed`、`not_checked`、`not_applicable`。`confidence` 与 qualification 仅在确有意义时出现。
 21. Qualification 最小字段为 `code`、`effect`、`message`；只有所属对象或关系没有表达依据时才增加 `basis`。
+22. 历史系统没有显式保存某种信息，不构成新增 MediaSense 产品实体或字段的充分理由。
+23. AI Album 在真实大规模数据上的成功运行是正面证据；若 MediaSense 增加长期结构，必须说明它额外保护了什么业务结果或用户明确要求的保证。
+24. 新增稳定语义必须通过删除测试：如果删除后没有独立责任、权威、生命周期或可观察业务损失，就应降为实现细节、派生 view 或暂不建立。
+25. Result 必须支持逐项精确核算与按需回查，但契约不要求全量 Source Items 平铺在一个文件中。
+26. 已交付 Result 不可变；Dataset 变化产生新 Result，但不得迫使内部未受影响工作全量重算。
+27. PreCheck Tool 提供与 Result 绑定的最小 Dataset view；Dataset 的长期身份仍由用户或上层产品维护。
+28. 默认 Evidence 入口属于 PreCheck 的稳定交付语义，但 Plan 对阅读顺序和证据选择拥有完全自主权。
+29. `represents`、`derived_from`、`expands_to` 保持为三个独立关系；它们不能用一个无语义的通用链接替代。
+30. 查询接口保留 `inspect / traverse`，但不发展成任意图查询语言，也不让 Plan 读取内部 SQLite。
+31. 不要求每种关系形式对称地支持双向查询；当前只保证业务问题需要的方向，其中 `represents` 必须支持从 Source Item 反查 Evidence。
+32. `attention_items` 是高效的派生查询，不是第二份异常权威清单。
+33. Result 保留 coverage、readiness、integrity 三个独立状态。
+34. Observation 保留五种状态，但 Observation 本身按需出现，不要求每个实体填满所有观察项。
+35. Qualification 只附着在影响实际发生的最近层级，相同内容可以共享，不输出空数组；纯提示性的 `informational` 不作为稳定 effect。
+36. `basis` 只对可质疑的压缩主张、推导结果和失败强制可追溯，允许继承或共享。
+37. 保留不透明引用与分页；cursor 不暴露内部格式，`kind` 只在消除对象类型歧义时出现。
 
 ## 问题清单
 
@@ -621,6 +635,218 @@ burst-003.jpg（1 个 Source Item） ┘
 
 你的回答：A
 
+### 第 3 轮：反过度设计必要性复审
+
+本轮不因为旧系统“没有”就默认 MediaSense“应该补上”，也不因为当前 Schema 已经存在就默认它合理。问题按“核心业务保证、Plan 怎样读取、公共字段成本”三组排列。每个例子都尽量只讲一个动作；可以直接写选项字母，也可以改写推荐答案。
+
+#### Q21. PreCheck 是否必须能逐项说明每个来源文件的归宿？
+
+为什么问：精确核算可以防止文件静默消失，但如果把一百万个文件全部平铺进一份结果，也会制造很大的存储和查询成本。
+
+简单例子：数据集有 100 万张照片。Plan 平时只看 500 份代表证据，但发现一张照片有疑问时，仍能问“这张照片被谁代表、是否出错”；不要求一次下载 100 万行清单。
+
+选项：
+
+- A. 保留逐项可查询的精确核算，但不要求把全量清单平铺进单个文件；实现可以分页、索引或按需计算。
+- B. 只保留总数和错误列表；普通文件不需要逐项可追溯。
+- C. 每份 Result 必须直接携带完整平铺清单，Plan 一次性读取。
+
+推荐：A。原因：它保留“无静默消失”和回查能力，同时没有把某种重型存储形状写进契约。
+
+你的回答：A
+
+#### Q22. 已交付给 Plan 的 PreCheck Result 是否必须保持不变？
+
+为什么问：不可变结果会增加版本管理，但可变结果可能让 Plan 今天和明天用同一个引用看到不同证据。
+
+简单例子：数据集 A 新增 10 张照片。旧 Plan 仍引用旧结果；PreCheck 复用旧缓存，只为新增和受影响部分生成一个新结果。
+
+选项：
+
+- A. 已交付 Result 保持不可变；内部缓存继续增长和复用，数据变化时产生新 Result。
+- B. Result 始终指向最新内容；Plan 每次读取时接受变化。
+- C. 数据集一有变化，旧缓存和旧 Result 全部作废并全量重算。
+
+推荐：A。原因：稳定读取与增量复用可以同时成立；它不要求把整个 Dataset 做成一个共同失效快照。
+
+你的回答：A
+
+#### Q23. Dataset 的详细信息是否必须由 PreCheck Tool 提供？
+
+为什么问：Dataset 身份有长期业务价值，但“它叫什么、用户怎样描述它”不一定必须由 PreCheck 成为权威来源。
+
+简单例子：`dataset:A` 的用户说明是“家庭旅行，优先保留人物差异”。Plan 需要看到这句话，但它可能由项目层维护，PreCheck 只是绑定当时使用的版本。
+
+选项：
+
+- A. Result 只保存 `dataset_ref`；名称和用户说明由 Dataset 的独立权威入口提供。
+- B. PreCheck Tool 提供与 Result 绑定的最小 Dataset view，包括 `ref` 和确实影响本次结果的带来源 context。
+- C. 每份 Result 都复制 Dataset 的完整可变资料。
+
+推荐：B。原因：Plan 能读取本次结果实际使用的上下文，又不让 PreCheck 接管 Dataset 的全部生命周期。
+
+你的回答：B
+
+#### Q24. 默认入口是否值得成为稳定产品语义？
+
+为什么问：如果没有默认入口，Plan 可能先遍历全部证据；但如果把某种代表图算法写死，又会限制未来压缩方法。
+
+简单例子：一万张照片准备了 200 份默认视觉证据。Plan 先看这 200 份，需要时再展开；至于它们是聚类代表、时间采样还是其他方法生成，不由契约规定。
+
+选项：
+
+- A. 保留“这组 Evidence 是本 Result 的低成本默认入口”这一语义，但不固定选择算法。
+- B. 不提供默认入口，Plan 自己遍历全部 Evidence 决定从哪里开始。
+- C. 在契约中固定聚类方法和代表图规则。
+
+推荐：A。原因：它直接服务于 PreCheck 的压缩目的，同时把实现方法保持开放。
+
+你的回答：A. 没问题保留就是了。但是永远别忘了，怎么plan是planner agent的职能，planning agent没有义务把任何precheck提供的信息当做a must，所以planner不要替人家担心
+
+#### Q25. `represents`、`derived_from`、`expands_to` 是否真的表达三件不同的事？
+
+为什么问：关系越多，生产、存储和测试成本越高；但错误合并也可能让 Plan 无法理解证据。
+
+简单例子：缩略图 E 是从照片 A 生成的，所以 E `derived_from` A；E 被选来概括 A、B、C，所以 E `represents` A、B、C；点击 E 可以打开已经准备好的边界样本 E2，所以 E `expands_to` E2。
+
+选项：
+
+- A. 保留三种关系；它们分别回答“怎么来的”“暂时代替看谁”“下一步已有内容看什么”。
+- B. 只保留 `derived_from` 和 `represents`；展开路径由查询工具临时计算，不成为 Result 语义。
+- C. 合并成一个通用 `linked_to`，由 Plan 自己猜关系含义。
+
+推荐：A。原因：三个问题直接对应来源追溯、压缩和渐进展开；例子中任何两个都不能无损推出第三个。
+
+你的回答：A
+
+#### Q26. Plan 应使用通用的 `inspect / traverse`，还是很多业务专用命令？
+
+为什么问：通用遍历比较紧凑，但术语更抽象；专用命令更直白，却可能随着每个新问题不断增加。
+
+简单例子：Plan 想做四件事：看默认入口、打开下一层、查一份证据覆盖谁、查一个来源在哪里被代表。
+
+选项：
+
+- A. 保留 `inspect / traverse` 两个动作，以少量稳定关系表达这些问题。
+- B. 改成 `get_starting_evidence`、`expand_evidence`、`find_representation` 等多个专用动作。
+- C. 不提供 Tool，让 Plan 直接查询 SQLite。
+
+推荐：A。原因：两种动作数量小，也不会把 SQLite 和当前算法暴露给 Plan；但应禁止继续扩张成任意图查询语言。
+
+你的回答：A
+
+#### Q27. 每一种关系都需要支持正向和反向查询吗？
+
+为什么问：反向查询有时有业务价值，但“所有关系天然双向可查”会增加索引和一致性成本。
+
+简单例子：从来源 B 反查“哪份代表证据覆盖了我”很有用；反查“哪些 Result 把这份 Evidence 当默认入口”在一次 Result 内可能没有实际用途。
+
+选项：
+
+- A. 所有五种关系都保证双向查询，保持接口完全对称。
+- B. 只保证有真实下游问题的方向；例如 `represents` 必须反查，其他方向逐项证明后再开放。
+- C. 全部只允许正向查询，Plan 需要时自行扫描。
+
+推荐：B。原因：保留真正需要的回查能力，不为形式对称承担永久成本。
+
+你的回答：B
+
+#### Q28. 是否需要一个高效的“只看异常项”入口？
+
+为什么问：它可以避免 Plan 扫描百万项核算关系，但也可能只是一个可再生的便利查询，不应成为第二份权威数据。
+
+简单例子：100 万个来源里只有 3 个损坏。Plan 希望直接取得这 3 个，而不是翻完 100 万项。
+
+选项：
+
+- A. 保留高效异常查询；它必须从权威核算关系派生，不保存第二份异常真相。
+- B. 不进入稳定接口，Plan 必须分页读取全部来源后自行筛选。
+- C. 单独维护一份权威异常清单，与核算关系并列。
+
+推荐：A。原因：它解决真实规模问题，同时避免双重权威；具体字段名 `attention_only` 仍可继续审查。
+
+你的回答：A
+
+#### Q29. `coverage / readiness / integrity` 三个结果状态是否都有独立用途？
+
+为什么问：三个状态比一个“成功/失败”复杂，但它们可能在回答完全不同的问题。
+
+简单例子：所有文件都核算到了，所以 coverage 完整；代表证据太差，Plan 不能开始，所以 readiness 阻塞；结果文件自身没有损坏，所以 integrity 有效。
+
+选项：
+
+- A. 保留三个独立状态，因为“核算到没有”“够不够 Plan 用”“结果本身可信不可信”不能互相推出。
+- B. 合并成一个成功/失败状态。
+- C. 只保留 coverage 和 integrity，由 Plan 自己判断 readiness。
+
+推荐：A。原因：它能准确表达局部失败与可用性，不会把“有一项坏媒体”误报成整个 Result 失败。
+
+你的回答：A
+
+#### Q30. Observation 是否需要五种状态？
+
+为什么问：状态越多，含义越精确，但生产方也要为每个值做一致判断。
+
+简单例子：拍摄时间可能是“读到 10:00”“文件里没有”“读取工具报错”“还没检查”；对某些非媒体辅助项，拍摄时间这个问题本身可能不适用。
+
+选项：
+
+- A. 保留 `available / missing / failed / not_checked / not_applicable`，只在确实需要表达时创建 Observation。
+- B. 删除 `not_applicable`；不适用时直接不创建这条 Observation。
+- C. 只保留值或 `null`，不区分没值、失败和未检查。
+
+推荐：A。原因：五种情况业务含义不同，而 Observation 本身是按需出现，不要求每个 Source Item 填满所有项目。
+
+你的回答：A
+
+#### Q31. Qualification 是否应该允许附着在几乎所有层级？
+
+为什么问：警告放在最接近问题的位置容易理解，但到处都能挂警告也可能造成重复和实现复杂度。
+
+简单例子：代表图 E 概括了 20 张照片，但可能隐藏其中一人的表情差异。这个限制属于 E 的 `represents` 关系，不需要在 20 个 Source Items 上重复。
+
+选项：
+
+- A. 保留一套最小 Qualification，但只能放在影响真正发生的最近层级，并允许查询页共享；不要求空数组。
+- B. Result、Dataset、Source Item、Evidence、Observation 和每条关系都各自保存完整警告副本。
+- C. 全部改成一段 Result 级自由文本。
+
+推荐：A。原因：既能精确指出影响范围，也避免重复。可以进一步考虑是否删除纯提示性的 `informational` effect。
+
+你的回答：A
+
+#### Q32. 哪些内容必须带 `basis`，哪些可以继承？
+
+为什么问：逐条保存完整来源依据最可审计，但会制造大量重复；完全没有依据又无法挑战压缩判断。
+
+简单例子：“这个文件是 JPEG”可以直接来自本地探测，不必每次重复工具详情；“代表图 E 足以概括 200 张照片”则必须说明选择或覆盖依据。
+
+选项：
+
+- A. 只有可质疑的压缩主张、推导结果和失败必须能找到 basis；相同依据可以由查询页或上层对象共享。
+- B. 每个 Observation 和关系成员都强制携带完整 basis。
+- C. basis 全部删除，相信 PreCheck 的结论即可。
+
+推荐：A。原因：把可追溯成本集中在会影响判断的地方，不为直接事实重复包装。
+
+你的回答：A。`basis` 表示一项结论的最小可追溯出处，而不是完整推理日志。只对压缩主张、推导结果和失败强制提供；直接事实允许继承共同依据。
+
+#### Q33. 百万级结果需要怎样的引用和分页？
+
+为什么问：一次返回全部内容不可扩展，但过度复杂的引用协议也可能增加实现负担。
+
+简单例子：Plan 每次读取 200 个来源项，用一个不透明 cursor 继续；它只关心“接着上一页”，不需要知道 SQLite 行号。
+
+选项：
+
+- A. 保留不透明 `ref` 和分页；cursor 不承诺内部格式，`kind` 只在不写就会混淆对象类型的位置出现。
+- B. 所有查询一次返回完整数组，不需要分页。
+- C. 直接把数据库主键、offset 和表名暴露给 Plan。
+
+推荐：A。原因：分页是规模需求，不透明引用则让 SQLite 和索引方式保持可替换；同时不要求无意义地重复类型信息。
+
+你的回答：A
+
 ## 被拒绝选项
 
 1. 用整个 Dataset 的单一 `Source Snapshot` 或整体 hash 作为全部缓存的共同失效边界：它会把局部变化错误放大成全量失效。
@@ -628,10 +854,15 @@ burst-003.jpg（1 个 Source Item） ┘
 3. 把 AI Album 的缓存类别、bitmap、partial MD5 或文件名直接提升成 MediaSense 永久契约：它们只能提供历史能力和失败证据。
 4. 用自由自然语言 `role` 承担必须稳定判断的入口、覆盖或展开语义：机器行为需要由明确关系表达。
 5. 因为某项 invalid、unsupported 或 auxiliary 就将其从核算边界静默移除：所有已发现项目都必须有明确归宿。
+6. 因为 AI Album 没有显式保存某项结构，就把它自动判定为需要修复的业务缺陷。
+7. 为了证明精确核算而强制每份 Result 携带单个、全量平铺的 Source Item 文件。
+8. 为了接口形式对称，让所有关系无条件支持双向查询。
+9. 在每个实体和关系成员上重复相同的 Qualification 或 basis；共同内容应放在最近的共享层级。
+10. 把默认 Evidence 解释成 Plan 必须遵守的阅读顺序；Plan 对实际理解和展开策略负责。
 
 ## 未决问题
 
-无阻塞项。下一步可以依据本记录重写正式 PreCheck 读取接口和 Mock；实现层的 SQLite、缓存依赖字段与算法仍留待第一阶段实现设计。
+无产品决策阻塞项。正式 PreCheck Read Contract 与香港 Mock 后续需要依据第 3 轮结论做一次最小化修订，重点收窄关系查询方向、Qualification effect、basis 要求和 `kind` 的重复位置；这属于下游契约维护，不再需要用户补充产品答案。
 
 ## 质量门
 
@@ -643,3 +874,6 @@ burst-003.jpg（1 个 Source Item） ┘
 - [x] 已将第 1 轮回答整合进“当前设计”“已确认决策”“被拒绝选项”和“未决问题”。
 - [x] 用户已回答第 2 轮公共记录最小字段问题。
 - [x] 当前设计足以让另一位 Agent 重写正式接口与 Mock，而无需自行发明实体或字段。
+- [x] 第 3 轮问题已按真实业务损失与永久工程成本重新组织，并为每题提供独立的浅显例子。
+- [x] 用户已回答第 3 轮必要性复审问题。
+- [x] 第 3 轮回答已整合，且明确区分保留的核心语义、派生 view、可选能力和实现细节。

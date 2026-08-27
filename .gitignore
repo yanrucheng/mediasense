@@ -31,6 +31,9 @@ Desktop.ini
 *.log.*
 *.pid
 *.tmp
+.pytest_cache/
+__pycache__/
+*.py[cod]
 
 # Bulk source media and externally managed datasets
 /data/

@@ -4,7 +4,7 @@ title: "MediaSense PreCheck Read Contract"
 type: spec
 status: active
 created: 2026-08-26
-updated: 2026-08-26
+updated: 2026-08-27
 timezone: "Asia/Shanghai"
 parent: "index-spec"
 depends-on:
@@ -18,7 +18,7 @@ tags: ["mediasense", "precheck", "tool-contract", "read-access"]
 
 ## Decision
 
-Plan reads one exact immutable PreCheck Result through the read-only Tool `mediasense.precheck.read`. The contract fixes the smallest semantics needed to begin cheaply, account for every item in the declared boundary, inspect material limits, trace compression in both directions, and progressively expand existing evidence.
+Plan reads one exact immutable PreCheck Result through the read-only Tool `mediasense.precheck.read`. The contract fixes the smallest semantics needed to begin cheaply, account for every item in the declared boundary, inspect material limits, trace compression in the directions required by downstream work, and progressively expand existing evidence.
 
 The Tool does not expose SQLite, caches, hashes, working-run state, thumbnails, embeddings, clusters, or algorithms. Those remain replaceable PreCheck implementation details.
 
@@ -44,7 +44,7 @@ Every request includes:
 
 - `result_ref`: the exact immutable Result, never an implicit `latest`;
 - `action`: `inspect` or `traverse`;
-- optionally `target`: a typed opaque reference inside that Result; omission means the Result itself;
+- optionally `target`: an opaque reference inside that Result; `inspect` uses `kind` to disambiguate the requested object, while `traverse` omits redundant `kind` when relation and direction already determine the origin type; omission means the Result itself;
 - for `traverse`, one relationship, one direction, and optional pagination;
 - only for outbound `accounts_for`, optional `filter.attention_only: true`.
 
@@ -58,6 +58,8 @@ Every request includes:
 | Dataset | `ref` | `name`, attributed `context`, `qualifications` |
 | Source Item | `ref`, `locator` | `observations`, `qualifications` |
 | Evidence | `ref`, `access` | `observations`, `qualifications` |
+
+`kind` remains the discriminator for `inspect` targets and returned object views, where several entity types share the same field position. Relationship origins and targets omit it when the selected relation and direction already determine the type; only `derived_from` and `expands_to` members retain a typed reference because either a Source Item or Evidence may be returned.
 
 `dataset_ref` is a required Result field, not a duplicated relationship. Dataset identity may be referenced across Results. A Dataset may expose a mutable current-discovery view elsewhere, but each Result accounts immutably for its own Source Items. Dataset context returned through this Tool is the immutable view bound to that Result; later context changes affect only later Results. Source Item references, Evidence references, and cursors are scoped to that exact Result.
 
@@ -87,7 +89,12 @@ Five relationship meanings are authoritative:
 | `derived_from` | Evidence → Source Item or Evidence | What actually produced this Evidence. |
 | `expands_to` | Evidence → Source Item or Evidence | Already-prepared detail available as the next inspection step. |
 
-Inbound traversal provides reverse lookup over the same relationship. It does not create reverse aliases.
+Stable traversal directions are intentionally asymmetric:
+
+- `accounts_for`, `entry_evidence`, `derived_from`, and `expands_to` support their declared outbound direction;
+- `represents` supports both outbound coverage lookup and inbound lookup from a Source Item to covering Evidence.
+
+Other reverse traversals are not part of the contract unless a later business need justifies them. The supported inbound `represents` traversal is a reverse lookup over the same relationship, not a reverse alias.
 
 These meanings do not collapse. For example, one representative JPEG Evidence may be `derived_from` one Source Item while it `represents` many Source Items. A video frame Evidence can be derived from and represent one video while expanding to additional frames and the source video.
 
@@ -111,20 +118,20 @@ A relationship page may carry shared `basis` and `qualifications`. A member repe
 An observation contains:
 
 - required `name` and `status`;
-- `value` and `basis` when status is `available`;
+- `value` when status is `available`, plus `basis` when that value is a challengeable derivation rather than a direct fact;
 - `basis` and no value when status is `failed`;
 - no value for `missing`, `not_checked`, or `not_applicable`;
 - optional `confidence` or qualifications only when they add real meaning.
 
 The five statuses distinguish a present value, an absent value, a failed attempt, work not performed, and a concept that does not apply. `null` does not silently merge those states.
 
-A qualification contains required `code`, `effect`, and human-readable `message`. It adds `basis` only when the containing object, observation, or relationship does not already provide that basis. Effects are `informational`, `limits_interpretation`, or `blocks_use`.
+A qualification contains required `code`, `effect`, and human-readable `message`. It adds `basis` only when the containing object, observation, or relationship does not already provide that basis. Stable effects are `limits_interpretation` and `blocks_use`; a message with no actual effect does not become a Qualification.
 
 ## Completeness, navigation, and replacement
 
-For a Result to claim `coverage: complete`, every Source Item in its declared boundary must be reachable through `accounts_for`, and each account must have explicit scope and condition. Separately, every source-media item must be reachable from entry Evidence through `represents` or `expands_to`, or be reachable through the derived attention view with a visible explanation of the gap.
+For a Result to claim `coverage: complete`, every Source Item in its declared boundary must be reachable through `accounts_for`, and each account must have explicit scope and condition. Separately, every accounted Source Item must be reachable from entry Evidence through `represents` or `expands_to`, or through an explicit auxiliary, excluded, unsupported, invalid, error, or unresolved exception route. This does not require one visual Evidence item per Source Item.
 
-Plan normally starts with `entry_evidence`, follows `expands_to` for existing detail, uses `represents` in either direction to test coverage, and queries the derived attention view when exceptions matter. This read behavior does not prescribe Plan's reasoning or VLM payload.
+Plan normally starts with `entry_evidence`, follows outbound `expands_to` for existing detail, uses `represents` in either supported direction to test coverage, and queries the derived attention view when exceptions matter. This read behavior does not prescribe Plan's reasoning or VLM payload.
 
 The Tool only returns existing immutable information. If Plan requires new evidence, corrected provenance, different coverage, or a changed compression claim, it requests a new PreCheck Result through stage routing. Mutable working state may reuse unaffected work, but the old Result is not modified.
 
@@ -153,7 +160,9 @@ Fixture-relative locators are review conveniences. The Mock does not make the lo
 - Source Item references, Evidence references, and cursors cannot escape that Result; Dataset identity may persist across Results;
 - `accounts_for` is exhaustive for a `complete` Result;
 - `attention_items` is derived rather than independently authored;
+- only the declared traversal directions are accepted, including inbound lookup for `represents` and no formal reverse traversal for the other relationships;
 - `represents` is challengeable and has an inspectable basis;
+- direct facts need not repeat inherited basis, and `kind` appears only where omission would make a reference ambiguous;
 - `derived_from` and `represents` never substitute for each other;
 - returned locators are local and read-only within PreCheck policy;
 - no storage technology or cache record is exposed as the cross-stage authority.
