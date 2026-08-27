@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "skills": {
+    "agent-friendly-cli-design": {
+      "source": "git@github.com:yanrucheng/skill-garden.git",
+      "sourceUrl": "git@github.com:yanrucheng/skill-garden.git",
+      "sourceType": "git",
+      "skillPath": "skills/design-principles/agent-friendly-cli-design/SKILL.md",
+      "computedHash": "6f84bb544f290b99c2bee8492fc91fe3313a92978b28d2bcfd5c3cf33214ae38"
+    },
+    "agent-skill-tool-boundary": {
+      "source": "git@github.com:yanrucheng/skill-garden.git",
+      "sourceUrl": "git@github.com:yanrucheng/skill-garden.git",
+      "sourceType": "git",
+      "skillPath": "skills/design-principles/agent-skill-tool-boundary/SKILL.md",
+      "computedHash": "3d79076c210a6ea36d3b98668c9d7a5452a6b60cb503dde420c0752c3436dc78"
+    },
+    "human-oriented-cli-design": {
+      "source": "git@github.com:yanrucheng/skill-garden.git",
+      "sourceUrl": "git@github.com:yanrucheng/skill-garden.git",
+      "sourceType": "git",
+      "skillPath": "skills/design-principles/human-oriented-cli-design/SKILL.md",
+      "computedHash": "b75ed073ae9e972406a345899789709d316c514eab304b27847d05a4ff013fff"
+    }
+  }
+}
