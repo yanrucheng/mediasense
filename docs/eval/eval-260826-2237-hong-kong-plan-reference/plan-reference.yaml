@@ -1,0 +1,397 @@
+# human-authored reference instance
+# Review artifact only. This YAML shape and every field name are provisional,
+# not a MediaSense Plan contract, schema, runtime output, or execution authorization.
+
+artifact:
+  kind: "human-authored reference instance"
+  purpose: "Pressure-test a bounded Plan-to-Apply handoff against the Hong Kong PreCheck development Mock."
+  authority: "Single candidate plan for this review module."
+  format_status: "illustrative; not a permanent interface"
+
+plan_identity:
+  plan_ref: "organization-plan:hk-bounded-reference-001"
+  version: 1
+  integrity: "valid"
+  integrity_meaning: "All in-scope dispositions and operation decisions are internally complete for this reference version."
+  freeze_state: "frozen"
+  frozen_at: "2026-08-26T22:37:00+08:00"
+  execution_authorization: "withheld"
+  execution_authorization_reason: "Every user confirmation below is illustrative; no real user has authorized filesystem effects."
+
+precheck_binding:
+  tool: "mediasense.precheck.read"
+  result_ref: "precheck-result:hk-review-slice-002"
+  dataset_ref: "dataset:hong-kong-food-trip"
+  result_axes:
+    coverage: "partial"
+    readiness: "plan_ready"
+    integrity: "valid"
+  qualifications:
+    - "The Result accounts for a selected 224-path review slice, not all 2,136 fixture source-media items."
+    - "Most fixture media are proxies rather than the unavailable original full-fidelity source."
+
+planning_scope:
+  rule: "Only the exact Result-local Source Item references listed here are planned."
+  included_source_items:
+    - "source-item:13"
+    - "source-item:14"
+    - "source-item:15"
+    - "source-item:211"
+    - "source-item:215"
+    - "source-item:216"
+    - "source-item:217"
+  explicitly_out_of_scope:
+    - "Every other Source Item accounted for by precheck-result:hk-review-slice-002."
+    - "Every member of the 201-item represents claim from evidence:bundle61-entry except source-item:13, 14, 15, and 211; exactly 197 members remain outside this plan."
+    - "The remaining entry_evidence after the first three of fourteen entries."
+    - "All Hong Kong fixture source media outside the selected 224-path Result."
+  non_generalization_rule: "No name, split, confirmation, or disposition in this plan applies to an unlisted Source Item."
+
+precheck_reads_used:
+  - query_id: "q01"
+    request: "inspect result"
+    result: "Bound dataset:hong-kong-food-trip and observed partial / plan_ready / valid plus two qualifications."
+  - query_id: "q02"
+    request: "inspect dataset:hong-kong-food-trip"
+    result: "Observed the dataset name and its fixture-backed evaluation context with the fixture-not-original qualification."
+  - query_id: "q03"
+    request: "traverse result accounts_for outbound, page.limit=2"
+    result: "Observed source-item:13 as usable and source-item:215 as invalid; response reports 2 of 224 and is incomplete."
+  - query_id: "q04"
+    request: "traverse result accounts_for outbound, filter.attention_only=true"
+    result: "Observed the derived attention_items view containing only source-item:215."
+  - query_id: "q05"
+    request: "traverse result entry_evidence outbound, page.limit=3"
+    result: "Observed evidence:normal-jpeg, evidence:bundle61-entry, and evidence:repair-patched; response reports 3 of 14 and is incomplete."
+  - query_id: "q06"
+    request: "inspect evidence:bundle61-entry"
+    result: "Observed access through source-item:13, covered_item_count=201, hidden-within-group variation, and historical-group-candidate qualifications."
+  - query_id: "q07"
+    request: "traverse evidence:bundle61-entry expands_to outbound"
+    result: "Reached evidence:bundle61-outlier and evidence:bundle61-boundary as already-prepared detail; neither is inspected by the current Mock."
+  - query_id: "q08"
+    request: "traverse evidence:bundle61-entry represents outbound, page.limit=3"
+    result: "Reached source-item:13, source-item:14, and source-item:15; response reports 3 of 201 and retains the historical-group-candidate qualification."
+  - query_id: "q09"
+    request: "traverse source-item:211 represents inbound"
+    result: "Reached evidence:bundle61-entry and evidence:bundle61-outlier; observed that the default entry hides a person visible in source-item:211."
+  - query_id: "q10"
+    request: "inspect source-item:215"
+    result: "Observed video/mp4, failed media readability, missing create_date, and the invalid-container qualification."
+  - query_id: "q11"
+    request: "traverse source-item:215 represents inbound"
+    result: "Reached evidence:repair-patched under a candidate association that explicitly does not prove byte or content identity."
+  - query_id: "q12"
+    request: "traverse evidence:repair-patched derived_from outbound"
+    result: "Reached the independently addressed source-item:216 as the production source of the displayed local rendition."
+  - query_id: "q13"
+    request: "inspect source-item:217"
+    result: "Observed readable video/mp4 with create_date status missing."
+
+progressive_expansion:
+  starting_entry_evidence:
+    - evidence_ref: "evidence:normal-jpeg"
+      use: "Listed but not expanded; no claim in this plan depends on its unseen contents."
+    - evidence_ref: "evidence:bundle61-entry"
+      use: "Primary entry for the bounded restaurant subset and hidden-variation challenge."
+    - evidence_ref: "evidence:repair-patched"
+      use: "Primary entry for the damaged/recovery family; its association remains qualified."
+  normal_plan_expansions:
+    - path: "evidence:bundle61-entry --expands_to--> evidence:bundle61-outlier"
+      effect: "Established an available detail path; no unreturned Evidence content is claimed."
+    - path: "evidence:bundle61-entry --expands_to--> evidence:bundle61-boundary"
+      effect: "Established an available boundary path; no unreturned Evidence content is claimed."
+    - path: "evidence:bundle61-entry --represents--> source-item:13/14/15 (first page only)"
+      effect: "Selected three exact members; the reverse lookup below selects one more, leaving the other 197 neither inspected nor planned."
+    - path: "source-item:211 <--represents-- evidence:bundle61-entry and evidence:bundle61-outlier"
+      effect: "Localized the known hidden-person variation to one exact Source Item."
+    - path: "source-item:215 <--represents-- evidence:repair-patched --derived_from--> source-item:216"
+      effect: "Kept the invalid source, its candidate representative Evidence, and the patched source distinct."
+    - path: "inspect source-item:217"
+      effect: "Separated readable media from timestamp availability instead of treating missing time as decode failure."
+  not_performed:
+    - "No source-wide rescan or direct reread of all media."
+    - "No remote model, paid API, fresh replay, new Evidence production, or upstream authority mutation."
+    - "No inspection of fixture files was used as hidden Plan knowledge."
+
+budget_accounting:
+  precheck_local_compute_and_io: "No PreCheck recomputation; thirteen reads of the existing Mock surface only."
+  plan_image_model_and_token_cost: "No remote model, paid API, or newly generated visual payload; the reference uses returned text and relation metadata."
+  user_attention: "Three bounded illustrative confirmations: one four-item split, one three-item anomaly policy, and one seven-item operation authorization."
+
+epistemic_register:
+  precheck_observations:
+    - statement_id: "obs-001"
+      statement: "The bound Result is partial / plan_ready / valid."
+      basis_queries: ["q01"]
+    - statement_id: "obs-002"
+      statement: "source-item:13 is usable and is the access item for evidence:bundle61-entry."
+      basis_queries: ["q03", "q06"]
+    - statement_id: "obs-003"
+      statement: "evidence:bundle61-entry claims to represent 201 items but hides person and wider restaurant context available through expansion."
+      basis_queries: ["q06", "q09"]
+    - statement_id: "obs-004"
+      statement: "source-item:215 is an invalid, unreadable video with missing create_date and remains distinct."
+      basis_queries: ["q04", "q10"]
+    - statement_id: "obs-005"
+      statement: "evidence:repair-patched represents source-item:215 only as a qualified candidate and was derived from source-item:216."
+      basis_queries: ["q05", "q11", "q12"]
+    - statement_id: "obs-006"
+      statement: "source-item:217 is a readable video whose create_date is missing."
+      basis_queries: ["q13"]
+    - statement_id: "obs-007"
+      statement: "The Mock returns Source Item references 14, 15, 211, and 216 through Result-bound relationships but does not include direct inspect responses for them."
+      basis_queries: ["q08", "q09", "q12"]
+  semantic_claims:
+    - statement_id: "claim-001"
+      statement: "source-item:13, 14, and 15 can serve as a small restaurant-table sequence."
+      status: "accepted only for this illustrative scope"
+      support: ["obs-002", "illustrative-confirmation-001"]
+      rival: "They may contain materially different moments; the current Mock does not expose direct observations for 14 or 15."
+    - statement_id: "claim-002"
+      statement: "source-item:211 belongs to the same broad restaurant episode but merits a separate people-focused unit."
+      status: "accepted only for this illustrative scope"
+      support: ["obs-003", "illustrative-confirmation-001"]
+      rival: "The person-bearing item could remain in the table sequence or belong to another event."
+    - statement_id: "claim-003"
+      statement: "source-item:215, 216, and 217 are useful to review as one damage/recovery family but are not proven to be byte-identical or content-identical."
+      status: "accepted as a planning relation, never as source fact"
+      support: ["obs-004", "obs-005", "obs-006", "illustrative-confirmation-002"]
+  agent_judgments:
+    - statement_id: "judgment-001"
+      statement: "Freeze only seven exact Source Items; do not spend attention or model budget on the unpaged Result remainder for this reference."
+    - statement_id: "judgment-002"
+      statement: "Split the hidden-person item from the three-item table sequence so representative compression does not erase a high-impact distinction."
+    - statement_id: "judgment-003"
+      statement: "Preserve both readable recovery candidates as ordered variants, do not repair the missing time, and give the invalid source an explicit no-output disposition."
+    - statement_id: "judgment-004"
+      statement: "Use non-destructive copies, deterministic target names, and batch-level collision refusal; source media remain unchanged."
+  illustrative_user_confirmations:
+    - confirmation_ref: "illustrative-confirmation-001"
+      statement_type: "illustrative_user_confirmation"
+      binds_plan: "organization-plan:hk-bounded-reference-001@1"
+      scope:
+        source_items: ["source-item:13", "source-item:14", "source-item:15", "source-item:211"]
+        decisions: ["unit membership", "unit names", "unit order", "member order"]
+      confirms: "Place 13/14/15 in Restaurant table sequence; place 211 separately in Restaurant people moment."
+      does_not_apply_to: "Any other member of bundle 61, any other day, location, or Source Item."
+      actual_authorization: false
+    - confirmation_ref: "illustrative-confirmation-002"
+      statement_type: "illustrative_user_confirmation"
+      binds_plan: "organization-plan:hk-bounded-reference-001@1"
+      scope:
+        source_items: ["source-item:215", "source-item:216", "source-item:217"]
+        decisions: ["disposition", "variant retention", "manual order", "no timestamp repair"]
+      confirms: "Copy 216 and 217 as separate recovery variants in that order; retain 215 only at source with no output; assert no identity among them."
+      actual_authorization: false
+    - confirmation_ref: "illustrative-confirmation-003"
+      statement_type: "illustrative_user_confirmation"
+      binds_plan: "organization-plan:hk-bounded-reference-001@1"
+      scope:
+        source_items: ["source-item:13", "source-item:14", "source-item:15", "source-item:211", "source-item:215", "source-item:216", "source-item:217"]
+        decisions: ["copy-only operation", "target root", "collision refusal", "no overwrite", "source remains read-only"]
+      confirms: "Use the exact operation set below and stop before mutation if a non-idempotent collision or failed safety precondition is found."
+      actual_authorization: false
+  illustrative_assumptions:
+    - statement: "A future Apply can resolve every listed Source Item reference through the exact bound Result and obtain a source basename without consulting Plan working state."
+      consequence_if_false: "Do not execute; treat inaccessible or unresolvable required evidence as a Reopen PreCheck signal."
+    - statement: "The configured output root is outside the source tree."
+      consequence_if_false: "Do not execute; return to Plan configuration without changing semantic decisions."
+  fixture_facts_not_used_as_plan_input:
+    - "The standard fixture verifier passed immediately before authoring this instance."
+    - "The package independently contains bundle 61 material and the invalid/patched/remux filenames cited by the Mock and historical handoff."
+    - "These checks support example plausibility only; they do not add observations, locators, timestamps, or membership to this Plan."
+
+organization_units:
+  - unit_ref: "unit:restaurant-table-sequence"
+    name: "Restaurant table sequence"
+    order: 1
+    members:
+      - source_item_ref: "source-item:13"
+        order: 1
+      - source_item_ref: "source-item:14"
+        order: 2
+      - source_item_ref: "source-item:15"
+        order: 3
+    decision_basis: ["claim-001", "judgment-002", "illustrative-confirmation-001"]
+  - unit_ref: "unit:restaurant-people-moment"
+    name: "Restaurant people moment"
+    order: 2
+    members:
+      - source_item_ref: "source-item:211"
+        order: 1
+    decision_basis: ["claim-002", "judgment-002", "illustrative-confirmation-001"]
+  - unit_ref: "unit:recovered-camera-clip-variants"
+    name: "Recovered camera clip variants"
+    order: 3
+    members:
+      - source_item_ref: "source-item:216"
+        order: 1
+      - source_item_ref: "source-item:217"
+        order: 2
+    decision_basis: ["claim-003", "judgment-003", "illustrative-confirmation-002"]
+
+source_item_dispositions:
+  - source_item_ref: "source-item:13"
+    final_disposition: "copy_to_unit"
+    unit_ref: "unit:restaurant-table-sequence"
+    operation_ref: "operation:001"
+  - source_item_ref: "source-item:14"
+    final_disposition: "copy_to_unit"
+    unit_ref: "unit:restaurant-table-sequence"
+    operation_ref: "operation:002"
+  - source_item_ref: "source-item:15"
+    final_disposition: "copy_to_unit"
+    unit_ref: "unit:restaurant-table-sequence"
+    operation_ref: "operation:003"
+  - source_item_ref: "source-item:211"
+    final_disposition: "copy_to_unit"
+    unit_ref: "unit:restaurant-people-moment"
+    operation_ref: "operation:004"
+  - source_item_ref: "source-item:215"
+    final_disposition: "retain_source_without_materialized_output"
+    reason: "Invalid media remains accounted and visible; the user-scoped example explicitly declines to ignore, replace, copy, delete, or rename it."
+    operation_ref: "operation:005"
+  - source_item_ref: "source-item:216"
+    final_disposition: "copy_to_unit"
+    unit_ref: "unit:recovered-camera-clip-variants"
+    operation_ref: "operation:006"
+  - source_item_ref: "source-item:217"
+    final_disposition: "copy_to_unit"
+    unit_ref: "unit:recovered-camera-clip-variants"
+    operation_ref: "operation:007"
+    time_policy: "Do not synthesize or write create_date; unit position 2 is a confirmed organizational order, not a timestamp claim."
+
+operation_plan:
+  target_root: "/Volumes/MediaSense-Review/organized/hong-kong-food-trip-bounded-review"
+  target_root_status: "illustrative absolute path confirmed only inside this reference; not a real filesystem authorization"
+  common_rules:
+    action: "copy"
+    source_resolution: "Resolve source_item_ref only against precheck-result:hk-review-slice-002."
+    target_filename: "{member_order_3_digits}--source-{source_ref_numeric_suffix}--{source_basename}"
+    preserve_source: true
+    preserve_file_bytes: true
+    overwrite: false
+    automatic_rename_on_collision: false
+  operations:
+    - operation_ref: "operation:001"
+      source_item_ref: "source-item:13"
+      action: "copy"
+      target_directory: "01-restaurant-table-sequence"
+      member_order: 1
+    - operation_ref: "operation:002"
+      source_item_ref: "source-item:14"
+      action: "copy"
+      target_directory: "01-restaurant-table-sequence"
+      member_order: 2
+    - operation_ref: "operation:003"
+      source_item_ref: "source-item:15"
+      action: "copy"
+      target_directory: "01-restaurant-table-sequence"
+      member_order: 3
+    - operation_ref: "operation:004"
+      source_item_ref: "source-item:211"
+      action: "copy"
+      target_directory: "02-restaurant-people-moment"
+      member_order: 1
+    - operation_ref: "operation:005"
+      source_item_ref: "source-item:215"
+      action: "no_op"
+      target_directory: null
+      verification: "Confirm no destination entry is created and the source remains unchanged."
+    - operation_ref: "operation:006"
+      source_item_ref: "source-item:216"
+      action: "copy"
+      target_directory: "03-recovered-camera-clip-variants"
+      member_order: 1
+    - operation_ref: "operation:007"
+      source_item_ref: "source-item:217"
+      action: "copy"
+      target_directory: "03-recovered-camera-clip-variants"
+      member_order: 2
+  collision_policy:
+    idempotent_existing_target: "Accept only when deterministic verification proves it is the already-completed copy for the same operation and source."
+    any_other_existing_target: "Refuse the entire not-yet-started batch before mutation; never overwrite or invent another name."
+
+apply_safety_preconditions:
+  - "The exact plan version is frozen, integrity-valid, and genuinely authorized; this reference currently fails the genuine-authorization check."
+  - "The exact PreCheck Result and Dataset binding match, and all seven Source Item references resolve within that Result."
+  - "Every copy source is readable at execution time; source-item:215 remains the planned no-op even if a different item represents it."
+  - "The source tree is read-only to Apply and the target root is outside it."
+  - "All final paths are derived exactly from the frozen target rules and remain beneath the selected target root."
+  - "A complete preflight finds no non-idempotent collision, duplicate target, inaccessible source, or insufficient target capacity."
+  - "Any temporary file and its final destination are on the same filesystem before atomic finalization; no move or hard-link substitution is allowed."
+  - "Apply journals each operation and post-verifies six copies, one no-op, expected paths, preserved source items, and no unplanned output."
+  - "Failure of any precondition stops before mutation and returns a deterministic failure; Apply does not repair the plan or choose a semantic alternative."
+
+residual_uncertainty:
+  - uncertainty: "The current Mock does not directly inspect source-item:14, 15, 211, or 216."
+    disposition: "The illustrative confirmations own the exact organization choices; Apply still must verify mechanical resolution and readability before mutation."
+    material_if: "A required reference is absent, inaccessible, or unreadable."
+    then: "reopen_precheck"
+  - uncertainty: "The repair-family represents relation does not prove identity among 215, 216, and 217."
+    disposition: "Keep all identities and filenames distinct; never substitute one source for another."
+    material_if: "Execution or a later plan requires an identity claim."
+    then: "reopen_precheck"
+  - uncertainty: "source-item:217 has no create_date."
+    disposition: "Use confirmed unit order only; do not infer or write metadata."
+    material_if: "A future organization requires factual chronological placement."
+    then: "reopen_precheck"
+  - uncertainty: "Bundle 61 has 201 represented items, but this plan covers only four exact references from that region."
+    disposition: "Leave every other member outside this plan."
+    material_if: "The requested scope expands to additional bundle members."
+    then: "continue_normal_plan_expansion_first"
+
+reopen_and_continue_rules:
+  normal_plan_work:
+    - "Follow the existing represents, expands_to, or derived_from paths and available pagination."
+    - "Revise names, grouping, or ordering, or ask another precisely scoped user question."
+    - "Create disposable review views from already available Evidence."
+  reopen_precheck_signals:
+    - "A listed Source Item is missing, inaccessible, or changed so that the bound Result no longer supports the planned operation."
+    - "A required Evidence object or continuation page is absent, inaccessible, or untrustworthy."
+    - "Coverage or reverse traceability is inconsistent with the sealed relation claims."
+    - "Representative Evidence hides another difference material to one of the seven frozen dispositions."
+    - "Planning requires a new observation, new authoritative Evidence, or factual timestamp repair."
+
+mock_surface_gaps:
+  - "The development Mock lists 3 of 14 entry Evidence objects and does not provide the continuation response."
+  - "It lists 3 of 201 bundle-61 represented Source Items and does not provide the continuation response."
+  - "It names bundle61-outlier and bundle61-boundary but provides no inspect response for either."
+  - "It provides no direct inspect response for source-item:13, 14, 15, 211, or 216, and no accounts_for page containing 14, 15, 211, 216, or 217."
+  - "These are Mock coverage gaps, not proof that the formal interface or a runtime Result lacks the information. A runtime missing required information would trigger the reopen rules above."
+
+migration_comparison:
+  - capability: "Representative-first review with progressive detail"
+    classification: "preserved"
+    judgment: "The example starts from entry Evidence and expands only challenged regions instead of rereading all media."
+  - capability: "Historical bundle as final semantic group"
+    classification: "intentionally_changed"
+    judgment: "Bundle 61 remains a challengeable compression claim; scoped Agent judgment and user confirmation own the final split."
+  - capability: "Generated caption, location, or title as organization truth"
+    classification: "intentionally_changed"
+    judgment: "No historical caption, location, title, or directory name becomes authoritative; the frozen names are explicit Plan decisions."
+  - capability: "Invalid and repaired media handling"
+    classification: "intentionally_changed"
+    judgment: "Three Source Items retain distinct identities and dispositions; no readable variant silently replaces the invalid item."
+  - capability: "Direct output-tree materialization during interpretation"
+    classification: "intentionally_changed"
+    judgment: "The example separates a frozen decision from deterministic, gated Apply operations."
+  - capability: "Whole-dataset functional coverage and runtime qualities"
+    classification: "not_comparable"
+    judgment: "This seven-item manual instance measures neither 2,136-item coverage nor throughput, resumability, cache reuse, model cost, or user-attention cost at production scale."
+  - capability: "Regression assessment"
+    classification: "not_comparable"
+    judgment: "No regression claim is supported until an implementation executes and measures the frozen handoff; no regression is hidden as a successful comparison here."
+
+apply_interpretation_boundary:
+  apply_must_not_decide:
+    - "Whether any items depict the same event."
+    - "Unit membership, names, order, or output location."
+    - "Whether a repaired item replaces the invalid item."
+    - "Whether missing create_date should be inferred."
+    - "Whether a collision may be overwritten or auto-renamed."
+  apply_may_only:
+    - "Validate the frozen version, authorization, exact bindings, mechanical resolvability, safety preconditions, and deterministic target paths."
+    - "Execute or idempotently recognize the seven declared operations in order."
+    - "Stop and report a deterministic failure without adding semantic decisions."
