@@ -1,0 +1,124 @@
+{
+  "sealed_content": {
+    "contract": "mediasense.frozen-plan",
+    "plan_ref": "frozen-plan:local-artifact-example-001",
+    "result_ref": "precheck-result:hk-review-slice-002",
+    "scope": {
+      "kind": "union",
+      "sets": [
+        {
+          "kind": "precheck_relation",
+          "origin": "evidence:bundle61-boundary",
+          "relation": "represents",
+          "direction": "outbound"
+        },
+        {
+          "kind": "explicit",
+          "source_item_refs": [
+            "source-item:215",
+            "source-item:217"
+          ]
+        }
+      ]
+    },
+    "logical_root": "Media",
+    "groups": [
+      {
+        "relative_path": [
+          "260501-香港美食之旅",
+          "0504-晚间活动",
+          "1-连续拍摄"
+        ],
+        "members": {
+          "kind": "precheck_relation",
+          "origin": "evidence:bundle61-boundary",
+          "relation": "represents",
+          "direction": "outbound"
+        },
+        "source_naming": {
+          "default": "preserve_source_basename",
+          "overrides": [
+            {
+              "source_item_ref": "source-item:13",
+              "name": "item-013.jpg"
+            },
+            {
+              "source_item_ref": "source-item:14",
+              "name": "item-014.jpg"
+            },
+            {
+              "source_item_ref": "source-item:15",
+              "name": "item-015.jpg"
+            }
+          ]
+        }
+      },
+      {
+        "relative_path": [
+          "260501-香港美食之旅",
+          "0504-晚间活动",
+          "d-damaged-info"
+        ],
+        "members": {
+          "kind": "explicit",
+          "source_item_refs": [
+            "source-item:215"
+          ]
+        },
+        "source_naming": {
+          "default": "preserve_source_basename"
+        }
+      },
+      {
+        "relative_path": [
+          "Uncategorized"
+        ],
+        "members": {
+          "kind": "explicit",
+          "source_item_refs": [
+            "source-item:217"
+          ]
+        },
+        "source_naming": {
+          "default": "preserve_source_basename"
+        }
+      }
+    ],
+    "other_outcomes": [],
+    "decision_notes": [
+      {
+        "applies_to": {
+          "kind": "precheck_relation",
+          "origin": "evidence:bundle61-boundary",
+          "relation": "represents",
+          "direction": "outbound"
+        },
+        "summary": "Product proposal: keep the related sequence together in one ordered content group.",
+        "evidence_refs": [
+          "evidence:bundle61-boundary"
+        ]
+      },
+      {
+        "applies_to": {
+          "kind": "explicit",
+          "source_item_refs": [
+            "source-item:215"
+          ]
+        },
+        "summary": "The unreadable item has no trustworthy group association in this review slice and falls back to the nearest known event chapter.",
+        "evidence_refs": [
+          "evidence:repair-patched"
+        ]
+      }
+    ]
+  },
+  "seal": {
+    "encoding_profile": "mediasense-json-strings-sha256-v1",
+    "content_identity": "sha256:a5394e3283460dc6b11b752fdb622f1f1f52858538be91e227370db749972c42",
+    "final_confirmation": {
+      "confirmed_content_identity": "sha256:a5394e3283460dc6b11b752fdb622f1f1f52858538be91e227370db749972c42",
+      "confirmed_at": "2026-08-28T20:43:00+08:00",
+      "confirmed_by": "user:illustrative-reviewer"
+    }
+  }
+}

@@ -2,7 +2,7 @@
 id: "spec-260827-1915B-plan-work"
 title: "MediaSense Plan Working State Tool Contract"
 type: spec
-status: review
+status: active
 created: 2026-08-27
 updated: 2026-08-27
 timezone: "Asia/Shanghai"

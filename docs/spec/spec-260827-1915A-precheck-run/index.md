@@ -2,7 +2,7 @@
 id: "spec-260827-1915A-precheck-run"
 title: "MediaSense PreCheck Run Tool Contract"
 type: spec
-status: review
+status: active
 created: 2026-08-27
 updated: 2026-08-27
 timezone: "Asia/Shanghai"
