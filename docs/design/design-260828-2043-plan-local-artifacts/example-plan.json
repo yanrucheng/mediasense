@@ -1,39 +1,54 @@
 {
   "sealed_content": {
     "contract": "mediasense.frozen-plan",
-    "plan_ref": "frozen-plan:local-artifact-example-001",
+    "plan_ref": "frozen-plan:local-artifact-example-002",
     "result_ref": "precheck-result:hk-review-slice-002",
     "scope": {
-      "kind": "union",
-      "sets": [
-        {
-          "kind": "precheck_relation",
-          "origin": "evidence:bundle61-boundary",
-          "relation": "represents",
-          "direction": "outbound"
-        },
-        {
-          "kind": "explicit",
-          "source_item_refs": [
-            "source-item:215",
-            "source-item:217"
-          ]
-        }
+      "kind": "explicit",
+      "source_item_refs": [
+        "source-item:13",
+        "source-item:14",
+        "source-item:15",
+        "source-item:211",
+        "source-item:215",
+        "source-item:216",
+        "source-item:217"
       ]
     },
     "logical_root": "Media",
     "groups": [
       {
         "relative_path": [
-          "260501-香港美食之旅",
-          "0504-晚间活动",
-          "1-连续拍摄"
+          "260501-示例小事件"
         ],
         "members": {
-          "kind": "precheck_relation",
-          "origin": "evidence:bundle61-boundary",
-          "relation": "represents",
-          "direction": "outbound"
+          "kind": "explicit",
+          "source_item_refs": [
+            "source-item:14"
+          ]
+        },
+        "source_naming": {
+          "default": "preserve_source_basename",
+          "overrides": [
+            {
+              "source_item_ref": "source-item:14",
+              "name": "item-014.jpg"
+            }
+          ]
+        }
+      },
+      {
+        "relative_path": [
+          "260501-示例复杂事件",
+          "0503-示例章节",
+          "1-关联媒体"
+        ],
+        "members": {
+          "kind": "explicit",
+          "source_item_refs": [
+            "source-item:13",
+            "source-item:211"
+          ]
         },
         "source_naming": {
           "default": "preserve_source_basename",
@@ -43,9 +58,27 @@
               "name": "item-013.jpg"
             },
             {
-              "source_item_ref": "source-item:14",
-              "name": "item-014.jpg"
-            },
+              "source_item_ref": "source-item:211",
+              "name": "item-211-context-known-damaged.mp4"
+            }
+          ]
+        }
+      },
+      {
+        "relative_path": [
+          "260501-示例复杂事件",
+          "0503-示例章节",
+          "2-同行人物"
+        ],
+        "members": {
+          "kind": "explicit",
+          "source_item_refs": [
+            "source-item:15"
+          ]
+        },
+        "source_naming": {
+          "default": "preserve_source_basename",
+          "overrides": [
             {
               "source_item_ref": "source-item:15",
               "name": "item-015.jpg"
@@ -55,8 +88,29 @@
       },
       {
         "relative_path": [
-          "260501-香港美食之旅",
-          "0504-晚间活动",
+          "260501-示例复杂事件",
+          "a-files",
+          "repair-reference"
+        ],
+        "members": {
+          "kind": "explicit",
+          "source_item_refs": [
+            "source-item:216"
+          ]
+        },
+        "source_naming": {
+          "default": "preserve_source_basename",
+          "overrides": [
+            {
+              "source_item_ref": "source-item:216",
+              "name": "item-216-reference.bin"
+            }
+          ]
+        }
+      },
+      {
+        "relative_path": [
+          "260501-示例复杂事件",
           "d-damaged-info"
         ],
         "members": {
@@ -71,6 +125,8 @@
       },
       {
         "relative_path": [
+          "260501-示例复杂事件",
+          "0504-示例章节",
           "Uncategorized"
         ],
         "members": {
@@ -88,14 +144,72 @@
     "decision_notes": [
       {
         "applies_to": {
-          "kind": "precheck_relation",
-          "origin": "evidence:bundle61-boundary",
-          "relation": "represents",
-          "direction": "outbound"
+          "kind": "explicit",
+          "source_item_refs": [
+            "source-item:13",
+            "source-item:14",
+            "source-item:15",
+            "source-item:211",
+            "source-item:215",
+            "source-item:216",
+            "source-item:217"
+          ]
         },
-        "summary": "Product proposal: keep the related sequence together in one ordered content group.",
+        "summary": "Fixture fact: all seven references occur in the bound review-slice Result. Human-authored assumption: every directory label, semantic role, and illustrative source-name override in this Plan is chosen only to demonstrate contract expressiveness and is not a Hong Kong classification claim.",
+        "evidence_refs": [
+          "evidence:bundle61-boundary",
+          "evidence:bundle61-outlier",
+          "evidence:repair-patched"
+        ]
+      },
+      {
+        "applies_to": {
+          "kind": "explicit",
+          "source_item_refs": [
+            "source-item:14"
+          ]
+        },
+        "summary": "Product proposal: this one-item scope is treated as a small event and is placed directly in the event directory without a redundant child group.",
         "evidence_refs": [
           "evidence:bundle61-boundary"
+        ]
+      },
+      {
+        "applies_to": {
+          "kind": "explicit",
+          "source_item_refs": [
+            "source-item:13",
+            "source-item:211"
+          ]
+        },
+        "summary": "Fixture fact: source-item:13 is the JPEG entry for evidence:bundle61-entry, and source-item:211 has reverse links to the same entry and its outlier evidence. Human-authored assumption: source-item:211 is damaged while retaining reliable group context. The proposed outcome demonstrates keeping that assumed damaged video with its associated JPEG rather than moving it to d-damaged-info.",
+        "evidence_refs": [
+          "evidence:bundle61-boundary",
+          "evidence:bundle61-outlier"
+        ]
+      },
+      {
+        "applies_to": {
+          "kind": "explicit",
+          "source_item_refs": [
+            "source-item:15"
+          ]
+        },
+        "summary": "Fixture fact: source-item:15 occurs in the complete bundle-boundary subset. Product proposal: it forms the second ordered content group in the illustrative complex event.",
+        "evidence_refs": [
+          "evidence:bundle61-boundary"
+        ]
+      },
+      {
+        "applies_to": {
+          "kind": "explicit",
+          "source_item_refs": [
+            "source-item:216"
+          ]
+        },
+        "summary": "Fixture fact: repair evidence is derived from this separately addressed Source Item. Human-authored assumption: classify it as auxiliary repair-reference material under a-files for this example.",
+        "evidence_refs": [
+          "evidence:repair-patched"
         ]
       },
       {
@@ -105,7 +219,19 @@
             "source-item:215"
           ]
         },
-        "summary": "The unreadable item has no trustworthy group association in this review slice and falls back to the nearest known event chapter.",
+        "summary": "Fixture fact: this MP4 is unreadable and the repair-family association does not prove identity. Product proposal: because no trustworthy finer placement is established, put it in d-damaged-info at the nearest assumed event level.",
+        "evidence_refs": [
+          "evidence:repair-patched"
+        ]
+      },
+      {
+        "applies_to": {
+          "kind": "explicit",
+          "source_item_refs": [
+            "source-item:217"
+          ]
+        },
+        "summary": "Fixture fact: this MP4 is readable but has no create date. Human-authored assumption: its event and chapter are known while its content group is not, so it goes to the nearest trustworthy Uncategorized directory.",
         "evidence_refs": [
           "evidence:repair-patched"
         ]
@@ -114,9 +240,9 @@
   },
   "seal": {
     "encoding_profile": "mediasense-json-strings-sha256-v1",
-    "content_identity": "sha256:a5394e3283460dc6b11b752fdb622f1f1f52858538be91e227370db749972c42",
+    "content_identity": "sha256:c21577e7565299a6a2f4c486bb8fe9764ad373ab266e61f4265085499633a114",
     "final_confirmation": {
-      "confirmed_content_identity": "sha256:a5394e3283460dc6b11b752fdb622f1f1f52858538be91e227370db749972c42",
+      "confirmed_content_identity": "sha256:c21577e7565299a6a2f4c486bb8fe9764ad373ab266e61f4265085499633a114",
       "confirmed_at": "2026-08-28T20:43:00+08:00",
       "confirmed_by": "user:illustrative-reviewer"
     }

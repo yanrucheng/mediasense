@@ -6,11 +6,15 @@ import json
 from pathlib import Path
 
 import pytest
+from jsonschema import Draft202012Validator
 
 
 ROOT = Path(__file__).parents[1]
 PLAN_SPEC = ROOT / "docs" / "spec" / "spec-260827-1138-frozen-plan"
 PRECHECK_SPEC = ROOT / "docs" / "spec" / "spec-260826-1546-precheck-read"
+PLAN_ARTIFACT_DESIGN = (
+    ROOT / "docs" / "design" / "design-260828-2043-plan-local-artifacts"
+)
 
 
 def _load(path: Path):
@@ -242,6 +246,43 @@ def test_hong_kong_mock_reuses_complete_precheck_relation() -> None:
         "source-item:15",
     }
     _validate_semantics(plan, resolver)
+
+
+def test_local_artifact_example_is_closed_and_covers_profile_cases() -> None:
+    plan = _load(PLAN_ARTIFACT_DESIGN / "example-plan.json")
+    schema = _load(PLAN_SPEC / "frozen-plan.schema.json")
+    Draft202012Validator.check_schema(schema)
+    Draft202012Validator(schema).validate(plan)
+    _validate_semantics(plan, _hong_kong_resolver())
+
+    content = plan["sealed_content"]
+    scope = set(content["scope"]["source_item_refs"])
+    groups = {
+        tuple(group["relative_path"]): set(group["members"]["source_item_refs"])
+        for group in content["groups"]
+    }
+
+    assert scope == set().union(*groups.values())
+    assert groups[("260501-示例小事件",)] == {"source-item:14"}
+    assert groups[
+        ("260501-示例复杂事件", "0503-示例章节", "1-关联媒体")
+    ] == {"source-item:13", "source-item:211"}
+    assert groups[
+        ("260501-示例复杂事件", "0503-示例章节", "2-同行人物")
+    ] == {"source-item:15"}
+    assert groups[
+        ("260501-示例复杂事件", "a-files", "repair-reference")
+    ] == {"source-item:216"}
+    assert groups[("260501-示例复杂事件", "d-damaged-info")] == {
+        "source-item:215"
+    }
+    assert groups[
+        ("260501-示例复杂事件", "0504-示例章节", "Uncategorized")
+    ] == {"source-item:217"}
+
+    notes = "\n".join(note["summary"] for note in content["decision_notes"])
+    assert "Fixture fact" in notes
+    assert "Human-authored assumption" in notes
 
 
 def test_scope_member_without_outcome_is_rejected() -> None:

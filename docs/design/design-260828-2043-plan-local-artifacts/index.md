@@ -2,7 +2,7 @@
 id: "design-260828-2043-plan-local-artifacts"
 title: "MediaSense Plan Local Artifact Design"
 type: design
-status: review
+status: active
 created: 2026-08-28
 updated: 2026-08-28
 timezone: "Asia/Shanghai"
@@ -194,6 +194,41 @@ This remains the minimum practical design unless a future requirement demonstrat
 [`example-plan.json`](example-plan.json) shows the exact file that could appear under the runtime `frozen/` directory after seal. It conforms to the existing Frozen Plan Schema and resolves against the existing Hong Kong PreCheck review slice. The sample paths are product proposals used only to demonstrate an event, an ordered content group, and a nearest-context damaged-item decision. It is not a complete Hong Kong Plan, actual runtime output, real Human confirmation, or Apply authorization.
 
 The example deliberately does not include a database file or SQL definition. A hand-written SQLite file would freeze implementation details without proving the design's product boundary.
+
+The seven-item example uses only Source Item and Evidence references present in the bound review-slice Result. Its decision notes explicitly distinguish fixture facts from Human-authored assumptions and product proposals. Those assumptions demonstrate the complete design surface without claiming to be Hong Kong facts.
+
+The following tree is rendered from that Frozen Plan. It is a Human-readable view, not a second authoritative artifact, and is not persisted:
+
+```text
+Media/
+├── 260501-示例小事件/
+│   └── item-014.jpg
+├── 260501-示例复杂事件/
+│   ├── 0503-示例章节/
+│   │   ├── 1-关联媒体/
+│   │   │   ├── item-013.jpg
+│   │   │   └── item-211-context-known-damaged.mp4
+│   │   └── 2-同行人物/
+│   │       └── item-015.jpg
+│   ├── 0504-示例章节/Uncategorized/
+│   │   └── DJI_20260504202728_0029_D.remux-faststart.MP4
+│   ├── a-files/repair-reference/
+│   │   └── item-216-reference.bin
+│   └── d-damaged-info/
+│       └── DJI_20260504202728_0029_D.MP4
+```
+
+The first event demonstrates folding: media appears directly in the event directory. The complex event demonstrates optional chapters and ordered groups. The `source-item:211` damaged condition and association are Human-authored assumptions, so the example proves that a context-known damaged item can remain with its group without asserting that fixture fact. By contrast, `source-item:215` being unreadable and `source-item:217` being readable but missing its create date are fixture facts; their final placements are still product proposals.
+
+## Consolidated acceptance
+
+| Area | Stable purpose and authority | Minimum and boundary check | Reference-instance evidence | Result |
+| --- | --- | --- | --- | --- |
+| Frozen Plan Contract | One immutable, Human-confirmed organization decision bound to one immutable PreCheck Result; the JSON artifact is authoritative. | Uses existing source sets, groups, outcomes, notes, and seal only; it does not absorb Working State, Profile, or Apply responsibilities. | The example has a seven-item explicit scope, six disjoint groups, unique paths and names, complete closure, Result-local references, Human-confirmation fields, and a verified digest. | Pass |
+| Default Organization Profile | Supplies reusable default organization policy while Agent judgment and Human preference remain authoritative for each Plan. | Adds no Tool, registry, `profile_ref`, or runtime state; method-specific thresholds remain open. | The example covers a folded small event, a complex event with chapter and ordered groups, assumed cross-format associated media, auxiliary material, assumed context-known damage, fixture-confirmed unassigned damage, and readable unresolved media. | Pass |
+| Plan Local Artifact Design | Separates mutable recoverable work from immutable cross-stage delivery. | Only SQLite Working State and Frozen Plan JSON are authoritative; indexes and views are rebuildable, and no manifest, latest pointer, per-Plan directory, or copied upstream artifact is introduced. | The design specifies `plan_ref` validation, idempotent repeat seal, interrupted-publication recovery, corruption refusal, and coexistence of multiple Works and Plans. | Pass |
+
+The three artifacts are consistent with `mediasense.precheck.read`, `mediasense.plan.work`, and the Apply boundary. Downstream implementation does not need to invent product behavior for scope closure, default directory semantics, authority placement, seal identity, or publication recovery. The implementation choices deliberately left open below do not block independent PreCheck and Plan development.
 
 ## Deferred decisions
 

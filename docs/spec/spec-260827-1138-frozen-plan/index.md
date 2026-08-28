@@ -2,9 +2,9 @@
 id: "spec-260827-1138-frozen-plan"
 title: "MediaSense Frozen Organization Plan Contract"
 type: spec
-status: review
+status: active
 created: 2026-08-27
-updated: 2026-08-27
+updated: 2026-08-28
 timezone: "Asia/Shanghai"
 parent: "index-spec"
 depends-on:

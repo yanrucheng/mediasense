@@ -4,7 +4,7 @@ title: "MediaSense Plan Working State Tool Contract"
 type: spec
 status: active
 created: 2026-08-27
-updated: 2026-08-27
+updated: 2026-08-28
 timezone: "Asia/Shanghai"
 parent: "index-spec"
 depends-on:

@@ -2,7 +2,7 @@
 id: "spec-260828-2026-default-organization-profile"
 title: "MediaSense Default Organization Profile"
 type: spec
-status: review
+status: active
 created: 2026-08-28
 updated: 2026-08-28
 timezone: "Asia/Shanghai"
@@ -24,7 +24,7 @@ This document defines MediaSense's default product policy for the logical media 
 
 This profile is a versioned product policy, not a Tool-managed object. It has no `profile_ref`, registry, independent runtime lifecycle, or public operation. `mediasense.plan.work` continues to store only the exact plan-scoped `organization_preferences` snapshot. The Planning Agent applies this default when preferences do not override it, combines it with the actual Dataset evidence and Human feedback, and writes only the resulting organization into candidate content. A Frozen Plan remains self-contained and does not require this profile to be interpreted or applied.
 
-The profile is in `review` until the written policy and a complete conforming Frozen Plan example receive Human review. The later Hong Kong exercise remains an end-to-end product acceptance target rather than a prerequisite for activating this policy. Its naming and folder examples are product proposals, not historical or geographic truth.
+The policy and a complete conforming Frozen Plan example have received Human review. The later Hong Kong exercise remains an end-to-end product acceptance target rather than a prerequisite for this policy. Its naming and folder examples are product proposals, not historical or geographic truth.
 
 ## Evidence boundary
 
@@ -164,7 +164,7 @@ The Hong Kong labels above are product proposals only. When the real Hong Kong a
 
 ## Acceptance boundary
 
-This profile is ready to become `active` when Human review accepts the policy wording and at least one complete proposed Frozen Plan demonstrates that the existing artifact contract can express:
+This active profile is accepted because the accompanying complete proposed Frozen Plan demonstrates that the existing artifact contract can express:
 
 - a folded small event;
 - a multi-day or otherwise complex event with ordered groups;
