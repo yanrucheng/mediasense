@@ -27,10 +27,14 @@ def _canonical_strings_json(value) -> str:
     if isinstance(value, list):
         return "[" + ",".join(_canonical_strings_json(item) for item in value) + "]"
     if isinstance(value, dict):
-        return "{" + ",".join(
-            _canonical_strings_json(key) + ":" + _canonical_strings_json(value[key])
-            for key in sorted(value)
-        ) + "}"
+        return (
+            "{"
+            + ",".join(
+                _canonical_strings_json(key) + ":" + _canonical_strings_json(value[key])
+                for key in sorted(value)
+            )
+            + "}"
+        )
     raise ValueError("profile permits only objects, arrays, and strings")
 
 
@@ -69,10 +73,14 @@ class Resolver:
                 raise ValueError("referenced PreCheck relationship does not exist")
             result, complete = self.relations[key]
             if not complete:
-                raise ValueError("referenced PreCheck relationship is not fully expandable")
+                raise ValueError(
+                    "referenced PreCheck relationship is not fully expandable"
+                )
             result = set(result)
         elif kind == "union":
-            result = set().union(*(self.resolve_set(item) for item in expression["sets"]))
+            result = set().union(
+                *(self.resolve_set(item) for item in expression["sets"])
+            )
         elif kind == "difference":
             result = self.resolve_set(expression["base"]) - self.resolve_set(
                 expression["subtract"]
@@ -109,13 +117,17 @@ def _validate_semantics(plan: dict, resolver: Resolver) -> None:
     if accounted != scope:
         raise ValueError("outcomes do not exactly partition scope")
 
-    group_paths = [path for _, path, _ in outcomes if path[0] != "@other"]
+    group_paths = [path for _, path, record in outcomes if "relative_path" in record]
     if len(group_paths) != len(set(group_paths)):
         raise ValueError("duplicate logical group path")
 
+    directory_paths = {
+        path[:depth] for path in group_paths for depth in range(1, len(path) + 1)
+    }
+
     targets: set[tuple[tuple[str, ...], str]] = set()
     for members, path, record in outcomes:
-        if path[0] == "@other":
+        if "relative_path" not in record:
             continue
         overrides = {
             item["source_item_ref"]: item["name"]
@@ -132,6 +144,8 @@ def _validate_semantics(plan: dict, resolver: Resolver) -> None:
             target = (path, name)
             if target in targets:
                 raise ValueError("logical target collision")
+            if (*path, name) in directory_paths:
+                raise ValueError("logical file and directory collision")
             targets.add(target)
 
     for note in content.get("decision_notes", []):
@@ -189,9 +203,10 @@ def _hong_kong_resolver() -> Resolver:
         }
         if not targets:
             continue
-        relations[
-            (response["origin"], response["relation"], response["direction"])
-        ] = (targets, response["page"]["complete"])
+        relations[(response["origin"], response["relation"], response["direction"])] = (
+            targets,
+            response["page"]["complete"],
+        )
     return Resolver(
         result_ref=precheck["result_ref"],
         source_items=source_items,
@@ -264,21 +279,20 @@ def test_local_artifact_example_is_closed_and_covers_profile_cases() -> None:
 
     assert scope == set().union(*groups.values())
     assert groups[("260501-示例小事件",)] == {"source-item:14"}
-    assert groups[
-        ("260501-示例复杂事件", "0503-示例章节", "1-关联媒体")
-    ] == {"source-item:13", "source-item:211"}
-    assert groups[
-        ("260501-示例复杂事件", "0503-示例章节", "2-同行人物")
-    ] == {"source-item:15"}
-    assert groups[
-        ("260501-示例复杂事件", "a-files", "repair-reference")
-    ] == {"source-item:216"}
-    assert groups[("260501-示例复杂事件", "d-damaged-info")] == {
-        "source-item:215"
+    assert groups[("260501-示例复杂事件", "0503-示例章节", "1-关联媒体")] == {
+        "source-item:13",
+        "source-item:211",
     }
-    assert groups[
-        ("260501-示例复杂事件", "0504-示例章节", "Uncategorized")
-    ] == {"source-item:217"}
+    assert groups[("260501-示例复杂事件", "0503-示例章节", "2-同行人物")] == {
+        "source-item:15"
+    }
+    assert groups[("260501-示例复杂事件", "a-files", "repair-reference")] == {
+        "source-item:216"
+    }
+    assert groups[("260501-示例复杂事件", "d-damaged-info")] == {"source-item:215"}
+    assert groups[("260501-示例复杂事件", "0504-示例章节", "Uncategorized")] == {
+        "source-item:217"
+    }
 
     notes = "\n".join(note["summary"] for note in content["decision_notes"])
     assert "Fixture fact" in notes
@@ -345,14 +359,46 @@ def test_duplicate_logical_group_path_is_rejected() -> None:
     }
     first_group = deepcopy(plan["sealed_content"]["groups"][1])
     second_group = deepcopy(first_group)
-    first_group["members"]["source_item_refs"] = [
-        "source-item:215"
-    ]
+    first_group["members"]["source_item_refs"] = ["source-item:215"]
     second_group["members"]["source_item_refs"] = ["source-item:217"]
     plan["sealed_content"]["groups"] = [first_group, second_group]
     plan["sealed_content"]["other_outcomes"] = []
     _reseal(plan)
     with pytest.raises(ValueError, match="duplicate logical group path"):
+        _validate_semantics(plan, _hong_kong_resolver())
+
+
+def test_logical_file_and_directory_collision_is_rejected() -> None:
+    plan = _mock_plan()
+    plan["sealed_content"]["scope"] = {
+        "kind": "explicit",
+        "source_item_refs": ["source-item:215", "source-item:217"],
+    }
+    plan["sealed_content"]["groups"] = [
+        {
+            "relative_path": ["foo"],
+            "members": {
+                "kind": "explicit",
+                "source_item_refs": ["source-item:215"],
+            },
+            "source_naming": {
+                "default": "preserve_source_basename",
+                "overrides": [{"source_item_ref": "source-item:215", "name": "bar"}],
+            },
+        },
+        {
+            "relative_path": ["foo", "bar"],
+            "members": {
+                "kind": "explicit",
+                "source_item_refs": ["source-item:217"],
+            },
+            "source_naming": {"default": "preserve_source_basename"},
+        },
+    ]
+    plan["sealed_content"]["other_outcomes"] = []
+    plan["sealed_content"]["decision_notes"] = []
+    _reseal(plan)
+    with pytest.raises(ValueError, match="file and directory collision"):
         _validate_semantics(plan, _hong_kong_resolver())
 
 
@@ -368,9 +414,7 @@ def test_reference_outside_bound_result_is_rejected() -> None:
 
 def test_evidence_outside_bound_result_is_rejected() -> None:
     plan = _mock_plan()
-    plan["sealed_content"]["decision_notes"][0]["evidence_refs"] = [
-        "evidence:missing"
-    ]
+    plan["sealed_content"]["decision_notes"][0]["evidence_refs"] = ["evidence:missing"]
     _reseal(plan)
     with pytest.raises(ValueError, match="unavailable Evidence"):
         _validate_semantics(plan, _hong_kong_resolver())
