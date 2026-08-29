@@ -1,0 +1,14 @@
+---
+id: "synthesis"
+title: "MediaSense Apply Stage Design Synthesis"
+type: delegation
+status: draft
+created: 2026-08-28
+updated: 2026-08-28
+timezone: "Asia/Shanghai"
+parent: "td-260828-2131-apply-stage-design"
+depends-on:
+  - "01-result-mediasense"
+superseded-by: ""
+---
+

@@ -4,7 +4,7 @@ title: "Documentation Index"
 type: index
 status: active
 created: 2026-08-23
-updated: 2026-08-26
+updated: 2026-08-28
 timezone: "Asia/Shanghai"
 parent: ""
 depends-on: []
@@ -16,6 +16,7 @@ superseded-by: ""
 | Subfolder | Type | Purpose |
 | --- | --- | --- |
 | [clarify/](clarify/index.md) | clarify | Active decision records and human-answerable clarification packets |
+| [delegation/](delegation/index.md) | delegation | Purpose-scoped Task Delegation packages, raw returns, and closing synthesis |
 | [design/](design/index.md) | design | Product boundaries and architecture rationale |
 | [eval/](eval/index.md) | eval | Legacy evidence, migration comparisons, and benchmarks |
 | [spec/](spec/index.md) | spec | Formal machine-facing contracts and schemas |
