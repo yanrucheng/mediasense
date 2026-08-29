@@ -1,0 +1,317 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:mediasense:tool:apply-read",
+  "name": "mediasense.apply.read",
+  "description": "Inspect or traverse one explicitly identified immutable Apply Receipt without exposing mutable Run state or storage segmentation.",
+  "inputSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "urn:mediasense:tool:apply-read-input",
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["receipt_ref", "action"],
+    "properties": {
+      "receipt_ref": { "type": "string", "pattern": "^apply-receipt:[^\\s]+$" },
+      "action": { "enum": ["inspect", "traverse"] },
+      "section": { "enum": ["operations", "exceptions", "metadata_discrepancies", "created_directories"] },
+      "filter": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "source_item_ref": { "type": "string", "pattern": "^source-item:[^\\s]+$" },
+          "result": { "enum": ["completed_and_verified", "failed", "refused", "not_attempted", "indeterminate"] }
+        },
+        "minProperties": 1
+      },
+      "page": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "limit": { "type": "integer", "minimum": 1, "maximum": 1000, "default": 100 },
+          "cursor": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "allOf": [
+      {
+        "if": { "properties": { "action": { "const": "inspect" } }, "required": ["action"] },
+        "then": { "properties": { "section": false, "filter": false, "page": false } }
+      },
+      {
+        "if": { "properties": { "action": { "const": "traverse" } }, "required": ["action"] },
+        "then": { "required": ["section"] }
+      },
+      {
+        "if": {
+          "properties": { "filter": { "required": ["result"] } },
+          "required": ["filter"]
+        },
+        "then": { "properties": { "section": { "enum": ["operations", "exceptions"] } }, "required": ["section"] }
+      },
+      {
+        "if": { "properties": { "section": { "const": "created_directories" } }, "required": ["section"] },
+        "then": { "properties": { "filter": false } }
+      }
+    ]
+  },
+  "outputSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "urn:mediasense:tool:apply-read-output",
+    "oneOf": [
+      { "$ref": "#/$defs/inspect_response" },
+      { "$ref": "#/$defs/traverse_response" },
+      { "$ref": "#/$defs/error_response" }
+    ],
+    "$defs": {
+      "receipt_ref": { "type": "string", "pattern": "^apply-receipt:[^\\s]+$" },
+      "run_ref": { "type": "string", "pattern": "^apply-run:[^\\s]+$" },
+      "plan_ref": { "type": "string", "pattern": "^frozen-plan:[^\\s]+$" },
+      "source_item_ref": { "type": "string", "pattern": "^source-item:[^\\s]+$" },
+      "count": { "type": "integer", "minimum": 0 },
+      "json_value": {
+        "oneOf": [
+          { "type": "boolean" },
+          { "type": "number" },
+          { "type": "string" },
+          { "type": "array" },
+          { "type": "object" }
+        ]
+      },
+      "accounting": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["plan_scope_items", "materialization_operations", "retained_without_effect", "excluded_without_effect", "completed_and_verified", "failed", "refused", "not_attempted", "indeterminate"],
+        "properties": {
+          "plan_scope_items": { "$ref": "#/$defs/count" },
+          "materialization_operations": { "$ref": "#/$defs/count" },
+          "retained_without_effect": { "$ref": "#/$defs/count" },
+          "excluded_without_effect": { "$ref": "#/$defs/count" },
+          "completed_and_verified": { "$ref": "#/$defs/count" },
+          "failed": { "$ref": "#/$defs/count" },
+          "refused": { "$ref": "#/$defs/count" },
+          "not_attempted": { "$ref": "#/$defs/count" },
+          "indeterminate": { "$ref": "#/$defs/count" }
+        }
+      },
+      "receipt_view": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["receipt_ref", "run_ref", "frozen_plan_ref", "effect", "execution_binding", "completion", "closure", "accounting", "verification", "metadata_preservation", "integrity"],
+        "properties": {
+          "receipt_ref": { "$ref": "#/$defs/receipt_ref" },
+          "run_ref": { "$ref": "#/$defs/run_ref" },
+          "frozen_plan_ref": { "$ref": "#/$defs/plan_ref" },
+          "effect": { "const": "move_originals" },
+          "execution_binding": {
+            "oneOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["kind", "source_root_count", "destination_parent", "resolved_logical_root"],
+                "properties": {
+                  "kind": { "const": "forward" },
+                  "source_root_count": { "type": "integer", "minimum": 1 },
+                  "destination_parent": { "type": "string", "minLength": 1 },
+                  "resolved_logical_root": { "type": "string", "minLength": 1 }
+                }
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["kind", "rewind_of_receipt_ref", "restored_source_parents"],
+                "properties": {
+                  "kind": { "const": "rewind" },
+                  "rewind_of_receipt_ref": { "$ref": "#/$defs/receipt_ref" },
+                  "restored_source_parents": {
+                    "type": "array",
+                    "minItems": 1,
+                    "uniqueItems": true,
+                    "items": { "type": "string", "minLength": 1 }
+                  }
+                }
+              }
+            ]
+          },
+          "completion": { "enum": ["complete", "incomplete"] },
+          "closure": { "enum": ["automatic", "human_cancelled"] },
+          "accounting": { "$ref": "#/$defs/accounting" },
+          "verification": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["unplanned_targets", "unplanned_renames", "unverified_items"],
+            "properties": {
+              "unplanned_targets": { "$ref": "#/$defs/count" },
+              "unplanned_renames": { "$ref": "#/$defs/count" },
+              "unverified_items": { "$ref": "#/$defs/count" }
+            }
+          },
+          "metadata_preservation": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["profile", "content_verification_result", "unpreserved_attribute_count", "accepted_discrepancy_count"],
+            "properties": {
+              "profile": { "enum": ["same_filesystem_rename_v1", "cross_filesystem_user_metadata_v1"] },
+              "content_verification_result": { "enum": ["verified", "failed", "indeterminate"] },
+              "unpreserved_attribute_count": { "$ref": "#/$defs/count" },
+              "accepted_discrepancy_count": { "$ref": "#/$defs/count" }
+            }
+          },
+          "rewind_window_ends_at": { "type": "string", "format": "date-time" },
+          "integrity": { "const": "valid" }
+        }
+      },
+      "operation_view": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["source_item_ref", "source_before", "intended_target", "source_verification", "result", "attempts", "source_after", "target_after", "verification"],
+        "properties": {
+          "source_item_ref": { "$ref": "#/$defs/source_item_ref" },
+          "source_before": { "type": "string", "minLength": 1 },
+          "intended_target": { "type": "string", "minLength": 1 },
+          "source_verification": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["profile", "result", "expected_basis"],
+            "properties": {
+              "profile": { "type": "string", "minLength": 1 },
+              "result": { "enum": ["matched", "mismatched", "unavailable", "indeterminate"] },
+              "expected_basis": { "$ref": "#/$defs/json_value" },
+              "observed_basis": { "$ref": "#/$defs/json_value" }
+            }
+          },
+          "result": { "enum": ["completed_and_verified", "failed", "refused", "not_attempted", "indeterminate"] },
+          "attempts": { "type": "integer", "minimum": 0 },
+          "source_after": { "enum": ["present", "absent", "indeterminate"] },
+          "target_after": { "enum": ["verified_present", "absent", "present_unverified", "indeterminate"] },
+          "verification": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["profile", "result", "basis"],
+            "properties": {
+              "profile": { "type": "string", "minLength": 1 },
+              "result": { "enum": ["verified", "failed", "indeterminate"] },
+              "basis": { "type": "string", "minLength": 1 }
+            }
+          },
+          "reason": { "type": "string", "minLength": 1 }
+        }
+      },
+      "created_directory_view": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "rewind_rule"],
+        "properties": {
+          "path": { "type": "string", "minLength": 1 },
+          "rewind_rule": { "const": "remove_only_if_empty_and_unchanged" }
+        }
+      },
+      "metadata_discrepancy_view": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["discrepancy_ref", "source_item_ref", "attribute", "expected", "observed", "accepted"],
+        "properties": {
+          "discrepancy_ref": { "type": "string", "pattern": "^metadata-discrepancy:[^\\s]+$" },
+          "source_item_ref": { "$ref": "#/$defs/source_item_ref" },
+          "attribute": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+          "expected": { "$ref": "#/$defs/json_value" },
+          "observed": { "$ref": "#/$defs/json_value" },
+          "accepted": { "type": "boolean" },
+          "authorization_ref": { "type": "string", "pattern": "^authorization:[^\\s]+$" }
+        },
+        "allOf": [
+          {
+            "if": { "properties": { "accepted": { "const": true } }, "required": ["accepted"] },
+            "then": { "required": ["authorization_ref"] },
+            "else": { "properties": { "authorization_ref": false } }
+          }
+        ]
+      },
+      "page": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["returned", "total", "complete"],
+        "properties": {
+          "returned": { "$ref": "#/$defs/count" },
+          "total": { "$ref": "#/$defs/count" },
+          "complete": { "type": "boolean" },
+          "next_cursor": { "type": "string", "minLength": 1 }
+        },
+        "allOf": [
+          {
+            "if": { "properties": { "complete": { "const": true } }, "required": ["complete"] },
+            "then": { "properties": { "next_cursor": false } }
+          },
+          {
+            "if": { "properties": { "complete": { "const": false } }, "required": ["complete"] },
+            "then": { "required": ["next_cursor"] }
+          }
+        ]
+      },
+      "inspect_response": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["outcome", "action", "receipt_ref", "receipt"],
+        "properties": {
+          "outcome": { "const": "ok" },
+          "action": { "const": "inspect" },
+          "receipt_ref": { "$ref": "#/$defs/receipt_ref" },
+          "receipt": { "$ref": "#/$defs/receipt_view" }
+        }
+      },
+      "traverse_response": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["outcome", "action", "receipt_ref", "section", "items", "page"],
+        "properties": {
+          "outcome": { "const": "ok" },
+          "action": { "const": "traverse" },
+          "receipt_ref": { "$ref": "#/$defs/receipt_ref" },
+          "section": { "enum": ["operations", "exceptions", "metadata_discrepancies", "created_directories"] },
+          "items": {
+            "type": "array",
+            "items": {
+              "oneOf": [
+                { "$ref": "#/$defs/operation_view" },
+                { "$ref": "#/$defs/metadata_discrepancy_view" },
+                { "$ref": "#/$defs/created_directory_view" }
+              ]
+            }
+          },
+          "page": { "$ref": "#/$defs/page" }
+        },
+        "allOf": [
+          {
+            "if": { "properties": { "section": { "enum": ["operations", "exceptions"] } }, "required": ["section"] },
+            "then": { "properties": { "items": { "type": "array", "items": { "$ref": "#/$defs/operation_view" } } } }
+          },
+          {
+            "if": { "properties": { "section": { "const": "metadata_discrepancies" } }, "required": ["section"] },
+            "then": { "properties": { "items": { "type": "array", "items": { "$ref": "#/$defs/metadata_discrepancy_view" } } } }
+          },
+          {
+            "if": { "properties": { "section": { "const": "created_directories" } }, "required": ["section"] },
+            "then": { "properties": { "items": { "type": "array", "items": { "$ref": "#/$defs/created_directory_view" } } } }
+          }
+        ]
+      },
+      "error_response": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["outcome", "action", "error"],
+        "properties": {
+          "outcome": { "const": "error" },
+          "action": { "enum": ["inspect", "traverse"] },
+          "receipt_ref": { "$ref": "#/$defs/receipt_ref" },
+          "error": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["code", "message"],
+            "properties": {
+              "code": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+              "message": { "type": "string", "minLength": 1 }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,490 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:mediasense:tool:apply-run",
+  "name": "mediasense.apply.run",
+  "description": "Prepare, authorize, execute, control, recover, verify, and close one durable Apply Run without exposing journal or storage internals.",
+  "inputSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "urn:mediasense:tool:apply-run-input",
+    "oneOf": [
+      { "$ref": "#/$defs/prepare_request" },
+      { "$ref": "#/$defs/status_request" },
+      { "$ref": "#/$defs/execute_request" },
+      { "$ref": "#/$defs/pause_request" },
+      { "$ref": "#/$defs/resume_request" },
+      { "$ref": "#/$defs/cancel_request" }
+    ],
+    "$defs": {
+      "run_ref": { "type": "string", "pattern": "^apply-run:[^\\s]+$" },
+      "receipt_ref": { "type": "string", "pattern": "^apply-receipt:[^\\s]+$" },
+      "request_id": { "type": "string", "pattern": "^request:[^\\s]+$" },
+      "content_identity": { "type": "string", "minLength": 3 },
+      "path": { "type": "string", "minLength": 1 },
+      "source_root_input": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["source_root_ref", "current_root"],
+        "properties": {
+          "source_root_ref": { "type": "string", "pattern": "^source-root:[^\\s]+$" },
+          "current_root": { "$ref": "#/$defs/path" }
+        }
+      },
+      "forward_source": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["frozen_plan_path", "effect", "current_source_roots", "destination_parent"],
+        "properties": {
+          "frozen_plan_path": { "$ref": "#/$defs/path" },
+          "effect": { "const": "move_originals" },
+          "current_source_roots": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": { "$ref": "#/$defs/source_root_input" }
+          },
+          "destination_parent": { "$ref": "#/$defs/path" }
+        }
+      },
+      "rewind_source": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["receipt_ref"],
+        "properties": {
+          "receipt_ref": { "$ref": "#/$defs/receipt_ref" }
+        }
+      },
+      "prepare_request": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["action", "request_id"],
+        "properties": {
+          "action": { "const": "prepare" },
+          "request_id": { "$ref": "#/$defs/request_id" },
+          "forward": { "$ref": "#/$defs/forward_source" },
+          "rewind": { "$ref": "#/$defs/rewind_source" }
+        },
+        "oneOf": [
+          { "required": ["forward"] },
+          { "required": ["rewind"] }
+        ]
+      },
+      "status_request": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["action", "run_ref"],
+        "properties": {
+          "action": { "const": "status" },
+          "run_ref": { "$ref": "#/$defs/run_ref" }
+        }
+      },
+      "execute_request": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["action", "run_ref", "prepared_revision", "prepared_content_identity", "request_id"],
+        "properties": {
+          "action": { "const": "execute" },
+          "run_ref": { "$ref": "#/$defs/run_ref" },
+          "prepared_revision": { "type": "string", "minLength": 1 },
+          "prepared_content_identity": { "$ref": "#/$defs/content_identity" },
+          "request_id": { "$ref": "#/$defs/request_id" }
+        }
+      },
+      "pause_request": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["action", "run_ref"],
+        "properties": {
+          "action": { "const": "pause" },
+          "run_ref": { "$ref": "#/$defs/run_ref" }
+        }
+      },
+      "resume_request": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["action", "run_ref"],
+        "properties": {
+          "action": { "const": "resume" },
+          "run_ref": { "$ref": "#/$defs/run_ref" }
+        }
+      },
+      "cancel_request": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["action", "run_ref"],
+        "properties": {
+          "action": { "const": "cancel" },
+          "run_ref": { "$ref": "#/$defs/run_ref" }
+        }
+      }
+    }
+  },
+  "outputSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "urn:mediasense:tool:apply-run-output",
+    "oneOf": [
+      { "$ref": "#/$defs/prepare_response" },
+      { "$ref": "#/$defs/status_response" },
+      { "$ref": "#/$defs/control_response" },
+      { "$ref": "#/$defs/error_response" }
+    ],
+    "$defs": {
+      "run_ref": { "type": "string", "pattern": "^apply-run:[^\\s]+$" },
+      "receipt_ref": { "type": "string", "pattern": "^apply-receipt:[^\\s]+$" },
+      "plan_ref": { "type": "string", "pattern": "^frozen-plan:[^\\s]+$" },
+      "content_identity": { "type": "string", "minLength": 3 },
+      "public_state": {
+        "enum": ["preparing", "ready_for_authorization", "blocked", "executing", "paused", "needs_attention", "verifying", "closed", "cancelled", "failed"]
+      },
+      "control_action": { "enum": ["execute", "pause", "resume", "cancel"] },
+      "no_actions": { "type": "array", "maxItems": 0 },
+      "ready_actions": {
+        "type": "array",
+        "minItems": 2,
+        "maxItems": 2,
+        "uniqueItems": true,
+        "items": { "$ref": "#/$defs/control_action" },
+        "allOf": [
+          { "contains": { "const": "execute" }, "minContains": 1, "maxContains": 1 },
+          { "contains": { "const": "cancel" }, "minContains": 1, "maxContains": 1 }
+        ]
+      },
+      "authorization_actions": {
+        "type": "array",
+        "minItems": 2,
+        "maxItems": 2,
+        "uniqueItems": true,
+        "items": { "$ref": "#/$defs/control_action" },
+        "allOf": [
+          { "contains": { "const": "execute" }, "minContains": 1, "maxContains": 1 },
+          { "contains": { "const": "cancel" }, "minContains": 1, "maxContains": 1 }
+        ]
+      },
+      "active_actions": {
+        "type": "array",
+        "minItems": 2,
+        "maxItems": 2,
+        "uniqueItems": true,
+        "items": { "$ref": "#/$defs/control_action" },
+        "allOf": [
+          { "contains": { "const": "pause" }, "minContains": 1, "maxContains": 1 },
+          { "contains": { "const": "cancel" }, "minContains": 1, "maxContains": 1 }
+        ]
+      },
+      "resumable_actions": {
+        "type": "array",
+        "minItems": 2,
+        "maxItems": 2,
+        "uniqueItems": true,
+        "items": { "$ref": "#/$defs/control_action" },
+        "allOf": [
+          { "contains": { "const": "resume" }, "minContains": 1, "maxContains": 1 },
+          { "contains": { "const": "cancel" }, "minContains": 1, "maxContains": 1 }
+        ]
+      },
+      "count_or_unknown": {
+        "oneOf": [
+          { "type": "integer", "minimum": 0 },
+          { "const": "unknown" }
+        ]
+      },
+      "progress": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["planned_operations", "completed_and_verified", "failed", "remaining"],
+        "properties": {
+          "planned_operations": { "$ref": "#/$defs/count_or_unknown" },
+          "completed_and_verified": { "$ref": "#/$defs/count_or_unknown" },
+          "failed": { "$ref": "#/$defs/count_or_unknown" },
+          "remaining": { "$ref": "#/$defs/count_or_unknown" },
+          "indeterminate": { "$ref": "#/$defs/count_or_unknown" }
+        }
+      },
+      "reason": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["code", "message"],
+        "properties": {
+          "code": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+          "message": { "type": "string", "minLength": 1 },
+          "resume_when": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "type": "string", "minLength": 1 }
+          }
+        }
+      },
+      "warning": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["code", "message"],
+        "properties": {
+          "code": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+          "message": { "type": "string", "minLength": 1 },
+          "source_item_ref": { "type": "string", "pattern": "^source-item:[^\\s]+$" }
+        }
+      },
+      "metadata_loss_authorization": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["profile", "discrepancy_set_identity", "discrepancy_count", "source_deletion_blocked", "disclosure"],
+        "properties": {
+          "profile": { "const": "cross_filesystem_user_metadata_v1" },
+          "discrepancy_set_identity": { "$ref": "#/$defs/content_identity" },
+          "discrepancy_count": { "type": "integer", "minimum": 1 },
+          "source_deletion_blocked": { "const": true },
+          "disclosure": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["ref", "content_identity", "item_count", "coverage", "access"],
+            "properties": {
+              "ref": { "type": "string", "pattern": "^apply-run-disclosure:[^\\s]+$" },
+              "content_identity": { "$ref": "#/$defs/content_identity" },
+              "item_count": { "type": "integer", "minimum": 1 },
+              "coverage": { "const": "complete_discrepancy_set" },
+              "access": { "const": "bounded_human_obtainable" }
+            }
+          }
+        }
+      },
+      "prepared_summary": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["frozen_plan_ref", "frozen_plan_content_identity", "effect", "execution_binding", "execution_route", "metadata_preservation_profile", "content_verification_profile", "plan_scope_items", "materialization_operations", "no_effect_items", "verified_sources", "unique_targets", "blockers", "warnings"],
+        "properties": {
+          "frozen_plan_ref": { "$ref": "#/$defs/plan_ref" },
+          "frozen_plan_content_identity": { "$ref": "#/$defs/content_identity" },
+          "effect": { "const": "move_originals" },
+          "execution_binding": {
+            "oneOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["kind", "source_roots", "destination_parent", "resolved_logical_root", "destination_observed_identity"],
+                "properties": {
+                  "kind": { "const": "forward" },
+                  "source_roots": {
+                    "type": "array",
+                    "minItems": 1,
+                    "uniqueItems": true,
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": ["source_root_ref", "current_root", "observed_identity"],
+                      "properties": {
+                        "source_root_ref": { "type": "string", "pattern": "^source-root:[^\\s]+$" },
+                        "current_root": { "type": "string", "minLength": 1 },
+                        "observed_identity": { "type": "string", "minLength": 1 }
+                      }
+                    }
+                  },
+                  "destination_parent": { "type": "string", "minLength": 1 },
+                  "resolved_logical_root": { "type": "string", "minLength": 1 },
+                  "destination_observed_identity": { "type": "string", "minLength": 1 }
+                }
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["kind", "rewind_of_receipt_ref", "restored_source_parents"],
+                "properties": {
+                  "kind": { "const": "rewind" },
+                  "rewind_of_receipt_ref": { "$ref": "#/$defs/receipt_ref" },
+                  "restored_source_parents": {
+                    "type": "array",
+                    "minItems": 1,
+                    "uniqueItems": true,
+                    "items": { "type": "string", "minLength": 1 }
+                  }
+                }
+              }
+            ]
+          },
+          "execution_route": { "enum": ["same_filesystem_atomic_move", "verified_cross_filesystem_transfer"] },
+          "metadata_preservation_profile": { "enum": ["same_filesystem_rename_v1", "cross_filesystem_user_metadata_v1"] },
+          "content_verification_profile": { "enum": ["filesystem_identity_and_location", "byte_for_byte"] },
+          "plan_scope_items": { "type": "integer", "minimum": 1 },
+          "materialization_operations": { "type": "integer", "minimum": 0 },
+          "no_effect_items": { "type": "integer", "minimum": 0 },
+          "verified_sources": { "type": "integer", "minimum": 0 },
+          "unique_targets": { "type": "integer", "minimum": 0 },
+          "blockers": { "type": "integer", "minimum": 0 },
+          "warnings": { "type": "integer", "minimum": 0 }
+        },
+        "allOf": [
+          {
+            "if": { "properties": { "execution_route": { "const": "same_filesystem_atomic_move" } }, "required": ["execution_route"] },
+            "then": {
+              "properties": {
+                "metadata_preservation_profile": { "const": "same_filesystem_rename_v1" },
+                "content_verification_profile": { "const": "filesystem_identity_and_location" }
+              }
+            }
+          },
+          {
+            "if": { "properties": { "execution_route": { "const": "verified_cross_filesystem_transfer" } }, "required": ["execution_route"] },
+            "then": {
+              "properties": {
+                "metadata_preservation_profile": { "const": "cross_filesystem_user_metadata_v1" },
+                "content_verification_profile": { "const": "byte_for_byte" }
+              }
+            }
+          }
+        ]
+      },
+      "prepare_response": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["outcome", "action", "run_ref", "state"],
+        "properties": {
+          "outcome": { "const": "ok" },
+          "action": { "const": "prepare" },
+          "run_ref": { "$ref": "#/$defs/run_ref" },
+          "state": { "const": "preparing" }
+        }
+      },
+      "status_response": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["outcome", "action", "run_ref", "state", "progress", "allowed_actions"],
+        "properties": {
+          "outcome": { "const": "ok" },
+          "action": { "const": "status" },
+          "run_ref": { "$ref": "#/$defs/run_ref" },
+          "state": { "$ref": "#/$defs/public_state" },
+          "prepared_revision": { "type": "string", "minLength": 1 },
+          "prepared_content_identity": { "$ref": "#/$defs/content_identity" },
+          "summary": { "$ref": "#/$defs/prepared_summary" },
+          "progress": { "$ref": "#/$defs/progress" },
+          "warnings": { "type": "array", "items": { "$ref": "#/$defs/warning" } },
+          "reasons": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/reason" } },
+          "metadata_loss_authorization": { "$ref": "#/$defs/metadata_loss_authorization" },
+          "allowed_actions": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": { "$ref": "#/$defs/control_action" }
+          },
+          "published_receipt": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["receipt_ref", "completion", "closure", "plan_scope_items", "materialization_operations", "completed_and_verified", "exceptions"],
+            "properties": {
+              "receipt_ref": { "$ref": "#/$defs/receipt_ref" },
+              "completion": { "enum": ["complete", "incomplete"] },
+              "closure": { "enum": ["automatic", "human_cancelled"] },
+              "plan_scope_items": { "type": "integer", "minimum": 0 },
+              "materialization_operations": { "type": "integer", "minimum": 0 },
+              "completed_and_verified": { "type": "integer", "minimum": 0 },
+              "exceptions": { "type": "integer", "minimum": 0 }
+            }
+          },
+          "guaranteed_zero_media_effects": { "const": true },
+          "possible_effects": { "enum": ["none", "known", "indeterminate"] }
+        },
+        "allOf": [
+          {
+            "if": { "properties": { "state": { "const": "ready_for_authorization" } }, "required": ["state"] },
+            "then": {
+              "properties": { "allowed_actions": { "$ref": "#/$defs/ready_actions" } },
+              "required": ["prepared_revision", "prepared_content_identity", "summary"]
+            }
+          },
+          {
+            "if": { "properties": { "state": { "enum": ["preparing", "executing"] } }, "required": ["state"] },
+            "then": { "properties": { "allowed_actions": { "$ref": "#/$defs/active_actions" } } }
+          },
+          {
+            "if": { "properties": { "state": { "enum": ["blocked", "paused"] } }, "required": ["state"] },
+            "then": {
+              "properties": { "allowed_actions": { "$ref": "#/$defs/resumable_actions" } },
+              "required": ["reasons"]
+            }
+          },
+          {
+            "if": { "properties": { "state": { "const": "needs_attention" } }, "required": ["state"] },
+            "then": {
+              "required": ["reasons"],
+              "oneOf": [
+                {
+                  "required": ["metadata_loss_authorization", "prepared_revision", "prepared_content_identity"],
+                  "properties": { "allowed_actions": { "$ref": "#/$defs/authorization_actions" } }
+                },
+                {
+                  "properties": {
+                    "metadata_loss_authorization": false,
+                    "allowed_actions": { "$ref": "#/$defs/resumable_actions" }
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "if": { "properties": { "state": { "enum": ["verifying", "closed", "cancelled", "failed"] } }, "required": ["state"] },
+            "then": { "properties": { "allowed_actions": { "$ref": "#/$defs/no_actions" } } }
+          },
+          {
+            "if": { "properties": { "state": { "const": "closed" } }, "required": ["state"] },
+            "then": { "required": ["published_receipt"] },
+            "else": { "properties": { "published_receipt": false } }
+          },
+          {
+            "if": { "properties": { "state": { "const": "cancelled" } }, "required": ["state"] },
+            "then": { "required": ["guaranteed_zero_media_effects"] },
+            "else": { "properties": { "guaranteed_zero_media_effects": false } }
+          },
+          {
+            "if": { "properties": { "state": { "const": "failed" } }, "required": ["state"] },
+            "then": { "required": ["possible_effects", "reasons"] },
+            "else": { "properties": { "possible_effects": false } }
+          }
+        ]
+      },
+      "control_response": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["outcome", "action", "run_ref", "observed_state", "target_state"],
+        "properties": {
+          "outcome": { "const": "accepted" },
+          "action": { "enum": ["execute", "pause", "resume", "cancel"] },
+          "run_ref": { "$ref": "#/$defs/run_ref" },
+          "observed_state": { "$ref": "#/$defs/public_state" },
+          "target_state": { "$ref": "#/$defs/public_state" }
+        },
+        "allOf": [
+          {
+            "if": { "properties": { "action": { "const": "execute" } }, "required": ["action"] },
+            "then": { "properties": { "target_state": { "const": "executing" } } }
+          },
+          {
+            "if": { "properties": { "action": { "const": "pause" } }, "required": ["action"] },
+            "then": { "properties": { "target_state": { "const": "paused" } } }
+          },
+          {
+            "if": { "properties": { "action": { "const": "resume" } }, "required": ["action"] },
+            "then": { "properties": { "target_state": { "enum": ["preparing", "executing"] } } }
+          },
+          {
+            "if": { "properties": { "action": { "const": "cancel" } }, "required": ["action"] },
+            "then": { "properties": { "target_state": { "enum": ["cancelled", "verifying"] } } }
+          }
+        ]
+      },
+      "error_response": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["outcome", "action", "error"],
+        "properties": {
+          "outcome": { "const": "error" },
+          "action": { "enum": ["prepare", "status", "execute", "pause", "resume", "cancel"] },
+          "run_ref": { "$ref": "#/$defs/run_ref" },
+          "error": { "$ref": "#/$defs/reason" },
+          "observed_state": { "$ref": "#/$defs/public_state" },
+          "allowed_actions": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": { "$ref": "#/$defs/control_action" }
+          }
+        }
+      }
+    }
+  }
+}

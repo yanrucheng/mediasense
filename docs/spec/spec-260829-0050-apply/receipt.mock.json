@@ -1,0 +1,177 @@
+{
+  "sealed_content": {
+    "contract": "mediasense.apply-receipt",
+    "receipt_ref": "apply-receipt:example-001",
+    "run_ref": "apply-run:example-001",
+    "frozen_plan_ref": "frozen-plan:local-artifact-example-002",
+    "frozen_plan_content_identity": "sha256:c21577e7565299a6a2f4c486bb8fe9764ad373ab266e61f4265085499633a114",
+    "effect": "move_originals",
+    "execution_binding": {
+      "kind": "forward",
+      "source_roots": [
+        {
+          "source_root_ref": "source-root:hk-fixture-root",
+          "current_root": "/Volumes/Archive/Inbox",
+          "observed_identity": "illustrative:volume-archive-inbox"
+        }
+      ],
+      "destination": {
+        "parent": "/Volumes/Archive",
+        "resolved_logical_root": "/Volumes/Archive/Media",
+        "observed_identity": "illustrative:volume-archive"
+      }
+    },
+    "prepared_content_identity": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "authorization": {
+      "binding": "illustrative:trusted-human-confirmation-001",
+      "confirmed_prepared_content_identity": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "confirmed_at": "2026-08-29T00:40:00+08:00"
+    },
+    "preflight": {
+      "source_compatibility": "verified",
+      "target_binding": "verified",
+      "execution_route": "same_filesystem_atomic_move",
+      "target_collisions": 0,
+      "blockers": 0,
+      "warnings": 1
+    },
+    "completion": "complete",
+    "closure": "automatic",
+    "accounting": {
+      "plan_scope_items": 7,
+      "materialization_operations": 7,
+      "retained_without_effect": 0,
+      "excluded_without_effect": 0,
+      "completed_and_verified": 7,
+      "failed": 0,
+      "refused": 0,
+      "not_attempted": 0,
+      "indeterminate": 0
+    },
+    "verification": {
+      "planned_targets_present": 7,
+      "original_locations_absent": 7,
+      "unplanned_targets": 0,
+      "unplanned_renames": 0,
+      "unverified_items": 0
+    },
+    "metadata_preservation": {
+      "profile": "same_filesystem_rename_v1",
+      "content_verification": {
+        "profile": "filesystem_identity_and_location",
+        "result": "verified"
+      },
+      "checked_attributes": ["filesystem_identity_and_location"],
+      "unpreserved_attributes": [],
+      "accepted_discrepancy_refs": [],
+      "discrepancy_authorizations": []
+    },
+    "operation_ledger": {
+      "kind": "inline",
+      "items": [
+        {
+          "source_item_ref": "source-item:13",
+          "source_before": "/Volumes/Archive/Inbox/illustrative/item-013-source.jpg",
+          "intended_target": "/Volumes/Archive/Media/260501-示例复杂事件/0503-示例章节/1-关联媒体/item-013.jpg",
+          "source_verification": { "profile": "illustrative:content-digest-v1", "result": "matched", "expected_basis": "illustrative:source-item-13", "observed_basis": "illustrative:source-item-13" },
+          "result": "completed_and_verified",
+          "attempts": 1,
+          "source_after": "absent",
+          "target_after": "verified_present",
+          "verification": { "profile": "same_filesystem_identity_and_location", "result": "verified", "basis": "Target identity matched and original location was absent." }
+        },
+        {
+          "source_item_ref": "source-item:14",
+          "source_before": "/Volumes/Archive/Inbox/illustrative/item-014-source.jpg",
+          "intended_target": "/Volumes/Archive/Media/260501-示例小事件/item-014.jpg",
+          "source_verification": { "profile": "illustrative:content-digest-v1", "result": "matched", "expected_basis": "illustrative:source-item-14", "observed_basis": "illustrative:source-item-14" },
+          "result": "completed_and_verified",
+          "attempts": 1,
+          "source_after": "absent",
+          "target_after": "verified_present",
+          "verification": { "profile": "same_filesystem_identity_and_location", "result": "verified", "basis": "Target identity matched and original location was absent." }
+        },
+        {
+          "source_item_ref": "source-item:15",
+          "source_before": "/Volumes/Archive/Inbox/illustrative/item-015-source.jpg",
+          "intended_target": "/Volumes/Archive/Media/260501-示例复杂事件/0503-示例章节/2-同行人物/item-015.jpg",
+          "source_verification": { "profile": "illustrative:content-digest-v1", "result": "matched", "expected_basis": "illustrative:source-item-15", "observed_basis": "illustrative:source-item-15" },
+          "result": "completed_and_verified",
+          "attempts": 1,
+          "source_after": "absent",
+          "target_after": "verified_present",
+          "verification": { "profile": "same_filesystem_identity_and_location", "result": "verified", "basis": "Target identity matched and original location was absent." }
+        },
+        {
+          "source_item_ref": "source-item:211",
+          "source_before": "/Volumes/Archive/Inbox/illustrative/item-211-source-damaged.mp4",
+          "intended_target": "/Volumes/Archive/Media/260501-示例复杂事件/0503-示例章节/1-关联媒体/item-211-context-known-damaged.mp4",
+          "source_verification": { "profile": "illustrative:content-digest-v1", "result": "matched", "expected_basis": "illustrative:source-item-211", "observed_basis": "illustrative:source-item-211" },
+          "result": "completed_and_verified",
+          "attempts": 1,
+          "source_after": "absent",
+          "target_after": "verified_present",
+          "verification": { "profile": "same_filesystem_identity_and_location", "result": "verified", "basis": "Target identity matched and original location was absent." }
+        },
+        {
+          "source_item_ref": "source-item:215",
+          "source_before": "/Volumes/Archive/Inbox/dataset/260501-HK美食之旅/0504/DJI_001-action-sd-amber/DJI_20260504202728_0029_D.MP4",
+          "intended_target": "/Volumes/Archive/Media/260501-示例复杂事件/d-damaged-info/DJI_20260504202728_0029_D.MP4",
+          "source_verification": { "profile": "illustrative:content-digest-v1", "result": "matched", "expected_basis": "illustrative:source-item-215", "observed_basis": "illustrative:source-item-215" },
+          "result": "completed_and_verified",
+          "attempts": 1,
+          "source_after": "absent",
+          "target_after": "verified_present",
+          "verification": { "profile": "same_filesystem_identity_and_location", "result": "verified", "basis": "Target identity matched and original location was absent." }
+        },
+        {
+          "source_item_ref": "source-item:216",
+          "source_before": "/Volumes/Archive/Inbox/illustrative/item-216-source-reference.bin",
+          "intended_target": "/Volumes/Archive/Media/260501-示例复杂事件/a-files/repair-reference/item-216-reference.bin",
+          "source_verification": { "profile": "illustrative:content-digest-v1", "result": "matched", "expected_basis": "illustrative:source-item-216", "observed_basis": "illustrative:source-item-216" },
+          "result": "completed_and_verified",
+          "attempts": 1,
+          "source_after": "absent",
+          "target_after": "verified_present",
+          "verification": { "profile": "same_filesystem_identity_and_location", "result": "verified", "basis": "Target identity matched and original location was absent." }
+        },
+        {
+          "source_item_ref": "source-item:217",
+          "source_before": "/Volumes/Archive/Inbox/dataset/260501-HK美食之旅/0504/DJI_001-action-sd-amber/DJI_20260504202728_0029_D.remux-faststart.MP4",
+          "intended_target": "/Volumes/Archive/Media/260501-示例复杂事件/0504-示例章节/Uncategorized/DJI_20260504202728_0029_D.remux-faststart.MP4",
+          "source_verification": { "profile": "illustrative:content-digest-v1", "result": "matched", "expected_basis": "illustrative:source-item-217", "observed_basis": "illustrative:source-item-217" },
+          "result": "completed_and_verified",
+          "attempts": 2,
+          "source_after": "absent",
+          "target_after": "verified_present",
+          "verification": { "profile": "same_filesystem_identity_and_location", "result": "verified", "basis": "Target identity matched and original location was absent." },
+          "recovery_fact": "First source-read attempt failed; resume reverified source and target before completing."
+        }
+      ]
+    },
+    "created_directories": [
+      { "path": "/Volumes/Archive/Media", "effect": "created_by_run", "rewind_rule": "remove_only_if_empty_and_unchanged" },
+      { "path": "/Volumes/Archive/Media/260501-示例小事件", "effect": "created_by_run", "rewind_rule": "remove_only_if_empty_and_unchanged" },
+      { "path": "/Volumes/Archive/Media/260501-示例复杂事件/0503-示例章节/1-关联媒体", "effect": "created_by_run", "rewind_rule": "remove_only_if_empty_and_unchanged" },
+      { "path": "/Volumes/Archive/Media/260501-示例复杂事件/0503-示例章节/2-同行人物", "effect": "created_by_run", "rewind_rule": "remove_only_if_empty_and_unchanged" },
+      { "path": "/Volumes/Archive/Media/260501-示例复杂事件/a-files/repair-reference", "effect": "created_by_run", "rewind_rule": "remove_only_if_empty_and_unchanged" },
+      { "path": "/Volumes/Archive/Media/260501-示例复杂事件/d-damaged-info", "effect": "created_by_run", "rewind_rule": "remove_only_if_empty_and_unchanged" },
+      { "path": "/Volumes/Archive/Media/260501-示例复杂事件/0504-示例章节/Uncategorized", "effect": "created_by_run", "rewind_rule": "remove_only_if_empty_and_unchanged" }
+    ],
+    "recovery": {
+      "resume_count": 1,
+      "recovered_item_refs": ["source-item:217"],
+      "rewind_window_ends_at": "2026-08-29T01:40:00+08:00"
+    },
+    "resource_facts": {
+      "bytes_moved": 7340032,
+      "started_at": "2026-08-29T00:40:10+08:00",
+      "ended_at": "2026-08-29T00:42:00+08:00"
+    }
+  },
+  "seal": {
+    "encoding_profile": "illustrative-json-sha256-v1",
+    "content_identity": "sha256:14f034729e953f3aee8b361da5e475d475720d2d6ac291e11e367cae0009bf4a",
+    "sealed_at": "2026-08-29T00:42:01+08:00"
+  }
+}
