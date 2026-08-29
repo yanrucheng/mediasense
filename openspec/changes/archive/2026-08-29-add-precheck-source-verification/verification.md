@@ -30,6 +30,10 @@ PreCheck owns the sealed observation. Plan freezes only `result_ref` and `source
   `source_content_verification` observation, supports `sha256-full-v1`, binds
   observation-level basis plus producer/time provenance into prepared content,
   and re-reads current source bytes for exact size and full SHA-256 comparison.
+- The execution boundary rechecks source-root and destination identities, target
+  absence, source object identity, size, and full SHA-256 immediately before
+  each effect. A same-byte replacement is refused rather than treating the
+  earlier preparation observation as timeless authority.
 - Non-materialized Source Items may remain unverified. Missing, unavailable,
   failed, unknown-profile, malformed, wrong-result, unbound-root, escaping,
   aliased, mismatched, or concurrently changing selected sources block the Run
@@ -38,16 +42,17 @@ PreCheck owns the sealed observation. Plan freezes only `result_ref` and `source
   Result through public APIs, reads it through `PrecheckReadTool`, and reaches a
   verified Apply `ready_for_authorization` state without changing source or
   destination media.
-- Focused Apply contract, negative-path, preparation, and real-Result integration:
-  `31 passed, 1 deselected`.
-- Full fast suite after integration: `354 passed, 10 deselected`.
-- Apply 100,000-item bounded-ledger scale test: `1 passed, 27 deselected` in
-  1.44 seconds; traversal remains capped at 1,000 rows and below the asserted
-  8 MiB peak allocation.
+- Focused Apply contract, negative-path, preparation, real-Result integration,
+  execution, recovery, and Receipt suite: `87 passed, 4 deselected`.
+- Full fast suite after activation: `390 passed, 11 deselected`.
+- Full repository scale suite after activation: `5 passed, 396 deselected`.
+- The Apply 100,000-item Run and Receipt tests keep traversal pages capped at
+  1,000 rows with asserted peak-allocation bounds.
 - The previously accepted Darwin APFS cross-filesystem evidence remains valid;
   no transfer implementation used by that evidence changed in this integration.
-- Ruff check and format checks pass for all changed Apply source and tests.
+- Ruff check and format checks pass for all changed Apply source and tests;
+  canonical OpenSpec strict validation reports `7 passed, 0 failed`.
 
-Apply Contract activation and production mutation remain separate Human
-decisions. This evidence completes implementation task 3.1 without changing the
-Apply contract from `review`.
+This evidence completed task 3.1. After both activation gates closed, the Human
+separately authorized the Apply Contract and first `move_originals` runtime on
+2026-08-30; no test or evaluation operated on non-fixture user media.
