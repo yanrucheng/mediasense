@@ -4,7 +4,7 @@ title: "MediaSense Information Architecture"
 type: design
 status: active
 created: 2026-08-25
-updated: 2026-08-26
+updated: 2026-08-30
 timezone: "Asia/Shanghai"
 parent: "index-design"
 depends-on:
@@ -45,6 +45,8 @@ No storage-lifecycle or PreCheck implementation module is part of this version. 
 - [Stage ownership](design-260825-2235B-stage-ownership.md) is authoritative for which stage produces, consumes, validates, or seals each concept.
 - [PreCheck compression boundary](design-260825-2235D-precheck-compression-boundary.md) is authoritative for PreCheck's accepted compression purpose, minimal handoff concepts and relationships, eight invariants, runtime/storage separation, and three-producer pressure-test judgment.
 - [PreCheck Read Contract](../../spec/spec-260826-1546-precheck-read/) is authoritative for the Tool name, machine-readable request and response schemas, stable relationship vocabulary, access outcomes, and Plan development Mock.
+- [Frozen Plan Contract](../../spec/spec-260827-1138-frozen-plan/) is authoritative for the immutable Human-confirmed organization handed to Apply.
+- [Apply Contract](../../spec/spec-260829-0050-apply/) is authoritative for the Run, Receipt, authorization, execution, recovery, and verification boundary.
 - [PreCheck reference handoff](design-260825-2235C-precheck-reference-handoff.md) preserves the concrete blocked and illustrative completion examples that exposed the abstraction problem. It remains review evidence, not an authoritative product shape.
 
 ## Accepted PreCheck handoff model
@@ -71,7 +73,7 @@ Information Domain Map
   -> Stage Ownership
   -> accepted PreCheck Compression Handoff Model
   -> active PreCheck Read Contract and development Mock
-  -> independent PreCheck implementation and later Plan design
+  -> active PreCheck, Plan, and Apply contracts and implementations
 ```
 
 The primary Plan outcome remains an effective Frozen Organization Plan. A separate diagnostic responsibility has an independent secondary purpose, but its package shape, capture policy, privacy boundary, and retention contract remain deferred until a Plan reference handoff is reviewed.

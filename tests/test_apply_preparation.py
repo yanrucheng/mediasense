@@ -247,7 +247,7 @@ def test_prepare_is_durable_deterministic_and_has_zero_media_effects(
     assert len(reopened.iter_items(run.run_ref, after_ordinal=1, limit=2)) == 1
 
 
-def test_ready_status_conforms_to_review_contract(tmp_path: Path) -> None:
+def test_ready_status_conforms_to_active_contract(tmp_path: Path) -> None:
     store, run, *_rest = _prepare(tmp_path)
     status = store.status(run.run_ref)
     schema = json.loads(APPLY_RUN_SCHEMA.read_text(encoding="utf-8"))["outputSchema"]

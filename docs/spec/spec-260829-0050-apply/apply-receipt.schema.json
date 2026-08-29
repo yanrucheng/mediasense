@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://mediasense.local/spec/apply-receipt.schema.json",
   "title": "MediaSense Apply Receipt",
-  "description": "Review candidate for one immutable, completely accounted Apply execution result.",
+  "description": "Active contract for one immutable, completely accounted Apply execution result.",
   "type": "object",
   "additionalProperties": false,
   "required": ["sealed_content", "seal"],

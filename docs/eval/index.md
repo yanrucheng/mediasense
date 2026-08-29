@@ -15,6 +15,6 @@ superseded-by: ""
 
 | ID | Title | Status | Created | Summary |
 | --- | --- | --- | --- | --- |
-| [eval-260829-1350-apply-activation-evidence](eval-260829-1350-apply-activation-evidence.md) | Apply Activation Evidence | review | 2026-08-29 | Tracks the two activation gates, read-only durable preparation, controlled filesystem probes, bounded ledger evidence, and remaining authorization boundaries. |
+| [eval-260829-1350-apply-activation-evidence](eval-260829-1350-apply-activation-evidence.md) | Apply Activation Evidence | active | 2026-08-29 | Records both closed gates, Result-scoped verification enforcement, controlled runtime/recovery evidence, and bounded 100,000-item Run and Receipt behavior. |
 | [eval-260826-2237-hong-kong-plan-reference](eval-260826-2237-hong-kong-plan-reference/index.md) | Hong Kong Bounded Plan Reference Instance | review | 2026-08-26 | Provides a human-authored, seven-item Plan handoff that separates observations, judgments, scoped illustrative confirmations, frozen operations, and reopen signals. |
 | [eval-260823-1918-ai-album-migration-baseline](eval-260823-1918-ai-album-migration-baseline/index.md) | AI Album Migration Baseline | active | 2026-08-23 | Reconstructs the Hong Kong production run, records retained and rejected behavior, and defines the representative fixture's evidentiary limits. |

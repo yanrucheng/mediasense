@@ -4,7 +4,7 @@ title: "MediaSense Stage Ownership"
 type: design
 status: active
 created: 2026-08-25
-updated: 2026-08-26
+updated: 2026-08-30
 timezone: "Asia/Shanghai"
 parent: "design-260825-2235-mediasense-information-architecture"
 depends-on:
@@ -38,7 +38,7 @@ This document does not define:
 - a Diagnostic Package contract;
 - physical storage, retention, garbage collection, or migration mechanisms.
 
-The three handoff boundaries below define business-content ownership. The PreCheck read boundary now has a formal [machine-facing contract](../../spec/spec-260826-1546-precheck-read/); Plan and Apply contracts still require their own reviewed examples and runtime/failure semantics.
+The three handoff boundaries below define business-content ownership. PreCheck has a formal [Read contract](../../spec/spec-260826-1546-precheck-read/), Plan has an active [Frozen Plan contract](../../spec/spec-260827-1138-frozen-plan/), and Apply has an active [Run, Receipt, and Read contract](../../spec/spec-260829-0050-apply/).
 
 ## Backward Compatibility Policy
 
@@ -162,7 +162,7 @@ Diagnostic material:
 
 ## Formal handoff boundaries
 
-These define business-content responsibility rather than physical storage. The active PreCheck read specification formalizes only the first boundary; Plan and Apply still require their own reviewed contracts.
+These define business-content responsibility rather than physical storage. Active PreCheck Read, Frozen Plan, and Apply contracts formalize all three handoff boundaries while preserving the ownership split below.
 
 ### PreCheck Result
 

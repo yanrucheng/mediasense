@@ -1,8 +1,8 @@
-"""Durable, read-only preparation for the first ``move_originals`` slice.
+"""Durable preparation for the first ``move_originals`` slice.
 
 Preparation may read source bytes and filesystem metadata, but it never creates,
 renames, copies, deletes, or changes metadata beneath a source or destination
-binding.  The only writes are to the caller-selected Apply Run database.
+binding. The same Run database is later consumed by the execution boundary.
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ import unicodedata
 from uuid import uuid4
 
 
-_SCHEMA_VERSION = 1
+_SCHEMA_VERSION = 2
 _VERIFICATION_OBSERVATION = "source_content_verification"
 _SUPPORTED_VERIFICATION_PROFILE = "sha256-full-v1"
 
@@ -223,10 +223,11 @@ SourceSetResolver = Callable[[str, Mapping[str, object]], SourceSetExpansion]
 
 
 class ApplyRunStore:
-    """SQLite authority for mutable Apply Run preparation state.
+    """SQLite authority for mutable Apply Run state.
 
-    The store owns Run state and its operation ledger.  It neither owns Frozen
-    Plan semantics nor PreCheck evidence, and it contains no media mutation API.
+    The store owns Run state and its operation ledger. It neither owns Frozen
+    Plan semantics nor PreCheck evidence. Media effects remain in the separate
+    execution boundary, which consumes this durable state.
     """
 
     def __init__(self, database_path: Path) -> None:
@@ -248,7 +249,7 @@ class ApplyRunStore:
                     singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
                     version INTEGER NOT NULL
                 );
-                INSERT INTO internal_schema (singleton, version) VALUES (1, 1);
+                INSERT INTO internal_schema (singleton, version) VALUES (1, 2);
 
                 CREATE TABLE runs (
                     run_ref TEXT PRIMARY KEY,
@@ -257,7 +258,8 @@ class ApplyRunStore:
                     state TEXT NOT NULL CHECK (
                         state IN (
                             'preparing', 'ready_for_authorization', 'blocked',
-                            'cancelled'
+                            'executing', 'paused', 'needs_attention',
+                            'verifying', 'closed', 'cancelled', 'failed'
                         )
                     ),
                     frozen_plan_ref TEXT NOT NULL,
@@ -269,6 +271,25 @@ class ApplyRunStore:
                     execution_route TEXT,
                     prepared_revision TEXT,
                     prepared_content_identity TEXT,
+                    execute_request_id TEXT UNIQUE,
+                    execute_request_identity TEXT,
+                    authorization_binding TEXT,
+                    authorized_prepared_content_identity TEXT,
+                    authorized_at TEXT,
+                    started_at TEXT,
+                    ended_at TEXT,
+                    closure TEXT CHECK (closure IN ('automatic', 'human_cancelled')),
+                    receipt_ref TEXT UNIQUE,
+                    receipt_path TEXT,
+                    receipt_content_identity TEXT,
+                    resume_count INTEGER NOT NULL DEFAULT 0,
+                    direction TEXT NOT NULL DEFAULT 'forward' CHECK (
+                        direction IN ('forward', 'rewind')
+                    ),
+                    rewind_of_receipt_ref TEXT,
+                    control_requested TEXT CHECK (
+                        control_requested IN ('pause', 'cancel')
+                    ),
                     plan_staged INTEGER NOT NULL DEFAULT 0 CHECK (plan_staged IN (0, 1))
                 );
 
@@ -310,6 +331,32 @@ class ApplyRunStore:
                         preparation_status IN ('pending', 'verified', 'blocked')
                     ),
                     issue_code TEXT,
+                    execution_status TEXT NOT NULL DEFAULT 'not_attempted' CHECK (
+                        execution_status IN (
+                            'not_attempted', 'intent', 'completed_and_verified',
+                            'failed', 'refused', 'indeterminate'
+                        )
+                    ),
+                    attempts INTEGER NOT NULL DEFAULT 0,
+                    source_after TEXT CHECK (
+                        source_after IN ('present', 'absent', 'indeterminate')
+                    ),
+                    target_after TEXT CHECK (
+                        target_after IN (
+                            'verified_present', 'absent',
+                            'present_unverified', 'indeterminate'
+                        )
+                    ),
+                    postcondition_profile TEXT,
+                    postcondition_result TEXT CHECK (
+                        postcondition_result IN ('verified', 'failed', 'indeterminate')
+                    ),
+                    postcondition_basis TEXT,
+                    execution_reason_code TEXT,
+                    execution_reason_message TEXT,
+                    recovery_fact TEXT,
+                    bytes_moved INTEGER NOT NULL DEFAULT 0,
+                    temporary_path TEXT,
                     PRIMARY KEY (run_ref, source_item_ref),
                     UNIQUE (run_ref, ordinal)
                 );
@@ -325,6 +372,37 @@ class ApplyRunStore:
                     source_item_ref TEXT NOT NULL DEFAULT '',
                     message TEXT NOT NULL,
                     PRIMARY KEY (run_ref, code, source_item_ref, message)
+                );
+
+                CREATE TABLE created_directories (
+                    run_ref TEXT NOT NULL REFERENCES runs(run_ref) ON DELETE CASCADE,
+                    path TEXT NOT NULL,
+                    status TEXT NOT NULL CHECK (
+                        status IN ('intent', 'created', 'preexisting')
+                    ),
+                    PRIMARY KEY (run_ref, path)
+                );
+
+                CREATE TABLE metadata_discrepancies (
+                    run_ref TEXT NOT NULL REFERENCES runs(run_ref) ON DELETE CASCADE,
+                    discrepancy_ref TEXT NOT NULL,
+                    source_item_ref TEXT NOT NULL,
+                    attribute TEXT NOT NULL,
+                    expected_json TEXT NOT NULL,
+                    observed_json TEXT NOT NULL,
+                    accepted_authorization_ref TEXT,
+                    PRIMARY KEY (run_ref, discrepancy_ref)
+                );
+
+                CREATE TABLE receipt_publications (
+                    run_ref TEXT PRIMARY KEY REFERENCES runs(run_ref) ON DELETE CASCADE,
+                    receipt_ref TEXT NOT NULL UNIQUE,
+                    content_identity TEXT NOT NULL,
+                    final_path TEXT NOT NULL,
+                    document_json TEXT NOT NULL,
+                    state TEXT NOT NULL CHECK (
+                        state IN ('reserved', 'published')
+                    )
                 );
                 """
             )
@@ -384,7 +462,20 @@ class ApplyRunStore:
             destination_identity=destination_identity,
             source_roots=normalized_roots,
         )
-        if existing.state in {"ready_for_authorization", "cancelled"}:
+        if (
+            existing.state
+            in {
+                "ready_for_authorization",
+                "executing",
+                "paused",
+                "needs_attention",
+                "verifying",
+                "closed",
+                "cancelled",
+                "failed",
+            }
+            and existing.run_ref == run_ref
+        ):
             return existing
         if existing.state == "blocked":
             self._reopen_blocked_preparation(run_ref)
@@ -425,6 +516,272 @@ class ApplyRunStore:
             )
 
         self._finalize_preparation(run_ref, normalized_roots, destination_stat.st_dev)
+        return self.get_run(run_ref)
+
+    def prepare_rewind(
+        self,
+        *,
+        request_id: str,
+        receipt: Mapping[str, object],
+        operations: Iterable[Mapping[str, object]] | None = None,
+        now: datetime | None = None,
+    ) -> PreparedRun:
+        """Prepare an exact whole-Run reversal from an immutable Receipt."""
+
+        sealed = _mapping(receipt.get("sealed_content"), "Receipt sealed content")
+        seal = _mapping(receipt.get("seal"), "Receipt seal")
+        if sealed.get("contract") != "mediasense.apply-receipt":
+            raise ApplyPreparationError("unsupported Apply Receipt contract")
+        if seal.get("content_identity") != _content_identity(sealed):
+            raise ApplyPreparationError("Apply Receipt content identity mismatch")
+        recovery = _mapping(sealed.get("recovery"), "Receipt recovery")
+        deadline = _nonempty_string(
+            recovery.get("rewind_window_ends_at"), "rewind deadline"
+        )
+        observed_now = now or datetime.now().astimezone()
+        if datetime.fromisoformat(deadline) <= observed_now:
+            raise ApplyPreparationError("Receipt rewind window has expired")
+        binding = _mapping(sealed.get("execution_binding"), "execution binding")
+        if binding.get("kind") != "forward":
+            raise ApplyPreparationError("only a forward Receipt can be rewound")
+        ledger = _mapping(sealed.get("operation_ledger"), "operation ledger")
+        if ledger.get("kind") == "inline":
+            operation_values = ledger.get("items", [])
+        elif ledger.get("kind") == "immutable_segments" and operations is not None:
+            operation_values = list(operations)
+            if len(operation_values) != ledger.get("item_count"):
+                raise ApplyPreparationError(
+                    "Receipt operation segments do not match their manifest"
+                )
+        else:
+            raise ApplyPreparationError(
+                "rewind requires the Receipt's complete immutable operation ledger"
+            )
+        operations = [
+            _mapping(item, "Receipt operation")
+            for item in operation_values
+            if isinstance(item, Mapping)
+            and item.get("result") == "completed_and_verified"
+        ]
+        if not operations:
+            raise ApplyPreparationError("Receipt has no completed effects to rewind")
+        request_identity = _content_identity(
+            {
+                "direction": "rewind",
+                "receipt_ref": sealed.get("receipt_ref"),
+                "receipt_content_identity": seal.get("content_identity"),
+            }
+        )
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            existing = connection.execute(
+                "SELECT * FROM runs WHERE request_id = ?", (request_id,)
+            ).fetchone()
+            if existing is not None:
+                if existing["request_identity"] != request_identity:
+                    raise IdempotencyConflict(
+                        "request_id was already used for different rewind content"
+                    )
+                connection.commit()
+                return self.get_run(str(existing["run_ref"]))
+            run_ref = f"apply-run:{uuid4().hex}"
+            destination = _mapping(binding.get("destination"), "destination")
+            connection.execute(
+                """
+                INSERT INTO runs (
+                    run_ref, request_id, request_identity, state,
+                    frozen_plan_ref, frozen_plan_content_identity, result_ref,
+                    logical_root, destination_parent,
+                    destination_observed_identity, execution_route,
+                    direction, rewind_of_receipt_ref, plan_staged
+                ) VALUES (?, ?, ?, 'preparing', ?, ?, ?, ?, ?, ?, ?,
+                          'rewind', ?, 1)
+                """,
+                (
+                    run_ref,
+                    request_id,
+                    request_identity,
+                    sealed["frozen_plan_ref"],
+                    sealed["frozen_plan_content_identity"],
+                    "precheck-result:rewind-from-receipt",
+                    Path(str(destination["resolved_logical_root"])).name,
+                    destination["parent"],
+                    destination["observed_identity"],
+                    _mapping(sealed.get("preflight"), "preflight")["execution_route"],
+                    sealed["receipt_ref"],
+                ),
+            )
+            current_source_roots: dict[str, tuple[str, str, int]] = {}
+            for ordinal, operation in enumerate(operations):
+                source_before = Path(str(operation["source_before"]))
+                target_before = Path(str(operation["intended_target"]))
+                parent = target_before.parent
+                parent_key = str(parent)
+                if not parent.exists() or not parent.is_dir():
+                    connection.execute(
+                        """
+                        INSERT OR IGNORE INTO findings (
+                            run_ref, code, source_item_ref, message
+                        ) VALUES (?, 'rewind_source_parent_missing', ?, ?)
+                        """,
+                        (
+                            run_ref,
+                            operation["source_item_ref"],
+                            f"current rewind source parent is unavailable: {parent}",
+                        ),
+                    )
+                    observed_identity = "unavailable"
+                    observed_device = -1
+                else:
+                    info = parent.stat()
+                    observed_identity = _filesystem_identity(parent, info)
+                    observed_device = int(info.st_dev)
+                if parent_key not in current_source_roots:
+                    root_ref = f"source-root:rewind-{len(current_source_roots)}"
+                    current_source_roots[parent_key] = (
+                        root_ref,
+                        observed_identity,
+                        observed_device,
+                    )
+                    connection.execute(
+                        """
+                        INSERT INTO source_roots (
+                            run_ref, source_root_ref, current_root,
+                            observed_identity, observed_device
+                        ) VALUES (?, ?, ?, ?, ?)
+                        """,
+                        (
+                            run_ref,
+                            root_ref,
+                            parent_key,
+                            observed_identity,
+                            observed_device,
+                        ),
+                    )
+                root_ref = current_source_roots[parent_key][0]
+                expected = _mapping(
+                    _mapping(
+                        operation.get("source_verification"), "source verification"
+                    ).get("expected_basis"),
+                    "source verification basis",
+                )
+                expected_digest = _nonempty_string(
+                    expected.get("value"), "source verification value"
+                )
+                expected_size = _nonnegative_int(
+                    expected.get("size_bytes"), "source verification size"
+                )
+                issue_code: str | None = None
+                if source_before.exists() or source_before.is_symlink():
+                    issue_code = "rewind_target_collision"
+                    connection.execute(
+                        """
+                        INSERT OR IGNORE INTO findings (
+                            run_ref, code, source_item_ref, message
+                        ) VALUES (?, ?, ?, ?)
+                        """,
+                        (
+                            run_ref,
+                            issue_code,
+                            operation["source_item_ref"],
+                            f"original source location is occupied: {source_before}",
+                        ),
+                    )
+                try:
+                    observed = _verify_source(
+                        target_before,
+                        parent,
+                        VerificationBasis(
+                            profile=str(
+                                _mapping(
+                                    operation.get("source_verification"),
+                                    "source verification",
+                                )["profile"]
+                            ),
+                            value=expected_digest,
+                            size_bytes=expected_size,
+                            observed_at=observed_now.isoformat(),
+                            producer="receipt-rewind-v1",
+                            basis="Exact source verification basis sealed by the Receipt.",
+                        ),
+                    )
+                except (OSError, ApplyPreparationError) as error:
+                    issue_code = "rewind_source_unverifiable"
+                    observed = {
+                        "digest": expected_digest,
+                        "device": -1,
+                        "inode": -1,
+                        "size": expected_size,
+                        "mtime_ns": -1,
+                    }
+                    connection.execute(
+                        """
+                        INSERT OR IGNORE INTO findings (
+                            run_ref, code, source_item_ref, message
+                        ) VALUES (?, ?, ?, ?)
+                        """,
+                        (run_ref, issue_code, operation["source_item_ref"], str(error)),
+                    )
+                connection.execute(
+                    """
+                    INSERT INTO run_items (
+                        run_ref, ordinal, source_item_ref, planned_outcome,
+                        relative_directory, source_root_ref, relative_source_path,
+                        source_path, intended_target, target_comparison_key,
+                        verification_profile, expected_verification,
+                        verification_observed_at, verification_producer,
+                        verification_basis_json, verification_limitations_json,
+                        observed_verification, observed_device, observed_inode,
+                        observed_size, observed_mtime_ns, preparation_status,
+                        issue_code
+                    ) VALUES (?, ?, ?, 'materialize', '[]', ?, ?, ?, ?, ?,
+                              'sha256-full-v1', ?, ?, 'receipt-rewind-v1', ?, '[]',
+                              ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        run_ref,
+                        ordinal,
+                        operation["source_item_ref"],
+                        root_ref,
+                        target_before.name,
+                        str(target_before),
+                        str(source_before),
+                        _target_comparison_key(source_before),
+                        expected_digest,
+                        observed_now.isoformat(),
+                        json.dumps(
+                            "Exact source verification basis sealed by the Receipt."
+                        ),
+                        observed["digest"],
+                        observed["device"],
+                        observed["inode"],
+                        observed["size"],
+                        observed["mtime_ns"],
+                        "blocked" if issue_code else "verified",
+                        issue_code,
+                    ),
+                )
+            blocker_count = int(
+                connection.execute(
+                    "SELECT COUNT(*) FROM findings WHERE run_ref = ?", (run_ref,)
+                ).fetchone()[0]
+            )
+            identity = _prepared_identity(
+                connection, run_ref, str(sealed["preflight"]["execution_route"])
+            )
+            connection.execute(
+                """
+                UPDATE runs SET state = ?, prepared_revision = ?,
+                    prepared_content_identity = ? WHERE run_ref = ?
+                """,
+                (
+                    "blocked" if blocker_count else "ready_for_authorization",
+                    f"prepared-revision:{identity.removeprefix('sha256:')[:24]}",
+                    identity,
+                    run_ref,
+                ),
+            )
+            connection.commit()
         return self.get_run(run_ref)
 
     def _pending_materialization_refs(self, run_ref: str) -> Iterable[str]:
@@ -490,10 +847,13 @@ class ApplyRunStore:
                 SELECT COUNT(*) AS scope_count,
                        SUM(planned_outcome = 'materialize') AS operation_count,
                        SUM(planned_outcome IN ('retain', 'exclude')) AS no_effect_count,
-                       SUM(
-                           planned_outcome = 'materialize'
-                           AND preparation_status = 'verified'
-                       ) AS verified_count
+                       SUM(planned_outcome = 'materialize'
+                           AND preparation_status = 'verified') AS verified_count,
+                       SUM(execution_status = 'completed_and_verified') AS completed_count,
+                       SUM(execution_status IN ('failed', 'refused')) AS failed_count,
+                       SUM(execution_status = 'indeterminate') AS indeterminate_count,
+                       SUM(planned_outcome = 'materialize'
+                           AND execution_status IN ('not_attempted', 'intent')) AS remaining_count
                 FROM run_items WHERE run_ref = ?
                 """,
                 (run_ref,),
@@ -504,6 +864,34 @@ class ApplyRunStore:
                     """
                     SELECT code, message FROM findings
                     WHERE run_ref = ? ORDER BY code, source_item_ref, message
+                    """,
+                    (run_ref,),
+                )
+            ]
+            execution_reasons = [
+                {
+                    "code": str(row["execution_reason_code"]),
+                    "message": str(row["execution_reason_message"]),
+                }
+                for row in connection.execute(
+                    """
+                    SELECT execution_reason_code, execution_reason_message
+                    FROM run_items
+                    WHERE run_ref = ? AND execution_reason_code IS NOT NULL
+                    ORDER BY ordinal
+                    """,
+                    (run_ref,),
+                )
+            ]
+            discrepancies = [
+                dict(row)
+                for row in connection.execute(
+                    """
+                    SELECT discrepancy_ref, source_item_ref, attribute,
+                           expected_json, observed_json
+                    FROM metadata_discrepancies
+                    WHERE run_ref = ? AND accepted_authorization_ref IS NULL
+                    ORDER BY discrepancy_ref
                     """,
                     (run_ref,),
                 )
@@ -526,6 +914,10 @@ class ApplyRunStore:
         operation_count = int(counts["operation_count"] or 0)
         no_effect_count = int(counts["no_effect_count"] or 0)
         verified_count = int(counts["verified_count"] or 0)
+        completed_count = int(counts["completed_count"] or 0)
+        failed_count = int(counts["failed_count"] or 0)
+        indeterminate_count = int(counts["indeterminate_count"] or 0)
+        remaining_count = int(counts["remaining_count"] or 0)
         route = str(run["execution_route"] or "same_filesystem_atomic_move")
         summary = {
             "frozen_plan_ref": str(run["frozen_plan_ref"]),
@@ -562,9 +954,15 @@ class ApplyRunStore:
             "warnings": 0,
         }
         state = str(run["state"])
+        reasons = findings + execution_reasons
         allowed_actions = {
             "ready_for_authorization": ["execute", "cancel"],
             "blocked": ["resume", "cancel"],
+            "executing": ["pause", "cancel"],
+            "paused": ["resume", "cancel"],
+            "needs_attention": (
+                ["execute", "cancel"] if discrepancies else ["resume", "cancel"]
+            ),
         }.get(state, [])
         response: dict[str, object] = {
             "outcome": "ok",
@@ -573,10 +971,10 @@ class ApplyRunStore:
             "state": state,
             "progress": {
                 "planned_operations": operation_count,
-                "completed_and_verified": 0,
-                "failed": 0,
-                "remaining": operation_count,
-                "indeterminate": 0,
+                "completed_and_verified": completed_count,
+                "failed": failed_count,
+                "remaining": remaining_count,
+                "indeterminate": indeterminate_count,
             },
             "allowed_actions": allowed_actions,
         }
@@ -588,11 +986,74 @@ class ApplyRunStore:
                     "summary": summary,
                 }
             )
-        if state == "blocked":
-            response["reasons"] = findings
+        if state in {"blocked", "paused", "needs_attention", "failed"}:
+            response["reasons"] = reasons or [
+                {
+                    "code": "attention_required",
+                    "message": "Run requires explicit continuation or cancellation.",
+                }
+            ]
+        if state == "needs_attention" and discrepancies:
+            facts = [
+                {
+                    "discrepancy_ref": row["discrepancy_ref"],
+                    "source_item_ref": row["source_item_ref"],
+                    "attribute": row["attribute"],
+                    "expected": json.loads(row["expected_json"]),
+                    "observed": json.loads(row["observed_json"]),
+                }
+                for row in discrepancies
+            ]
+            identity = _content_identity(facts)
+            response["metadata_loss_authorization"] = {
+                "profile": "cross_filesystem_user_metadata_v1",
+                "discrepancy_set_identity": identity,
+                "discrepancy_count": len(facts),
+                "source_deletion_blocked": True,
+                "disclosure": {
+                    "ref": f"apply-run-disclosure:{run_ref.split(':', 1)[-1]}",
+                    "content_identity": identity,
+                    "item_count": len(facts),
+                    "coverage": "complete_discrepancy_set",
+                    "access": "bounded_human_obtainable",
+                },
+            }
         if state == "cancelled":
             response["guaranteed_zero_media_effects"] = True
+        if state == "closed":
+            response["published_receipt"] = self._published_receipt_summary(run_ref)
+        if state == "failed":
+            response["possible_effects"] = "indeterminate"
         return response
+
+    def _published_receipt_summary(self, run_ref: str) -> dict[str, object]:
+        with self._connect() as connection:
+            run = connection.execute(
+                "SELECT receipt_ref, closure FROM runs WHERE run_ref = ?", (run_ref,)
+            ).fetchone()
+            counts = connection.execute(
+                """
+                SELECT COUNT(*) AS scope_count,
+                       SUM(planned_outcome = 'materialize') AS operation_count,
+                       SUM(execution_status = 'completed_and_verified') AS completed_count,
+                       SUM(planned_outcome = 'materialize'
+                           AND execution_status <> 'completed_and_verified') AS exception_count
+                FROM run_items WHERE run_ref = ?
+                """,
+                (run_ref,),
+            ).fetchone()
+        if run is None or run["receipt_ref"] is None:
+            raise ApplyPreparationError("closed Run has no published Receipt")
+        exceptions = int(counts["exception_count"] or 0)
+        return {
+            "receipt_ref": str(run["receipt_ref"]),
+            "completion": "complete" if exceptions == 0 else "incomplete",
+            "closure": str(run["closure"] or "automatic"),
+            "plan_scope_items": int(counts["scope_count"] or 0),
+            "materialization_operations": int(counts["operation_count"] or 0),
+            "completed_and_verified": int(counts["completed_count"] or 0),
+            "exceptions": exceptions,
+        }
 
     def cancel_before_execution(self, run_ref: str) -> PreparedRun:
         """Idempotently cancel a Run whose ledger proves zero media effects."""
@@ -652,7 +1113,12 @@ class ApplyRunStore:
                        expected_verification, verification_observed_at,
                        verification_producer, verification_basis_json,
                        verification_limitations_json, observed_verification,
-                       preparation_status, issue_code
+                       preparation_status, issue_code, execution_status,
+                       attempts, source_after, target_after,
+                       postcondition_profile, postcondition_result,
+                       postcondition_basis, execution_reason_code,
+                       execution_reason_message, recovery_fact, bytes_moved,
+                       temporary_path
                 FROM run_items
                 WHERE run_ref = ? AND ordinal > ?
                 ORDER BY ordinal LIMIT ?
@@ -660,6 +1126,41 @@ class ApplyRunStore:
                 (run_ref, after_ordinal, limit),
             ).fetchall()
         return [dict(row) for row in rows]
+
+    def iter_metadata_discrepancies(
+        self,
+        run_ref: str,
+        *,
+        after_discrepancy_ref: str = "",
+        limit: int = 100,
+    ) -> list[dict[str, object]]:
+        """Return a bounded, complete-by-pagination Run-owned disclosure."""
+
+        if limit < 1 or limit > 1_000:
+            raise ValueError("limit must be between 1 and 1000")
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT discrepancy_ref, source_item_ref, attribute,
+                       expected_json, observed_json,
+                       accepted_authorization_ref
+                FROM metadata_discrepancies
+                WHERE run_ref = ? AND discrepancy_ref > ?
+                ORDER BY discrepancy_ref LIMIT ?
+                """,
+                (run_ref, after_discrepancy_ref, limit),
+            ).fetchall()
+        return [
+            {
+                "discrepancy_ref": str(row["discrepancy_ref"]),
+                "source_item_ref": str(row["source_item_ref"]),
+                "attribute": str(row["attribute"]),
+                "expected": json.loads(row["expected_json"]),
+                "observed": json.loads(row["observed_json"]),
+                "accepted_authorization_ref": row["accepted_authorization_ref"],
+            }
+            for row in rows
+        ]
 
     def assert_authorization_binding(
         self,
@@ -675,8 +1176,23 @@ class ApplyRunStore:
         """
 
         run = self.get_run(run_ref)
-        if run.state != "ready_for_authorization":
+        if run.state not in {"ready_for_authorization", "needs_attention"}:
             raise ApplyPreparationError("Run is not ready for authorization")
+        if run.state == "needs_attention":
+            with self._connect() as connection:
+                pending_discrepancies = int(
+                    connection.execute(
+                        """
+                        SELECT COUNT(*) FROM metadata_discrepancies
+                        WHERE run_ref = ? AND accepted_authorization_ref IS NULL
+                        """,
+                        (run_ref,),
+                    ).fetchone()[0]
+                )
+            if pending_discrepancies == 0:
+                raise ApplyPreparationError(
+                    "Run needs recovery rather than new execution authorization"
+                )
         if run.prepared_revision != prepared_revision:
             raise ApplyPreparationError("prepared revision mismatch")
         if run.prepared_content_identity != prepared_content_identity:
@@ -1167,18 +1683,6 @@ class ApplyRunStore:
                 if all(source_roots[ref][2] == destination_device for ref in used_roots)
                 else "verified_cross_filesystem_transfer"
             )
-            if route == "verified_cross_filesystem_transfer":
-                connection.execute(
-                    """
-                    INSERT OR IGNORE INTO findings (
-                        run_ref, code, source_item_ref, message
-                    ) VALUES (?, 'cross_filesystem_effect_not_activated', '', ?)
-                    """,
-                    (
-                        run_ref,
-                        "cross-filesystem effects remain disabled until Human activation",
-                    ),
-                )
             self._record_concurrency_conflict(connection, run_ref)
             identity = _prepared_identity(connection, run_ref, route)
             revision = f"prepared-revision:{identity.removeprefix('sha256:')[:24]}"
@@ -1216,7 +1720,10 @@ class ApplyRunStore:
              )
             JOIN runs AS other_run ON other_run.run_ref = other.run_ref
             WHERE current.run_ref = ?
-              AND other_run.state IN ('preparing', 'ready_for_authorization')
+              AND other_run.state IN (
+                  'preparing', 'ready_for_authorization', 'executing',
+                  'paused', 'needs_attention', 'verifying'
+              )
             LIMIT 1
             """,
             (run_ref,),

@@ -4,7 +4,7 @@ title: "Design Documents"
 type: index
 status: active
 created: 2026-08-23
-updated: 2026-08-29
+updated: 2026-08-30
 timezone: "Asia/Shanghai"
 parent: "index-docs"
 depends-on: []
@@ -15,7 +15,7 @@ superseded-by: ""
 
 | ID | Title | Status | Created | Summary |
 | --- | --- | --- | --- | --- |
-| [design-260829-0038-apply-reference-handoff](design-260829-0038-apply-reference-handoff/) | MediaSense Apply Reference Handoff | review | 2026-08-29 | Pressure-tests the Apply Run and Receipt boundary with concrete lifecycle, recovery, verification, and rewind examples before formal contracts. |
+| [design-260829-0038-apply-reference-handoff](design-260829-0038-apply-reference-handoff/) | MediaSense Apply Reference Handoff | review | 2026-08-29 | Preserves the Human-authored lifecycle, recovery, verification, and rewind examples that support the active Apply contract. |
 | [design-260828-2043-plan-local-artifacts](design-260828-2043-plan-local-artifacts/) | MediaSense Plan Local Artifact Design | active | 2026-08-28 | Defines SQLite as the mutable Plan Working State authority and immutable Frozen Plan JSON files as the minimal cross-stage handoff. |
 | [design-260827-0022-precheck-implementation](design-260827-0022-precheck-implementation.md) | MediaSense PreCheck Implementation Design | active | 2026-08-27 | Defines the target local PreCheck runtime, fine-grained reuse and invalidation, Evidence compression, sealing, recovery, resource control, and staged delivery. |
 | [design-260825-2235-mediasense-information-architecture](design-260825-2235-mediasense-information-architecture/) | MediaSense Information Architecture | active | 2026-08-25 | Defines the stage-neutral business information concepts needed to account for sources, preserve evidence and coverage, freeze organization intent, and verify execution. |

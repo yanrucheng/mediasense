@@ -2,9 +2,9 @@
 id: "spec-260829-0050-apply"
 title: "MediaSense Apply Contract"
 type: spec
-status: review
+status: active
 created: 2026-08-29
-updated: 2026-08-29
+updated: 2026-08-30
 timezone: "Asia/Shanghai"
 parent: "index-spec"
 depends-on:
@@ -18,7 +18,7 @@ superseded-by: ""
 
 # MediaSense Apply Contract
 
-## Decision and review boundary
+## Decision and activation boundary
 
 Apply has two public Tool responsibilities and two top-level business entities:
 
@@ -27,14 +27,14 @@ mediasense.apply.run  <-> mutable Apply Run
 mediasense.apply.read  -> immutable Apply Receipt
 ```
 
-[`apply-run.tool.json`](apply-run.tool.json), [`apply-receipt.schema.json`](apply-receipt.schema.json), and [`apply-read.tool.json`](apply-read.tool.json) are review contract candidates. [`lifecycle.mock.json`](lifecycle.mock.json) is a Human-authored exchange example; [`receipt.mock.json`](receipt.mock.json) is a schema-conforming reference Receipt. None is production output or actual authorization.
+[`apply-run.tool.json`](apply-run.tool.json), [`apply-receipt.schema.json`](apply-receipt.schema.json), and [`apply-read.tool.json`](apply-read.tool.json) are the active contracts. [`lifecycle.mock.json`](lifecycle.mock.json) remains a Human-authored exchange example; [`receipt.mock.json`](receipt.mock.json) remains a schema-conforming reference Receipt. The examples are not runtime output, actual authorization, or evidence that their illustrative paths were changed.
 
-The package must remain `review` until two blocking dependencies have executable evidence:
+Both activation dependencies have executable evidence recorded in [`../../eval/eval-260829-1350-apply-activation-evidence.md`](../../eval/eval-260829-1350-apply-activation-evidence.md):
 
 1. each planned Source Item has an immutable Apply-grade verification basis reachable through its exact PreCheck Result; and
 2. the supported cross-filesystem transfer profile proves its byte and declared filesystem-metadata preservation behavior on supported platforms.
 
-No source media operation is implemented or authorized by this specification.
+The first production-capable `move_originals` runtime is implemented under `src/mediasense/apply/`. The contract itself never authorizes an operation: effects begin only after a trusted Human confirmation is bound to the exact prepared Run revision and content identity. Repository tests operate only on controlled temporary fixtures.
 
 ## Backward Compatibility Policy
 
@@ -48,7 +48,7 @@ AI Album formats, command flags, directory trees, caches, and implicit output be
 ## Authority and boundaries
 
 - The Frozen Plan is authoritative for logical root, relative organization, membership, output names, and accounted non-materialized outcomes.
-- The exact PreCheck Result is authoritative for Result-scoped Source Items, locators, and the future Apply-grade verification basis.
+- The exact PreCheck Result is authoritative for Result-scoped Source Items, locators, and the Apply-grade verification basis.
 - The Human is authoritative for the selected real effect, source and destination bindings where needed, final execution authorization, cancellation, acceptance of an incomplete result, and a requested whole-run rewind.
 - `mediasense.apply.run` is authoritative for one Run's prepared operation set, preflight, authorization binding, lifecycle, effects, recovery, verification, and Receipt publication.
 - The Apply Receipt is authoritative for what actually happened. It never changes Plan semantics to match reality.
@@ -68,12 +68,12 @@ The source namespace and final organization namespace must not overlap. An exist
 
 Same-filesystem moves use non-overwriting atomic move semantics where the platform supports them. Cross-filesystem move is a distinct disclosed route: write to a non-final destination, verify content byte for byte, and preserve timestamps, permissions, extended attributes, Finder tags, and other attributes declared user-relevant by the active platform profile before publishing without overwrite. If any such attribute cannot be preserved, deletion of that source item is blocked until the exact loss is disclosed under a new prepared-content identity and receives new Human authorization. The Receipt records accepted discrepancies and their authorization binding. Content inequality is never an authorizable metadata exception. No fallback may silently change route or guarantees.
 
-The review candidate `cross_filesystem_user_metadata_v1` currently supports
+The active `cross_filesystem_user_metadata_v1` profile currently supports
 Darwin APFS-to-APFS transfer and declares exact preservation of byte content and
 logical length, modification and creation timestamps, POSIX mode bits, owner and
 group IDs, BSD file flags, and all extended attributes including Finder tags.
 Access time and metadata change time are observationally volatile and are not
-preservation claims. ACL-bearing sources are unsupported by this candidate until
+preservation claims. ACL-bearing sources are unsupported by this profile until
 a non-empty ACL fixture proves preservation; preparation must block rather than
 silently omit such ACLs. Any declared-field difference follows the discrepancy,
 new prepared identity, and new Human authorization rule above.
@@ -84,14 +84,14 @@ Copy and link remain explicit deferred profiles. A Run never combines effect pro
 
 Path equality does not prove source identity. Before authorization and again at the individual effect boundary, Apply must resolve every planned Source Item and verify it against immutable evidence bound to the exact PreCheck Result.
 
-The current PreCheck Read shape permits open Source Item Observations but does not yet require an Apply-grade verification observation. The upstream correction should reuse that existing observation surface and define a verification profile with:
+The active PreCheck Read contract permits open Source Item Observations because items outside dangerous effects need not carry Apply evidence. For every Source Item selected for `move_originals`, Apply requires the exact Result-scoped view to contain:
 
-- the object property or content claim being verified;
-- a stable profile identifier and value sufficient for deterministic comparison;
-- basis and limitations; and
-- an `available` state for every Source Item admitted to dangerous Apply.
+- a `source_root_relative_path` locator with `source_root_ref` and root-relative `value`;
+- exactly one `source_content_verification` observation with `status: available`;
+- the supported `sha256-full-v1` profile, digest `value`, `size_bytes`, `observed_at`, and `producer`; and
+- observation-level basis, with qualifications only when real limitations exist.
 
-The contract does not require Dataset-wide snapshots, permanent identity across Results, a new Source Verify Tool, or exposure of PreCheck cache keys. If the required strength is unavailable or current verification disagrees, `prepare` blocks without media effects.
+Apply obtains that evidence only through exact `result_ref + source_item_ref` calls to `mediasense.precheck.read`, then binds the current root and re-reads size plus full SHA-256. The contract does not require Dataset-wide snapshots, permanent identity across Results, a new Source Verify Tool, hash duplication in Frozen Plan, or exposure of PreCheck cache keys. Missing, unavailable, unsupported, mismatched, stale, escaping, rebound, or ambiguous evidence makes `prepare` block without media effects.
 
 ## Run actions
 
@@ -169,7 +169,7 @@ A Receipt carries or binds an immutable operation ledger containing each Source 
 
 The Receipt records a rewind deadline, not an eternal claim that rewind is currently safe. Rewind creates a new Run over the original Receipt's actual completed set and passes through the same preflight and Human authorization boundary. Both Receipts remain immutable.
 
-[`apply-receipt.schema.json`](apply-receipt.schema.json) constrains the review encoding. Semantic closure, set equality, target uniqueness, operation-ledger coverage, digest verification, source/target observation consistency, and rewind eligibility require checks beyond JSON Schema.
+[`apply-receipt.schema.json`](apply-receipt.schema.json) constrains the active encoding. Semantic closure, set equality, target uniqueness, operation-ledger coverage, digest verification, source/target observation consistency, and rewind eligibility require checks beyond JSON Schema.
 
 ## Receipt read semantics
 
@@ -206,7 +206,7 @@ The minimum local shape has one durable mutable Run authority and one immutable 
         └── <optional immutable operation segments>
 ```
 
-This layout is a design candidate, not a portable contract. Table shape, journal encoding, file extension, segment threshold, locking, flush strategy, and garbage collection remain replaceable. The stable requirements are independent survival from media-volume loss, complete recovery semantics, independently readable Receipts, and no competing journal authority.
+The current runtime uses this layout, but it is not a portable contract. Table shape, journal encoding, file extension, segment threshold, locking, flush strategy, and garbage collection remain replaceable. The stable requirements are independent survival from media-volume loss, complete recovery semantics, independently readable Receipts, and no competing journal authority.
 
 ## AI Album migration disposition
 
@@ -216,22 +216,22 @@ Intentional changes include collision refusal instead of automatic parent-name i
 
 Thumbnail/summary preview is preserved outside Apply in Plan. Copy and relative-link effects remain deferred and cannot be claimed as delivered. Combining multiple effect profiles in one Run is intentionally unsupported.
 
-## Test strategy before activation
+## Acceptance and ongoing verification
 
-Apply is a high-risk filesystem and concurrency boundary. Activation requires:
+Apply is a high-risk filesystem and concurrency boundary. The active profile is maintained by:
 
 - fast schema and semantic model tests for lifecycle transitions, authorization identity, set closure, compact accounting, idempotency, and pagination;
 - temporary-filesystem integration tests for non-overwriting same-filesystem moves, source/target aliases, directory effects, pause/cancel, and recovery reconciliation;
 - deterministic fault injection at every journal/effect/publication boundary, without real sleeps;
 - a platform/filesystem matrix proving byte-for-byte cross-filesystem verification and declared preservation behavior for timestamps, permissions, extended attributes, Finder tags, and any additional user-relevant attributes;
 - a separate slow scale suite for 100,000-item preparation, status, Receipt publication, read pagination, restart, and memory bounds; and
-- representative throughput and metadata-preservation comparison with AI Album before declaring the migration preserved.
+- representative throughput and metadata-preservation comparison with AI Album before broadening migration claims.
 
 Mocks must not replace real filesystem integration where atomicity, overwrite behavior, durability, or metadata preservation is the risk under test.
 
-## Review blockers and stopping rule
+## Activation record and reopening rule
 
-This contract may move to `active` only when:
+The contract became `active` after the following conditions were met:
 
 1. the Source Item verification profile and access path are formally owned upstream and exercised by the Apply reference;
 2. the fixed cross-filesystem byte and user-relevant-attribute guarantee is supported by representative platform evidence, including the block-and-reauthorize loss path;
@@ -239,4 +239,4 @@ This contract may move to `active` only when:
 4. the lifecycle and every material fault window have an unambiguous observable outcome and continuation; and
 5. the migration ledger distinguishes delivered behavior from deferred copy/link profiles.
 
-Do not reopen the two-entity model merely because the database, journal, hashing method, concurrency strategy, filesystem API, CLI text, or artifact sharding changes.
+Reopen activation if the accepted PreCheck projection changes incompatibly, supported filesystem evidence is invalidated, a material fault window loses a trustworthy recovery outcome, or complete Receipt accounting can no longer be produced. Do not reopen the two-entity model merely because the database, journal, hashing method, concurrency strategy, filesystem API, CLI text, or artifact sharding changes.

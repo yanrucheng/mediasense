@@ -8,7 +8,7 @@ The product is organized around three user-facing skills:
 - `mediasense.plan` lets an agent and user iteratively turn static evidence into a complete, reviewable organization plan.
 - `mediasense.apply` validates and safely applies a frozen plan without making new semantic decisions.
 
-The three durable handoff roles are the precheck result, the frozen organization plan, and the apply receipt. PreCheck and Plan have active read, run, working-state, Frozen Plan, default organization, and local-artifact contracts or designs. Apply now has a review-stage reference handoff and contract candidate. Its cross-filesystem policy is fixed: verify content byte for byte, preserve user-relevant filesystem attributes, and block source deletion until any exact preservation loss receives new Human authorization. Apply remains blocked from activation and implementation until source verification and representative cross-filesystem preservation evidence are closed.
+The three durable handoff roles are the precheck result, the frozen organization plan, and the apply receipt. PreCheck, Plan, and Apply now have active contracts for the first end-to-end `move_originals` path. Apply verifies every selected source through its exact PreCheck Result, binds trusted Human authorization to one prepared Run identity, refuses overwrite, journals and recovers effects, and publishes one immutable Receipt. Its Darwin cross-filesystem profile verifies content byte for byte and blocks source deletion until any exact user-relevant metadata loss receives new Human authorization.
 
 ## Start here
 
@@ -16,9 +16,10 @@ The three durable handoff roles are the precheck result, the frozen organization
 2. Read [AI Album Migration Baseline](docs/eval/eval-260823-1918-ai-album-migration-baseline/index.md) before migrating or comparing legacy behavior.
 3. Read [the fixture descriptor](eval/fixtures/ai-album-hk-representative-v1.yaml) before using the Hong Kong representative package.
 4. For Plan development, read the [Plan Working State Tool Contract](docs/spec/spec-260827-1915B-plan-work/), [Frozen Organization Plan Contract](docs/spec/spec-260827-1138-frozen-plan/), [Default Organization Profile](docs/spec/spec-260828-2026-default-organization-profile/), and [Plan Local Artifact Design](docs/design/design-260828-2043-plan-local-artifacts/).
+5. For Apply development, read the [Apply Contract](docs/spec/spec-260829-0050-apply/) and [Apply Activation Evidence](docs/eval/eval-260829-1350-apply-activation-evidence.md).
 
 ## Current phase
 
-PreCheck and Plan design are closed enough for independent implementation against their active contracts and reference artifacts. Plan development consumes only the PreCheck Read Contract and can use its existing Mock without waiting for the PreCheck runtime. Apply has review-stage Run, Receipt, and Read contracts, but no active contract, Skill, or production Tool implementation yet.
+PreCheck, Plan, and the first Apply `move_originals` slice are implemented against active contracts. Apply supports durable preparation, exact authorization, same-filesystem moves, the evidence-bounded Darwin cross-filesystem route, pause/resume/cancel, restart reconciliation, immutable Receipts, bounded Receipt reads, and whole-Run rewind. Copy/link profiles, broader cross-filesystem platforms, ACL-bearing sources, and representative real-media throughput measurements remain deferred.
 
 The former implementation remains in `/Users/chengyanru/repos/personal/photo/ai_album` as historical evidence. MediaSense is a new project and must not take a runtime dependency on that repository.

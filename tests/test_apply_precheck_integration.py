@@ -6,7 +6,12 @@ from pathlib import Path
 
 from PIL import Image
 
-from mediasense.apply import ApplyRunStore, SourceSetExpansion
+from mediasense.apply import (
+    ApplyExecutor,
+    ApplyRunStore,
+    ReceiptStore,
+    SourceSetExpansion,
+)
 from mediasense.precheck import (
     AccountingStore,
     ImageRenditionProducer,
@@ -134,3 +139,83 @@ def test_prepare_resolves_and_verifies_one_real_sealed_precheck_result(
     assert item["expected_verification"] == item["observed_verification"]
     assert (source / "original.jpg").read_bytes() == source_before
     assert list(destination.iterdir()) == []
+
+
+def test_real_sealed_precheck_result_executes_controlled_move_and_receipt(
+    tmp_path: Path,
+) -> None:
+    database = tmp_path / "precheck-state" / "working.sqlite3"
+    source = tmp_path / "source"
+    destination = tmp_path / "destination"
+    source.mkdir()
+    destination.mkdir()
+    Image.new("RGB", (80, 40), "green").save(source / "original.jpg")
+    original = (source / "original.jpg").read_bytes()
+
+    accounting = AccountingStore(database)
+    accounting.register_dataset("dataset-apply-e2e")
+    run_id = accounting.start_or_resume_run("dataset-apply-e2e", source)
+    accounting.process_run(run_id)
+    rendition = ImageRenditionProducer(database).produce(run_id, Path("original.jpg"))
+    result = ResultStore(database).seal(
+        ResultStore(database).build_minimal(run_id, [rendition.work.work_id])
+    )
+    reader = PrecheckReadTool(database)
+    accounts = reader.read(
+        {
+            "result_ref": result.result_ref,
+            "action": "traverse",
+            "relation": "accounts_for",
+            "direction": "outbound",
+        }
+    )
+    source_item_ref = next(
+        str(item["target"])
+        for item in accounts["items"]
+        if item["scope"] == "source_media"
+    )
+    source_view = reader.read(
+        {
+            "result_ref": result.result_ref,
+            "action": "inspect",
+            "target": {"kind": "source_item", "ref": source_item_ref},
+        }
+    )["target"]
+    source_root_ref = source_view["locator"]["source_root_ref"]
+
+    apply = ApplyRunStore.initialize(tmp_path / "apply-state" / "work.sqlite3")
+    prepared = apply.prepare_forward(
+        request_id="request:real-precheck-e2e",
+        frozen_plan=_plan(
+            result_ref=result.result_ref, source_item_ref=source_item_ref
+        ),
+        source_roots={source_root_ref: source},
+        destination_parent=destination,
+        resolve_source_set=_resolve,
+        precheck_read=reader,
+    )
+    executor = ApplyExecutor(
+        apply,
+        ReceiptStore(
+            tmp_path / "apply-state" / "receipts",
+            Path(__file__).parents[1]
+            / "docs/spec/spec-260829-0050-apply/apply-receipt.schema.json",
+        ),
+    )
+    status = executor.execute(
+        run_ref=prepared.run_ref,
+        prepared_revision=prepared.prepared_revision,
+        prepared_content_identity=prepared.prepared_content_identity,
+        request_id="request:real-precheck-e2e-execute",
+        authorization_binding="test:trusted-human",
+    )
+
+    assert status["state"] == "closed"
+    assert not (source / "original.jpg").exists()
+    assert (
+        destination / "Media" / "Verified" / "original.jpg"
+    ).read_bytes() == original
+    receipt = executor.receipt_store.read(status["published_receipt"]["receipt_ref"])
+    operation = receipt["sealed_content"]["operation_ledger"]["items"][0]
+    assert operation["source_item_ref"] == source_item_ref
+    assert operation["source_verification"]["profile"] == "sha256-full-v1"

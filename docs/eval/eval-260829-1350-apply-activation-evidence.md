@@ -2,7 +2,7 @@
 id: "eval-260829-1350-apply-activation-evidence"
 title: "Apply Activation Evidence"
 type: eval
-status: review
+status: active
 created: 2026-08-29
 updated: 2026-08-30
 timezone: "Asia/Shanghai"
@@ -24,10 +24,11 @@ preparation evidence, controlled filesystem evidence, and production mutation
 evidence. A passing schema or Mock test is never counted as filesystem safety
 evidence.
 
-The Apply contract remains `review`. The implementation in
-`src/mediasense/apply/` deliberately has no media-mutation entry point. Its only
-writes are to a caller-selected Apply Run SQLite database; all source and
-destination paths are read-only during preparation.
+The Apply contract is `active` for the first `move_originals` profile. The
+implementation in `src/mediasense/apply/` exposes the contracted Run and Receipt
+boundaries, performs no media effects during preparation, and starts mutation
+only after trusted Human context authorizes the exact prepared revision and
+content identity. Repository tests use controlled temporary roots only.
 
 ## Responsibility allocation
 
@@ -37,9 +38,9 @@ destination paths are read-only during preparation.
 | Source Item, locator, root association, and verification claim | Exact immutable PreCheck Result | Consumer parser and activation acceptance test define the minimum usable evidence | Missing or weaker evidence blocks preparation; Apply does not synthesize it |
 | Current source-root and destination bindings | Human | Inputs are bound to observed filesystem identities in prepared content | Binding changes produce different prepared content and require new authorization |
 | Prepared operation set, preflight, lifecycle, and ledger | Apply Run | Durable SQLite Run and bounded ledger traversal | Any material re-preparation invalidates old authorization coordinates |
-| Effect authorization and risk exceptions | Human through a trusted Tool host | Exact revision/content guard exists; no authorization is recorded yet | Request fields cannot self-assert Human authority |
-| File effects, non-overwrite, recovery, verification, Receipt publication | Apply Tool/runtime | Only controlled filesystem probes exist | Production mutation runtime cannot begin before activation approval |
-| Actual immutable outcome | Apply Receipt | Review schema/Mock only | No runtime Receipt is claimed before execution exists |
+| Effect authorization and risk exceptions | Human through a trusted Tool host | `ApplyConfirmationContext` is converted to a binding outside the public request and checked against exact prepared coordinates | Request fields cannot self-assert Human authority |
+| File effects, non-overwrite, recovery, verification, Receipt publication | Apply Tool/runtime | Controlled end-to-end and injected-fault tests cover same-filesystem execution; the accepted Darwin probe covers the cross-filesystem profile | Unsupported platforms, ACL-bearing sources, unsafe bindings, and indeterminate effects stop fail-closed |
+| Actual immutable outcome | Apply Receipt | Runtime publication, integrity, bounded Read, restart, incomplete closure, and rewind tests | Receipt history is immutable; repair proceeds through a new Run |
 
 ## Activation gate status
 
@@ -92,9 +93,11 @@ source or destination media:
   starting effects; pre-execution cancellation is idempotent, publishes no
   Receipt, and reports proven zero media effects.
 
-The current concurrency check is store-local. A production Tool must establish
-one authoritative store/lock domain for every path it can mutate; separate
-databases are not a safe concurrency boundary.
+Preparation detects overlap within its authoritative Run store. At the effect
+boundary, the production filesystem adapter also takes process-independent,
+OS-account-wide reservations keyed by source filesystem identity and normalized
+final target, so separate Run stores cannot concurrently mutate the same source
+object or target. Native non-overwriting publication remains the final guard.
 
 ## Filesystem profile evidence
 
@@ -137,50 +140,63 @@ change times are volatile observations rather than preservation claims.
 Non-empty ACLs remain unsupported and must block preparation until separately
 proved; the present fixture does not claim ACL preservation.
 
-## Scale and test evidence
+## Runtime, recovery, and scale evidence
 
-The focused Apply contract, negative-path, preparation, and real sealed-Result
-integration suite reports `31 passed, 1 deselected` in 1.54 seconds. The old
-activation xfail has been replaced by passing tests: the public schema may omit
-verification for unselected Source Items, while the Apply consumer rejects every
-selected move without a usable proof.
+The old activation xfail has been replaced by passing consumer enforcement:
+the public PreCheck schema may omit verification for items not selected for a
+dangerous effect, while Apply rejects every selected move without usable
+Result-scoped evidence. The integration suite consumes a real sealed PreCheck
+Result through `mediasense.precheck.read`; it does not read PreCheck SQLite or
+copy verification hashes into Frozen Plan.
 
-The full fast suite currently reports `354 passed, 10 deselected` in 18.80
-seconds. Ruff check and format checks pass for the changed Apply source and
-tests.
+Controlled runtime tests exercise same-filesystem move, target non-overwrite,
+effect-boundary source drift, source-object replacement, Run-store restart,
+cross-store overlap reservation, local-failure continuation, global-risk stop,
+pause/resume/cancel, exact metadata-loss reauthorization, ACL refusal, immutable
+Receipt publication/read, rewind, and every injected intent/effect/directory/
+publication fault point. Final repository-wide counts are recorded in the
+`implement-apply-stage` change validation before closure. The final fast suite
+reports `390 passed, 11 deselected`; the Apply-focused suite reports `87 passed,
+4 deselected`; and the targeted fault/recovery selection reports `9 passed, 27
+deselected`.
 
-The opt-in `scale` 100,000-item preparation/ledger test reports one pass in 2.03 seconds
-on this development host. It stages and seals a synthetic 100,000-row Run, then
-reads a 1,000-row page while asserting a peak allocation below 8 MiB for that
-traversal. This establishes bounded ledger reading; it is not a claim about
-100,000 real-file hashing throughput or production latency.
+The opt-in scale suite covers two separate 100,000-item paths. Preparation
+stages a synthetic 100,000-row Run and reads a 1,000-row page with a peak
+allocation bound. Receipt scale packages 100,000 immutable operation facts into
+content-bound physical segments, republishes safely across a restarted store,
+and reads a 1,000-row page with a separate memory bound. Segment names remain an
+internal method and never become business references. These tests do not claim
+100,000 real-file hashing or move throughput. The complete opt-in scale suite
+reports `5 passed, 396 deselected` on this development host.
 
 ## AI Album migration judgment
 
 | Capability or operating quality | Classification | Current implementation status |
 | --- | --- | --- |
-| Complete original-media target derivation, hierarchy, and basename preservation | `preserved` | Implemented for prepared operations; file effects are not active |
+| Complete original-media target derivation, hierarchy, and basename preservation | `preserved` | Implemented through controlled end-to-end `move_originals` execution |
 | Automatic collision-name injection | `intentionally_changed` | Replaced by deterministic collision refusal |
-| Same-filesystem move | `preserved` | Darwin primitive proved in temporary fixtures; production orchestration not implemented |
+| Same-filesystem move | `preserved` | Production-capable orchestration uses non-overwriting native rename and post-verification; temporary integration tests pass |
 | Silent cross-filesystem copy-delete fallback | `intentionally_changed` | Replaced by disclosed verified transfer and metadata-loss reauthorization; distinct-device Darwin APFS probe passed |
-| Durable restart and per-item outcome accounting | `intentionally_changed` | Preparation ledger implemented; effect journal and Receipt publication remain pending |
-| Mutation throughput and interruption cost | `not_comparable` | No production mutation runtime exists, so no honest AI Album comparison can yet be made |
+| Durable restart and per-item outcome accounting | `intentionally_changed` | Effect intent, reconciliation, recovery, immutable Receipt publication, and bounded Read are implemented |
+| Mutation throughput and interruption cost | `not_comparable` | Synthetic 100,000-item state and Receipt tests pass, but no representative real-media throughput comparison has been run |
 | Cache reuse | `not_comparable` | Apply consumes immutable upstream evidence and does not adopt AI Album caches |
 | User effort | `intentionally_changed` | Exact prepared content requires explicit Human authorization; no measured end-to-end user study yet |
 
-No regression judgment is supported yet. Mutation throughput, full recovery,
-and metadata fidelity remain capable of changing that conclusion.
+No regression is currently identified in the migrated `move_originals`
+capability. Representative real-media throughput and broader filesystem
+profiles remain capable of changing the operating-quality judgment.
 
 ## Continue, stop, and reopen conditions
 
-Both pre-activation evidence gates are now closed for the first supported
-profiles. The next decision is Human activation of the Apply contract. Reopen a
-gate if the accepted PreCheck projection changes, a new source verification or
-filesystem profile is supported, or new evidence contradicts the current
-platform result.
+Both activation gates are closed for the first supported profiles, and Human
+authorization on 2026-08-30 activated the Apply contract and first
+`move_originals` runtime. Reopen a gate if the accepted PreCheck projection
+changes incompatibly, a new source-verification or filesystem profile is
+supported, or new evidence contradicts the current platform result.
 
-Stop before changing the Apply contract to `active`, recording real Human
-authorization, exposing a mutation entry point, or operating on non-fixture
-media. Reopen the structure if the upstream evidence cannot bind a Source Item
-to a current root without a new top-level entity, or if the platform probe shows
-that the declared metadata profile cannot be preserved or precisely disclosed.
+The repository supplies a mutation-capable Tool, but validation and evaluation
+must continue to stop before operating on non-fixture media unless a Human
+separately supplies the real paths and exact execution authorization. Reopen the
+structure if upstream evidence cannot bind a Source Item to a current root
+without a new top-level entity, or if platform evidence shows that the declared
+metadata profile cannot be preserved or precisely disclosed.

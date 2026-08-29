@@ -4,7 +4,7 @@ title: "MediaSense Apply Reference Handoff"
 type: design
 status: review
 created: 2026-08-29
-updated: 2026-08-29
+updated: 2026-08-30
 timezone: "Asia/Shanghai"
 parent: "index-design"
 depends-on:
@@ -18,9 +18,9 @@ superseded-by: ""
 
 # MediaSense Apply Reference Handoff
 
-## Purpose and review status
+## Purpose and current status
 
-This package pressure-tests the accepted Apply workflow with a concrete Run and Receipt before the review contracts are activated or runtime implementation begins.
+This package is the Human-authored reference that pressure-tested the Apply workflow before activation. The resulting Run, Receipt, and Read contracts are now active, and the first `move_originals` runtime implements the same boundary. This package remains `review` because its examples are explanatory fixtures rather than runtime authority.
 
 - [`lifecycle.mock.json`](../../spec/spec-260829-0050-apply/lifecycle.mock.json) demonstrates prepare, Human-bound execute, a localized failure, resume, verification, and Receipt publication.
 - [`receipt.mock.json`](../../spec/spec-260829-0050-apply/receipt.mock.json) demonstrates immutable operation accounting and short-window whole-run rewind support.
@@ -35,12 +35,12 @@ The following are explicit illustrative assumptions needed to exercise Apply:
 
 - `/Volumes/Archive/Inbox` is the currently selected Dataset parent and `/Volumes/Archive` is the selected destination parent;
 - both are on the same writable filesystem;
-- all seven current source objects have sufficient immutable verification evidence;
+- all seven current source objects are illustratively assumed to have sufficient immutable verification evidence;
 - no final target exists before execution;
 - source locators for items not exposed by the current PreCheck development Mock are placeholders; and
 - the failure and retry of `source-item:217` are simulated.
 
-The example cannot be used to claim that the current PreCheck contract already supplies sufficient Apply-grade source binding. It exposes that missing capability deliberately.
+The example itself cannot prove current source identity. That proof now comes from the accepted PreCheck `source_content_verification` observation and Apply's real Result-scoped consumer tests.
 
 ## User-visible walkthrough
 
@@ -85,7 +85,7 @@ The immutable Receipt owns:
 
 The impact summary, progress display, and metadata-loss disclosure are views over the Run. A discrepancy disclosure must be complete, bounded to consume, content-identity-bound, and obtainable by the Human before authorization. Inline values, files, pagination, and database projections are replaceable implementation methods. The journal, checkpoints, locks, temporary paths, task scheduling, concurrency, and physical Receipt shards are also implementation mechanisms. None is an additional cross-stage authority.
 
-## Tool boundary candidate
+## Tool boundary
 
 The example supports two Tool responsibilities:
 
@@ -101,13 +101,13 @@ mediasense.apply.read
 
 `apply.read` exists because a Receipt can cover hundreds of thousands of operations and outlives its mutable Run. It exposes an immutable summary and bounded traversal without exposing storage shards.
 
-The review contract now uses these operation names, but they remain non-active candidates. No Preview Tool, Confirm Tool, Rewind Plan, Source Snapshot, or Source Verify Tool is justified.
+The active contract and runtime use these operation names. No Preview Tool, Confirm Tool, Rewind Plan, Source Snapshot, or Source Verify Tool is justified.
 
-## Source-binding gap
+## Closed source-binding boundary
 
-The current PreCheck Read minimum exposes a Result-scoped Source Item `ref` and `locator`, but a dangerous Apply also needs immutable evidence sufficient to prove that the object currently resolved at that locator is compatible with the object used by Plan.
+PreCheck Read exposes each applicable Result-scoped Source Item with a `source_root_relative_path` locator and an available `source_content_verification` observation. Apply consumes the exact `result_ref + source_item_ref`, binds the locator to the Human-supplied current root, and verifies size plus full SHA-256 before authorization and again at the effect boundary.
 
-The minimum correction belongs with the Source Item view already owned by the exact PreCheck Result. It must provide or reference an Apply-usable verification basis and its declared strength. The contract should not fix one fingerprint algorithm, expose cache keys, create a Dataset-wide snapshot, or promise permanent identity across Results.
+The evidence remains owned by the exact PreCheck Result. Apply supports `sha256-full-v1` without copying hashes into Frozen Plan, exposing cache keys, creating a Dataset-wide snapshot, or promising permanent identity across Results. Other profiles may be added deliberately without changing the authority boundary.
 
 Apply refuses execution when:
 
@@ -163,21 +163,20 @@ SQLite, table names, journal mode, file extensions, segment encoding, sharding t
 - Durable Run state and Receipt publication cannot depend only on either mutable media volume; a source or destination disconnect must not erase the knowledge needed for recovery.
 - Recovery treats an already-present target as completed only when it matches the exact operation verification basis and the source is absent; otherwise it remains a collision or indeterminate fact.
 
-## What remains open
+## Deferred scope
 
-- review closure for enum names, error envelope, cursor shape, and content-identity profile in the existing Run, Receipt, and Read candidates;
-- the concrete Source Item verification profile and its performance evidence;
-- the duration and policy source for the short rewind window;
-- physical Run store, journal, Receipt publication, sharding, locking, and garbage collection;
-- executable platform evidence for the fixed cross-filesystem byte and user-relevant-attribute preservation policy;
+- broader verification profiles beyond `sha256-full-v1`;
+- broader cross-filesystem platforms and ACL-bearing sources beyond the proven Darwin APFS profile;
+- configurable rewind-window policy beyond the current short-window profile;
+- long-term garbage collection and operational packaging;
 - copy and link Apply profiles; and
 - CLI and Agent presentation details.
 
-These decisions do not block review of the two-entity model or the Run/Read Tool split. Formal contracts must not become active until the source-binding gap and cross-filesystem preservation guarantee have executable acceptance evidence.
+These deferred methods and future profiles do not block the active two-entity model or the Run/Read Tool split. Any broader claim requires its own executable evidence and must preserve the same authority and safety invariants.
 
 ## Contract acceptance scenarios
 
-The review contracts and later implementation must make these scenarios mechanically testable. The checks state observable outcomes, not required implementation techniques.
+The active contracts and implementation make these scenarios mechanically testable. The checks state observable outcomes, not required implementation techniques.
 
 | Scenario | Required observable result |
 | --- | --- |
@@ -206,9 +205,9 @@ The review contracts and later implementation must make these scenarios mechanic
 
 Performance acceptance must compare MediaSense with the AI Album baseline for operation throughput, memory use, user effort, interruption cost, resume reuse, and metadata preservation. No numeric threshold is asserted until a representative filesystem and dataset benchmark exists; lack of a threshold cannot be used to waive bounded-memory or no-silent-loss guarantees.
 
-## Review acceptance
+## Reference disposition
 
-This reference remains sufficient support for the Apply contract review while reviewers agree that:
+This reference remains review evidence supporting the active Apply contract because it preserves the accepted conclusions that:
 
 1. every mutation is traceable to exact confirmed prepared content;
 2. Run and Receipt are the only necessary new top-level business entities;
