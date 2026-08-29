@@ -89,7 +89,9 @@ def _assert_receipt_semantics(receipt: dict) -> None:
     for authorization in preservation["discrepancy_authorizations"]:
         refs = authorization["accepted_discrepancy_refs"]
         authorized_facts = [discrepancy_by_ref[ref] for ref in refs]
-        assert authorization["confirmed_discrepancy_set_identity"] == _discrepancy_set_identity(authorized_facts)
+        assert authorization[
+            "confirmed_discrepancy_set_identity"
+        ] == _discrepancy_set_identity(authorized_facts)
         assert not authorized_refs.intersection(refs)
         authorized_refs.update(refs)
     assert authorized_refs == accepted_refs
@@ -103,7 +105,10 @@ def _assert_receipt_semantics(receipt: dict) -> None:
     if content["preflight"]["execution_route"] == "verified_cross_filesystem_transfer":
         for operation in operations:
             if operation["source_after"] == "absent":
-                assert operation["verification"]["profile"] == "cross_filesystem_content_and_metadata"
+                assert (
+                    operation["verification"]["profile"]
+                    == "cross_filesystem_content_and_metadata"
+                )
                 assert operation["verification"]["result"] == "verified"
 
     if content["completion"] == "complete":
@@ -240,7 +245,9 @@ def test_control_acknowledgement_does_not_claim_completion() -> None:
         validator.validate(wrong_target)
 
 
-def test_closed_status_requires_receipt_and_cancelled_requires_zero_effect_proof() -> None:
+def test_closed_status_requires_receipt_and_cancelled_requires_zero_effect_proof() -> (
+    None
+):
     validator = Draft202012Validator(_run_tool()["outputSchema"])
     base = {
         "outcome": "ok",
@@ -282,8 +289,14 @@ def test_status_progress_and_allowed_actions_are_truthful() -> None:
     }
     for status in statuses:
         progress = status["progress"]
-        values = [progress[k] for k in ("completed_and_verified", "failed", "remaining", "indeterminate")]
-        if all(isinstance(value, int) for value in values + [progress["planned_operations"]]):
+        values = [
+            progress[k]
+            for k in ("completed_and_verified", "failed", "remaining", "indeterminate")
+        ]
+        if all(
+            isinstance(value, int)
+            for value in values + [progress["planned_operations"]]
+        ):
             assert sum(values) == progress["planned_operations"]
         assert set(status["allowed_actions"]) == expected_actions[status["state"]]
     closed = next(status for status in statuses if status["state"] == "closed")
@@ -349,7 +362,9 @@ def test_metadata_loss_requires_a_new_execute_authorization_boundary() -> None:
         validator.validate(unsafe_resume)
 
     file_coupled = deepcopy(status)
-    file_coupled["metadata_loss_authorization"]["disclosure"]["path"] = "/tmp/losses.json"
+    file_coupled["metadata_loss_authorization"]["disclosure"]["path"] = (
+        "/tmp/losses.json"
+    )
     with pytest.raises(ValidationError):
         validator.validate(file_coupled)
 
@@ -359,10 +374,19 @@ def test_receipt_mock_conforms_and_accounting_closes() -> None:
     Draft202012Validator(_receipt_schema()).validate(receipt)
     content = receipt["sealed_content"]
     accounting = content["accounting"]
-    assert sum(
-        accounting[key]
-        for key in ("completed_and_verified", "failed", "refused", "not_attempted", "indeterminate")
-    ) == accounting["materialization_operations"]
+    assert (
+        sum(
+            accounting[key]
+            for key in (
+                "completed_and_verified",
+                "failed",
+                "refused",
+                "not_attempted",
+                "indeterminate",
+            )
+        )
+        == accounting["materialization_operations"]
+    )
     assert (
         accounting["materialization_operations"]
         + accounting["retained_without_effect"]
@@ -371,8 +395,13 @@ def test_receipt_mock_conforms_and_accounting_closes() -> None:
     )
     assert content["completion"] == "complete"
     assert content["closure"] == "automatic"
-    assert accounting["completed_and_verified"] == accounting["materialization_operations"]
-    assert content["authorization"]["confirmed_prepared_content_identity"] == content["prepared_content_identity"]
+    assert (
+        accounting["completed_and_verified"] == accounting["materialization_operations"]
+    )
+    assert (
+        content["authorization"]["confirmed_prepared_content_identity"]
+        == content["prepared_content_identity"]
+    )
     assert content["preflight"]["source_compatibility"] == "verified"
     assert content["preflight"]["target_binding"] == "verified"
     assert content["preflight"]["target_collisions"] == 0
@@ -406,7 +435,12 @@ def test_unaccepted_metadata_loss_keeps_source_and_receipt_incomplete() -> None:
     content["metadata_preservation"] = {
         "profile": "cross_filesystem_user_metadata_v1",
         "content_verification": {"profile": "byte_for_byte", "result": "verified"},
-        "checked_attributes": ["timestamps", "permissions", "extended_attributes", "finder_tags"],
+        "checked_attributes": [
+            "timestamps",
+            "permissions",
+            "extended_attributes",
+            "finder_tags",
+        ],
         "unpreserved_attributes": [discrepancy],
         "accepted_discrepancy_refs": [],
         "discrepancy_authorizations": [],
@@ -423,7 +457,8 @@ def test_unaccepted_metadata_loss_keeps_source_and_receipt_incomplete() -> None:
         _assert_receipt_semantics(unsafe)
 
     operation = next(
-        item for item in content["operation_ledger"]["items"]
+        item
+        for item in content["operation_ledger"]["items"]
         if item["source_item_ref"] == discrepancy["source_item_ref"]
     )
     operation.update(
@@ -464,7 +499,12 @@ def test_accepted_metadata_loss_records_exact_reauthorization() -> None:
     content["metadata_preservation"] = {
         "profile": "cross_filesystem_user_metadata_v1",
         "content_verification": {"profile": "byte_for_byte", "result": "verified"},
-        "checked_attributes": ["timestamps", "permissions", "extended_attributes", "finder_tags"],
+        "checked_attributes": [
+            "timestamps",
+            "permissions",
+            "extended_attributes",
+            "finder_tags",
+        ],
         "unpreserved_attributes": [discrepancy],
         "accepted_discrepancy_refs": [discrepancy["discrepancy_ref"]],
         "discrepancy_authorizations": [
@@ -472,7 +512,9 @@ def test_accepted_metadata_loss_records_exact_reauthorization() -> None:
                 "authorization_ref": authorization_ref,
                 "binding": "illustrative:trusted-human-confirmation-metadata-loss",
                 "confirmed_prepared_content_identity": "sha256:metadata-loss-prepared-content",
-                "confirmed_discrepancy_set_identity": _discrepancy_set_identity([discrepancy]),
+                "confirmed_discrepancy_set_identity": _discrepancy_set_identity(
+                    [discrepancy]
+                ),
                 "accepted_discrepancy_refs": [discrepancy["discrepancy_ref"]],
                 "confirmed_at": "2026-08-29T00:41:00+08:00",
             }
@@ -486,15 +528,24 @@ def test_accepted_metadata_loss_records_exact_reauthorization() -> None:
         }
     Draft202012Validator(_receipt_schema()).validate(receipt)
     _assert_receipt_semantics(receipt)
-    assert content["metadata_preservation"]["discrepancy_authorizations"][0]["authorization_ref"] == authorization_ref
+    assert (
+        content["metadata_preservation"]["discrepancy_authorizations"][0][
+            "authorization_ref"
+        ]
+        == authorization_ref
+    )
 
     changed_loss_set = deepcopy(receipt)
-    changed_loss_set["sealed_content"]["metadata_preservation"]["unpreserved_attributes"][0]["observed"] = ["Travel"]
+    changed_loss_set["sealed_content"]["metadata_preservation"][
+        "unpreserved_attributes"
+    ][0]["observed"] = ["Travel"]
     with pytest.raises(AssertionError):
         _assert_receipt_semantics(changed_loss_set)
 
     wrong_content_profile = deepcopy(receipt)
-    wrong_content_profile["sealed_content"]["metadata_preservation"]["content_verification"]["profile"] = "filesystem_identity_and_location"
+    wrong_content_profile["sealed_content"]["metadata_preservation"][
+        "content_verification"
+    ]["profile"] = "filesystem_identity_and_location"
     with pytest.raises(ValidationError):
         Draft202012Validator(_receipt_schema()).validate(wrong_content_profile)
 
@@ -555,7 +606,9 @@ def test_forward_source_root_refs_are_unique() -> None:
 
 def test_receipt_content_identity_matches_canonical_content() -> None:
     receipt = _receipt()
-    assert receipt["seal"]["content_identity"] == _canonical_identity(receipt["sealed_content"])
+    assert receipt["seal"]["content_identity"] == _canonical_identity(
+        receipt["sealed_content"]
+    )
 
 
 def test_read_mock_conforms_and_pages_are_bounded() -> None:
@@ -635,7 +688,17 @@ def test_read_summary_matches_receipt() -> None:
     assert summary["closure"] == receipt["closure"]
     assert summary["execution_binding"]["kind"] == receipt["execution_binding"]["kind"]
     assert summary["accounting"] == receipt["accounting"]
-    assert summary["metadata_preservation"]["profile"] == receipt["metadata_preservation"]["profile"]
-    assert summary["metadata_preservation"]["content_verification_result"] == receipt["metadata_preservation"]["content_verification"]["result"]
-    assert summary["metadata_preservation"]["unpreserved_attribute_count"] == len(receipt["metadata_preservation"]["unpreserved_attributes"])
-    assert summary["metadata_preservation"]["accepted_discrepancy_count"] == len(receipt["metadata_preservation"]["accepted_discrepancy_refs"])
+    assert (
+        summary["metadata_preservation"]["profile"]
+        == receipt["metadata_preservation"]["profile"]
+    )
+    assert (
+        summary["metadata_preservation"]["content_verification_result"]
+        == receipt["metadata_preservation"]["content_verification"]["result"]
+    )
+    assert summary["metadata_preservation"]["unpreserved_attribute_count"] == len(
+        receipt["metadata_preservation"]["unpreserved_attributes"]
+    )
+    assert summary["metadata_preservation"]["accepted_discrepancy_count"] == len(
+        receipt["metadata_preservation"]["accepted_discrepancy_refs"]
+    )
