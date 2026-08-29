@@ -4,7 +4,7 @@ MediaSense is an agent-native system for organizing large personal media collect
 
 The product is organized around three user-facing skills:
 
-- `mediasense.precheck` prepares a large media collection with source-read-only, offline-by-default, resumable local computation.
+- `mediasense.precheck` prepares a large media collection with source-read-only, local-first, resumable computation; external evidence calls are disabled by default and require a frozen-scope confirmation.
 - `mediasense.plan` lets an agent and user iteratively turn static evidence into a complete, reviewable organization plan.
 - `mediasense.apply` validates and safely applies a frozen plan without making new semantic decisions.
 

@@ -142,7 +142,7 @@ sealed PreCheck Result
   owns the stable compressed representation and the claims needed to rely on it
 ```
 
-The complete working log should not be copied into the cross-stage contract. A sealed result may retain only those provenance, integrity, source-read-only, offline, or limitation claims needed to establish the result's trust boundary. It must not depend on mutable working state after sealing.
+The complete working log should not be copied into the cross-stage contract. A sealed result may retain only those provenance, integrity, source-read-only, local-first/external-effect, or limitation claims needed to establish the result's trust boundary. It must not depend on mutable working state after sealing.
 
 This resolves the apparent overlap between `working-state.yaml` and `final-result.yaml` in the first sample: they may illustrate two lifecycle states, but that does not justify two permanent cross-stage file types. Working state belongs to PreCheck operation. The sealed result alone crosses into Plan.
 

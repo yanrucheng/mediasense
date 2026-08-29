@@ -4,7 +4,7 @@ title: "MediaSense PreCheck Run Tool Contract"
 type: spec
 status: active
 created: 2026-08-27
-updated: 2026-08-28
+updated: 2026-08-29
 timezone: "Asia/Shanghai"
 parent: "index-spec"
 depends-on:
@@ -43,7 +43,7 @@ The Tool is authoritative for:
 - current business progress, blocking facts, and allowed control actions; and
 - whether automatic publication completed and which immutable `result_ref` was published.
 
-The Tool may create and mutate Working Run state and internal derived artifacts. It may not mutate source media or any published Result. Remote calls and billable model access remain disabled by default under the PreCheck stage invariant.
+The Tool may create and mutate Working Run state and internal derived artifacts. It may not mutate source media or any published Result. External and unusually resource-intensive work remains disabled until its exact pending work is known and the user confirms it through a paused Run checkpoint.
 
 Mutable Work Records, cache keys, checkpoints, leases, SQLite rows, internal producer states, artifact paths, and implementation phases are not public. A stronger implementation may replace any of them without changing this contract.
 
@@ -51,7 +51,12 @@ Mutable Work Records, cache keys, checkpoints, leases, SQLite rows, internal pro
 
 ### `start`
 
-`start` creates a new Run and returns it in `running` state.
+`start` durably creates and prepares a new Run, then returns its `run_ref` in
+`running` state without waiting for discovery or producer execution. The host
+schedules the existing private execution coordinator with that reference;
+`status`, `pause`, and `cancel` therefore remain available while long work is
+running. This scheduling boundary is not another public action or product
+entity.
 
 - A first Run supplies exactly one `dataset_ref`.
 - A successor Run supplies exactly one `prior_result_ref`; its Dataset is derived from that immutable Result and returned as `dataset_ref`.
@@ -99,10 +104,25 @@ For a completed Run, conformance requires more than shape validation: `accounted
 Control operations are target-state idempotent and do not require `request_id`:
 
 - `pause` requests `paused`;
-- `resume` requests `running`; and
+- `resume` requests `running` and returns without waiting for resumed work; and
 - `cancel` requests `cancelled`.
 
+The runtime may also enter `paused` automatically when a frozen optional work set requires user confirmation. Status then includes one `confirmation` with a concise summary, exact logical quantity, unit, and whether the work may be skipped. It does not predict provider-specific calls or monetary cost when those are not yet knowable.
+
+For an ordinary pause, `resume` carries no decision. For a confirmation pause, `resume.decision` is required by runtime semantics:
+
+- `proceed` authorizes only the frozen pending work reported by the current status;
+- `skip_optional_work` records that optional work as not requested and continues without it, and is accepted only when `confirmation.skip_allowed` is true.
+
+If the pending work changes, the runtime pauses again. A prior decision never authorizes a larger or different work set. No separate authorization action or public resource entity is introduced.
+
 An accepted control response proves only that the request was accepted and reports the state observed at that moment. Only a later `status` response proves the transition completed. Repeating an already-achieved target is accepted without creating another effect. An incompatible transition returns `invalid_state` and the current state and allowed actions.
+
+The host is responsible for invoking or rescheduling the private coordinator
+after `start` or `resume`. This internal call is not exposed as a sixth Tool
+action. A worker may finish already-admitted bounded work while a pause or
+cancel request is being committed, but it must observe the durable state before
+admitting further Work or publishing a Result.
 
 ## Public lifecycle
 

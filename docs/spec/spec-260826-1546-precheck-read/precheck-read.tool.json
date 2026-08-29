@@ -222,6 +222,10 @@
         "type": "string",
         "minLength": 1
       },
+      "source_root_ref": {
+        "type": "string",
+        "pattern": "^source-root:[^\\s]+$"
+      },
       "json_value": {
         "description": "A JSON value whose domain meaning is named by its containing record.",
         "oneOf": [
@@ -347,6 +351,33 @@
           }
         }
       },
+      "source_verification_value": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["profile", "value", "size_bytes", "observed_at", "producer"],
+        "properties": {
+          "profile": {
+            "type": "string",
+            "minLength": 1
+          },
+          "value": {
+            "type": "string",
+            "minLength": 1
+          },
+          "size_bytes": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "observed_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "producer": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
       "observation": {
         "type": "object",
         "additionalProperties": false,
@@ -415,18 +446,43 @@
             "then": {
               "properties": {"value": false}
             }
+          },
+          {
+            "if": {
+              "properties": {
+                "name": {"const": "source_content_verification"}
+              },
+              "required": ["name"]
+            },
+            "then": {
+              "properties": {
+                "status": {"const": "available"},
+                "value": {"$ref": "#/$defs/source_verification_value"}
+              },
+              "required": ["value", "basis"]
+            }
           }
         ]
       },
-      "locator": {
+      "source_locator": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "source_root_ref", "value"],
+        "properties": {
+          "kind": {"const": "source_root_relative_path"},
+          "source_root_ref": {"$ref": "#/$defs/source_root_ref"},
+          "value": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "artifact_locator": {
         "type": "object",
         "additionalProperties": false,
         "required": ["kind", "value"],
         "properties": {
-          "kind": {
-            "type": "string",
-            "minLength": 1
-          },
+          "kind": {"const": "local_file_path"},
           "value": {
             "type": "string",
             "minLength": 1
@@ -441,7 +497,7 @@
             "required": ["kind", "locator"],
             "properties": {
               "kind": {"const": "local_artifact"},
-              "locator": {"$ref": "#/$defs/locator"}
+              "locator": {"$ref": "#/$defs/artifact_locator"}
             }
           },
           {
@@ -487,7 +543,7 @@
       "result_view": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["kind", "ref", "dataset_ref", "coverage", "readiness", "integrity"],
+        "required": ["kind", "ref", "dataset_ref", "coverage", "readiness", "integrity", "execution_boundary"],
         "properties": {
           "kind": {"const": "result"},
           "ref": {
@@ -507,12 +563,69 @@
           "integrity": {
             "enum": ["valid", "invalid"]
           },
+          "execution_boundary": {
+            "$ref": "#/$defs/execution_boundary"
+          },
           "qualifications": {
             "type": "array",
             "minItems": 1,
             "items": {"$ref": "#/$defs/qualification"}
           }
         }
+      },
+      "execution_boundary": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["billable_calls", "network_access", "remote_models", "source_read_only"],
+            "properties": {
+              "billable_calls": {"const": 0},
+              "network_access": {"const": false},
+              "remote_models": {"const": false},
+              "source_read_only": {"const": true}
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["authorizations", "billable_calls", "logical_external_queries", "network_access", "provider_requests", "providers", "remote_models", "source_read_only"],
+            "properties": {
+              "authorizations": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["confirmed_logical_queries", "decision", "pending_fingerprint", "run_ref"],
+                  "properties": {
+                    "confirmed_logical_queries": {"type": "integer", "minimum": 1},
+                    "decision": {"const": "proceed"},
+                    "pending_fingerprint": {"type": "string", "minLength": 1},
+                    "run_ref": {"type": "string", "minLength": 1}
+                  }
+                }
+              },
+              "billable_calls": {
+                "oneOf": [
+                  {"type": "integer", "minimum": 0},
+                  {"const": "unknown"}
+                ]
+              },
+              "logical_external_queries": {"type": "integer", "minimum": 1},
+              "network_access": {"const": true},
+              "provider_requests": {"type": "integer", "minimum": 1},
+              "providers": {
+                "type": "array",
+                "minItems": 1,
+                "items": {"type": "string", "minLength": 1},
+                "uniqueItems": true
+              },
+              "remote_models": {"const": false},
+              "source_read_only": {"const": true}
+            }
+          }
+        ]
       },
       "dataset_view": {
         "type": "object",
@@ -549,7 +662,7 @@
             "type": "string",
             "minLength": 1
           },
-          "locator": {"$ref": "#/$defs/locator"},
+          "locator": {"$ref": "#/$defs/source_locator"},
           "observations": {
             "type": "array",
             "items": {"$ref": "#/$defs/observation"}

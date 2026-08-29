@@ -21,6 +21,12 @@
           "coverage": "partial",
           "readiness": "plan_ready",
           "integrity": "valid",
+          "execution_boundary": {
+            "billable_calls": 0,
+            "network_access": false,
+            "remote_models": false,
+            "source_read_only": true
+          },
           "qualifications": [
             {
               "code": "selected_slice_only",
@@ -434,7 +440,8 @@
           "kind": "source_item",
           "ref": "source-item:215",
           "locator": {
-            "kind": "fixture_relative_path",
+            "kind": "source_root_relative_path",
+            "source_root_ref": "source-root:hk-representative-v1",
             "value": "dataset/260501-HK美食之旅/0504/DJI_001-action-sd-amber/DJI_20260504202728_0029_D.MP4"
           },
           "observations": [
@@ -551,7 +558,8 @@
           "kind": "source_item",
           "ref": "source-item:217",
           "locator": {
-            "kind": "fixture_relative_path",
+            "kind": "source_root_relative_path",
+            "source_root_ref": "source-root:hk-representative-v1",
             "value": "dataset/260501-HK美食之旅/0504/DJI_001-action-sd-amber/DJI_20260504202728_0029_D.remux-faststart.MP4"
           },
           "observations": [

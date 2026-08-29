@@ -40,11 +40,18 @@ tags: ["mediasense", "precheck", "contract", "concept-model"]
     "coverage": "complete",
     "readiness": "plan_ready",
     "integrity": "valid",
+    "execution_boundary": {
+      "billable_calls": 0,
+      "network_access": false,
+      "remote_models": false,
+      "source_read_only": true
+    },
     "source_items": [
       {
         "ref": "source-item:video-001",
         "locator": {
-          "kind": "dataset_relative_path",
+          "kind": "source_root_relative_path",
+          "source_root_ref": "source-root:A",
           "value": "旅行/video-001.mp4"
         },
         "accounting": {
@@ -65,7 +72,8 @@ tags: ["mediasense", "precheck", "contract", "concept-model"]
       {
         "ref": "source-item:burst-001",
         "locator": {
-          "kind": "dataset_relative_path",
+          "kind": "source_root_relative_path",
+          "source_root_ref": "source-root:A",
           "value": "旅行/burst-001.jpg"
         },
         "accounting": {
@@ -76,7 +84,8 @@ tags: ["mediasense", "precheck", "contract", "concept-model"]
       {
         "ref": "source-item:burst-002",
         "locator": {
-          "kind": "dataset_relative_path",
+          "kind": "source_root_relative_path",
+          "source_root_ref": "source-root:A",
           "value": "旅行/burst-002.jpg"
         },
         "accounting": {
@@ -87,7 +96,8 @@ tags: ["mediasense", "precheck", "contract", "concept-model"]
       {
         "ref": "source-item:burst-003",
         "locator": {
-          "kind": "dataset_relative_path",
+          "kind": "source_root_relative_path",
+          "source_root_ref": "source-root:A",
           "value": "旅行/burst-003.jpg"
         },
         "accounting": {
@@ -241,10 +251,10 @@ burst-003.jpg（1 个 Source Item） ┘
 9. 长期对象采用工作名 `Dataset`，由用户或上层产品维持身份；最小字段为 `ref`、可选 `name`、可选且可追溯的 `context`、必要时的 `qualifications`。
 10. Dataset 可以有当前发现视图，但每份 Result 必须直接且不可变地核算自身覆盖的 Source Items；不以全局 Source Snapshot 作为缓存边界。
 11. `Source Item` 的引用只承诺在一个 Result 内稳定；当前实现可以识别来源移动并复用缓存，但这不升级为跨 Result 永久身份契约。
-12. Source Item 的最小字段为 `ref`、`locator`、开放式 `observations` 和必要时的 `qualifications`；范围角色与处理状况在核算关系上分别表达。
-13. Plan 接口不公开 hash、缓存 key 等内部有效性依据；PreCheck 内部保留可独立复用和失效的工作单元，但当前接口阶段不冻结其字段。
+12. Source Item 的最小字段为 `ref`、相对 `source_root_ref` 的 `locator`、开放式 `observations` 和必要时的 `qualifications`；范围角色与处理状况在核算关系上分别表达。可执行来源操作所需的 Source Item 可以带可替换 profile 的 `source_content_verification` observation。
+13. Plan 接口不公开缓存 key 等内部有效性依据；唯一按需公开的内容验证值属于 Result-local Source Item observation，供 Apply 在执行前重新读取来源并验证。Plan 只冻结 `result_ref` 和 `source_item_ref`，不复制该验证值。PreCheck 内部仍保留可独立复用和失效的工作单元，但不冻结其字段。
 14. Plan 可读的压缩入口采用工作名 `Evidence`；其最小字段为 `ref`、`access`、开放式 `observations` 和必要时的 `qualifications`，入口与展开角色由关系表达。
-15. `PreCheck Result` 是不可变交付，不是可变缓存视图；最小字段为 `ref`、`dataset_ref`、`coverage`、`readiness`、`integrity` 和必要时的 `qualifications`。
+15. `PreCheck Result` 是不可变交付，不是可变缓存视图；最小字段为 `ref`、`dataset_ref`、`coverage`、`readiness`、`integrity`、`execution_boundary` 和必要时的 `qualifications`。`source_root_ref` 属于 Source Item locator，以免把一个 Result 冻结成只能核算单一来源根。
 16. 关系层保留五种独立权威语义：`accounts_for`、`entry_evidence`、`represents`、`derived_from`、`expands_to`。`dataset_ref` 作为 Result 字段；`attention_items` 作为由 `accounts_for` 派生的快捷视图。
 17. 关系查询在外层声明 `origin`、`relation` 和 `direction`；返回成员只保留 `target` 及该成员特有的信息，不设置关系 ID，也不重复 `type/from/to`。
 18. 不为所有关系强制统一 `epistemic_state`。每种关系由自身语义确定权威性质；`represents` 是可质疑的 PreCheck 压缩主张，不冒充来源真值。
@@ -267,6 +277,9 @@ burst-003.jpg（1 个 Source Item） ┘
 35. Qualification 只附着在影响实际发生的最近层级，相同内容可以共享，不输出空数组；纯提示性的 `informational` 不作为稳定 effect。
 36. `basis` 只对可质疑的压缩主张、推导结果和失败强制可追溯，允许继承或共享。
 37. 保留不透明引用与分页；cursor 不暴露内部格式，`kind` 只在消除对象类型歧义时出现。
+38. PreCheck 是本地优先而非绝对离线。当前唯一允许的外部例外是：压缩完成后，对冻结且去重的坐标集合进行反向地理编码；媒体、rendition、embedding、prompt 和一般 metadata 不得因此外传。
+39. 反向地理编码启用后，Run 在调用前自动暂停并报告准确逻辑查询数；`proceed` 只授权该 fingerprint 对应的冻结集合，集合变化必须重新确认，跳过或取消不得发出请求。Result 公开实际 provider、fallback、失败、请求数和已知或未知的费用影响。
+40. Apply 的来源重验不建立 Dataset-wide Source Snapshot、永久 Source identity 或独立验证服务。每个 Source Item locator 提供自己的 `source_root_ref` 与相对路径，并可携带可替换验证 observation；Apply 只对 Frozen Plan 实际选择并将执行文件操作的 Source Items fail closed 地重验。
 
 ## 问题清单
 

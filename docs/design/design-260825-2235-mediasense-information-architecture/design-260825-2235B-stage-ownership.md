@@ -88,7 +88,7 @@ mediasense.apply
 
 The flow has four invariants:
 
-1. PreCheck is entirely local and offline. A remote-model, online-map, billable, or data-egress operation belongs outside this stage and cannot be legitimized by marking a result partial or blocked.
+1. PreCheck is source-read-only and local-first. Remote calls and data egress are disabled by default. Post-compression coordinate reverse geocoding is permitted only for an exact frozen logical query set confirmed by the user and recorded with provider and actual-request evidence; remote models and media, feature, prompt, or general-metadata egress remain outside this stage.
 2. Plan does not replace PreCheck's source facts, candidate evidence, coverage, or declared omissions. It may interpret, ignore, challenge, or request replacement of them.
 3. Apply receives only an exact Frozen Organization Plan as semantic authority. It does not caption, identify places, classify, group, name, or repair intent.
 4. Every replacement of a sealed upstream handoff creates a new version and invalidates downstream compatibility until the downstream handoff is reconsidered and resealed.
@@ -145,7 +145,7 @@ No stage may depend on another stage's hidden mutable working state.
 | Epistemic State | The owner of the qualified statement. | The stage producing or retaining the statement. | Every downstream reader. | Consumers validate that fact, candidate, judgment, confirmation, intent, and outcome remain distinguishable. | Travels with the qualified information. | Cannot be promoted silently. A changed epistemic status requires a new owned statement or handoff version. |
 | Availability State | The owner of the qualified information. | The stage attempting or deciding whether to produce it. | Every consumer of that information. | Consumers challenge ambiguous absence or empty values. | Travels with the qualified information. | `Not-requested`, unavailable, partial, and error remain distinct. Resolution occurs in the owning stage and yields a new sealed version when already handed off. |
 | Confidence and Quality | The owner of the qualified evidence or claim. | The relevant producer using a declared meaning or method. | Downstream reasoning and evaluation. | Consumers challenge calibration, provenance, or unsupported precision. | Travels with the qualified information when available and material. | No universal score is invented. Recalculation or changed meaning belongs to the owner and creates a new version. |
-| Resource and External-effect Facts | The stage causing the resource use or external effect. | PreCheck records local work and offline proof; Plan records its model use, egress, authorization, cost, and user-attention effects; Apply records filesystem operations and execution resources. | User, stage validators, audit, and evaluation. | The next stage validates only facts needed for entry; audit may challenge proof boundaries. | Relevant summaries and required authorization/effect bindings enter the owning stage's handoff; detailed Plan diagnostics remain deferred. | Facts are append-only while working and immutable when sealed. Unknown or unobservable scope must be explicit, never inferred as zero. |
+| Resource and External-effect Facts | The stage causing the resource use or external effect. | PreCheck records local work, default-zero external proof, and any confirmed coordinate reverse-geocode requests; Plan records its model use, egress, authorization, cost, and user-attention effects; Apply records filesystem operations and execution resources. | User, stage validators, audit, and evaluation. | The next stage validates only facts needed for entry; audit may challenge proof boundaries. | Relevant summaries and required authorization/effect bindings enter the owning stage's handoff; detailed Plan diagnostics remain deferred. | Facts are append-only while working and immutable when sealed. Unknown or unobservable scope must be explicit, never inferred as zero. |
 | Lifecycle Role | The stage owning the information or artifact. | Each stage labels mutable working state, reusable artifacts, sealed results, and derived views under its control. | Runtime, downstream consumers, and evaluation. | Consumers validate that working state is not presented as a sealed authority and that derived views do not replace their sources. | Sealed role is represented by the corresponding formal handoff; working state never crosses as authority. | Mutable work may advance; reusable artifacts may invalidate; sealed handoffs are replaced only by new versions; derived views may be regenerated. |
 
 ### Diagnostic responsibility
@@ -269,7 +269,7 @@ Plan validates, without re-performing PreCheck:
 - resolvable representation, derivation, expansion, and reverse-lookup relationships over Evidence and Source Items;
 - visible material compression loss, uncertainty, provenance, and limits;
 - independence from mutable Working Run state;
-- the fully offline and source-read-only proof within its observation boundary.
+- source-read-only and external-effect proof within its observation boundary, including either observed zero external calls or the exact authorization and actual effects of optional coordinate reverse geocoding.
 
 A readable result is not automatically compatible. Missing integrity, stale dependencies, an unsupported declared boundary, or material insufficiency blocks planning and routes to PreCheck.
 
@@ -295,7 +295,7 @@ Apply may seal a receipt only when every planned operation is accounted for, inc
 | Condition | Continue or return to | Required effect |
 | --- | --- | --- |
 | PreCheck Working Run is paused, interrupted, or recoverably incomplete | PreCheck | Resume from working state; do not present it as a sealed result. |
-| Source binding, compression coverage, traceability, material-loss disclosure, integrity, or offline proof cannot support a trustworthy handoff | PreCheck | Continue preparation; do not present mutable or insufficient work as the cross-stage result. |
+| Source binding, compression coverage, traceability, material-loss disclosure, integrity, source-read-only proof, or external-effect proof cannot support a trustworthy handoff | PreCheck | Continue preparation; do not present mutable or insufficient work as the cross-stage result. |
 | Plan needs more detail already present behind coverage/expansion links | Plan | Locally expand the sealed result; no reopen. |
 | Plan wants a different review view or VLM composition from existing evidence | Plan | Create temporary Plan-owned working material; no upstream mutation. |
 | Plan discovers missing source items, material hidden variation, broken coverage, or necessary absent/invalid evidence | PreCheck | Issue Reopen Signal; produce a new PreCheck Result. |

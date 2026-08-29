@@ -84,7 +84,7 @@ The stage ends only when every in-scope asset has an explicit disposition, confl
 - The exact detector, model, labels, thresholds, and implementation remain replaceable. The stage boundary preserves the evidence capability and its traceability, not one historical classifier or taxonomy.
 - `plan` may use or ignore sensitivity evidence according to an explicit policy. Valid policies may include all-local processing, all-remote processing, signal-informed routing, warnings before remote use, user confirmation, or future mechanisms. No one mechanism is part of the stage contract.
 - VLM providers expose their locality and data-egress effects; `plan` selects and invokes them under the applicable user policy and authorization. A provider must not silently change locality or fall back from local to remote execution.
-- `precheck` does not choose a local or remote VLM path from sensitivity signals. Local evidence acquisition does not relax its source-read-only, offline-by-default, or explicit remote-call and cost-reporting guarantees.
+- `precheck` does not choose a local or remote VLM path from sensitivity signals. Local evidence acquisition does not relax its source-read-only, local-first, external-call-disabled-by-default, or explicit authorization and effect-reporting guarantees. Coordinate-only reverse geocoding may run after compression freezes the exact logical query set and the user confirms it; this does not authorize media, feature, or prompt egress.
 
 This separation lets evidence collection improve independently from planning policy, while allowing stronger future Agents and providers to replace today's interpretation and routing methods without changing the precheck handoff boundary.
 
@@ -94,7 +94,9 @@ This separation lets evidence collection improve independently from planning pol
 
 Its safety guarantees belong in Tools, not merely in Skill instructions:
 
-- Bind authorization to an exact plan digest and a verified source snapshot.
+- Bind authorization to an exact plan digest, the selected Result-local Source
+  Item references, and their safely rebound source roots; revalidate the selected
+  source bytes from their declared, replaceable verification observations.
 - Refuse silent overwrite and unplanned target-name changes.
 - For same-filesystem moves, use filesystem rename semantics and preserve basenames when the plan requires it.
 - Never silently fall back from a cross-filesystem move to copy-then-delete.

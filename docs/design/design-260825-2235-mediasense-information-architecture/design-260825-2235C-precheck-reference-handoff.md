@@ -173,9 +173,9 @@ The reference page must never collapse them into one “success” badge. A resu
 | Default planning evidence prepared? | Partially: concrete frontier cards are reviewable, but this document does not establish coverage for every one of the 2,136 source-media items. |
 | Material omissions or failed evidence? | Two RAW evidence acquisitions are `not-requested`; one MP4 is invalid; one separate readable MP4 has a missing time; the invalid item's substitute relationship is not yet accepted. |
 | Known representative conflicts? | Yes: bundle 61 hides person and wider-context evidence behind a food-only representative; abnormal-time and repair-family conflicts are also surfaced below. |
-| Offline and zero-egress proof sufficient? | No actual PreCheck run audit exists. Package inspection was local, but that is not a sealed runtime proof. |
+| Local-only external-effect proof sufficient? | No actual PreCheck run audit exists. Package inspection was local, but that is not a sealed runtime proof. |
 | Source stayed read-only? | Yes during this review and during documented fixture derivation, within the stated observation boundary. |
-| Can Plan proceed? | `blocked` for an authoritative full-fixture plan until evidence coverage and offline proof are sufficient; read-only exploratory review may continue. |
+| Can Plan proceed? | `blocked` for an authoritative full-fixture plan until evidence coverage and source-read-only/external-effect proof are sufficient; read-only exploratory review may continue. |
 
 The summary links to, rather than duplicates, the Source Account, Evidence Base, Coverage Map, exceptions, and proof facts.
 
@@ -450,7 +450,7 @@ No MediaSense runtime has produced this variant. Its authority classes are expli
 
 - **Fixture facts:** the 2,140-path Source Account, 2,136 source-media population, 168 historical candidate relations, 2,133 readable manifest media, exact special-item paths, and existing local fixture bytes and renditions.
 - **Human review decisions:** whether proposed evidence is sufficient for the bounded planning purpose, whether the repair-family relation may represent the invalid item's content, and whether residual uncertainty is acceptable.
-- **Illustrative completion assumptions:** new local RAW observations and renditions exist, every required Coverage Relationship is constructed and valid, deterministic checks pass, and an actual PreCheck run supplies adequate offline/source-read-only proof.
+- **Illustrative completion assumptions:** new local RAW observations and renditions exist, every required Coverage Relationship is constructed and valid, deterministic checks pass, and an actual PreCheck run supplies adequate source-read-only and external-effect proof. This fixture variant remains deliberately local-only.
 
 The bounded purpose is planning the representative fixture's 2,136 source-media paths. It does not claim coverage of the unavailable original 1.09 TB collection or properties discarded by the proxy transformations.
 
@@ -552,7 +552,7 @@ These checks specify proof obligations, not SQL, tables, JSON/YAML fields, direc
 
 ### Completion-variant status
 
-If and only if the local RAW evidence, reviewed repair-family decision, complete Coverage Relationships, deterministic checks, immutable seal, and offline/source-read-only proof above all hold, the variant displays:
+If and only if the local RAW evidence, reviewed repair-family decision, complete Coverage Relationships, deterministic checks, immutable seal, and source-read-only/external-effect proof above all hold, the variant displays:
 
 ```text
 Coverage:   complete
@@ -606,7 +606,7 @@ Plan may accept a PreCheck Result only when all of the following hold for the st
 - Coverage Relationships reach their claimed Source Items through usable expansion links;
 - residual uncertainty and known Reopen Signals are explicit;
 - Evidence Sufficiency supports `plan-ready`;
-- the fully local, offline, zero-egress, zero-billable proof is adequate within its declared observation boundary.
+- the declared source-read-only and external-effect proof is adequate within its observation boundary; this local-only reference expects zero egress and zero provider requests.
 
 One invalid asset does not automatically block Plan. It blocks Plan when its missing content or broken coverage could materially change the intended organization and no sufficient alternative evidence exists.
 
@@ -634,11 +634,11 @@ Plan issues a Reopen Signal when the corrective action would change upstream evi
 
 Reopening starts or resumes mutable PreCheck work and seals a new PreCheck Result. It never edits the old result in place.
 
-## Offline, zero-egress, and source-read-only proof
+## External-effect and source-read-only proof
 
 The trust page must distinguish four kinds of statements:
 
-1. **Declared policy:** remote calls, uploads, online maps, reverse geocoding, and billable models are disabled.
+1. **Declared policy:** remote calls, uploads, online maps, reverse geocoding, and billable models are disabled by default; an enabled coordinate reverse-geocode producer is bound to a frozen logical query set and explicit user confirmation.
 2. **Enforced boundary:** the runtime restrictions that prevent or constrain those effects.
 3. **Observed facts:** requests, egress, providers, fees, and source writes observed within the MediaSense control boundary.
 4. **Unknown outside scope:** external processes or infrastructure the run could not observe.
@@ -646,13 +646,13 @@ The trust page must distinguish four kinds of statements:
 `plan-ready` requires an honest proof, within that boundary, of:
 
 - zero media upload;
-- zero metadata, coordinate, or feature-artifact egress;
+- zero general metadata or feature-artifact egress;
 - zero remote-model calls;
-- zero online-map or reverse-geocoding calls;
-- zero billable requests;
+- either zero coordinate/online-map egress or an exact confirmed post-compression reverse-geocode query set with provider, datum, actual-request, result-state, and authorization evidence;
+- zero billable requests when the local-only path is claimed, otherwise an explicit observed or unknown billable-call count rather than an inferred zero;
 - no source-media mutation.
 
-Configuration intent alone is not proof. A network-disabled claim and an observed zero-request audit answer different questions and should both be visible. Historical AI Album reverse-geocoded location text and remote semantic caches are excluded from PreCheck authority even when they exist in the fixture.
+Configuration intent alone is not proof. A network-disabled claim and an observed zero-request audit answer different questions and should both be visible. Historical AI Album reverse-geocoded location text and remote semantic caches are excluded from PreCheck authority even when they exist in the fixture; a new confirmed PreCheck observation may independently provide equivalent candidate evidence.
 
 ## Working Run, interruption, reuse, and sealing
 
@@ -686,7 +686,7 @@ Human approval of this reference should permit later contract design to require 
 - Coverage Relationships with covered sets, evidence roles, exclusions, and expansion paths;
 - Evidence Sufficiency, residual uncertainty, blockers, and known Reopen Signals;
 - separate coverage, readiness, and integrity axes;
-- local-resource and external-effect facts sufficient to support the offline and source-read-only boundary;
+- local-resource and external-effect facts sufficient to support the source-read-only boundary and either a local-only run or explicitly confirmed coordinate enrichment;
 - Working Run versus sealed-result lifecycle, resumability, localized failure, incremental reuse, and immutable replacement semantics;
 - deterministic review checks plus a regenerable human/Plan review projection.
 

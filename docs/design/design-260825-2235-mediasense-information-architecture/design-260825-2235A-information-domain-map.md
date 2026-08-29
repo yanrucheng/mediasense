@@ -146,7 +146,7 @@ These meanings attach to the information they qualify; they are not general-purp
 
 For a PreCheck Result, an interrupted Working Run is not an immutable result. A Result separately expresses complete or explicitly partial coverage, plan-ready or blocked readiness, and valid or invalid integrity. Partial does not automatically mean blocked, and complete does not automatically mean plan-ready. Continued work produces a new Result rather than modifying an old one.
 
-A PreCheck Result may claim `plan-ready` only when it can show, within the stated MediaSense control boundary, zero media upload, zero metadata, coordinate, or feature-artifact egress, zero remote-model and online-map calls, and zero billable requests. It must distinguish an offline configuration claim, enforced network policy, observed zero-request audit evidence, and external processes outside the proof boundary.
+A PreCheck Result may claim `plan-ready` only when it can show, within the stated MediaSense control boundary, source-read-only execution and an honest external-effect account. The default path proves zero media, metadata, coordinate, and feature-artifact egress, zero remote-model and online-map calls, and zero billable requests. The narrow optional exception is post-compression coordinate reverse geocoding: its exact frozen logical query set requires user confirmation, and the Result records the provider, actual requests, candidate status, and authorization boundary. This exception does not authorize media, feature, prompt, or general-metadata egress. Configuration intent, enforcement, observed effects, and processes outside the proof boundary remain distinct.
 
 ### Diagnostic responsibility
 

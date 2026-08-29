@@ -4,7 +4,7 @@ title: "MediaSense PreCheck Implementation Design"
 type: design
 status: active
 created: 2026-08-27
-updated: 2026-08-27
+updated: 2026-08-29
 timezone: "Asia/Shanghai"
 parent: ""
 depends-on:
@@ -53,7 +53,7 @@ The ordinary fixture verifier validates all listed checksums and expected struct
 3. Reuse and invalidation operate on the smallest semantically complete dependency set. No application-wide implementation version or Dataset-wide snapshot invalidates unrelated work.
 4. The first implementation is one local runtime with one internal structured store and one artifact store. The boundaries in this document are responsibility boundaries, not separate services.
 5. SQLite is the initial structured authority for working state and sealed projections. Its schema, indexes, journal mode, and migration mechanics are internal and never enter the cross-stage contract.
-6. PreCheck is local, offline, source-read-only, and non-billable. Stage ownership is determined by meaning, not by whether an algorithm happens to be local or remote.
+6. PreCheck is source-read-only, local-first, and cost-bounded. External Evidence producers are disabled by default and may run only after their exact pending work is known and the user confirms it. Stage ownership is determined by meaning, not by whether an algorithm happens to be local or remote.
 7. Multiple compression profiles may reuse the same valid lower-level work while producing different Evidence graphs and immutable Results.
 8. There is no general plugin system. Narrow internal strategies are introduced only where multiple implementations or real replacement pressure exist.
 9. The target architecture is designed as a whole and delivered through independently testable slices.
@@ -82,7 +82,7 @@ The normal route does not require one visual Evidence item per Source Item. A st
 
 ## Goals
 
-- Preserve the read-only source and produce no remote call, upload, online-map request, or billable request.
+- Preserve the read-only source and a zero-network default path; optional external Evidence work must pause before execution, disclose its exact logical request count, and require user confirmation.
 - Scale by reusing valid work across runs, profiles, and Results.
 - Support many-to-one, one-to-many, and multi-level Evidence without making clustering a permanent abstraction.
 - Make progress, reuse, invalidation, failures, resource consumption, and remaining work observable.
@@ -94,7 +94,7 @@ The normal route does not require one visual Evidence item per Source Item. A st
 ## Non-goals
 
 - Deciding the user's final organization, names, hierarchy, or semantic interpretation.
-- Sending media, metadata, coordinates, embeddings, or prompts to remote providers.
+- Sending media bytes, general metadata, embeddings, or prompts to remote providers, or sending coordinates outside the explicitly enabled, post-compression reverse-geocode path whose exact logical query set the user confirmed.
 - Applying filesystem moves, copies, links, or an organization tree to source media.
 - Preserving AI Album cache filenames, cache bitmap semantics, directory layout, thresholds, or model choices.
 - Building a distributed scheduler, cloud artifact service, dynamic plugin registry, or third-party plugin protocol without demonstrated need.
@@ -222,6 +222,13 @@ Enumeration is streamed into bounded durable batches. The runtime must not retai
 
 An ignore marker must not make discovered content vanish from accounting. By default it is an observed scope hint, not automatic authorization to exclude media from compression. Any policy that turns it into an exclusion decision must be explicit in the Working Run inputs and retain the marker as its basis. If policy prevents enumeration of a subtree, the run must expose that limit and cannot claim complete path-level coverage for the unenumerated subtree.
 
+The current implementation does not parse `.albumignore` contents and does not
+change producer or compression scope because a marker is present. It accounts
+for the marker and every reachable descendant, annotates their discovery basis
+with the observed marker, and applies normal type/scope rules. Any future
+exclusion behavior therefore requires an explicit Run policy and new tests; it
+cannot appear as a silent reinterpretation of today's marker observation.
+
 RAW/DNG and other original media are Source Items even when the current decoder cannot prepare visual Evidence. XMP, EXIF, JSON/XML sidecars, GPX, AppleDouble, LRF, M01/M02 variants, control markers, and similar objects are classified by their role and condition; filename proximity alone does not permanently demote an original.
 
 ### Stable-enough source recognition
@@ -236,6 +243,14 @@ Recognition uses an escalating strategy:
 - ambiguous matches remain distinct or unresolved rather than being silently unified.
 
 The chosen algorithms and thresholds are versioned internal producer inputs. They remain replaceable.
+
+The initial large-file candidate fingerprint preserves AI Album's bounded-read
+shape: read 4 KiB from the beginning, middle, and end. MediaSense intentionally
+does not preserve MD5 cache filenames or the path-only in-process memoization.
+It domain-separates the sampled offsets and file size, checks file observations
+before and after the read, and treats the result only as a change candidate.
+Artifact-producing Work still requires the stronger proof appropriate to the
+producer because no fixed sample can prove equality of all source bytes.
 
 ### Concurrent source change
 
@@ -327,7 +342,7 @@ Each producer declares:
 
 This is static internal wiring in the first implementation. There is no runtime plugin discovery, registry service, package negotiation, or public provider schema.
 
-Locality does not decide stage ownership. A future local model may create a source-derived, inspectable, provenance-bearing candidate observation in PreCheck. A deterministic rule that makes a final organization choice still belongs to Plan. Current PreCheck producers may not perform network access or billable work.
+Locality does not decide stage ownership. A future local model may create a source-derived, inspectable, provenance-bearing candidate observation in PreCheck. A deterministic rule that makes a final organization choice still belongs to Plan. Slice 1 producers perform no network or billable work; later external Evidence producers remain optional, user-confirmed, bounded, and observable.
 
 ## Resource-aware scheduling
 
@@ -339,13 +354,18 @@ Every ready Work Record submits a resource claim rather than directly creating u
 - GPU or accelerator memory and model residency;
 - ExifTool process lanes;
 - decoder and encoder lanes; and
-- network access, fixed to zero for the current PreCheck profile.
+- network access, fixed to zero for local-only profiles and bounded by the
+  confirmed pending work for an enabled external profile.
 
 Queues are bounded. Producers receive backpressure before materializing large input lists or decoded frames. Work is grouped by locality where beneficial, but batches remain interruptible and record item-level outcomes.
 
 Operator-facing configuration should expose intent and resource ceilings: total memory, temporary-space budget, CPU/GPU allowance, source-volume I/O pressure, enabled local producers, and optional advanced overrides. Producer batch sizes, semaphore counts, and worker counts default to measured adaptive choices and remain internal unless operators need them to resolve a real resource problem.
 
 AI Album's concrete values—ExifTool batch 200, frame embedding batch 8, per-stage parallelism 4/1/1/4, cluster naming 20, and a fixed 12 GB startup gate—are benchmark inputs, not defaults to inherit. In particular, one coarse memory gate is not runtime memory control, and creating all ExifTool batches or output operations at once is not acceptable backpressure.
+
+The Slice 2 executor keeps only a bounded window of calls materialized and admits each call against one shared in-process resource budget. CPU/process, source/workspace I/O, memory, temporary space, accelerator memory/model residency, ExifTool, decoder, encoder, and network lanes are independently bounded. One over-budget or failed call becomes its own outcome and does not discard successful siblings. These claims control execution only: they are not Work semantic dependencies, a persistent scheduler service, or a public registry.
+
+Manual rebuild uses an intersection of exact Work IDs, capabilities, and Dataset-relative source paths. It invalidates the matched Work and real transitive dependents while retaining history and immutable Artifact bytes; subsequent producer demand creates replacement Work. An actively leased Work is refused rather than being silently stolen, no empty selector can invalidate a whole run, and already sealed Results remain unchanged and readable.
 
 ## Evidence and compression
 
@@ -375,6 +395,16 @@ One Evidence item may be `derived_from` one Source Item while `represents` links
 ### One-to-many
 
 One video Source Item may produce several frame Evidence items. A low-cost contact sheet or selected frame may be entry Evidence and `expands_to` the additional frames and source. All frames remain derived material, not Source Items.
+
+The implemented local video path keeps probe facts as bounded inline Work output and publishes each requested frame as its own immutable Artifact. A contact sheet is separate aggregate Work whose direct inputs are the exact successful frame Works selected for the sheet. One decode failure therefore remains local to one timestamp, cannot turn a wildcard or partial frame set into success, and does not erase usable sibling frames.
+
+The Slice 2 sampling profile preserves AI Album c90's useful operational shape: roughly ten-second spacing, no more than twenty frames, and endpoint coverage. MediaSense intentionally changes the completion and reuse model rather than the capability: FFprobe/FFmpeg identity, source validity, timestamps, rendering profile, and direct upstream Work determine reuse; the legacy cache filename, wildcard existence check, and directory layout do not.
+
+Local embedding consumes an already-published high-resolution rendition or video frame and publishes one immutable float32 vector Artifact. The Work identity includes the exact visual input Work, source-content basis required for Artifact publication, model identity and pinned model revision, runtime versions, output dimensions, dtype, and normalization policy. The c90 ChineseCLIP path remains available through a local-only adapter, but model files are never downloaded implicitly. Embedding bytes remain internal until a later candidate producer turns them into an inspectable relation; an embedding Artifact is not promoted to Evidence merely because it exists.
+
+Local content-sensitivity analysis consumes the same visual Artifact boundary but emits bounded structured observations rather than another large Artifact. Each detector is independent Work, so NudeNet and the binary NSFW classifier can succeed, fail, or be replaced separately. Raw labels, scores, effective thresholds, detector identity, input Work, and completion or failure remain visible. This preserves c90's two-tier signals while intentionally removing the unsafe inference that an empty cached dictionary proves non-sensitive content; remote-routing policy remains outside PreCheck.
+
+The c90 ancestry shows that these models were made lazy, singleton-backed, and globally locked to control startup and concurrent model use, and that `cb16c2d` added fail-fast privacy mode after silent partial fallback proved ambiguous. Later privacy repair commits `b85aae2`, `e097c56`, and `eb9b132` are not ancestors of c90 and are retained only as separately labeled historical evidence, not as claims about the c90 production tree.
 
 ### Frontier construction
 
@@ -436,6 +466,8 @@ created -> discovering -> preparing -> assembling -> validating -> sealing -> se
 
 Cancellation or terminal failure ends a Working Run without publishing a Result. An explicitly requested partial Result may still be sealed if its boundary, omissions, navigation paths, readiness, and qualifications satisfy the contract. A merely interrupted run is never presented as a partial Result.
 
+When a bounded optional resource action requires user confirmation, the runtime first freezes the exact pending work set and automatically enters `paused`. Status reports the capability and logical request count. Resuming with `proceed` authorizes only that frozen work; resuming with `skip_optional_work` records the omission and continues without it. If the pending set changes, the runtime pauses again rather than widening the earlier confirmation. This is a general Working Run checkpoint, not a geography-specific stage or entity.
+
 ### Work execution states
 
 A Work Record distinguishes at least pending, leased/running, succeeded, retryable failure, terminal failure, and invalidated outcomes. Exact storage enums remain internal.
@@ -459,7 +491,7 @@ A Work Record distinguishes at least pending, leased/running, succeeded, retryab
 | Producer or effective parameter change | Create new Work identities only for affected computations and descendants. |
 | Seal interruption | Publish no Result until the seal transaction and integrity record are complete. |
 
-Retries are producer-specific and bounded. Permanent decode failure is not retried like a transient filesystem error. Current PreCheck has no remote rate-limit path; AI Album's network retry behavior is retained only as operational experience for Plan-owned capabilities.
+Retries are producer-specific and bounded. Permanent decode failure is not retried like a transient filesystem error. External producers must count actual provider requests, fallback, and retries against their confirmed work boundary; retry behavior never silently widens authorization.
 
 ## Filesystem capability boundary
 
@@ -491,19 +523,19 @@ Sealing is a validation and publication boundary, not a directory rename.
 - all five relationship sets;
 - the declared compression purpose and effective profile;
 - material observations, bases, and qualifications;
-- source-read-only, offline, cost, and integrity evidence; and
+- source-read-only, external-effect, cost, and integrity evidence; and
 - the independently evaluated coverage, readiness, and integrity axes.
 
 ### Seal gates
 
-1. Every discovered in-boundary Source Item has exactly one `accounts_for` scope and condition.
+1. Every discovered in-boundary Source Item has exactly one `accounts_for` scope and condition; a known unenumerated region makes coverage `partial` and remains visible through a qualification.
 2. Every accounted Source Item satisfies normal navigation closure or an explicit exception route.
 3. Every referenced target exists within the same Result and every contract-required traversal direction can be answered from the sealed relationships.
 4. Every `represents` claim has an inspectable basis and any material compression loss is visible.
 5. `derived_from` matches actual production inputs and is not substituted for representation.
 6. Every retained Artifact passes integrity verification and remains pinned for the Result lifetime.
 7. Dataset context and Source Item locators are frozen as observed for this Result.
-8. Policy, enforcement, and observed facts establish the declared source-read-only, offline, and non-billable boundary.
+8. Policy, confirmation, enforcement, and observed facts establish the declared source-read-only and external-effect boundary. The default path seals a local-only Result with zero external calls. The sole current exception is post-compression coordinate reverse geocoding: the Run freezes and deduplicates the exact pending set, pauses for user confirmation, and records authorization plus actual provider effects in the Result.
 9. Status axes are evaluated independently and qualifications explain any partial or blocked state.
 10. The read projection passes contract conformance and traversal closure checks.
 
@@ -532,16 +564,16 @@ The read adapter accepts only the active contract and queries the sealed project
 
 Mutable Work Records, attempt history, dependency keys, internal source-recognition evidence, database row IDs, cache locations, and garbage-collection state are never returned. Query indexes may be rebuilt without changing responses.
 
-## Source-read-only, offline, and cost proof
+## Source-read-only, external-effect, and cost proof
 
 The run records four separate levels:
 
-1. **Policy:** network, upload, online maps, remote models, and billable calls are forbidden.
-2. **Construction:** enabled producers have no remote provider path and receive no API credentials.
-3. **Enforcement:** the strongest available process, container, firewall, filesystem, or mount restriction is recorded.
-4. **Observation:** network attempts, external requests, billable calls, and source writes observed within the declared boundary are counted.
+1. **Policy:** source writes are forbidden; external producers are disabled unless the user confirms their frozen pending work.
+2. **Construction:** each producer declares whether it has an external path and receives credentials only within the confirmed run boundary.
+3. **Enforcement:** source-read-only controls and the strongest available request, provider, and resource limits are recorded.
+4. **Observation:** source writes, logical external work, provider requests, fallback, retries, and billable calls observed within the declared boundary are counted.
 
-Configuration intent alone is insufficient. A Result qualification states any enforcement limitation that prevents a stronger claim.
+Configuration intent alone is insufficient. A Result qualification states any enforcement limitation that prevents a stronger claim. Local-only Results state zero external work; externally enriched Results retain the confirmed logical request count and actual effects.
 
 PreCheck may use local models when their output is source-derived, inspectable candidate evidence with provenance and uncertainty. It may not convert such observations into final names or organization decisions.
 
@@ -571,7 +603,7 @@ The operator must be able to inspect:
 - CPU, memory, GPU, decoder, ExifTool, and per-volume I/O pressure;
 - current bottleneck, estimated remaining work where defensible, and last durable checkpoint;
 - compression frontier size, represented population, uncovered normal paths, exception counts, and material qualifications; and
-- observed source writes, network attempts, remote calls, and billable cost, expected to remain zero.
+- observed source writes, network attempts, provider calls, retry/fallback calls, and billable cost, compared with the confirmed boundary and expected to remain zero for local-only runs.
 
 Detailed events belong to the mutable operational record. A sealed Result keeps only the proof and qualifications needed for downstream trust.
 
@@ -596,12 +628,13 @@ The table maps every capability in the migration ledger to a target responsibili
 | Sensitivity-informed VLM routing | Plan | `intentionally_changed` | Plan owns whether and how a signal affects local/remote inspection, authorization, and user interaction. |
 | Date/location/content clustering | PreCheck and Plan | `not_comparable` as final truth | PreCheck may produce candidates; Plan owns final semantic grouping. |
 | Per-representative caption | Plan by default; PreCheck only for qualifying candidate observers | `intentionally_changed` | Do not bulk-call remote models. A future local candidate observation is allowed only under PreCheck semantics. |
-| Visual location inference | Plan | `intentionally_changed` | Keep observations and candidates distinct from final place interpretation; no online maps in PreCheck. |
+| Coordinate reverse geocoding and nearby-place lookup | PreCheck | `preserved` capability, `intentionally_changed` mechanism | Run only after location-relevant compression fixes the logical query set; automatically pause for user confirmation; bind reuse to the coordinate, provider profile, and preceding route-observation Work that carries c90-style provider/language continuity; retain datum conversion and provenance; and count actual provider calls. |
+| Visual location inference | Plan | `intentionally_changed` | Keep visual inference and final place interpretation in Plan; it does not substitute for coordinate-based PreCheck Evidence. |
 | Per-item title and cluster mode | Plan | `intentionally_changed` | Name the whole organization coherently after evidence review rather than propagating representative titles. |
 | Direct output-tree construction | Plan then Apply | `intentionally_changed` | Freeze intent first; perform no organizational filesystem effect in PreCheck. |
 | Thumbnail/copy/link/move modes | PreCheck Evidence or Apply | `preserved` with stronger boundary | PreCheck may materialize Evidence copies; Apply owns authorized organization effects and receipts. |
 | Per-stage cache | PreCheck | `preserved` capability, `intentionally_changed` mechanism | Replace the imperative eight-bit bitmap with dependency-aware reuse and targeted rebuild selectors. |
-| Usage monitoring | All stages | `intentionally_changed` | Attribute relevant local cost and work; PreCheck proves zero remote and billable use. |
+| Usage monitoring | All stages | `intentionally_changed` | Attribute relevant local cost and work; PreCheck proves zero external use for local-only runs and reports confirmed versus actual effects for enabled external producers. |
 
 Additional operating lessons retained from code and tests include configuration overrides, collision detection, cache corruption recovery, bounded retries, progress display, timing, Docker parity, and memory awareness. Their historical implementations and constants are not copied.
 
@@ -711,7 +744,7 @@ Deliver:
 - immutable Artifact publication and integrity checks;
 - a conservative local rendition path;
 - an end-to-end sealed Result and conforming `mediasense.precheck.read` implementation; and
-- source-read-only and offline enforcement tests.
+- source-read-only and zero-external-effect default-path tests.
 
 The slice may use a deliberately simple frontier, but it must reduce default reading for its test purpose and satisfy navigation or exception closure.
 
@@ -726,6 +759,32 @@ Add:
 - fine-grained dependency invalidation and manual rebuild selectors; and
 - per-resource scheduling and backpressure.
 
+The first Slice 2 increment implements local metadata, capture-time, and raw-GPS
+observations as ordinary Work with bounded inline output. It preserves c90's
+ExifTool group/numeric mode, effective tag priority, and useful same-stem
+sidecar input while making every selected field traceable to its exact Source
+Item and tag. Missing, invalid, and extraction-failure states remain distinct;
+no missing value becomes epoch zero. Reverse geocoding is not metadata
+extraction and remains a separately authorized Evidence producer. A same-stem
+RAW file remains an independently accounted Source Item rather than silently
+becoming the factual authority for a JPEG's fields; their association can be
+expressed later as a candidate relation.
+
+The first GPX increment does not create a Dataset-level track registry. GPX
+adoption is an explicit producer input. Matching depends on the upstream
+capture-time Work, every adopted GPX Source Item, and the effective time-error
+and interpolation profile. It preserves track-segment boundaries and reports
+nearest-point or within-segment interpolation provenance. A malformed track is
+a visible local limitation when other adopted tracks remain useful; it does not
+erase the successful candidate or silently disappear.
+
+Ordinary and high-resolution still-image renditions remain two effective
+profiles of the same producer, not two services or registries. The ordinary
+640-pixel long-edge rendition is eligible for the default frontier; the
+1920-pixel high-resolution rendition is reachable through `expands_to`. Both
+profiles preserve aspect ratio. This intentionally avoids c90's high-resolution
+`keep_original_ratio=False` distortion while preserving its two review tiers.
+
 ### Slice 3 — Adaptive compression and multiple Results
 
 Add:
@@ -735,6 +794,44 @@ Add:
 - frontier budget and qualification evaluation;
 - the 500 → 3 → 200 repeated-compression acceptance scenario; and
 - Result comparison metrics without exposing internal work.
+
+The first Slice 3 increment preserves c90's same-directory stem, AppleDouble,
+M01/M02, adjacent-time chaining, and media-extension representative candidates,
+but makes the result a dependency-complete Work observation instead of process-
+local union-find state. Deterministic ordering replaces input-order accidents;
+missing time does not become epoch zero; every candidate reports its total span,
+boundary paths, and a qualification when transitive adjacent links exceed the
+configured per-edge gap.
+
+The Hong Kong manifest comparison reproduces 167 of 168 historical valid-media
+memberships exactly. Historical bundle 114 is intentionally split: its damaged
+original MP4 has no usable capture time in the current fixture, so MediaSense
+keeps it as an explicit singleton instead of borrowing a filename guess,
+epoch-zero value, or historical cache fact to recreate the old union.
+
+Adaptive frontier construction consumes explicit visual, metadata, GPX,
+embedding, and optional bundle Work. It ranks adjacent temporal, WGS84 spatial,
+and cosine-content boundaries under a declared target, reuses c90's top-half
+average-similarity representative rule, and retains boundary, outlier, conflict,
+and limited-evidence roles. This is intentionally not the final organization:
+the Result exposes the claim through existing observations, `represents`, and
+`expands_to`; Plan remains free to challenge it. No cluster service, public
+candidate relationship type, or naming entity is introduced.
+
+Each target produces new group Work and a new immutable Result while reusing
+unchanged lower-level Work and Artifacts. An opt-in generated acceptance seals
+the required 500-entry, 3-entry, and 200-entry frontiers in sequence and proves
+that the first Result bytes do not change. Seal validation now rechecks every
+selected inline supporting Work at both the pre-publication and final
+registration boundaries, not only visible Artifact-producing Work.
+
+Result comparison reads only the two sealed projections. It reports accounted
+source-boundary changes, entry counts and compression ratios, shared Artifact
+count, and identical representation-group count; it does not expose Work IDs,
+cache keys, internal thresholds, or SQLite layout. Video frames use the same
+candidate boundary: c90's top-half average-similarity rule is preserved as
+explicit key-frame Work, and the selected frame can be frontier Evidence when
+no contact sheet is requested.
 
 ### Slice 4 — Production hardening and final migration gate
 
@@ -746,6 +843,78 @@ Add:
 - generated hundred-thousand-item scale profiles and a read-only 1.5 TB milestone run;
 - Hong Kong fixture comparison and capability-ledger status updates; and
 - operational runbooks after runtime behavior is proven.
+
+The implemented Run control surface now persists `start`, `status`, `pause`,
+`resume`, and `cancel`, binds public progress to one accounting Run, and
+publishes completion only through an internally sealed and re-verified Result.
+`start` persists the Run, source binding, and effective execution configuration
+and returns `run_ref` before discovery or producer execution. The host invokes
+the private `advance(run_ref)` coordinator on a worker; `resume` likewise only
+changes durable control state, after which the host reschedules that worker.
+This keeps polling, pause, and cancel available throughout a multi-hour Run
+without creating a sixth public action, scheduler service, or job entity.
+Result construction or workspace-write failure therefore becomes an explicit
+terminal or resumable Run state; `seal` is not a caller action. Optional
+post-compression reverse geocoding freezes and deduplicates the selected
+coordinate set first, reports the exact number of pending logical queries, and
+automatically pauses the Run. Only a matching `proceed` decision permits
+provider access; disablement, skipping, cancellation, and reusable completed
+Work issue no new requests. API credentials remain constructor-only secrets and
+are not part of Work identity, output, Result provenance, or persisted Run
+state.
+
+Automatic publication derives one private idempotency reference from the Run.
+If a process exits after immutable bytes are linked but before registration, a
+retry adopts those bytes only when their complete canonical package matches the
+same draft; if registration succeeded before Run completion, the retry reuses
+that one Result. Neither window can create a second successful Result for the
+same Run.
+
+Workspace maintenance uses the existing Work, Artifact, Result, and Run
+authorities rather than a separate manifest. Sealed Results and active Runs pin
+reachable Work; collection only quarantines expired unpublished files and
+unreferenced invalidated Work/Artifact pairs. Matching quarantined bytes can
+repair a missing Artifact, while corruption cannot become a cache hit. The
+current generated profiles exercise 100,000 streamed paths with bounded Python
+memory, a sparse 1.5 TB constant-I/O candidate fingerprint, and repeated
+`500 → 3 → 200` immutable Results. Capability tests distinguish same-volume,
+cross-volume, and unavailable sources, verify SQLite locking and workspace
+replacement observations, and preserve distinct Source Items while reporting
+Unicode NFC path collisions.
+
+Operationally, start a Run with external producers disabled, schedule its
+private worker, observe progress through `status`, and use `pause`, `resume`, or
+`cancel` without discarding completed reusable Work. After `resume`, the host
+reschedules the same durable Run. If an enabled external producer freezes pending work,
+the Run reports one confirmation with the exact logical-query count and remains
+paused until the operator chooses `proceed` or `skip_optional_work`. A blocked
+workspace is resumed only after its stated `resume_when` condition is satisfied.
+Successful completion returns one exact `result_ref`; consumers then use only
+`mediasense.precheck.read`. Maintenance first audits, then quarantines or
+collects only unpinned state; sealed Results are never rewritten.
+
+### Integration blockers and production certification
+
+The following are release blockers for entering three-stage integration:
+
+- a public Run-driven chain reaches a sealed Result without caller-side producer
+  assembly;
+- accounting/navigation closure, Result integrity, Read/Run conformance, and
+  source-verification projection pass;
+- pause, resume, cancel, localized failure, restart, seal crash recovery,
+  cross-Run reuse, and 500 → 3 → 200 Results are exercised;
+- the default path proves zero external calls and enabled fake geocoding proves
+  exact confirmation and request accounting; and
+- OpenSpec strict validation, the fast/contract/scale/fixture suites, Ruff,
+  format, lock, diff, and boundary scans pass.
+
+The following remain explicitly later production certification, not hidden
+integration blockers: real pinned-model quality and throughput, the wider
+RAW/HEIF/video codec and HDR matrix, non-POSIX and removable-volume identity,
+long process/GPU/concurrent-maintenance soak, live-provider quota/retention and
+switching-quality checks, and a controlled read-only run over a real 1.5 TB
+source. Failure to complete those measurements limits production claims but
+does not erase the verified local integration contract.
 
 ## Verification strategy
 
@@ -806,16 +975,16 @@ Add:
 ## Known risks and explicit follow-up decisions
 
 - Slice 1 now keeps source attachment on each Working Run rather than on Dataset identity. It audits verified root relocation and operator-confirmed rebinding, and isolates unverified rebinding with a new reuse domain. Before removable-volume production use, replace the current session-local device/inode evidence with the strongest supported platform volume identity and validate it on the filesystem matrix.
-- The current implementation exposes discovery accounting completion separately from Work Record completion; the full `created` through `sealed` orchestration state machine is not implemented yet and must be introduced before Result sealing.
-- Work Records currently commit only bounded inline structured results. Artifact-backed success remains unavailable until immutable publication and integrity verification are implemented.
-- A complete scan must retain a run-owned removal fact before deleting an absent path from the current discovery view. Artifact or Evidence dependency reuse cannot begin until removal propagation and tombstone behavior have characterization tests.
-- A fast sampled fingerprint is only candidate evidence. Any reuse whose false hit could affect Artifact semantics or Result integrity requires stronger producer-appropriate verification, including a negative test for an unsampled middle-byte change with preserved size and timestamps.
+- The public Run surface now owns durable control and verified completion, while sealing remains an internal automatic transition rather than a public action. `start` and `resume` return before long work; an application-level worker calls the private coordinator without becoming a second authority.
+- Artifact-backed Work success has immutable publication, integrity verification, ENOSPC fault coverage, Result/active-Run retention pins, conservative reachability collection, quarantine, and integrity-matching restoration. Long-duration retention and concurrent-maintenance soak tests remain operational follow-up.
+- Complete scans retain run-owned removal facts and propagate source changes, removals, and unavailability to direct and transitive Work dependencies. Future population-wide Work must declare its exact membership input before it can claim localized invalidation.
+- The fast sampled fingerprint is candidate evidence only. Artifact-producing Work uses a full SHA-256 source-content dependency, and a negative test covers an unsampled mutation with preserved size and timestamps. The remaining risk is the measured I/O cost of this stronger proof, not an unresolved validity rule.
 - `.albumignore` is an observed hint by default. Compression scope changes require an explicit run policy or operator decision; marker presence alone must not silently suppress Evidence or Source Item accounting.
-- Source-read-only and offline claims must state the evidence level actually achieved. Unit tests establish only observed behavior on their exercised paths; sealing requires the policy, construction, enforcement, and observation evidence described above.
-- Source identity evidence must balance false reuse against the cost of full hashing; benchmarks and corruption tests will choose the first implementation, not the public contract.
+- Source-read-only and external-effect claims must state the evidence level actually achieved. Unit tests establish only observed behavior on their exercised paths; sealing requires the policy, construction, enforcement, and observation evidence described above.
+- Source identity evidence must balance false reuse against the cost of full hashing. The first implementation uses the legacy bounded-read candidate fingerprint broadly and full hashing only at the Artifact-validity boundary; benchmarks may replace either internal method only with evidence of equivalent semantics.
 - Compression quality has no single objective metric. Frontier size, coverage, variation, user effort, and reopen frequency must be evaluated together.
 - Some compression methods have population-wide dependencies. The implementation must report broad invalidation honestly rather than claiming locality it cannot prove.
-- SQLite durability and locking vary by filesystem. Unsupported workspace capabilities require a local supported workspace or a future storage adapter, not silent degradation.
+- SQLite durability and locking vary by filesystem. The current probe refuses unverified locking and records replace, case, and cross-volume observations; additional removable-volume and non-POSIX certification remains platform work rather than permission to degrade silently.
 - Local models can be large and nondeterministic across hardware or library versions. Producer identity and relevant environment capture must be empirically sufficient without falling back to a global version stamp.
 - A stronger future model must be able to replace extraction or compression strategies without changing Dataset, Source Item, Evidence, Result, or the read contract.
 

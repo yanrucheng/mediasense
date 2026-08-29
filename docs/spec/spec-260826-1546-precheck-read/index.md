@@ -4,7 +4,7 @@ title: "MediaSense PreCheck Read Contract"
 type: spec
 status: active
 created: 2026-08-26
-updated: 2026-08-27
+updated: 2026-08-29
 timezone: "Asia/Shanghai"
 parent: "index-spec"
 depends-on:
@@ -54,16 +54,41 @@ Every request includes:
 
 | Kind | Required | Optional when meaningful |
 | --- | --- | --- |
-| Result | `ref`, `dataset_ref`, `coverage`, `readiness`, `integrity` | `qualifications` |
+| Result | `ref`, `dataset_ref`, `coverage`, `readiness`, `integrity`, `execution_boundary` | `qualifications` |
 | Dataset | `ref` | `name`, attributed `context`, `qualifications` |
 | Source Item | `ref`, `locator` | `observations`, `qualifications` |
 | Evidence | `ref`, `access` | `observations`, `qualifications` |
 
 `kind` remains the discriminator for `inspect` targets and returned object views, where several entity types share the same field position. Relationship origins and targets omit it when the selected relation and direction already determine the type; only `derived_from` and `expands_to` members retain a typed reference because either a Source Item or Evidence may be returned.
 
-`dataset_ref` is a required Result field, not a duplicated relationship. Dataset identity may be referenced across Results. A Dataset may expose a mutable current-discovery view elsewhere, but each Result accounts immutably for its own Source Items. Dataset context returned through this Tool is the immutable view bound to that Result; later context changes affect only later Results. Source Item references, Evidence references, and cursors are scoped to that exact Result.
+`dataset_ref` is a required Result field, not a duplicated relationship. Dataset identity may be referenced across Results. Each Source Item locator carries its own `source_root_ref` and a path relative to that root. This supports Results that account for one or multiple roots without exposing an absolute path or turning Dataset identity into a location; an explicitly unverified rebind receives a different root reference. A Dataset may expose a mutable current-discovery view elsewhere, but each Result accounts immutably for its own Source Items. Dataset context returned through this Tool is the immutable view bound to that Result; later context changes affect only later Results. Source Item references, Evidence references, and cursors are scoped to that exact Result.
 
-A Source Item reference is stable within its Result. The contract does not require permanent identity across Results. Implementations may recognize moved but unchanged media and reuse valid work without elevating a particular fingerprint or matching method into the interface.
+`execution_boundary` is part of the Result view because consumers cannot inspect
+private package fields. A local-only Result reports zero network and billable
+effects. If the confirmed post-compression coordinate exception ran, this view
+reports the authorization records, exact logical-query count, actual provider
+request count, providers, and known or unknown billable-call count. It never
+authorizes media, rendition, embedding, prompt, or general-metadata egress.
+
+A Source Item reference is stable within its Result. Its runtime locator combines an opaque `source_root_ref` with a root-relative path; neither Dataset identity nor Source Item identity is an absolute path. The contract does not require permanent identity across Results. Implementations may recognize moved but unchanged media and reuse valid work without elevating a particular fingerprint or matching method into identity.
+
+An eligible Source Item may carry a `source_content_verification` observation.
+When available, its value contains a named `profile`, opaque verification
+`value`, exact `size_bytes`, `observed_at`, and producer identity. The first
+supported profile is `sha256-full-v1`, whose value is prefixed `sha256:`. The
+profile is replaceable; it is neither the Source Item identity nor a permanent
+promise that SHA-256 is the only supported method. PreCheck revalidates every
+included observation at seal. Source Items that are excluded, unsupported,
+invalid, erroneous, unresolved, or not selected for exact proof need not carry
+one; their accounting must still remain explicit.
+
+Plan freezes only the exact `result_ref` and selected `source_item_ref` values,
+not a copied digest. Apply resolves those references through this Tool, safely
+binds the locator's `source_root_ref`, and verifies current bytes immediately before each
+authorized file operation. An unknown profile, absent observation, unsafe root
+binding, size mismatch, or verification mismatch blocks that operation. This
+contract does not create a Dataset-wide snapshot, permanent Source identity, or
+independent source-verification service.
 
 Evidence access may point to a local artifact, directly reuse a Source Item, or contain inline structured content. Evidence is not source truth: it is a compressed, inspectable basis whose limits remain visible.
 
