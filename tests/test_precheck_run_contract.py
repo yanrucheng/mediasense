@@ -75,7 +75,9 @@ def _accounting_views(result_ref: str) -> tuple[dict, dict]:
     return accounting, attention
 
 
-def _assert_progress_relations(progress: dict, *, accounting_total: int | None = None) -> None:
+def _assert_progress_relations(
+    progress: dict, *, accounting_total: int | None = None
+) -> None:
     accounted = progress["accounted"]
     buckets = [progress["usable"], progress["exceptional"], progress["unresolved"]]
     known_buckets = [value for value in buckets if isinstance(value, int)]
@@ -180,6 +182,49 @@ def test_control_actions_are_acknowledgements_not_completion_claims() -> None:
         assert response["outcome"] == "accepted"
         assert response["target_state"] == expected[response["action"]]
         assert "state" not in response
+
+
+def test_confirmation_pause_reuses_resume_without_adding_an_action() -> None:
+    input_validator, output_validator = _validators()
+    input_validator.validate(
+        {
+            "action": "resume",
+            "run_ref": "precheck-run:test",
+            "decision": "proceed",
+        }
+    )
+    input_validator.validate(
+        {
+            "action": "resume",
+            "run_ref": "precheck-run:test",
+            "decision": "skip_optional_work",
+        }
+    )
+    with pytest.raises(ValidationError):
+        input_validator.validate(
+            {
+                "action": "resume",
+                "run_ref": "precheck-run:test",
+                "decision": "authorize_more",
+            }
+        )
+
+    paused = deepcopy(_mock()["exchanges"][3]["response"])
+    paused["reason"] = {
+        "code": "confirmation_required",
+        "message": "237 reverse-geocode lookups are ready.",
+        "resume_when": "The caller chooses proceed or skip_optional_work.",
+    }
+    paused["confirmation"] = {
+        "summary": "Reverse-geocode the frozen representative set.",
+        "quantity": 237,
+        "unit": "logical_queries",
+        "skip_allowed": True,
+    }
+    output_validator.validate(paused)
+    paused.pop("confirmation")
+    with pytest.raises(ValidationError):
+        output_validator.validate(paused)
 
 
 def test_status_state_rules_and_allowed_actions_are_exact() -> None:

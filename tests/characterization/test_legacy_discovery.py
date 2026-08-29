@@ -1,18 +1,23 @@
-"""Discovery characterization derived from AI Album commit c90aa8f.
+"""Discovery characterization derived from AI Album production history.
 
 The legacy source of truth for these cases is ``src/media_libs.py:97-223`` and
 ``src/media_utils.py:28-60`` at commit
 ``c90aa8f04fd0d3348284e0ad19e18462987b1af2``. The tests retain useful filename
 association behavior while making MediaSense's intentional scope differences
-explicit. They do not import or execute the AI Album repository.
+explicit. Fast hashing was introduced by commit ``d10f42a`` and remained in c90
+through ``jinnang.MyPath.hash``. These tests do not import or execute either
+legacy repository.
 """
 
 from __future__ import annotations
 
+import hashlib
+import os
 from pathlib import Path
 
 import pytest
 
+from mediasense.precheck import _fingerprint
 from mediasense.precheck.discovery import (
     DiscoveredSource,
     DiscoveryIssue,
@@ -25,10 +30,64 @@ from mediasense.precheck.discovery import (
 )
 
 
+_LEGACY_HASH_CHUNK_BYTES = 4 * 1024
+
+
+def _legacy_partial_file_hash(path: Path) -> str:
+    """Characterize AI Album d10f42a/Jinnang's bounded-read hash."""
+
+    digest = hashlib.md5()  # noqa: S324 - exact legacy characterization
+    size = path.stat().st_size
+    with path.open("rb") as source:
+        if size <= _LEGACY_HASH_CHUNK_BYTES * 3:
+            digest.update(source.read())
+        else:
+            for offset in (0, size // 2, size - _LEGACY_HASH_CHUNK_BYTES):
+                source.seek(offset)
+                digest.update(source.read(_LEGACY_HASH_CHUNK_BYTES))
+    return digest.hexdigest()
+
+
 def _items(root: Path) -> list[DiscoveredSource]:
     events = list(discover_source_events(root))
     assert not [event for event in events if isinstance(event, DiscoveryIssue)]
     return [event for event in events if isinstance(event, DiscoveredSource)]
+
+
+@pytest.mark.characterization
+def test_fast_fingerprint_preserves_legacy_bounded_read_shape(tmp_path: Path) -> None:
+    media = tmp_path / "large.MP4"
+    media.write_bytes(b"A" * 200_000)
+    original_stat = media.stat()
+    legacy_before = _legacy_partial_file_hash(media)
+    current_before = _fingerprint.hash_regular_file(media, original_stat)
+
+    with media.open("r+b") as stream:
+        stream.seek(80_000)  # Outside the legacy beginning/middle/end samples.
+        stream.write(b"B")
+    os.utime(media, ns=(original_stat.st_atime_ns, original_stat.st_mtime_ns))
+
+    assert _legacy_partial_file_hash(media) == legacy_before
+    assert _fingerprint.hash_regular_file(media, media.stat()) == current_before
+
+
+@pytest.mark.characterization
+@pytest.mark.parametrize("offset", [0, 100_000, 199_999])
+def test_fast_fingerprint_observes_each_legacy_sample_region(
+    tmp_path: Path,
+    offset: int,
+) -> None:
+    media = tmp_path / "large.MP4"
+    media.write_bytes(b"A" * 200_000)
+    legacy_before = _legacy_partial_file_hash(media)
+    current_before = _fingerprint.hash_regular_file(media, media.stat())
+
+    with media.open("r+b") as stream:
+        stream.seek(offset)
+        stream.write(b"B")
+
+    assert _legacy_partial_file_hash(media) != legacy_before
+    assert _fingerprint.hash_regular_file(media, media.stat()) != current_before
 
 
 @pytest.mark.characterization

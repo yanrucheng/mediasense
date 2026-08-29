@@ -62,10 +62,14 @@ def _canonical_strings_json(value) -> str:
     if isinstance(value, list):
         return "[" + ",".join(_canonical_strings_json(item) for item in value) + "]"
     if isinstance(value, dict):
-        return "{" + ",".join(
-            _canonical_strings_json(key) + ":" + _canonical_strings_json(value[key])
-            for key in sorted(value)
-        ) + "}"
+        return (
+            "{"
+            + ",".join(
+                _canonical_strings_json(key) + ":" + _canonical_strings_json(value[key])
+                for key in sorted(value)
+            )
+            + "}"
+        )
     raise ValueError("profile permits only objects, arrays, and strings")
 
 
@@ -176,17 +180,22 @@ def test_preferences_are_preserved_in_the_working_state() -> None:
     create = _exchanges("create")[0]
     update = _exchanges("update")[0]
     inspect = _exchanges("inspect")[0]
-    assert create["request"]["organization_preferences"] == create["response"][
-        "organization_preferences"
-    ]
+    assert (
+        create["request"]["organization_preferences"]
+        == create["response"]["organization_preferences"]
+    )
     assert "organization_preferences" not in update["request"]
-    assert _updated_preferences(
-        create["response"]["organization_preferences"],
-        update["request"],
-    ) == create["response"]["organization_preferences"]
-    assert create["response"]["organization_preferences"] == inspect["response"][
-        "sections"
-    ]["preferences"]
+    assert (
+        _updated_preferences(
+            create["response"]["organization_preferences"],
+            update["request"],
+        )
+        == create["response"]["organization_preferences"]
+    )
+    assert (
+        create["response"]["organization_preferences"]
+        == inspect["response"]["sections"]["preferences"]
+    )
 
 
 def test_preference_object_replaces_and_empty_object_clears_snapshot() -> None:
@@ -264,7 +273,9 @@ def test_inspect_without_revision_returns_an_exact_revision() -> None:
 
 def test_paged_content_keeps_one_revision_and_global_identity() -> None:
     complete = _exchanges("inspect")[0]["response"]
-    pages = [exchange for exchange in _exchanges("inspect") if "page" in exchange["request"]]
+    pages = [
+        exchange for exchange in _exchanges("inspect") if "page" in exchange["request"]
+    ]
     assert len(pages) == 2
     for exchange in _exchanges("inspect"):
         response = exchange["response"]
@@ -276,7 +287,10 @@ def test_paged_content_keeps_one_revision_and_global_identity() -> None:
         for item in exchange["response"]["sections"]["content"]["items"]
     ]
     assert returned_groups == expected_groups
-    assert pages[0]["response"]["sections"]["content"]["page"]["next_cursor"] == pages[1]["request"]["page"]["cursor"]
+    assert (
+        pages[0]["response"]["sections"]["content"]["page"]["next_cursor"]
+        == pages[1]["request"]["page"]["cursor"]
+    )
     identities = {
         complete["candidate_content_identity"],
         *(exchange["response"]["candidate_content_identity"] for exchange in pages),
@@ -290,7 +304,9 @@ def test_paged_content_keeps_one_revision_and_global_identity() -> None:
 
 
 def test_page_from_another_revision_is_detectably_invalid() -> None:
-    pages = [exchange for exchange in _exchanges("inspect") if "page" in exchange["request"]]
+    pages = [
+        exchange for exchange in _exchanges("inspect") if "page" in exchange["request"]
+    ]
     second = deepcopy(pages[1])
     second["response"]["revision"] = "work-revision:other"
     expected_revision = pages[0]["response"]["revision"]
@@ -318,9 +334,9 @@ def test_seal_binds_trusted_context_to_exact_candidate() -> None:
     _assert_confirmation(exchange)
     context = exchange["context"]["human_confirmation"]
     response = exchange["response"]
-    assert context["content_identity"] == exchange["request"][
-        "candidate_content_identity"
-    ]
+    assert (
+        context["content_identity"] == exchange["request"]["candidate_content_identity"]
+    )
     assert response["content_identity"] == context["content_identity"]
     assert response["frozen_plan"]["seal"]["final_confirmation"] == {
         "confirmed_content_identity": context["content_identity"],

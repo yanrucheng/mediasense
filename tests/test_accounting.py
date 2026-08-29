@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import os
+import sqlite3
 import socket
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -16,6 +18,8 @@ from mediasense.precheck.accounting import (
     SourceRebindRequired,
     WorkingRunStatus,
 )
+from mediasense.precheck.source_attachment import UnsafeWorkspace
+from mediasense.precheck import source_attachment
 
 
 def _complete_run(
@@ -26,6 +30,124 @@ def _complete_run(
     store.register_dataset(dataset_id)
     run_id = store.start_or_resume_run(dataset_id, root)
     return store.process_run(run_id, batch_size=2)
+
+
+@pytest.mark.parametrize("old_version", [11, 12, 13, 14])
+def test_supported_schema_is_upgraded_without_discarding_existing_state(
+    tmp_path: Path,
+    old_version: int,
+) -> None:
+    database = tmp_path / "working.sqlite3"
+    store = AccountingStore(database)
+    store.register_dataset("dataset-a")
+    with sqlite3.connect(database) as connection:
+        connection.execute("DROP INDEX run_items_normalized_path")
+        connection.execute("ALTER TABLE run_items DROP COLUMN normalized_path")
+        connection.execute(
+            "ALTER TABLE precheck_runs DROP COLUMN execution_config_json"
+        )
+        connection.execute("ALTER TABLE precheck_runs DROP COLUMN execution_checkpoint")
+        connection.execute("DROP TABLE result_work_records")
+        if old_version == 11:
+            connection.execute("DROP TABLE precheck_runs")
+        connection.execute(
+            "UPDATE internal_schema SET version = ? WHERE singleton = 1",
+            (old_version,),
+        )
+
+    AccountingStore(database).register_dataset("dataset-b")
+
+    with sqlite3.connect(database) as connection:
+        version = connection.execute(
+            "SELECT version FROM internal_schema WHERE singleton = 1"
+        ).fetchone()[0]
+        datasets = {
+            row[0] for row in connection.execute("SELECT dataset_id FROM datasets")
+        }
+        run_table = connection.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'precheck_runs'"
+        ).fetchone()
+        result_work_table = connection.execute(
+            "SELECT name FROM sqlite_master "
+            "WHERE type = 'table' AND name = 'result_work_records'"
+        ).fetchone()
+    assert version == 15
+    assert datasets == {"dataset-a", "dataset-b"}
+    assert run_table == ("precheck_runs",)
+    assert result_work_table == ("result_work_records",)
+    with sqlite3.connect(database) as connection:
+        run_item_columns = {
+            row[1] for row in connection.execute("PRAGMA table_info(run_items)")
+        }
+    assert "normalized_path" in run_item_columns
+    with sqlite3.connect(database) as connection:
+        precheck_run_columns = {
+            row[1] for row in connection.execute("PRAGMA table_info(precheck_runs)")
+        }
+    assert {"execution_config_json", "execution_checkpoint"} <= precheck_run_columns
+
+
+def test_unicode_normalized_collisions_are_visible_without_merging_sources(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    source = tmp_path / "source"
+    source.mkdir()
+    payload = source / "payload.jpg"
+    payload.write_bytes(b"same bytes")
+    observed = payload.stat()
+    names = (
+        Path("caf\N{LATIN SMALL LETTER E WITH ACUTE}.jpg"),
+        Path("cafe\N{COMBINING ACUTE ACCENT}.jpg"),
+    )
+    events = tuple(
+        discovery.DiscoveredSource(
+            relative_path=name,
+            locator=payload,
+            kind=discovery.SourceKind.IMAGE,
+            scope=discovery.SourceScope.SOURCE_MEDIA,
+            condition=discovery.SourceCondition.UNRESOLVED,
+            basis=("media_extension_candidate",),
+            size_bytes=observed.st_size,
+            mtime_ns=observed.st_mtime_ns,
+            device_id=observed.st_dev,
+            inode=observed.st_ino,
+            mode=observed.st_mode,
+        )
+        for name in names
+    )
+    monkeypatch.setattr(
+        accounting,
+        "discover_source_events",
+        lambda _root: iter(events),
+    )
+    monkeypatch.setattr(
+        accounting,
+        "_fingerprint_candidate",
+        lambda item: _fingerprint.CandidateFingerprint(
+            algorithm="test-full-sha256-v1",
+            value=item.relative_path.as_posix(),
+            size_bytes=observed.st_size,
+            mtime_ns=observed.st_mtime_ns,
+            device_id=observed.st_dev,
+            inode=observed.st_ino,
+            mode=observed.st_mode,
+        ),
+    )
+    store = AccountingStore(tmp_path / "working.sqlite3")
+
+    summary = _complete_run(store, "dataset-a", source)
+
+    assert summary.status is WorkingRunStatus.COMPLETED_WITH_ISSUES
+    assert {item.relative_path for item in store.get_run_items(summary.run_id)} == set(
+        names
+    )
+    issues = store.get_run_issues(summary.run_id)
+    assert {issue.relative_path for issue in issues} == set(names)
+    assert {issue.code for issue in issues} == {
+        discovery.DiscoveryIssueCode.NORMALIZED_PATH_COLLISION
+    }
+    assert all(issue.basis == ("unicode_nfc_collision",) for issue in issues)
 
 
 def test_small_dataset_has_one_explainable_accounting_row_per_path(
@@ -660,5 +782,65 @@ def test_capability_probe_persists_observations_without_overclaiming(
     assert capabilities.workspace_atomic_replace is True
     assert capabilities.workspace_case_sensitive in {True, False, None}
     assert capabilities.workspace_same_filesystem_as_source in {True, False}
-    assert capabilities.sqlite_locking == "not_probed_by_attachment_probe"
+    assert capabilities.sqlite_locking.endswith("_immediate_lock_verified")
     assert capabilities.symlink_policy == "root_and_descendant_symlinks_not_followed"
+
+
+@pytest.mark.parametrize(
+    (
+        "source_device",
+        "workspace_device",
+        "atomic_replace",
+        "case_sensitive",
+        "expected_same_filesystem",
+    ),
+    [
+        (7, 7, True, True, True),
+        (7, 8, True, False, False),
+        (None, 8, False, None, None),
+    ],
+)
+def test_filesystem_capability_matrix_preserves_observed_boundaries(
+    tmp_path: Path,
+    source_device: int | None,
+    workspace_device: int,
+    atomic_replace: bool,
+    case_sensitive: bool | None,
+    expected_same_filesystem: bool | None,
+) -> None:
+    source_stat = (
+        None if source_device is None else SimpleNamespace(st_dev=source_device)
+    )
+
+    capabilities = source_attachment._capabilities(
+        source_root=tmp_path,
+        source_stat=source_stat,
+        workspace_stat=SimpleNamespace(st_dev=workspace_device),
+        atomic_replace=atomic_replace,
+        case_sensitive=case_sensitive,
+        sqlite_locking="wal_immediate_lock_verified",
+    )
+
+    assert capabilities.workspace_same_filesystem_as_source is (
+        expected_same_filesystem
+    )
+    assert capabilities.workspace_atomic_replace is atomic_replace
+    assert capabilities.workspace_case_sensitive is case_sensitive
+    assert capabilities.source_case_sensitivity == "unknown_not_probed_on_source"
+
+
+def test_unverified_sqlite_locking_refuses_the_workspace(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    source = tmp_path / "source"
+    source.mkdir()
+    store = AccountingStore(tmp_path / "working.sqlite3")
+    store.register_dataset("dataset-a")
+    monkeypatch.setattr(
+        "mediasense.precheck.source_attachment._probe_sqlite_locking",
+        lambda _workspace: "wal_lock_not_enforced",
+    )
+
+    with pytest.raises(UnsafeWorkspace, match="SQLite locking"):
+        store.start_or_resume_run("dataset-a", source)

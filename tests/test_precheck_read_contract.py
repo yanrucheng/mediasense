@@ -4,6 +4,8 @@ from collections.abc import Iterator
 import json
 from pathlib import Path
 
+from jsonschema import Draft202012Validator
+
 
 SPEC_ROOT = (
     Path(__file__).parents[1] / "docs" / "spec" / "spec-260826-1546-precheck-read"
@@ -41,8 +43,7 @@ def test_contract_exposes_only_business_required_traversal_directions() -> None:
     assert _relation_directions(input_branches) == expected
     assert _relation_directions(output_branches) == expected
     assert all(
-        branch["properties"].get("target", {}).get("$ref")
-        == "#/$defs/opaque_ref"
+        branch["properties"].get("target", {}).get("$ref") == "#/$defs/opaque_ref"
         for branch in input_branches
         if "target" in branch["properties"]
         and branch["properties"]["target"] is not False
@@ -76,6 +77,73 @@ def test_contract_keeps_qualification_and_basis_minimal() -> None:
     assert all(value["minItems"] == 1 for value in qualification_lists)
 
 
+def test_contract_exposes_replaceable_result_local_source_verification() -> None:
+    tool = _load("precheck-read.tool.json")
+    definitions = tool["outputSchema"]["$defs"]
+    result_view = definitions["result_view"]
+    source_locator = definitions["source_locator"]
+    verification = definitions["source_verification_value"]
+
+    assert "source_root_ref" not in result_view["required"]
+    assert "source_root_ref" not in result_view["properties"]
+    assert source_locator["required"] == ["kind", "source_root_ref", "value"]
+    assert source_locator["properties"]["source_root_ref"] == {
+        "$ref": "#/$defs/source_root_ref"
+    }
+    assert "execution_boundary" in result_view["required"]
+    assert result_view["properties"]["execution_boundary"] == {
+        "$ref": "#/$defs/execution_boundary"
+    }
+    assert verification["required"] == [
+        "profile",
+        "value",
+        "size_bytes",
+        "observed_at",
+        "producer",
+    ]
+    assert verification["properties"]["profile"]["type"] == "string"
+    assert "enum" not in verification["properties"]["profile"]
+
+    mock = _load("hong-kong.mock.json")
+    source_views = [
+        exchange["response"]["target"]
+        for exchange in mock["exchanges"]
+        if exchange["response"].get("target", {}).get("kind") == "source_item"
+    ]
+    assert source_views
+    assert all(
+        item["locator"]["source_root_ref"].startswith("source-root:")
+        for item in source_views
+    )
+
+
+def test_contract_allows_one_result_to_reference_multiple_source_roots() -> None:
+    output_schema = _load("precheck-read.tool.json")["outputSchema"]
+    validator = Draft202012Validator(output_schema)
+    result_ref = "precheck-result:multi-root"
+
+    for item_ref, root_ref, relative_path in (
+        ("source-item:a", "source-root:disk-a", "DCIM/a.jpg"),
+        ("source-item:b", "source-root:disk-b", "archive/b.jpg"),
+    ):
+        validator.validate(
+            {
+                "outcome": "ok",
+                "result_ref": result_ref,
+                "action": "inspect",
+                "target": {
+                    "kind": "source_item",
+                    "ref": item_ref,
+                    "locator": {
+                        "kind": "source_root_relative_path",
+                        "source_root_ref": root_ref,
+                        "value": relative_path,
+                    },
+                },
+            }
+        )
+
+
 def test_mock_uses_kind_only_when_relationship_target_type_is_ambiguous() -> None:
     mock = _load("hong-kong.mock.json")
     for exchange in mock["exchanges"]:
@@ -96,11 +164,7 @@ def test_mock_uses_kind_only_when_relationship_target_type_is_ambiguous() -> Non
             )
         else:
             assert target_types <= {str}
-    assert not [
-        value
-        for value in _objects(mock)
-        if value.get("qualifications") == []
-    ]
+    assert not [value for value in _objects(mock) if value.get("qualifications") == []]
 
 
 def test_all_local_schema_references_resolve() -> None:

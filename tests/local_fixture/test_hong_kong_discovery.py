@@ -1,11 +1,22 @@
 from __future__ import annotations
 
+from collections import defaultdict
+from datetime import datetime
 import json
 import os
 from pathlib import Path
 
 import pytest
 
+from mediasense.precheck import (
+    HIGH_RESOLUTION_RENDITION_PROFILE,
+    BundleItem,
+    BundleProfile,
+    ImageRenditionProducer,
+    MetadataProducer,
+    WorkStatus,
+    build_bundle_candidates,
+)
 from mediasense.precheck.accounting import AccountingStore, WorkingRunStatus
 from mediasense.precheck.discovery import (
     DiscoveredSource,
@@ -35,7 +46,7 @@ pytestmark = [
 
 
 def _signed_source_paths() -> set[Path]:
-    rows = [json.loads(line) for line in MANIFEST.read_text().splitlines() if line]
+    rows = _manifest_rows()
     paths = {Path(row["path"]) for row in rows}
     paths.update(
         {
@@ -48,6 +59,10 @@ def _signed_source_paths() -> set[Path]:
         }
     )
     return paths
+
+
+def _manifest_rows() -> list[dict[str, object]]:
+    return [json.loads(line) for line in MANIFEST.read_text().splitlines() if line]
 
 
 def _discover_fixture() -> tuple[
@@ -113,3 +128,87 @@ def test_hong_kong_source_state_reaches_sqlite_accounting_closure(
     assert summary.new_count == 2_142
     assert summary.issue_count == 0
     assert all(item.scope and item.condition and item.basis for item in items)
+
+
+def test_hong_kong_representative_supports_real_local_metadata_and_rendition(
+    tmp_path: Path,
+) -> None:
+    relative_path = Path("0502/100MSDCF/DSC00085.JPG")
+    media = SOURCE_ROOT / relative_path
+    source_before = media.read_bytes()
+    database = tmp_path / "workspace" / "working.sqlite3"
+    accounting = AccountingStore(database)
+    accounting.register_dataset("hk-representative-v1")
+    run_id = accounting.start_or_resume_run("hk-representative-v1", SOURCE_ROOT)
+    accounting.process_run(run_id, batch_size=128)
+
+    metadata = MetadataProducer(database).produce(run_id, relative_path)
+    rendition = ImageRenditionProducer(database).produce(
+        run_id,
+        relative_path,
+        profile=HIGH_RESOLUTION_RENDITION_PROFILE,
+    )
+
+    assert metadata.work.status is WorkStatus.SUCCEEDED
+    capture_time = next(
+        item for item in metadata.observations if item["name"] == "capture_time"
+    )
+    assert capture_time["status"] == "available"
+    # The proxy's current EXIF contains subsecond precision; the historical
+    # manifest cache recorded only whole seconds and is not source authority.
+    assert capture_time["value"] == "2026-05-01T18:03:03.046000+08:00"
+    assert capture_time["provenance"]["relative_path"] == relative_path.as_posix()
+    assert rendition.work.status is WorkStatus.SUCCEEDED
+    assert rendition.artifact is not None
+    assert rendition.artifact.path.stat().st_size > 0
+    assert media.read_bytes() == source_before
+
+
+def test_hong_kong_bundle_candidates_match_recorded_valid_media_membership() -> None:
+    rows = _manifest_rows()
+    items = []
+    expected_members: dict[int, list[Path]] = defaultdict(list)
+    for row in rows:
+        path = Path(str(row["path"]))
+        metadata = row.get("cached_metadata")
+        time_value = None
+        if isinstance(metadata, dict) and isinstance(metadata.get("time"), dict):
+            time_value = metadata["time"].get("create_date")
+        items.append(
+            BundleItem(
+                path,
+                None
+                if not isinstance(time_value, str)
+                else datetime.fromisoformat(time_value),
+            )
+        )
+        bundle_index = int(row["bundle_index"])
+        expected_members[bundle_index].append(path)
+
+    actual = build_bundle_candidates(items, BundleProfile(max_gap_seconds=60))
+    actual_by_members = {frozenset(group.members): group for group in actual}
+
+    expected_sets = {
+        bundle_index: frozenset(members)
+        for bundle_index, members in expected_members.items()
+    }
+    matched_indices = {
+        bundle_index
+        for bundle_index, members in expected_sets.items()
+        if members in actual_by_members
+    }
+    assert len(actual) == 169
+    assert matched_indices == set(expected_sets) - {114}
+
+    legacy_114 = expected_sets[114]
+    split_114 = [
+        group
+        for group in actual
+        if set(group.members) and set(group.members) <= legacy_114
+    ]
+    assert sorted(len(group.members) for group in split_114) == [1, 31]
+    missing_time_group = next(group for group in split_114 if len(group.members) == 1)
+    assert missing_time_group.members == (
+        Path("0504/DJI_001-action-sd-amber/DJI_20260504202728_0029_D.MP4"),
+    )
+    assert "capture_time_unavailable" in missing_time_group.qualifications
