@@ -8,7 +8,7 @@ The product is organized around three user-facing skills:
 - `mediasense.plan` lets an agent and user iteratively turn static evidence into a complete, reviewable organization plan.
 - `mediasense.apply` validates and safely applies a frozen plan without making new semantic decisions.
 
-The three durable handoff roles are the precheck result, the frozen organization plan, and the apply receipt. PreCheck and Plan have active read, run, working-state, Frozen Plan, default organization, and local-artifact contracts or designs. Apply now has a review-stage reference handoff and contract candidate. Its cross-filesystem policy is fixed: verify content byte for byte, preserve user-relevant filesystem attributes, and block source deletion until any exact preservation loss receives new Human authorization. Apply remains blocked from activation and implementation until source verification and representative cross-filesystem preservation evidence are closed.
+The three durable handoff roles are the precheck result, the frozen organization plan, and the apply receipt. PreCheck and Plan have active read, run, working-state, Frozen Plan, default organization, and local-artifact contracts or designs. Apply has a review-stage reference handoff and contract candidate. Its source-verification and declared Darwin APFS cross-filesystem activation gates now have executable evidence, including fail-closed public PreCheck Read integration. The contract still requires explicit Human activation before production mutation runtime begins.
 
 ## Start here
 
@@ -19,6 +19,6 @@ The three durable handoff roles are the precheck result, the frozen organization
 
 ## Current phase
 
-PreCheck and Plan design are closed enough for independent implementation against their active contracts and reference artifacts. Plan development consumes only the PreCheck Read Contract and can use its existing Mock without waiting for the PreCheck runtime. Apply has review-stage Run, Receipt, and Read contracts, but no active contract, Skill, or production Tool implementation yet.
+PreCheck and Plan have active contracts and implementations. Apply has a review-stage Run, Receipt, and Read contract plus a pre-activation, zero-media-effect preparation implementation; it has no active contract, Skill, or production mutation Tool yet.
 
 The former implementation remains in `/Users/chengyanru/repos/personal/photo/ai_album` as historical evidence. MediaSense is a new project and must not take a runtime dependency on that repository.

@@ -682,6 +682,92 @@ class ApplyRunStore:
         if run.prepared_content_identity != prepared_content_identity:
             raise ApplyPreparationError("prepared content identity mismatch")
 
+    def revalidate_prepared_item(
+        self,
+        *,
+        run_ref: str,
+        source_item_ref: str,
+    ) -> None:
+        """Recheck one prepared move immediately before a future file effect.
+
+        This is a read-only gate.  It deliberately exposes no operation that can
+        create a directory, publish a target, or remove a source.
+        """
+
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT runs.state, runs.destination_parent,
+                       runs.destination_observed_identity,
+                       run_items.source_path, run_items.intended_target,
+                       run_items.verification_profile,
+                       run_items.expected_verification,
+                       run_items.verification_observed_at,
+                       run_items.verification_producer,
+                       run_items.verification_basis_json,
+                       run_items.verification_limitations_json,
+                       run_items.observed_device, run_items.observed_inode,
+                       run_items.observed_size, run_items.observed_mtime_ns,
+                       source_roots.current_root,
+                       source_roots.observed_identity AS root_observed_identity
+                FROM run_items
+                JOIN runs USING (run_ref)
+                JOIN source_roots USING (run_ref, source_root_ref)
+                WHERE run_ref = ? AND source_item_ref = ?
+                  AND planned_outcome = 'materialize'
+                  AND preparation_status = 'verified'
+                """,
+                (run_ref, source_item_ref),
+            ).fetchone()
+        if row is None:
+            raise ApplyPreparationError("prepared move item does not exist")
+        if row["state"] != "ready_for_authorization":
+            raise ApplyPreparationError("Run is not ready for an effect-boundary check")
+
+        root = _strict_directory(Path(row["current_root"]), "source root")
+        root_info = root.stat()
+        if _filesystem_identity(root, root_info) != row["root_observed_identity"]:
+            raise ApplyPreparationError("source root binding changed after preparation")
+        destination = _strict_directory(
+            Path(row["destination_parent"]), "destination parent"
+        )
+        destination_info = destination.stat()
+        if (
+            _filesystem_identity(destination, destination_info)
+            != row["destination_observed_identity"]
+        ):
+            raise ApplyPreparationError("destination binding changed after preparation")
+        target = Path(row["intended_target"])
+        if target.exists() or target.is_symlink():
+            raise ApplyPreparationError("final target appeared after preparation")
+
+        basis = VerificationBasis(
+            profile=str(row["verification_profile"]),
+            value=str(row["expected_verification"]),
+            size_bytes=int(row["observed_size"]),
+            observed_at=str(row["verification_observed_at"]),
+            producer=str(row["verification_producer"]),
+            basis=json.loads(str(row["verification_basis_json"])),
+            limitations=tuple(json.loads(str(row["verification_limitations_json"]))),
+        )
+        observed = _verify_source(Path(row["source_path"]), root, basis)
+        prepared_object = (
+            int(row["observed_device"]),
+            int(row["observed_inode"]),
+            int(row["observed_size"]),
+            int(row["observed_mtime_ns"]),
+        )
+        current_object = (
+            observed["device"],
+            observed["inode"],
+            observed["size"],
+            observed["mtime_ns"],
+        )
+        if current_object != prepared_object:
+            raise ApplyPreparationError(
+                "source filesystem object changed after preparation"
+            )
+
     def _begin_run(
         self,
         *,

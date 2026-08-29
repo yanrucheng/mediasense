@@ -300,6 +300,28 @@ def test_stale_authorization_coordinates_are_rejected(tmp_path: Path) -> None:
         )
 
 
+def test_effect_boundary_revalidation_rejects_replaced_source_object(
+    tmp_path: Path,
+) -> None:
+    store, run, source, destination, *_rest = _prepare(tmp_path)
+    store.revalidate_prepared_item(
+        run_ref=run.run_ref,
+        source_item_ref="source-item:a",
+    )
+
+    source_path = source / "a.jpg"
+    same_bytes = source_path.read_bytes()
+    source_path.unlink()
+    source_path.write_bytes(same_bytes)
+
+    with pytest.raises(ApplyPreparationError, match="filesystem object changed"):
+        store.revalidate_prepared_item(
+            run_ref=run.run_ref,
+            source_item_ref="source-item:a",
+        )
+    assert list(destination.iterdir()) == []
+
+
 def test_prepare_blocks_source_changed_from_precheck_evidence(tmp_path: Path) -> None:
     source, destination, state, _files, reader = _fixture(tmp_path)
     (source / "b.jpg").write_bytes(b"changed after PreCheck")

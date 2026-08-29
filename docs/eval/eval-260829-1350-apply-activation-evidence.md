@@ -92,6 +92,12 @@ source or destination media:
   starting effects; pre-execution cancellation is idempotent, publishes no
   Receipt, and reports proven zero media effects.
 
+`ApplyRunStore.revalidate_prepared_item` is the read-only guard reserved for the
+future effect boundary. It rechecks source-root and destination identities,
+target absence, exact source filesystem object, size, and full SHA-256. It has no
+mutation capability, but prevents production execution from treating the
+earlier prepare observation as timeless authority.
+
 The current concurrency check is store-local. A production Tool must establish
 one authoritative store/lock domain for every path it can mutate; separate
 databases are not a safe concurrency boundary.
@@ -140,16 +146,18 @@ proved; the present fixture does not claim ACL preservation.
 ## Scale and test evidence
 
 The focused Apply contract, negative-path, preparation, and real sealed-Result
-integration suite reports `31 passed, 1 deselected` in 1.54 seconds. The old
+integration suite reports `32 passed, 1 deselected` in 1.81 seconds. The old
 activation xfail has been replaced by passing tests: the public schema may omit
 verification for unselected Source Items, while the Apply consumer rejects every
 selected move without a usable proof.
 
-The full fast suite currently reports `354 passed, 10 deselected` in 18.80
-seconds. Ruff check and format checks pass for the changed Apply source and
-tests.
+The full fast suite after integration reports `355 passed, 10 deselected` in
+24.66 seconds on the restored worktree. The full repository scale suite reports
+`4 passed, 361 deselected` in 80.33 seconds. Ruff check and format checks pass
+for the changed Apply source and tests, and the source-verification OpenSpec
+change passes strict validation.
 
-The opt-in `scale` 100,000-item preparation/ledger test reports one pass in 2.03 seconds
+The opt-in `scale` 100,000-item preparation/ledger test reports one pass in 1.55 seconds
 on this development host. It stages and seals a synthetic 100,000-row Run, then
 reads a 1,000-row page while asserting a peak allocation below 8 MiB for that
 traversal. This establishes bounded ledger reading; it is not a claim about

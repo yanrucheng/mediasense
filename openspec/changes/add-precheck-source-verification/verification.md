@@ -30,6 +30,9 @@ PreCheck owns the sealed observation. Plan freezes only `result_ref` and `source
   `source_content_verification` observation, supports `sha256-full-v1`, binds
   observation-level basis plus producer/time provenance into prepared content,
   and re-reads current source bytes for exact size and full SHA-256 comparison.
+- A separate read-only effect-boundary guard rechecks the prepared root and
+  destination identities, target absence, source object identity, size, and full
+  SHA-256 immediately before any future mutation implementation may proceed.
 - Non-materialized Source Items may remain unverified. Missing, unavailable,
   failed, unknown-profile, malformed, wrong-result, unbound-root, escaping,
   aliased, mismatched, or concurrently changing selected sources block the Run
@@ -39,14 +42,19 @@ PreCheck owns the sealed observation. Plan freezes only `result_ref` and `source
   verified Apply `ready_for_authorization` state without changing source or
   destination media.
 - Focused Apply contract, negative-path, preparation, and real-Result integration:
-  `31 passed, 1 deselected`.
-- Full fast suite after integration: `354 passed, 10 deselected`.
-- Apply 100,000-item bounded-ledger scale test: `1 passed, 27 deselected` in
-  1.44 seconds; traversal remains capped at 1,000 rows and below the asserted
+  `32 passed, 1 deselected`.
+- Combined PreCheck Read/Result/source-validity and Apply integration suite:
+  `63 passed, 1 deselected`.
+- Full fast suite after integration: `355 passed, 10 deselected` in 24.66
+  seconds on the restored worktree.
+- Apply 100,000-item bounded-ledger scale test: `1 passed, 28 deselected` in
+  1.55 seconds; traversal remains capped at 1,000 rows and below the asserted
   8 MiB peak allocation.
+- Full repository scale suite: `4 passed, 361 deselected` in 80.33 seconds.
 - The previously accepted Darwin APFS cross-filesystem evidence remains valid;
   no transfer implementation used by that evidence changed in this integration.
 - Ruff check and format checks pass for all changed Apply source and tests.
+- `openspec validate add-precheck-source-verification --strict` passes.
 
 Apply Contract activation and production mutation remain separate Human
 decisions. This evidence completes implementation task 3.1 without changing the

@@ -4,7 +4,7 @@ title: "MediaSense Apply Contract"
 type: spec
 status: review
 created: 2026-08-29
-updated: 2026-08-29
+updated: 2026-08-30
 timezone: "Asia/Shanghai"
 parent: "index-spec"
 depends-on:
@@ -29,12 +29,16 @@ mediasense.apply.read  -> immutable Apply Receipt
 
 [`apply-run.tool.json`](apply-run.tool.json), [`apply-receipt.schema.json`](apply-receipt.schema.json), and [`apply-read.tool.json`](apply-read.tool.json) are review contract candidates. [`lifecycle.mock.json`](lifecycle.mock.json) is a Human-authored exchange example; [`receipt.mock.json`](receipt.mock.json) is a schema-conforming reference Receipt. None is production output or actual authorization.
 
-The package must remain `review` until two blocking dependencies have executable evidence:
+The two activation dependencies now have executable evidence:
 
-1. each planned Source Item has an immutable Apply-grade verification basis reachable through its exact PreCheck Result; and
-2. the supported cross-filesystem transfer profile proves its byte and declared filesystem-metadata preservation behavior on supported platforms.
+1. each materialized Source Item is resolved through its exact PreCheck Result and
+   fail-closed Apply enforcement revalidates its accepted
+   `source_content_verification`; and
+2. the declared Darwin APFS cross-filesystem transfer profile has executable byte,
+   metadata-preservation, non-overwrite, and reauthorization evidence.
 
-No source media operation is implemented or authorized by this specification.
+The package remains `review` until explicit Human activation. No source media
+operation is implemented or authorized by this specification.
 
 ## Backward Compatibility Policy
 
@@ -84,14 +88,27 @@ Copy and link remain explicit deferred profiles. A Run never combines effect pro
 
 Path equality does not prove source identity. Before authorization and again at the individual effect boundary, Apply must resolve every planned Source Item and verify it against immutable evidence bound to the exact PreCheck Result.
 
-The current PreCheck Read shape permits open Source Item Observations but does not yet require an Apply-grade verification observation. The upstream correction should reuse that existing observation surface and define a verification profile with:
+The accepted PreCheck Read contract exposes `source_root_relative_path` locators
+whose `source_root_ref` is bound by Apply to a Human-selected current root. It
+also exposes the replaceable `source_content_verification` observation. The first
+supported value profile is `sha256-full-v1`, carrying:
 
-- the object property or content claim being verified;
-- a stable profile identifier and value sufficient for deterministic comparison;
-- basis and limitations; and
-- an `available` state for every Source Item admitted to dangerous Apply.
+- the opaque `sha256:` verification value and exact `size_bytes`;
+- `observed_at` and producer identity in the value; and
+- provenance or basis at the observation level, with limitations only when they
+  actually exist.
 
-The contract does not require Dataset-wide snapshots, permanent identity across Results, a new Source Verify Tool, or exposure of PreCheck cache keys. If the required strength is unavailable or current verification disagrees, `prepare` blocks without media effects.
+PreCheck intentionally does not require this observation on every accounted
+Source Item. Apply requires exactly one available, supported observation for
+every item selected for `move_originals`, resolves it through exact
+`result_ref + source_item_ref`, re-reads current bytes, and compares size plus
+full SHA-256. Missing, unavailable, failed, unknown-profile, malformed,
+unbound-root, escaping, ambiguous, mismatched, or changing sources block
+`prepare` without media effects.
+
+The contract does not require Dataset-wide snapshots, permanent identity across
+Results, a new Source Verify Tool, exposure of PreCheck cache keys, or copied
+hashes in Frozen Plan.
 
 ## Run actions
 
