@@ -15,6 +15,7 @@ from ._work_types import (
     WorkSpec,
     WorkStateError,
     WorkStatus,
+    source_content_dependency,
     source_revision_dependency,
     upstream_dependency,
 )
@@ -39,6 +40,7 @@ __all__ = [
     "WorkStateError",
     "WorkStatus",
     "WorkStore",
+    "source_content_dependency",
     "source_revision_dependency",
     "upstream_dependency",
 ]

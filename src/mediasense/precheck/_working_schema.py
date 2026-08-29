@@ -1,13 +1,13 @@
 """Private SQLite schema for mutable PreCheck working state."""
 
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 15
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS internal_schema (
     singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
     version INTEGER NOT NULL
 );
-INSERT OR IGNORE INTO internal_schema (singleton, version) VALUES (1, 7);
+INSERT OR IGNORE INTO internal_schema (singleton, version) VALUES (1, 15);
 
 CREATE TABLE IF NOT EXISTS datasets (
     dataset_id TEXT PRIMARY KEY,
@@ -36,6 +36,28 @@ CREATE TABLE IF NOT EXISTS working_runs (
 );
 CREATE INDEX IF NOT EXISTS working_runs_dataset_status
     ON working_runs(dataset_id, status);
+
+CREATE TABLE IF NOT EXISTS precheck_runs (
+    run_ref TEXT PRIMARY KEY,
+    request_id TEXT NOT NULL UNIQUE,
+    request_json TEXT NOT NULL,
+    dataset_ref TEXT NOT NULL,
+    prior_result_ref TEXT,
+    state TEXT NOT NULL,
+    progress_json TEXT NOT NULL,
+    reason_json TEXT,
+    confirmation_json TEXT,
+    confirmation_fingerprint TEXT,
+    confirmation_decision TEXT,
+    published_result_json TEXT,
+    accounting_run_id TEXT REFERENCES working_runs(run_id),
+    execution_config_json TEXT,
+    execution_checkpoint TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS precheck_runs_dataset_state
+    ON precheck_runs(dataset_ref, state);
 
 CREATE TABLE IF NOT EXISTS run_source_rebindings (
     run_id TEXT NOT NULL REFERENCES working_runs(run_id),
@@ -80,6 +102,7 @@ CREATE TABLE IF NOT EXISTS source_state (
 CREATE TABLE IF NOT EXISTS run_items (
     run_id TEXT NOT NULL REFERENCES working_runs(run_id),
     relative_path TEXT NOT NULL,
+    normalized_path TEXT NOT NULL,
     source_revision INTEGER,
     kind TEXT NOT NULL,
     scope TEXT NOT NULL,
@@ -171,6 +194,66 @@ CREATE TABLE IF NOT EXISTS work_dependencies (
 );
 CREATE INDEX IF NOT EXISTS work_dependencies_lookup
     ON work_dependencies(dependency_kind, dependency_key, dependency_value);
+
+CREATE TABLE IF NOT EXISTS source_content_proofs (
+    dataset_id TEXT NOT NULL REFERENCES datasets(dataset_id),
+    relative_path TEXT NOT NULL,
+    reuse_domain TEXT NOT NULL,
+    source_revision INTEGER NOT NULL,
+    algorithm TEXT NOT NULL,
+    digest TEXT NOT NULL,
+    size_bytes INTEGER NOT NULL CHECK (size_bytes >= 0),
+    proof_value TEXT NOT NULL,
+    observed_at TEXT NOT NULL,
+    PRIMARY KEY (dataset_id, relative_path, reuse_domain)
+);
+
+CREATE TABLE IF NOT EXISTS artifacts (
+    artifact_id TEXT PRIMARY KEY,
+    digest_algorithm TEXT NOT NULL,
+    digest TEXT NOT NULL,
+    size_bytes INTEGER NOT NULL CHECK (size_bytes >= 0),
+    media_type TEXT NOT NULL,
+    relative_path TEXT NOT NULL UNIQUE,
+    integrity_status TEXT NOT NULL,
+    last_verified_at TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS work_artifacts (
+    work_id TEXT NOT NULL REFERENCES work_records(work_id),
+    role TEXT NOT NULL,
+    position INTEGER NOT NULL CHECK (position >= 0),
+    artifact_id TEXT NOT NULL REFERENCES artifacts(artifact_id),
+    PRIMARY KEY (work_id, role, position),
+    UNIQUE (work_id, artifact_id, role)
+);
+CREATE INDEX IF NOT EXISTS work_artifacts_artifact
+    ON work_artifacts(artifact_id, work_id);
+
+CREATE TABLE IF NOT EXISTS sealed_results (
+    result_ref TEXT PRIMARY KEY,
+    dataset_id TEXT NOT NULL REFERENCES datasets(dataset_id),
+    relative_path TEXT NOT NULL UNIQUE,
+    digest_algorithm TEXT NOT NULL,
+    digest TEXT NOT NULL,
+    size_bytes INTEGER NOT NULL CHECK (size_bytes > 0),
+    published_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS result_artifacts (
+    result_ref TEXT NOT NULL REFERENCES sealed_results(result_ref),
+    artifact_id TEXT NOT NULL REFERENCES artifacts(artifact_id),
+    PRIMARY KEY (result_ref, artifact_id)
+);
+
+CREATE TABLE IF NOT EXISTS result_work_records (
+    result_ref TEXT NOT NULL REFERENCES sealed_results(result_ref),
+    work_id TEXT NOT NULL REFERENCES work_records(work_id),
+    PRIMARY KEY (result_ref, work_id)
+);
+CREATE INDEX IF NOT EXISTS result_work_records_work
+    ON result_work_records(work_id, result_ref);
 
 CREATE TABLE IF NOT EXISTS run_work_records (
     run_id TEXT NOT NULL REFERENCES working_runs(run_id),

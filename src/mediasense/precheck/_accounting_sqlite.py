@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 import json
 from pathlib import Path
 import sqlite3
+import unicodedata
 
 from ._working_schema import SCHEMA, SCHEMA_VERSION
 from ._accounting_types import (
@@ -19,6 +20,7 @@ from ._accounting_types import (
     WorkingRunSummary,
 )
 from ._fingerprint import CandidateFingerprint, fingerprint_stat_identity
+from ._invalidation import invalidate_source_dependencies
 from .discovery import (
     DiscoveredSource,
     DiscoveryEvent,
@@ -49,8 +51,54 @@ class SQLiteAccounting:
             version = connection.execute(
                 "SELECT version FROM internal_schema WHERE singleton = 1"
             ).fetchone()[0]
-            if version != SCHEMA_VERSION:
+            if version not in {11, 12, 13, 14, SCHEMA_VERSION}:
                 raise RuntimeError(f"unsupported internal schema version: {version}")
+            columns = {
+                str(row["name"])
+                for row in connection.execute("PRAGMA table_info(run_items)")
+            }
+            if "normalized_path" not in columns:
+                if version == SCHEMA_VERSION:
+                    raise RuntimeError(
+                        "current internal schema is missing normalized_path"
+                    )
+                connection.execute(
+                    "ALTER TABLE run_items "
+                    "ADD COLUMN normalized_path TEXT NOT NULL DEFAULT ''"
+                )
+                rows = connection.execute(
+                    "SELECT rowid, relative_path FROM run_items"
+                ).fetchall()
+                connection.executemany(
+                    "UPDATE run_items SET normalized_path = ? WHERE rowid = ?",
+                    (
+                        (_normalized_path(str(row["relative_path"])), int(row["rowid"]))
+                        for row in rows
+                    ),
+                )
+            connection.execute(
+                "CREATE INDEX IF NOT EXISTS run_items_normalized_path "
+                "ON run_items(run_id, normalized_path, last_seen_generation)"
+            )
+            run_columns = {
+                str(row["name"])
+                for row in connection.execute("PRAGMA table_info(precheck_runs)")
+            }
+            for column in ("execution_config_json", "execution_checkpoint"):
+                if column not in run_columns:
+                    if version == SCHEMA_VERSION:
+                        raise RuntimeError(
+                            f"current internal schema is missing {column}"
+                        )
+                    connection.execute(
+                        f"ALTER TABLE precheck_runs ADD COLUMN {column} TEXT"
+                    )
+            if version in {11, 12, 13, 14}:
+                connection.execute(
+                    "UPDATE internal_schema SET version = ? WHERE singleton = 1",
+                    (SCHEMA_VERSION,),
+                )
+                version = SCHEMA_VERSION
 
     def register_dataset(self, dataset_id: str) -> None:
         now = _now()
@@ -470,7 +518,7 @@ class SQLiteAccounting:
         with self.connect() as connection:
             rows = connection.execute(
                 """
-                SELECT relative_path, scope, condition, basis_json,
+                SELECT relative_path, kind, scope, condition, basis_json,
                        change_kind, source_revision
                 FROM run_items
                 WHERE run_id = ?
@@ -481,6 +529,7 @@ class SQLiteAccounting:
         return tuple(
             AccountedItem(
                 relative_path=Path(row["relative_path"]),
+                kind=str(row["kind"]),
                 scope=str(row["scope"]),
                 condition=str(row["condition"]),
                 basis=tuple(json.loads(row["basis_json"])),
@@ -595,6 +644,34 @@ class SQLiteAccounting:
                 """,
                 (run_id, run["dataset_id"], run_id, scan_generation),
             )
+            affected_paths = {
+                str(row["relative_path"])
+                for row in connection.execute(
+                    """
+                    SELECT relative_path FROM run_items
+                    WHERE run_id = ? AND last_seen_generation = ?
+                      AND change_kind IN (?, ?)
+                    UNION
+                    SELECT relative_path FROM run_removals
+                    WHERE run_id = ? AND scan_generation = ?
+                    """,
+                    (
+                        run_id,
+                        scan_generation,
+                        ChangeKind.CHANGED,
+                        ChangeKind.ERROR,
+                        run_id,
+                        scan_generation,
+                    ),
+                )
+            }
+            if affected_paths:
+                invalidate_source_dependencies(
+                    connection,
+                    str(run["dataset_id"]),
+                    affected_paths,
+                    reason="source_accounting_changed",
+                )
             connection.execute(
                 """
                 DELETE FROM run_items
@@ -623,12 +700,16 @@ class SQLiteAccounting:
         code: DiscoveryIssueCode,
     ) -> None:
         with self.connect() as connection:
-            scan_generation = int(
-                connection.execute(
-                    "SELECT scan_generation FROM working_runs WHERE run_id = ?",
-                    (run_id,),
-                ).fetchone()[0]
-            )
+            run = connection.execute(
+                """
+                SELECT scan_generation, dataset_id FROM working_runs
+                WHERE run_id = ?
+                """,
+                (run_id,),
+            ).fetchone()
+            if run is None:
+                raise KeyError(f"unknown working run: {run_id}")
+            scan_generation = int(run["scan_generation"])
             self._write_issue(
                 connection,
                 run_id,
@@ -649,6 +730,12 @@ class SQLiteAccounting:
                 WHERE run_id = ?
                 """,
                 (WorkingRunStatus.BLOCKED, code, _now(), run_id),
+            )
+            invalidate_source_dependencies(
+                connection,
+                str(run["dataset_id"]),
+                None,
+                reason="source_root_unavailable",
             )
 
     def set_status(
@@ -852,12 +939,14 @@ class SQLiteAccounting:
         connection.execute(
             """
             INSERT INTO run_items (
-                run_id, relative_path, source_revision, kind, scope, condition,
+                run_id, relative_path, normalized_path, source_revision,
+                kind, scope, condition,
                 basis_json, size_bytes, mtime_ns, device_id, inode, mode,
                 fingerprint_algorithm, fingerprint, producer_identity,
                 reuse_domain, change_kind, last_seen_generation
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(run_id, relative_path) DO UPDATE SET
+                normalized_path = excluded.normalized_path,
                 source_revision = excluded.source_revision, kind = excluded.kind,
                 scope = excluded.scope, condition = excluded.condition,
                 basis_json = excluded.basis_json, size_bytes = excluded.size_bytes,
@@ -873,6 +962,7 @@ class SQLiteAccounting:
             (
                 run_id,
                 item.relative_path.as_posix(),
+                _normalized_path(item.relative_path.as_posix()),
                 revision,
                 item.kind,
                 item.scope,
@@ -891,6 +981,53 @@ class SQLiteAccounting:
                 scan_generation,
             ),
         )
+        self._record_normalized_path_collisions(
+            connection,
+            run_id,
+            scan_generation,
+            _normalized_path(item.relative_path.as_posix()),
+        )
+
+    def _record_normalized_path_collisions(
+        self,
+        connection: sqlite3.Connection,
+        run_id: str,
+        scan_generation: int,
+        normalized_path: str,
+    ) -> None:
+        paths = tuple(
+            str(row["relative_path"])
+            for row in connection.execute(
+                """
+                SELECT relative_path
+                FROM run_items
+                WHERE run_id = ? AND normalized_path = ?
+                  AND last_seen_generation = ?
+                ORDER BY relative_path
+                """,
+                (run_id, normalized_path, scan_generation),
+            )
+        )
+        if len(paths) < 2:
+            return
+        for relative_path in paths:
+            peers = tuple(path for path in paths if path != relative_path)
+            self._write_issue(
+                connection,
+                run_id,
+                scan_generation,
+                DiscoveryIssue(
+                    relative_path=Path(relative_path),
+                    locator=Path(relative_path),
+                    code=DiscoveryIssueCode.NORMALIZED_PATH_COLLISION,
+                    message=(
+                        "Distinct source paths share the same Unicode NFC form: "
+                        + ", ".join(peers)
+                    ),
+                    blocked=False,
+                    basis=("unicode_nfc_collision",),
+                ),
+            )
 
     def _write_issue(
         self,
@@ -959,12 +1096,14 @@ class SQLiteAccounting:
             connection.execute(
                 """
                 INSERT INTO run_items (
-                    run_id, relative_path, source_revision, kind, scope, condition,
+                    run_id, relative_path, normalized_path, source_revision,
+                    kind, scope, condition,
                     basis_json, size_bytes, mtime_ns, device_id, inode, mode,
                     fingerprint_algorithm, fingerprint, producer_identity,
                     reuse_domain, change_kind, last_seen_generation
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(run_id, relative_path) DO UPDATE SET
+                    normalized_path = excluded.normalized_path,
                     condition = excluded.condition, basis_json = excluded.basis_json,
                     change_kind = excluded.change_kind,
                     last_seen_generation = excluded.last_seen_generation
@@ -972,6 +1111,7 @@ class SQLiteAccounting:
                 (
                     run_id,
                     row["relative_path"],
+                    _normalized_path(str(row["relative_path"])),
                     row["revision"],
                     row["kind"],
                     row["scope"],
@@ -989,6 +1129,12 @@ class SQLiteAccounting:
                     ChangeKind.ERROR,
                     scan_generation,
                 ),
+            )
+            self._record_normalized_path_collisions(
+                connection,
+                run_id,
+                scan_generation,
+                _normalized_path(str(row["relative_path"])),
             )
 
 
@@ -1010,6 +1156,12 @@ def _can_reuse_current_observation(
         and previous["condition"] == item.condition
         and tuple(json.loads(previous["basis_json"])) == item.basis
     )
+
+
+def _normalized_path(relative_path: str) -> str:
+    """Return a comparison key without changing the authoritative spelling."""
+
+    return unicodedata.normalize("NFC", relative_path)
 
 
 def _item_observation(item: DiscoveredSource) -> tuple[object, ...]:

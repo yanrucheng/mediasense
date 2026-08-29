@@ -47,6 +47,7 @@ class WorkingRunSummary:
 @dataclass(frozen=True, slots=True)
 class AccountedItem:
     relative_path: Path
+    kind: str
     scope: str
     condition: str
     basis: tuple[str, ...]

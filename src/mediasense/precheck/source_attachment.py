@@ -7,9 +7,15 @@ from enum import StrEnum
 import json
 import os
 from pathlib import Path
+import sqlite3
 import stat
 import tempfile
+from threading import Lock
 from uuid import uuid4
+
+
+_SQLITE_LOCKING_CACHE: dict[int, str] = {}
+_SQLITE_LOCKING_CACHE_LOCK = Lock()
 
 
 class AttachmentState(StrEnum):
@@ -110,7 +116,11 @@ def probe_source_attachment(
 
     workspace.mkdir(parents=True, exist_ok=True)
     workspace_stat = workspace.stat()
-    atomic_replace, case_sensitive = _probe_workspace(workspace)
+    atomic_replace, case_sensitive, sqlite_locking = _probe_workspace(workspace)
+    if not sqlite_locking.endswith("_immediate_lock_verified"):
+        raise UnsafeWorkspace(
+            "the PreCheck workspace does not provide verified SQLite locking"
+        )
     source_is_symlink = root.is_symlink()
 
     try:
@@ -128,6 +138,7 @@ def probe_source_attachment(
                 workspace_stat=workspace_stat,
                 atomic_replace=atomic_replace,
                 case_sensitive=case_sensitive,
+                sqlite_locking=sqlite_locking,
             ),
             blocked_reason=f"source_root_unavailable:{type(error).__name__}",
         )
@@ -148,6 +159,7 @@ def probe_source_attachment(
                 workspace_stat=workspace_stat,
                 atomic_replace=atomic_replace,
                 case_sensitive=case_sensitive,
+                sqlite_locking=sqlite_locking,
             ),
             blocked_reason=reason,
         )
@@ -164,6 +176,7 @@ def probe_source_attachment(
             workspace_stat=workspace_stat,
             atomic_replace=atomic_replace,
             case_sensitive=case_sensitive,
+            sqlite_locking=sqlite_locking,
         ),
     )
 
@@ -181,6 +194,7 @@ def _capabilities(
     workspace_stat: os.stat_result,
     atomic_replace: bool,
     case_sensitive: bool | None,
+    sqlite_locking: str,
 ) -> FilesystemCapabilities:
     mount_read_only: bool | None = None
     process_writable: bool | None = None
@@ -201,12 +215,12 @@ def _capabilities(
         workspace_atomic_replace=atomic_replace,
         workspace_case_sensitive=case_sensitive,
         workspace_same_filesystem_as_source=same_filesystem,
-        sqlite_locking="not_probed_by_attachment_probe",
+        sqlite_locking=sqlite_locking,
         symlink_policy="root_and_descendant_symlinks_not_followed",
     )
 
 
-def _probe_workspace(workspace: Path) -> tuple[bool, bool | None]:
+def _probe_workspace(workspace: Path) -> tuple[bool, bool | None, str]:
     descriptor, first_name = tempfile.mkstemp(
         prefix="mediasense-probe-a", dir=workspace
     )
@@ -223,7 +237,58 @@ def _probe_workspace(workspace: Path) -> tuple[bool, bool | None]:
     finally:
         first.unlink(missing_ok=True)
         replacement.unlink(missing_ok=True)
-    return atomic_replace, case_sensitive
+    return atomic_replace, case_sensitive, _probe_sqlite_locking(workspace)
+
+
+def _probe_sqlite_locking(workspace: Path) -> str:
+    device = workspace.stat().st_dev
+    with _SQLITE_LOCKING_CACHE_LOCK:
+        cached = _SQLITE_LOCKING_CACHE.get(device)
+    if cached is not None:
+        return cached
+    descriptor, database_name = tempfile.mkstemp(
+        prefix="mediasense-sqlite-probe-", suffix=".sqlite3", dir=workspace
+    )
+    os.close(descriptor)
+    database = Path(database_name)
+    first: sqlite3.Connection | None = None
+    second: sqlite3.Connection | None = None
+    journal_mode = "unknown"
+    try:
+        first = sqlite3.connect(database, timeout=0)
+        journal_mode = str(first.execute("PRAGMA journal_mode = WAL").fetchone()[0])
+        first.execute("CREATE TABLE probe (value INTEGER)")
+        first.commit()
+        second = sqlite3.connect(database, timeout=0)
+        first.execute("BEGIN IMMEDIATE")
+        try:
+            second.execute("BEGIN IMMEDIATE")
+        except sqlite3.OperationalError as error:
+            if "locked" not in str(error).casefold():
+                return f"{journal_mode}_lock_probe_failed"
+        else:
+            second.rollback()
+            return f"{journal_mode}_lock_not_enforced"
+        finally:
+            first.rollback()
+        result = f"{journal_mode}_immediate_lock_verified"
+        with _SQLITE_LOCKING_CACHE_LOCK:
+            _SQLITE_LOCKING_CACHE[device] = result
+        return result
+    except (OSError, sqlite3.Error):
+        return f"{journal_mode}_lock_probe_failed"
+    finally:
+        if second is not None:
+            second.close()
+        if first is not None:
+            first.close()
+        for path in (
+            database,
+            Path(f"{database}-wal"),
+            Path(f"{database}-shm"),
+            Path(f"{database}-journal"),
+        ):
+            path.unlink(missing_ok=True)
 
 
 def _is_within(candidate: Path, root: Path) -> bool:

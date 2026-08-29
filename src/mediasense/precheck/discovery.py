@@ -12,6 +12,7 @@ from collections import defaultdict
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from enum import StrEnum
+from itertools import islice
 import os
 from pathlib import Path
 import stat
@@ -55,6 +56,7 @@ class DiscoveryIssueCode(StrEnum):
     ROOT_NOT_DIRECTORY = "root_not_directory"
     DIRECTORY_READ_FAILED = "directory_read_failed"
     ENTRY_INSPECTION_FAILED = "entry_inspection_failed"
+    NORMALIZED_PATH_COLLISION = "normalized_path_collision"
 
 
 @dataclass(frozen=True, slots=True)
@@ -89,9 +91,13 @@ class DiscoveryIssue:
 DiscoveryEvent = DiscoveredSource | DiscoveryIssue
 
 
-_IMAGE_EXTENSIONS = frozenset({".png", ".jpg", ".jpeg", ".gif", ".bmp", ".heic", ".heif"})
+_IMAGE_EXTENSIONS = frozenset(
+    {".png", ".jpg", ".jpeg", ".gif", ".bmp", ".heic", ".heif"}
+)
 _VIDEO_EXTENSIONS = frozenset({".mp4", ".avi", ".mov", ".mkv", ".flv", ".webm"})
-_RAW_EXTENSIONS = frozenset({".arw", ".dng", ".cr2", ".cr3", ".nef", ".orf", ".raf", ".rw2", ".pef"})
+_RAW_EXTENSIONS = frozenset(
+    {".arw", ".dng", ".cr2", ".cr3", ".nef", ".orf", ".raf", ".rw2", ".pef"}
+)
 _SIDECAR_EXTENSIONS = frozenset({".xmp", ".exif", ".json", ".xml"})
 
 
@@ -164,9 +170,13 @@ def discover_source_events(
         return
 
     def walk(directory: Path, inherited_ignore: bool) -> Iterator[DiscoveryEvent]:
+        marker = directory / ignore_marker
+        local_ignore = inherited_ignore or marker.exists() or marker.is_symlink()
         try:
             with os.scandir(directory) as scan:
-                entries = sorted(scan, key=lambda entry: entry.name)
+                while entries := tuple(islice(scan, 4096)):
+                    for entry in sorted(entries, key=lambda item: item.name):
+                        yield from visit(entry, local_ignore)
         except OSError as error:
             yield DiscoveryIssue(
                 relative_path=directory.relative_to(root),
@@ -176,78 +186,76 @@ def discover_source_events(
                 blocked=directory == root,
                 basis=("scandir_failed",),
             )
-            return
+        return
 
-        local_ignore = inherited_ignore or any(entry.name == ignore_marker for entry in entries)
-
-        for entry in entries:
-            path = Path(entry.path)
-            try:
-                is_symlink = entry.is_symlink()
-                is_directory = entry.is_dir(follow_symlinks=False)
-            except OSError as error:
-                yield _failed_item(
-                    root,
-                    path,
-                    ignore_marker=ignore_marker,
-                    under_ignore=local_ignore,
-                )
-                yield DiscoveryIssue(
-                    relative_path=path.relative_to(root),
-                    locator=path,
-                    code=DiscoveryIssueCode.ENTRY_INSPECTION_FAILED,
-                    message=str(error),
-                    blocked=False,
-                    basis=("directory_entry_type_failed",),
-                )
-                continue
-
-            if is_directory and not is_symlink:
-                yield from walk(path, local_ignore)
-                continue
-
-            try:
-                observed = entry.stat(follow_symlinks=False)
-            except OSError as error:
-                yield _failed_item(
-                    root,
-                    path,
-                    ignore_marker=ignore_marker,
-                    under_ignore=local_ignore,
-                    is_symlink=is_symlink,
-                )
-                yield DiscoveryIssue(
-                    relative_path=path.relative_to(root),
-                    locator=path,
-                    code=DiscoveryIssueCode.ENTRY_INSPECTION_FAILED,
-                    message=str(error),
-                    blocked=False,
-                    basis=("entry_stat_failed",),
-                )
-                continue
-
-            kind = _source_kind(
+    def visit(entry: os.DirEntry[str], local_ignore: bool) -> Iterator[DiscoveryEvent]:
+        path = Path(entry.path)
+        try:
+            is_symlink = entry.is_symlink()
+            is_directory = entry.is_dir(follow_symlinks=False)
+        except OSError as error:
+            yield _failed_item(
+                root,
                 path,
                 ignore_marker=ignore_marker,
-                is_symlink=is_symlink,
-            )
-            scope, condition, basis = _initial_disposition(
-                kind,
                 under_ignore=local_ignore,
             )
-            yield DiscoveredSource(
+            yield DiscoveryIssue(
                 relative_path=path.relative_to(root),
                 locator=path,
-                kind=kind,
-                scope=scope,
-                condition=condition,
-                basis=basis,
-                size_bytes=observed.st_size,
-                mtime_ns=observed.st_mtime_ns,
-                device_id=observed.st_dev,
-                inode=observed.st_ino,
-                mode=observed.st_mode,
+                code=DiscoveryIssueCode.ENTRY_INSPECTION_FAILED,
+                message=str(error),
+                blocked=False,
+                basis=("directory_entry_type_failed",),
             )
+            return
+
+        if is_directory and not is_symlink:
+            yield from walk(path, local_ignore)
+            return
+
+        try:
+            observed = entry.stat(follow_symlinks=False)
+        except OSError as error:
+            yield _failed_item(
+                root,
+                path,
+                ignore_marker=ignore_marker,
+                under_ignore=local_ignore,
+                is_symlink=is_symlink,
+            )
+            yield DiscoveryIssue(
+                relative_path=path.relative_to(root),
+                locator=path,
+                code=DiscoveryIssueCode.ENTRY_INSPECTION_FAILED,
+                message=str(error),
+                blocked=False,
+                basis=("entry_stat_failed",),
+            )
+            return
+
+        kind = _source_kind(
+            path,
+            ignore_marker=ignore_marker,
+            is_symlink=is_symlink,
+        )
+        scope, condition, basis = _initial_disposition(
+            kind,
+            under_ignore=local_ignore,
+        )
+        yield DiscoveredSource(
+            relative_path=path.relative_to(root),
+            locator=path,
+            kind=kind,
+            scope=scope,
+            condition=condition,
+            basis=basis,
+            size_bytes=observed.st_size,
+            mtime_ns=observed.st_mtime_ns,
+            device_id=observed.st_dev,
+            inode=observed.st_ino,
+            mode=observed.st_mode,
+        )
 
     yield from walk(root, False)
 
@@ -291,7 +299,11 @@ def _initial_disposition(
             ("albumignore_marker_observed",),
         )
     if kind is SourceKind.SYMLINK:
-        return SourceScope.EXCLUDED, SourceCondition.UNRESOLVED, ("symlink_not_followed",)
+        return (
+            SourceScope.EXCLUDED,
+            SourceCondition.UNRESOLVED,
+            ("symlink_not_followed",),
+        )
     if kind in {SourceKind.IMAGE, SourceKind.VIDEO, SourceKind.RAW_IMAGE}:
         disposition = (
             SourceScope.SOURCE_MEDIA,

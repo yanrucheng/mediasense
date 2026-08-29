@@ -7,6 +7,7 @@ contracts.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 from uuid import uuid4
 
@@ -136,6 +137,7 @@ class AccountingStore:
         *,
         batch_size: int = 256,
         max_batches: int | None = None,
+        should_continue: Callable[[], bool] | None = None,
     ) -> WorkingRunSummary:
         """Process a run in durable batches and optionally pause after a limit.
 
@@ -201,6 +203,9 @@ class AccountingStore:
                 )
                 pending.clear()
                 batches += 1
+                if should_continue is not None and not should_continue():
+                    self._database.set_status(run_id, WorkingRunStatus.PAUSED)
+                    return self.get_run_summary(run_id)
                 if max_batches is not None and batches >= max_batches:
                     if blocking_issue_code is None:
                         self._database.set_status(run_id, WorkingRunStatus.PAUSED)
@@ -219,6 +224,9 @@ class AccountingStore:
                 pending,
                 _fingerprint_candidate,
             )
+        if should_continue is not None and not should_continue():
+            self._database.set_status(run_id, WorkingRunStatus.PAUSED)
+            return self.get_run_summary(run_id)
 
         if blocking_issue_code is not None:
             self._database.set_status(

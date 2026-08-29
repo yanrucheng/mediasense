@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import deque
+from collections.abc import Iterable
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 import hashlib
@@ -13,6 +14,7 @@ from typing import Iterator
 from uuid import uuid4
 
 from ._accounting_types import WorkingRunStatus
+from ._invalidation import invalidate_work_tree
 from ._working_schema import SCHEMA_VERSION
 from ._work_types import (
     AttemptOutcome,
@@ -138,6 +140,7 @@ class SQLiteWorkStore:
         *,
         lease_duration: timedelta,
         limit: int = 1,
+        work_id: str | None = None,
         now: datetime | None = None,
     ) -> tuple[WorkLease, ...]:
         """Atomically claim a bounded set of ready work for one run."""
@@ -169,6 +172,7 @@ class SQLiteWorkStore:
                              OR work_records.retry_not_before <= ?)
                     )
                   )
+                  AND (? IS NULL OR work_records.work_id = ?)
                 ORDER BY work_records.created_at, work_records.work_id
                 LIMIT ?
                 """,
@@ -177,6 +181,8 @@ class SQLiteWorkStore:
                     WorkStatus.READY,
                     WorkStatus.RETRYABLE_FAILURE,
                     claimed_at,
+                    work_id,
+                    work_id,
                     limit,
                 ),
             ).fetchall()
@@ -456,50 +462,85 @@ class SQLiteWorkStore:
         invalidated: list[str] = []
         with self._transaction(immediate=True) as connection:
             self._get_work(connection, work_id)
-            queue = deque([(work_id, reason.strip())])
-            seen: set[str] = set()
-            while queue:
-                current, current_reason = queue.popleft()
-                if current in seen:
-                    continue
-                seen.add(current)
-                row = connection.execute(
-                    "SELECT * FROM work_records WHERE work_id = ?", (current,)
-                ).fetchone()
-                if row is None or WorkStatus(row["status"]) is WorkStatus.INVALIDATED:
-                    continue
-                if row["status"] == WorkStatus.RUNNING:
-                    connection.execute(
-                        """
-                        UPDATE work_attempts
-                        SET finished_at = ?, outcome = ?, retryable = 0,
-                            error_code = ?, error_message = ?
-                        WHERE work_id = ? AND attempt_number = ?
-                        """,
-                        (
-                            observed_at,
-                            AttemptOutcome.INVALIDATED,
-                            "work_invalidated",
-                            current_reason,
-                            current,
-                            row["attempt_count"],
-                        ),
-                    )
-                connection.execute(
-                    """
-                    UPDATE work_records
-                    SET status = ?, lease_run_id = NULL, lease_owner = NULL,
-                        lease_token = NULL, lease_expires_at = NULL,
-                        retry_not_before = NULL, invalidation_reason = ?,
-                        updated_at = ?
-                    WHERE work_id = ?
-                    """,
-                    (WorkStatus.INVALIDATED, current_reason, observed_at, current),
+            invalidated.extend(
+                invalidate_work_tree(
+                    connection,
+                    {work_id: reason.strip()},
+                    observed_at=observed_at,
                 )
-                invalidated.append(current)
-                for dependent in self._dependent_ids(connection, current):
-                    queue.append((dependent, f"upstream_invalidated:{current}"))
+            )
         return tuple(invalidated)
+
+    def invalidate_for_rebuild(
+        self,
+        run_id: str,
+        reason: str,
+        *,
+        work_ids: Iterable[str] = (),
+        capabilities: Iterable[str] = (),
+        source_paths: Iterable[Path] = (),
+        now: datetime | None = None,
+    ) -> tuple[str, ...]:
+        """Invalidate an explicit selector intersection and its dependents."""
+
+        if not reason.strip():
+            raise ValueError("rebuild reason must be non-empty")
+        selected_work_ids = {value.strip() for value in work_ids if value.strip()}
+        selected_capabilities = {
+            value.strip() for value in capabilities if value.strip()
+        }
+        selected_paths = {
+            _validated_rebuild_path(value).as_posix() for value in source_paths
+        }
+        if not (selected_work_ids or selected_capabilities or selected_paths):
+            raise ValueError("manual rebuild requires at least one selector")
+        observed_at = _utc(now)
+        with self._transaction(immediate=True) as connection:
+            self._require_run(connection, run_id)
+            rows = connection.execute(
+                """
+                SELECT work_records.work_id, work_records.capability,
+                       work_records.status
+                FROM run_work_records
+                JOIN work_records USING (work_id)
+                WHERE run_work_records.run_id = ?
+                ORDER BY work_records.created_at, work_records.work_id
+                """,
+                (run_id,),
+            ).fetchall()
+            attached_ids = {str(row["work_id"]) for row in rows}
+            unknown_ids = selected_work_ids - attached_ids
+            if unknown_ids:
+                raise KeyError(
+                    "manual rebuild Work is not attached to this run: "
+                    + ", ".join(sorted(unknown_ids))
+                )
+            roots: dict[str, str] = {}
+            for row in rows:
+                work_id = str(row["work_id"])
+                if selected_work_ids and work_id not in selected_work_ids:
+                    continue
+                if (
+                    selected_capabilities
+                    and str(row["capability"]) not in selected_capabilities
+                ):
+                    continue
+                if selected_paths and not (
+                    selected_paths & _work_source_paths(connection, work_id)
+                ):
+                    continue
+                if WorkStatus(row["status"]) is WorkStatus.RUNNING:
+                    raise InvalidWorkTransition(
+                        f"cannot rebuild actively leased Work: {work_id}"
+                    )
+                roots[work_id] = f"manual rebuild: {reason.strip()}"
+            if not roots:
+                raise ValueError("manual rebuild selectors matched no Work")
+            return invalidate_work_tree(
+                connection,
+                roots,
+                observed_at=observed_at,
+            )
 
     def get_work(self, work_id: str) -> WorkRecord:
         with self._connect() as connection:
@@ -603,7 +644,10 @@ class SQLiteWorkStore:
         spec: WorkSpec,
     ) -> None:
         for dependency in spec.dependencies:
-            if dependency.kind is not DependencyKind.SOURCE_REVISION:
+            if dependency.kind not in {
+                DependencyKind.SOURCE_REVISION,
+                DependencyKind.SOURCE_CONTENT,
+            }:
                 continue
             try:
                 source_dataset, relative_path = json.loads(dependency.key)
@@ -622,13 +666,38 @@ class SQLiteWorkStore:
                 """,
                 (run_id, relative_path),
             ).fetchone()
+            if row is None or row["source_revision"] is None:
+                raise InvalidWorkSpec(
+                    f"source dependency is not accounted by this run: {relative_path}"
+                )
+            if dependency.kind is DependencyKind.SOURCE_REVISION:
+                if str(row["source_revision"]) != dependency.value:
+                    raise InvalidWorkSpec(
+                        f"source revision is not accounted by this run: {relative_path}"
+                    )
+                continue
+            try:
+                proof_value = json.loads(dependency.value)
+                reuse_domain = str(proof_value["reuse_domain"])
+            except (KeyError, TypeError, ValueError) as error:
+                raise InvalidWorkSpec(
+                    "invalid source content dependency value"
+                ) from error
+            proof = connection.execute(
+                """
+                SELECT source_revision, proof_value
+                FROM source_content_proofs
+                WHERE dataset_id = ? AND relative_path = ? AND reuse_domain = ?
+                """,
+                (dataset_id, relative_path, reuse_domain),
+            ).fetchone()
             if (
-                row is None
-                or row["source_revision"] is None
-                or str(row["source_revision"]) != dependency.value
+                proof is None
+                or int(proof["source_revision"]) != int(row["source_revision"])
+                or str(proof["proof_value"]) != dependency.value
             ):
                 raise InvalidWorkSpec(
-                    f"source revision is not accounted by this run: {relative_path}"
+                    f"exact source content is not proven for this run: {relative_path}"
                 )
 
     def _upstream_statuses(
@@ -946,6 +1015,35 @@ _UNUSABLE_UPSTREAM = {
     WorkStatus.INVALIDATED,
     WorkStatus.CANCELLED,
 }
+
+
+def _validated_rebuild_path(value: Path) -> Path:
+    path = Path(value)
+    if path.is_absolute() or path == Path(".") or ".." in path.parts:
+        raise ValueError("manual rebuild source paths must stay relative")
+    return path
+
+
+def _work_source_paths(connection: sqlite3.Connection, work_id: str) -> set[str]:
+    rows = connection.execute(
+        """
+        SELECT dependency_kind, dependency_key, dependency_value
+        FROM work_dependencies WHERE work_id = ?
+        """,
+        (work_id,),
+    ).fetchall()
+    paths: set[str] = set()
+    for row in rows:
+        kind = DependencyKind(row["dependency_kind"])
+        if (
+            kind is DependencyKind.PARAMETER
+            and row["dependency_key"] == "subject_relative_path"
+        ):
+            paths.add(str(row["dependency_value"]))
+        elif kind in {DependencyKind.SOURCE_REVISION, DependencyKind.SOURCE_CONTENT}:
+            _dataset_id, relative_path = json.loads(str(row["dependency_key"]))
+            paths.add(str(relative_path))
+    return paths
 
 
 def _descriptor_json(spec: WorkSpec) -> str:

@@ -11,6 +11,7 @@ from pathlib import Path
 
 class DependencyKind(StrEnum):
     SOURCE_REVISION = "source_revision"
+    SOURCE_CONTENT = "source_content"
     UPSTREAM_WORK = "upstream_work"
     PARAMETER = "parameter"
     MODEL = "model"
@@ -174,6 +175,54 @@ def source_revision_dependency(
         raise InvalidWorkSpec("source dependency path must stay relative to its root")
     return WorkDependency(
         kind=DependencyKind.SOURCE_REVISION,
-        key=json.dumps([dataset_id, path.as_posix()], ensure_ascii=False),
+        key=_source_dependency_key(dataset_id, path),
         value=str(revision),
     )
+
+
+def source_content_dependency(
+    dataset_id: str,
+    relative_path: Path,
+    *,
+    reuse_domain: str,
+    algorithm: str,
+    digest: str,
+    size_bytes: int,
+) -> WorkDependency:
+    """Bind Work to an exact, run-compatible observation of source bytes."""
+
+    if not reuse_domain.strip() or not algorithm.strip() or not digest.strip():
+        raise InvalidWorkSpec("source content proof fields must be non-empty")
+    if size_bytes < 0:
+        raise InvalidWorkSpec("source content size cannot be negative")
+    path = _validated_source_path(relative_path)
+    value = json.dumps(
+        {
+            "algorithm": algorithm,
+            "digest": digest,
+            "reuse_domain": reuse_domain,
+            "size_bytes": size_bytes,
+        },
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    )
+    return WorkDependency(
+        kind=DependencyKind.SOURCE_CONTENT,
+        key=_source_dependency_key(dataset_id, path),
+        value=value,
+    )
+
+
+def _source_dependency_key(dataset_id: str, relative_path: Path) -> str:
+    if not dataset_id.strip():
+        raise InvalidWorkSpec("source Dataset must be non-empty")
+    path = _validated_source_path(relative_path)
+    return json.dumps([dataset_id, path.as_posix()], ensure_ascii=False)
+
+
+def _validated_source_path(relative_path: Path) -> Path:
+    path = Path(relative_path)
+    if path.is_absolute() or path == Path(".") or ".." in path.parts:
+        raise InvalidWorkSpec("source dependency path must stay relative to its root")
+    return path

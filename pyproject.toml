@@ -5,6 +5,15 @@ description = "Accountable local media compression for agent-assisted organizati
 requires-python = ">=3.11"
 dependencies = [
   "jsonschema>=4.25,<5",
+  "gpxpy>=1.6,<2",
+  "Pillow>=11,<13",
+]
+
+[project.optional-dependencies]
+local-models = [
+  "nudenet==3.4.2",
+  "torch>=2.1,<3",
+  "transformers>=4.26,<5",
 ]
 
 [dependency-groups]
@@ -13,10 +22,11 @@ dev = [
 ]
 
 [tool.pytest.ini_options]
-addopts = "-ra -m 'not local_fixture'"
+addopts = "-ra -m 'not local_fixture and not scale'"
 pythonpath = ["src"]
 testpaths = ["tests"]
 markers = [
   "characterization: behavior captured from the AI Album production baseline",
   "local_fixture: opt-in tests that require a fixture outside the repository",
+  "scale: opt-in generated scale and throughput acceptance tests",
 ]

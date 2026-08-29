@@ -12,9 +12,9 @@ from typing import Final
 from .discovery import DiscoveredSource, SourceKind
 
 
-FINGERPRINT_ALGORITHM: Final = "candidate-sha256-full-or-5x16k-v1"
-_FULL_HASH_LIMIT: Final = 80 * 1024
-_SAMPLE_BYTES: Final = 16 * 1024
+FINGERPRINT_ALGORITHM: Final = "candidate-sha256-full-or-3x4k-v1"
+_SAMPLE_BYTES: Final = 4 * 1024
+_FULL_HASH_LIMIT: Final = _SAMPLE_BYTES * 3
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,7 +39,9 @@ def fingerprint_candidate(item: DiscoveredSource) -> CandidateFingerprint:
         before = item.locator.lstat()
         target = os.readlink(item.locator)
         after = item.locator.lstat()
-        digest = hashlib.sha256(target.encode("utf-8", errors="surrogateescape")).hexdigest()
+        digest = hashlib.sha256(
+            target.encode("utf-8", errors="surrogateescape")
+        ).hexdigest()
     else:
         before = item.locator.stat(follow_symlinks=False)
         digest = hash_regular_file(item.locator, before)
@@ -59,7 +61,7 @@ def fingerprint_candidate(item: DiscoveredSource) -> CandidateFingerprint:
 
 
 def hash_regular_file(path: Path, observed: os.stat_result) -> str:
-    """Hash small files fully and sample large files at five fixed offsets."""
+    """Hash small files fully and sample large files at three fixed offsets."""
 
     hasher = hashlib.sha256()
     hasher.update(str(observed.st_size).encode("ascii"))
@@ -72,14 +74,11 @@ def hash_regular_file(path: Path, observed: os.stat_result) -> str:
             while chunk := source.read(64 * 1024):
                 hasher.update(chunk)
         else:
-            final_offset = observed.st_size - _SAMPLE_BYTES
             offsets = sorted(
                 {
                     0,
-                    final_offset // 4,
-                    final_offset // 2,
-                    (final_offset * 3) // 4,
-                    final_offset,
+                    observed.st_size // 2,
+                    observed.st_size - _SAMPLE_BYTES,
                 }
             )
             for offset in offsets:
