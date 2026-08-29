@@ -13,7 +13,7 @@
 
 ## 3. Downstream integration
 
-- [ ] 3.1 Implement Apply-side resolution and verification in the dedicated Apply worktree after this contract is accepted.
+- [x] 3.1 Implement Apply-side resolution and verification in the dedicated Apply worktree after this contract is accepted.
 - [x] 3.2 Obtain human acceptance of the PreCheck contract, producer, projection,
   and conformance evidence; keep the change active until Apply-side enforcement
   is implemented and accepted.

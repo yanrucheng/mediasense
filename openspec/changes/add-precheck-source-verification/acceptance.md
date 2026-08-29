@@ -1,8 +1,9 @@
 ## Acceptance state
 
 The PreCheck contract, producer, projection, and conformance evidence were
-human-accepted on 2026-08-30. The change remains active and unarchived because
-Apply-side enforcement is still an explicit integration follow-up.
+human-accepted on 2026-08-30. Apply-side enforcement is now implemented in the
+dedicated Apply worktree with public-Tool integration and fail-closed tests.
 
-Apply-side enforcement must fail closed until implemented; it is not silently
-claimed by this worktree or by the accepted PreCheck scope.
+The change remains active and unarchived until that downstream evidence is
+reviewed and the separate Apply activation decision is made. Implementation does
+not itself activate the Apply contract or authorize production media mutation.

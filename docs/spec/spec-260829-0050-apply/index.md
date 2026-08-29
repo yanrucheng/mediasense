@@ -68,6 +68,16 @@ The source namespace and final organization namespace must not overlap. An exist
 
 Same-filesystem moves use non-overwriting atomic move semantics where the platform supports them. Cross-filesystem move is a distinct disclosed route: write to a non-final destination, verify content byte for byte, and preserve timestamps, permissions, extended attributes, Finder tags, and other attributes declared user-relevant by the active platform profile before publishing without overwrite. If any such attribute cannot be preserved, deletion of that source item is blocked until the exact loss is disclosed under a new prepared-content identity and receives new Human authorization. The Receipt records accepted discrepancies and their authorization binding. Content inequality is never an authorizable metadata exception. No fallback may silently change route or guarantees.
 
+The review candidate `cross_filesystem_user_metadata_v1` currently supports
+Darwin APFS-to-APFS transfer and declares exact preservation of byte content and
+logical length, modification and creation timestamps, POSIX mode bits, owner and
+group IDs, BSD file flags, and all extended attributes including Finder tags.
+Access time and metadata change time are observationally volatile and are not
+preservation claims. ACL-bearing sources are unsupported by this candidate until
+a non-empty ACL fixture proves preservation; preparation must block rather than
+silently omit such ACLs. Any declared-field difference follows the discrepancy,
+new prepared identity, and new Human authorization rule above.
+
 Copy and link remain explicit deferred profiles. A Run never combines effect profiles.
 
 ## Source compatibility gate

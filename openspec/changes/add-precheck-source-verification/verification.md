@@ -19,3 +19,35 @@ PreCheck owns the sealed observation. Plan freezes only `result_ref` and `source
 - `intentionally_changed`: full-content proof, explicit profile/provenance, source-root-relative handoff, and fail-closed downstream semantics replace cache-path/hash coupling.
 - `regression`: none demonstrated by current characterization.
 - `not_comparable`: Result-local Apply verification observation and source-root binding have no c90 equivalent.
+
+## Apply-side enforcement evidence (2026-08-30)
+
+- `src/mediasense/apply/preparation.py` resolves every Frozen Plan item selected
+  for `move_originals` by calling the public `mediasense.precheck.read` boundary
+  with its exact `result_ref` and `source_item_ref`. It does not accept caller-
+  supplied verification facts as a substitute.
+- The consumer accepts the contract's `source_root_relative_path` locator and
+  `source_content_verification` observation, supports `sha256-full-v1`, binds
+  observation-level basis plus producer/time provenance into prepared content,
+  and re-reads current source bytes for exact size and full SHA-256 comparison.
+- Non-materialized Source Items may remain unverified. Missing, unavailable,
+  failed, unknown-profile, malformed, wrong-result, unbound-root, escaping,
+  aliased, mismatched, or concurrently changing selected sources block the Run
+  with zero destination effects.
+- `tests/test_apply_precheck_integration.py` creates and seals a real PreCheck
+  Result through public APIs, reads it through `PrecheckReadTool`, and reaches a
+  verified Apply `ready_for_authorization` state without changing source or
+  destination media.
+- Focused Apply contract, negative-path, preparation, and real-Result integration:
+  `31 passed, 1 deselected`.
+- Full fast suite after integration: `354 passed, 10 deselected`.
+- Apply 100,000-item bounded-ledger scale test: `1 passed, 27 deselected` in
+  1.44 seconds; traversal remains capped at 1,000 rows and below the asserted
+  8 MiB peak allocation.
+- The previously accepted Darwin APFS cross-filesystem evidence remains valid;
+  no transfer implementation used by that evidence changed in this integration.
+- Ruff check and format checks pass for all changed Apply source and tests.
+
+Apply Contract activation and production mutation remain separate Human
+decisions. This evidence completes implementation task 3.1 without changing the
+Apply contract from `review`.

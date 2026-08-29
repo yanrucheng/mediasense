@@ -1,0 +1,136 @@
+from __future__ import annotations
+
+import hashlib
+import json
+from pathlib import Path
+
+from PIL import Image
+
+from mediasense.apply import ApplyRunStore, SourceSetExpansion
+from mediasense.precheck import (
+    AccountingStore,
+    ImageRenditionProducer,
+    PrecheckReadTool,
+    ResultStore,
+)
+
+
+def _identity(value: object) -> str:
+    encoded = json.dumps(
+        value,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    return "sha256:" + hashlib.sha256(encoded).hexdigest()
+
+
+def _plan(*, result_ref: str, source_item_ref: str) -> dict[str, object]:
+    content = {
+        "contract": "mediasense.frozen-plan",
+        "plan_ref": "frozen-plan:real-precheck-integration",
+        "result_ref": result_ref,
+        "scope": {"kind": "explicit", "source_item_refs": [source_item_ref]},
+        "logical_root": "Media",
+        "groups": [
+            {
+                "relative_path": ["Verified"],
+                "members": {
+                    "kind": "explicit",
+                    "source_item_refs": [source_item_ref],
+                },
+                "source_naming": {"default": "preserve_source_basename"},
+            }
+        ],
+        "other_outcomes": [],
+    }
+    content_identity = _identity(content)
+    return {
+        "sealed_content": content,
+        "seal": {
+            "encoding_profile": "mediasense-json-strings-sha256-v1",
+            "content_identity": content_identity,
+            "final_confirmation": {
+                "confirmed_content_identity": content_identity,
+                "confirmed_at": "2026-08-30T09:00:00+08:00",
+                "confirmed_by": "human:integration-test",
+            },
+        },
+    }
+
+
+def _resolve(_result_ref: str, source_set: dict) -> SourceSetExpansion:
+    return SourceSetExpansion(iter(source_set["source_item_refs"]), complete=True)
+
+
+def test_prepare_resolves_and_verifies_one_real_sealed_precheck_result(
+    tmp_path: Path,
+) -> None:
+    database = tmp_path / "precheck-state" / "working.sqlite3"
+    source = tmp_path / "source"
+    destination = tmp_path / "destination"
+    source.mkdir()
+    destination.mkdir()
+    Image.new("RGB", (80, 40), "blue").save(source / "original.jpg")
+    source_before = (source / "original.jpg").read_bytes()
+
+    accounting = AccountingStore(database)
+    accounting.register_dataset("dataset-apply-integration")
+    run_id = accounting.start_or_resume_run("dataset-apply-integration", source)
+    accounting.process_run(run_id)
+    rendition = ImageRenditionProducer(database).produce(run_id, Path("original.jpg"))
+    result = ResultStore(database).seal(
+        ResultStore(database).build_minimal(run_id, [rendition.work.work_id])
+    )
+    reader = PrecheckReadTool(database)
+
+    accounts = reader.read(
+        {
+            "result_ref": result.result_ref,
+            "action": "traverse",
+            "relation": "accounts_for",
+            "direction": "outbound",
+        }
+    )
+    source_item_ref = next(
+        str(item["target"])
+        for item in accounts["items"]
+        if item["scope"] == "source_media"
+    )
+    inspected = reader.read(
+        {
+            "result_ref": result.result_ref,
+            "action": "inspect",
+            "target": {"kind": "source_item", "ref": source_item_ref},
+        }
+    )
+    source_view = inspected["target"]
+    source_root_ref = source_view["locator"]["source_root_ref"]
+    verification = next(
+        observation
+        for observation in source_view["observations"]
+        if observation["name"] == "source_content_verification"
+    )
+    assert verification["value"]["profile"] == "sha256-full-v1"
+
+    apply = ApplyRunStore.initialize(tmp_path / "apply-state" / "apply.sqlite3")
+    prepared = apply.prepare_forward(
+        request_id="request:real-precheck-integration",
+        frozen_plan=_plan(
+            result_ref=result.result_ref,
+            source_item_ref=source_item_ref,
+        ),
+        source_roots={source_root_ref: source},
+        destination_parent=destination,
+        resolve_source_set=_resolve,
+        precheck_read=reader,
+    )
+
+    assert prepared.state == "ready_for_authorization"
+    item = apply.iter_items(prepared.run_ref, limit=1)[0]
+    assert item["source_item_ref"] == source_item_ref
+    assert item["verification_profile"] == "sha256-full-v1"
+    assert item["verification_producer"] == "builtin-source-content-proof-v1"
+    assert item["expected_verification"] == item["observed_verification"]
+    assert (source / "original.jpg").read_bytes() == source_before
+    assert list(destination.iterdir()) == []
