@@ -4,13 +4,14 @@ The PreCheck runtime, its immutable Result, and the `mediasense.precheck.run`
 and `mediasense.precheck.read` contracts already exist. Plan and Apply have
 repository-local user-facing Skills, while PreCheck does not. This change adds
 the missing procedural knowledge after the deterministic boundaries are stable;
-it does not redesign the stage or turn the Skill into another runtime authority.
+it does not redesign the stage, change the Run contract, or turn the Skill into
+another runtime authority.
 
 The Skill must be useful for collections ranging from hundreds of files to
 multi-terabyte or hundred-thousand-item Datasets. It therefore has to help an
-Agent choose a compression purpose, explain long-running state, adapt evidence
-budgets, and preserve uncertainty without fixing today's algorithms or storage
-implementation as permanent workflow law.
+Agent review initial compression, explain costs and long-running state,
+diagnose concrete evidence problems, and preserve uncertainty without fixing
+today's algorithms or storage implementation as permanent workflow law.
 
 ## Goals / Non-Goals
 
@@ -20,8 +21,9 @@ implementation as permanent workflow law.
   result interpretation, and Plan handoff.
 - Preserve the Human, Agent, Skill, Tool, and Result authority boundaries.
 - Keep source media read-only and external work disabled by default.
-- Support goal-driven initial compression and later recompression or evidence
-  expansion without hiding cost, coverage, or uncertainty.
+- Support data-sensitive initial compression and diagnosis-led revisions
+  without hiding cost, coverage, or uncertainty or treating an Evidence count
+  as a universal target.
 - Verify the workflow with positive and negative activation cases plus
   independent realistic Agent scenarios.
 
@@ -52,9 +54,9 @@ are already the authoritative boundary used by Plan and Apply.
 
 The Human owns collection intent, consequential trade-offs, the bounded online
 decision, and the choice after a blocked Result. The Agent interprets that
-intent, recommends a compression purpose, explains observable status and
-uncertainty, and chooses among Tool-supported next steps. The Skill supplies the
-reusable criteria and workflow. `mediasense.precheck.run` owns discovery, long
+intent, explains observable status, cost, and uncertainty, diagnoses reported
+evidence problems, and chooses among Tool-supported next steps. The Skill
+supplies the reusable criteria and workflow. `mediasense.precheck.run` owns discovery, long
 work, control transitions, confirmation enforcement, recovery, and publication;
 `mediasense.precheck.read` owns immutable Result views and evidence navigation.
 
@@ -73,29 +75,51 @@ Automatic discovery remains enabled. The description names both the positive
 scope and the nearby Plan/Apply exclusions so ordinary preparation requests can
 activate it without attracting naming or filesystem-execution requests.
 
-### Compression follows the decision purpose
+### Compression count is an observation, not an input target
 
-The Skill asks what downstream decision the evidence must support and balances
-coverage, variation, user review burden, local cost, and residual uncertainty.
-It does not canonize a target or algorithm. A changed target or purpose creates
-a new Run and immutable Result from the exact prior Result lineage through the
-available Tool boundary; reusable valid work remains a runtime guarantee, not a
-Skill implementation recipe.
+For a new Dataset, the Agent uses an appropriate available initial configuration
+without asking the Human to predict a correct Evidence count. Dataset content,
+coverage, variation, local cost, downstream review burden, and residual
+uncertainty determine whether the observed frontier is useful; a count is not a
+standalone quality label.
 
-When evidence is insufficient, the Agent can recommend targeted Result-local
-expansion, a differently compressed Result, or directed upstream rebuild. It
-must not manufacture confidence or require one visual rendition per Source
-Item. Accounting remains closed through the normal frontier or explicit
-auxiliary, excluded, unsupported, invalid, error, or unresolved paths.
+If the Human is dissatisfied, the Agent asks for the concrete symptom and uses
+the immutable Result to diagnose the narrowest relevant producer, profile,
+parameter, or evidence gap. Only then does it explain trade-offs and select a
+supported configuration revision. The successor Run binds the exact prior
+`result_ref`, publishes a distinct immutable Result, and leaves valid-work reuse
+to the Tool. Thus 500, 3, and 200 are possible outputs of three revisions, not
+three count targets passed to the Run contract.
+
+When evidence is insufficient, the Agent can inspect existing Result-local
+Evidence before Plan starts, recommend a supported configuration revision, or
+request a directed upstream rebuild when the runtime exposes one. It must state
+an unavailable capability instead of inventing an action, manufacture no
+confidence, and require no visual rendition for every Source Item. Accounting
+remains closed through the normal frontier or explicit auxiliary, excluded,
+unsupported, invalid, error, or unresolved paths.
+
+### Cost becomes visible progressively
+
+The Skill reports cost only when the Tool or immutable Result exposes evidence
+for it. During the Run this includes local progress, reuse, resource pressure,
+and the exact pending reverse-geocode logical-query count. After compression or
+publication it includes the frontier and represented population, prospective
+Plan Evidence and user-attention burden, and actual provider, retry, fallback,
+and billable-call observations where available. Estimates remain
+distinguishable from observations and unknowns.
 
 ### External scope remains narrow and exact
 
 The normal path is local-only. The sole current online exception is reverse
 geocoding of the normalized, deduplicated coordinate set frozen after
 compression. Before any request, the Agent presents the Tool-reported exact
-logical-query count and scope and asks for the matching Human decision. A skip
-continues without that optional evidence. The Skill grants no authority to send
-media, renditions, features, prompts, or ordinary metadata.
+logical-query count and scope, states that coordinates leave the local boundary
+and can reveal visited places, distinguishes unknown provider handling and
+cost, and asks for the matching Human decision. A skip continues without that
+optional evidence; the Agent does not invent a durable qualification when the
+Result does not return one. The Skill grants no authority to send media,
+renditions, features, prompts, or ordinary metadata.
 
 ### Observable state drives recovery and completion
 
@@ -109,9 +133,10 @@ facts.
 Only an immutable Result read through `mediasense.precheck.read` can support
 handoff. Coverage, readiness, and integrity are independent: a partial but
 `plan_ready` Result may proceed with its qualifications, while `blocked`
-requires an explicit Human choice to continue preparation, request directed
-rebuild/other evidence, or stop. Plan receives only the exact `result_ref` and
-uses Read; it never receives a PreCheck database or cache path.
+requires an explicit Human choice to start a successor, request supported
+directed rebuild/other evidence, or stop. A completed Run is not resumed or
+cancelled. Plan receives only the exact `result_ref` and uses Read; it never
+receives a PreCheck database or cache path.
 
 ### Validation separates structure from behavior
 
@@ -119,7 +144,8 @@ Repository tests validate the Skill package, automatic invocation policy,
 contract links, prohibited authority claims, activation examples, and the
 complete scenario matrix. Independent Agent passes receive realistic prompts
 and Tool observations without the intended answer, then are reviewed for Tool
-selection, confirmation, status explanation, recovery, and stage handoff.
+selection, cost explanation, diagnosis-led revision, confirmation, status
+explanation, recovery, and stage handoff.
 Generated evaluation output stays outside Git.
 
 ## Risks / Trade-offs
@@ -131,6 +157,14 @@ Generated evaluation output stays outside Git.
 - **A short Skill can omit rare recovery detail** → Teach interpretation of
   Tool-provided reasons and recovery conditions rather than enumerate internal
   exceptions or duplicate schemas.
+- **The public Tool does not discover or edit host configuration** → Revise only
+  when the current host exposes a supported configuration path; otherwise
+  report the capability gap instead of inventing request fields.
+- **The Run Tool starts only from an existing Dataset or Result reference** →
+  Require a host-supplied exact `dataset_ref`; if onboarding is unavailable,
+  report the gap instead of scanning a path directly.
+- **Some local and downstream cost fields are not standardized** → Report only
+  Tool/Result evidence, label estimates, and keep unavailable values unknown.
 - **Forward tests are model-dependent** → Pair independent Agent evaluation
   with deterministic package and scenario-contract tests; report both and keep
   the observed transcripts outside the repository.

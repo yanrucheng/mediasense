@@ -4,16 +4,54 @@ import json
 from pathlib import Path
 import re
 
+from jsonschema import Draft202012Validator
+
 
 ROOT = Path(__file__).parents[1]
 SKILL_DIR = ROOT / ".agents" / "skills" / "mediasense-precheck"
 SKILL_PATH = SKILL_DIR / "SKILL.md"
 OPENAI_PATH = SKILL_DIR / "agents" / "openai.yaml"
+RUN_TOOL = json.loads(
+    (
+        ROOT
+        / "docs"
+        / "spec"
+        / "spec-260827-1915A-precheck-run"
+        / "precheck-run.tool.json"
+    ).read_text(encoding="utf-8")
+)
+READ_TOOL = json.loads(
+    (
+        ROOT
+        / "docs"
+        / "spec"
+        / "spec-260826-1546-precheck-read"
+        / "precheck-read.tool.json"
+    ).read_text(encoding="utf-8")
+)
+TOOL_SCHEMAS = {
+    RUN_TOOL["name"]: RUN_TOOL["inputSchema"],
+    READ_TOOL["name"]: READ_TOOL["inputSchema"],
+}
 SCENARIOS = json.loads(
     (ROOT / "tests" / "fixtures" / "precheck-skill-forward-v1.json").read_text(
         encoding="utf-8"
     )
 )["scenarios"]
+
+
+def _action_constants(value: object) -> set[str]:
+    if isinstance(value, list):
+        return set().union(*(_action_constants(item) for item in value))
+    if not isinstance(value, dict):
+        return set()
+    actions: set[str] = set()
+    properties = value.get("properties")
+    if isinstance(properties, dict):
+        action = properties.get("action")
+        if isinstance(action, dict) and isinstance(action.get("const"), str):
+            actions.add(action["const"])
+    return actions | set().union(*(_action_constants(item) for item in value.values()))
 
 
 def test_skill_package_is_minimal_and_normally_discoverable() -> None:
@@ -60,7 +98,10 @@ def test_forward_scenarios_cover_required_behavior_and_phase_boundaries() -> Non
         "positive_activation",
         "negative_activation",
         "initial_compression",
+        "cost_reporting",
         "recompression",
+        "diagnosis_led_revision",
+        "observed_counts",
         "interruption",
         "disconnect",
         "disk_full",
@@ -68,6 +109,7 @@ def test_forward_scenarios_cover_required_behavior_and_phase_boundaries() -> Non
         "external_default_off",
         "reverse_geocode",
         "exact_confirmation",
+        "coordinate_privacy",
         "skip_optional",
         "partial_result",
         "plan_ready",
@@ -85,17 +127,28 @@ def test_forward_scenarios_cover_required_behavior_and_phase_boundaries() -> Non
         scenario for scenario in SCENARIOS if not scenario["expected_activation"]
     ]
     assert positive
+    assert all(
+        scenario["expected_owner"] == "mediasense-precheck" for scenario in positive
+    )
     assert {scenario["id"] for scenario in negative} == {
         "negative_apply_execution",
         "negative_plan_naming",
     }
+    assert {scenario["expected_owner"] for scenario in negative} == {
+        "mediasense-apply",
+        "mediasense-plan",
+    }
     assert all(scenario["tool_route"] for scenario in positive)
+    assert all(not scenario["tool_route"] for scenario in negative)
     assert all(scenario["must"] and scenario["must_not"] for scenario in SCENARIOS)
-    assert all(
-        not any(
-            forbidden in route
-            for forbidden in ("sqlite", "cache", "filesystem", "shell")
-        )
-        for scenario in positive
-        for route in scenario["tool_route"]
-    )
+
+    contract_actions = {
+        name: _action_constants(schema) for name, schema in TOOL_SCHEMAS.items()
+    }
+    for scenario in positive:
+        for step in scenario["tool_route"]:
+            assert set(step) == {"tool", "request"}
+            tool_name = step["tool"]
+            assert tool_name in TOOL_SCHEMAS
+            assert step["request"]["action"] in contract_actions[tool_name]
+            Draft202012Validator(TOOL_SCHEMAS[tool_name]).validate(step["request"])

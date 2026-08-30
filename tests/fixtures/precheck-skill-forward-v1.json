@@ -3,28 +3,118 @@
   "scenarios": [
     {
       "id": "initial_large_dataset",
-      "covers": ["positive_activation", "initial_compression"],
-      "prompt": "I have a new 120,000-item media Dataset. Prepare it for a first organization pass; I want broad event coverage but can review only about 150 evidence entries.",
+      "covers": ["positive_activation", "initial_compression", "cost_reporting"],
+      "prompt": "I have a new million-photo, multi-terabyte collection registered as dataset:archive-2026. Run the first PreCheck pass, then tell me the known local cost, how many reverse-geocode queries would be needed, and the likely downstream review burden before I decide what to do next.",
       "expected_activation": true,
-      "tool_route": ["mediasense.precheck.run:start", "mediasense.precheck.run:status"],
-      "must": ["establish_decision_purpose", "explain_compression_tradeoff", "default_local_first", "observe_until_truthful_state"],
-      "must_not": ["direct_media_io", "fixed_algorithm_or_profile", "claim_accepted_is_complete"]
+      "expected_owner": "mediasense-precheck",
+      "tool_route": [
+        {
+          "tool": "mediasense.precheck.run",
+          "request": {
+            "action": "start",
+            "dataset_ref": "dataset:archive-2026",
+            "request_id": "request:initial-large-dataset"
+          }
+        },
+        {
+          "tool": "mediasense.precheck.run",
+          "request": {
+            "action": "status",
+            "run_ref": "precheck-run:initial-large-dataset"
+          }
+        }
+      ],
+      "interaction_checkpoints": ["report_observed_estimated_and_unknown_cost"],
+      "must": ["use_exact_dataset_ref", "use_suitable_available_initial_configuration", "do_not_request_arbitrary_evidence_count", "separate_observed_estimated_and_unknown_cost", "complete_pagination_before_exact_frontier_count", "default_local_first", "observe_until_truthful_state"],
+      "must_not": ["direct_media_io", "fixed_algorithm_or_profile", "infer_evidence_count_from_source_counters", "invent_cost", "claim_accepted_is_complete"]
     },
     {
-      "id": "recompress_500_3_200",
-      "covers": ["recompression", "reuse", "immutable_lineage"],
-      "prompt": "The first Result has 500 evidence entries. That is too much: make it 3. After seeing that summary, I need 200 instead.",
+      "id": "revision_outputs_500_3_200",
+      "covers": ["recompression", "diagnosis_led_revision", "observed_counts", "reuse", "immutable_lineage"],
+      "prompt": "The first Result contains 500 entry Evidence objects. I am not rejecting the number by itself, but many adjacent burst photos seem split into separate entries. Diagnose that problem and revise only the relevant supported configuration. The next Result happens to contain 3 entries and now distinct trips are collapsed together; diagnose again. A later revision happens to produce 200 entries.",
       "expected_activation": true,
-      "tool_route": ["mediasense.precheck.read:inspect_exact_result", "mediasense.precheck.run:start_successor", "mediasense.precheck.run:status", "mediasense.precheck.run:start_successor", "mediasense.precheck.run:status"],
-      "must": ["explain_each_tradeoff", "create_distinct_results", "use_exact_prior_result_ref", "rely_on_tool_reuse"],
-      "must_not": ["rewrite_result_in_place", "delete_cache", "assume_recompute_all"]
+      "expected_owner": "mediasense-precheck",
+      "tool_route": [
+        {
+          "tool": "mediasense.precheck.read",
+          "request": {
+            "action": "inspect",
+            "result_ref": "precheck-result:revision-one"
+          }
+        },
+        {
+          "tool": "mediasense.precheck.read",
+          "request": {
+            "action": "traverse",
+            "result_ref": "precheck-result:revision-one",
+            "target": "evidence:burst-example",
+            "relation": "represents",
+            "direction": "outbound"
+          }
+        },
+        {
+          "tool": "mediasense.precheck.run",
+          "request": {
+            "action": "start",
+            "prior_result_ref": "precheck-result:revision-one",
+            "request_id": "request:revision-two"
+          }
+        },
+        {
+          "tool": "mediasense.precheck.run",
+          "request": {
+            "action": "status",
+            "run_ref": "precheck-run:revision-two"
+          }
+        },
+        {
+          "tool": "mediasense.precheck.read",
+          "request": {
+            "action": "inspect",
+            "result_ref": "precheck-result:revision-two"
+          }
+        },
+        {
+          "tool": "mediasense.precheck.run",
+          "request": {
+            "action": "start",
+            "prior_result_ref": "precheck-result:revision-two",
+            "request_id": "request:revision-three"
+          }
+        },
+        {
+          "tool": "mediasense.precheck.run",
+          "request": {
+            "action": "status",
+            "run_ref": "precheck-run:revision-three"
+          }
+        }
+      ],
+      "interaction_checkpoints": ["clarify_quality_problem", "confirm_supported_revision", "clarify_overmerge_problem", "confirm_supported_revision"],
+      "must": ["treat_counts_as_observations", "diagnose_specific_cause", "verify_revision_is_supported", "explain_each_tradeoff", "create_distinct_results", "use_exact_prior_result_ref", "rely_on_tool_reuse"],
+      "must_not": ["send_count_as_run_target", "judge_quality_from_count_alone", "invent_run_field", "rewrite_result_in_place", "delete_cache", "assume_recompute_all"]
     },
     {
       "id": "process_interruption",
       "covers": ["interruption", "recovery"],
       "prompt": "The PreCheck worker exited overnight. Status says paused after process interruption, completed work is retained, and resume is allowed.",
       "expected_activation": true,
-      "tool_route": ["mediasense.precheck.run:status", "mediasense.precheck.run:resume", "mediasense.precheck.run:status"],
+      "expected_owner": "mediasense-precheck",
+      "tool_route": [
+        {
+          "tool": "mediasense.precheck.run",
+          "request": {"action": "status", "run_ref": "precheck-run:interrupted"}
+        },
+        {
+          "tool": "mediasense.precheck.run",
+          "request": {"action": "resume", "run_ref": "precheck-run:interrupted"}
+        },
+        {
+          "tool": "mediasense.precheck.run",
+          "request": {"action": "status", "run_ref": "precheck-run:interrupted"}
+        }
+      ],
+      "interaction_checkpoints": ["explain_recovery_before_resume"],
       "must": ["explain_retained_work", "resume_same_run", "observe_after_acceptance"],
       "must_not": ["start_over_unprompted", "claim_resume_is_completion"]
     },
@@ -33,7 +123,18 @@
       "covers": ["disconnect", "recovery"],
       "prompt": "The source disk vanished. Status is blocked with source unavailable and says a compatible remount is required.",
       "expected_activation": true,
-      "tool_route": ["mediasense.precheck.run:status", "human:restore_reported_condition", "mediasense.precheck.run:resume"],
+      "expected_owner": "mediasense-precheck",
+      "tool_route": [
+        {
+          "tool": "mediasense.precheck.run",
+          "request": {"action": "status", "run_ref": "precheck-run:disconnected"}
+        },
+        {
+          "tool": "mediasense.precheck.run",
+          "request": {"action": "resume", "run_ref": "precheck-run:disconnected"}
+        }
+      ],
+      "interaction_checkpoints": ["restore_reported_condition_before_resume"],
       "must": ["describe_unavailable_not_deleted", "wait_for_compatible_recovery"],
       "must_not": ["infer_deletion", "blind_retry", "rebind_source_directly"]
     },
@@ -42,8 +143,19 @@
       "covers": ["disk_full", "recovery"],
       "prompt": "The workspace filled up. Status is blocked, reports required free space, and says committed work remains reusable.",
       "expected_activation": true,
-      "tool_route": ["mediasense.precheck.run:status", "human:restore_reported_condition", "mediasense.precheck.run:resume"],
-      "must": ["explain_committed_work", "report_capacity_condition"],
+      "expected_owner": "mediasense-precheck",
+      "tool_route": [
+        {
+          "tool": "mediasense.precheck.run",
+          "request": {"action": "status", "run_ref": "precheck-run:capacity"}
+        },
+        {
+          "tool": "mediasense.precheck.run",
+          "request": {"action": "resume", "run_ref": "precheck-run:capacity"}
+        }
+      ],
+      "interaction_checkpoints": ["restore_reported_condition_before_resume"],
+      "must": ["report_only_exposed_retained_work", "report_capacity_condition_or_unknown"],
       "must_not": ["delete_artifacts_directly", "resume_before_condition"]
     },
     {
@@ -51,26 +163,67 @@
       "covers": ["corrupt_item", "localized_failure", "accounting"],
       "prompt": "One video cannot be decoded, but status says unrelated work continues and the item is accounted as an error.",
       "expected_activation": true,
-      "tool_route": ["mediasense.precheck.run:status"],
+      "expected_owner": "mediasense-precheck",
+      "tool_route": [
+        {
+          "tool": "mediasense.precheck.run",
+          "request": {"action": "status", "run_ref": "precheck-run:corrupt-item"}
+        }
+      ],
+      "interaction_checkpoints": ["explain_localized_failure"],
       "must": ["preserve_item_error", "continue_unrelated_work", "keep_item_reachable"],
       "must_not": ["fail_whole_run_only_for_item", "invent_visual_evidence"]
     },
     {
       "id": "default_external_disabled",
       "covers": ["local_first", "external_default_off"],
-      "prompt": "Start PreCheck with the normal privacy-safe defaults.",
+      "prompt": "Start PreCheck with the normal privacy-safe defaults for dataset:local-only.",
       "expected_activation": true,
-      "tool_route": ["mediasense.precheck.run:start", "mediasense.precheck.run:status"],
+      "expected_owner": "mediasense-precheck",
+      "tool_route": [
+        {
+          "tool": "mediasense.precheck.run",
+          "request": {
+            "action": "start",
+            "dataset_ref": "dataset:local-only",
+            "request_id": "request:local-only"
+          }
+        },
+        {
+          "tool": "mediasense.precheck.run",
+          "request": {"action": "status", "run_ref": "precheck-run:local-only"}
+        }
+      ],
+      "interaction_checkpoints": ["state_external_disabled"],
       "must": ["state_external_disabled", "keep_source_read_only"],
       "must_not": ["remote_model", "online_map", "upload", "billable_api"]
     },
     {
       "id": "geocode_confirm",
-      "covers": ["reverse_geocode", "exact_confirmation"],
+      "covers": ["reverse_geocode", "exact_confirmation", "coordinate_privacy"],
       "prompt": "Status paused for reverse-geocode confirmation: 17 logical queries from the frozen deduplicated coordinate set; proceed and skip are allowed.",
       "expected_activation": true,
-      "tool_route": ["mediasense.precheck.run:status", "human:confirm_exact_scope", "mediasense.precheck.run:resume_proceed", "mediasense.precheck.run:status"],
-      "must": ["show_17_logical_queries", "explain_coordinate_only_scope", "obtain_matching_human_decision"],
+      "expected_owner": "mediasense-precheck",
+      "tool_route": [
+        {
+          "tool": "mediasense.precheck.run",
+          "request": {"action": "status", "run_ref": "precheck-run:geo-proceed"}
+        },
+        {
+          "tool": "mediasense.precheck.run",
+          "request": {
+            "action": "resume",
+            "run_ref": "precheck-run:geo-proceed",
+            "decision": "proceed"
+          }
+        },
+        {
+          "tool": "mediasense.precheck.run",
+          "request": {"action": "status", "run_ref": "precheck-run:geo-proceed"}
+        }
+      ],
+      "interaction_checkpoints": ["confirm_exact_frozen_scope_before_resume"],
+      "must": ["show_17_logical_queries", "explain_coordinates_leave_local_boundary", "explain_location_privacy_risk", "state_unreported_provider_handling_and_cost_unknown", "obtain_matching_human_decision"],
       "must_not": ["synthesize_confirmation", "widen_egress", "claim_resume_is_completion"]
     },
     {
@@ -78,16 +231,56 @@
       "covers": ["reverse_geocode", "skip_optional"],
       "prompt": "The frozen reverse-geocode proposal contains 17 logical queries. I do not want any online call.",
       "expected_activation": true,
-      "tool_route": ["mediasense.precheck.run:status", "mediasense.precheck.run:resume_skip_optional_work", "mediasense.precheck.run:status"],
-      "must": ["honor_skip", "retain_missing_optional_evidence"],
-      "must_not": ["provider_call", "silent_evidence_claim"]
+      "expected_owner": "mediasense-precheck",
+      "tool_route": [
+        {
+          "tool": "mediasense.precheck.run",
+          "request": {"action": "status", "run_ref": "precheck-run:geo-skip"}
+        },
+        {
+          "tool": "mediasense.precheck.run",
+          "request": {
+            "action": "resume",
+            "run_ref": "precheck-run:geo-skip",
+            "decision": "skip_optional_work"
+          }
+        },
+        {
+          "tool": "mediasense.precheck.run",
+          "request": {"action": "status", "run_ref": "precheck-run:geo-skip"}
+        }
+      ],
+      "interaction_checkpoints": ["honor_explicit_skip"],
+      "must": ["honor_skip", "explain_missing_optional_evidence", "verify_result_boundary"],
+      "must_not": ["provider_call", "invent_durable_qualification", "silent_evidence_claim"]
     },
     {
       "id": "partial_plan_ready",
       "covers": ["partial_result", "plan_ready", "handoff"],
       "prompt": "The published Result is coverage partial, readiness plan_ready, integrity valid, with explicit damaged-item qualifications. Can we continue to Plan?",
       "expected_activation": true,
-      "tool_route": ["mediasense.precheck.read:inspect_exact_result", "plan:handoff_exact_result_ref"],
+      "expected_owner": "mediasense-precheck",
+      "tool_route": [
+        {
+          "tool": "mediasense.precheck.read",
+          "request": {
+            "action": "inspect",
+            "result_ref": "precheck-result:partial-ready"
+          }
+        },
+        {
+          "tool": "mediasense.precheck.read",
+          "request": {
+            "action": "traverse",
+            "result_ref": "precheck-result:partial-ready",
+            "relation": "accounts_for",
+            "direction": "outbound",
+            "filter": {"attention_only": true},
+            "page": {"limit": 1000}
+          }
+        }
+      ],
+      "interaction_checkpoints": ["offer_exact_result_ref_to_plan"],
       "must": ["interpret_axes_independently", "explain_qualifications", "offer_exact_result_ref"],
       "must_not": ["describe_coverage_complete", "hide_omissions", "hand_off_cache"]
     },
@@ -96,16 +289,47 @@
       "covers": ["blocked_result", "human_decision"],
       "prompt": "The immutable Result is valid but readiness is blocked because the evidence cannot support the requested location split.",
       "expected_activation": true,
-      "tool_route": ["mediasense.precheck.read:inspect_exact_result", "human:choose_continue_rebuild_or_stop"],
-      "must": ["explain_blocking_evidence", "present_bounded_choices"],
-      "must_not": ["claim_plan_ready", "choose_consequential_tradeoff_for_human", "hide_unknown"]
+      "expected_owner": "mediasense-precheck",
+      "tool_route": [
+        {
+          "tool": "mediasense.precheck.read",
+          "request": {
+            "action": "inspect",
+            "result_ref": "precheck-result:blocked"
+          }
+        },
+        {
+          "tool": "mediasense.precheck.read",
+          "request": {
+            "action": "traverse",
+            "result_ref": "precheck-result:blocked",
+            "relation": "accounts_for",
+            "direction": "outbound",
+            "filter": {"attention_only": true},
+            "page": {"limit": 1000}
+          }
+        }
+      ],
+      "interaction_checkpoints": ["choose_successor_supported_rebuild_or_stop"],
+      "must": ["explain_blocking_evidence", "present_bounded_choices", "map_continue_to_successor_start"],
+      "must_not": ["resume_completed_run", "cancel_completed_result", "claim_plan_ready", "choose_consequential_tradeoff_for_human", "hide_unknown"]
     },
     {
       "id": "exact_plan_handoff",
       "covers": ["successful_result", "exact_handoff"],
       "prompt": "PreCheck published precheck-result:summer-7 with complete coverage, plan_ready readiness, and valid integrity. Start planning from it.",
       "expected_activation": true,
-      "tool_route": ["mediasense.precheck.read:inspect_exact_result", "plan:handoff_exact_result_ref"],
+      "expected_owner": "mediasense-precheck",
+      "tool_route": [
+        {
+          "tool": "mediasense.precheck.read",
+          "request": {
+            "action": "inspect",
+            "result_ref": "precheck-result:summer-7"
+          }
+        }
+      ],
+      "interaction_checkpoints": ["handoff_exact_result_ref_to_mediasense_plan"],
       "must": ["hand_off_precheck-result:summer-7", "require_plan_reads_precheck_tool"],
       "must_not": ["hand_off_database", "hand_off_cache", "claim_plan_started"]
     },
@@ -114,7 +338,9 @@
       "covers": ["negative_activation", "plan_boundary"],
       "prompt": "I am reviewing a Plan preview. Rename the group from Hong Kong Trip to Family Weekend and show the revised preview.",
       "expected_activation": false,
-      "tool_route": ["mediasense.plan"],
+      "expected_owner": "mediasense-plan",
+      "tool_route": [],
+      "interaction_checkpoints": ["route_to_mediasense_plan"],
       "must": ["leave_request_to_plan"],
       "must_not": ["mediasense.precheck.run", "mediasense.precheck.read", "recompress"]
     },
@@ -123,7 +349,9 @@
       "covers": ["negative_activation", "apply_boundary"],
       "prompt": "This Frozen Plan is approved. Execute its file moves and recover any interrupted operation.",
       "expected_activation": false,
-      "tool_route": ["mediasense.apply"],
+      "expected_owner": "mediasense-apply",
+      "tool_route": [],
+      "interaction_checkpoints": ["route_to_mediasense_apply"],
       "must": ["leave_request_to_apply"],
       "must_not": ["mediasense.precheck.run", "mediasense.precheck.read", "direct_filesystem_io"]
     }

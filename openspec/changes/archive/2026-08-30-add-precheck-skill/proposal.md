@@ -2,16 +2,19 @@
 
 MediaSense defines PreCheck, Plan, and Apply as three user-facing stages, but the
 repository exposes Skills only for Plan and Apply. The missing PreCheck Skill
-leaves Agents without durable guidance for goal-driven compression, observable
-long-running work, bounded external confirmation, honest partial Results, and
-the exact handoff to Plan even though the Run and Read contracts are complete.
+leaves Agents without durable guidance for initial compression, progressive
+cost reporting, diagnosis-led revision, observable long-running work, bounded
+external confirmation, honest partial Results, and the exact handoff to Plan
+even though the Run and Read contracts are complete.
 
 ## What Changes
 
 - Add a normally discoverable repository-local `mediasense-precheck` Skill.
-- Define the Agent workflow for choosing a compression purpose, operating and
-  recovering a PreCheck Run through its Tool boundary, interpreting immutable
-  Results, and handing one exact `result_ref` to Plan.
+- Define the Agent workflow for running an appropriate initial compression,
+  reporting known and estimated costs, diagnosing user-observed evidence
+  problems before revising configuration, operating and recovering a PreCheck
+  Run, interpreting immutable Results, and handing one exact `result_ref` to
+  Plan.
 - Preserve local-first execution and the single confirmed online exception for
   a frozen, deduplicated post-compression reverse-geocode query set.
 - Add positive and negative activation checks plus independent, realistic Agent
