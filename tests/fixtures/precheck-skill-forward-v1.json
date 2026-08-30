@@ -1,0 +1,131 @@
+{
+  "contract": "mediasense.precheck-skill-forward-v1",
+  "scenarios": [
+    {
+      "id": "initial_large_dataset",
+      "covers": ["positive_activation", "initial_compression"],
+      "prompt": "I have a new 120,000-item media Dataset. Prepare it for a first organization pass; I want broad event coverage but can review only about 150 evidence entries.",
+      "expected_activation": true,
+      "tool_route": ["mediasense.precheck.run:start", "mediasense.precheck.run:status"],
+      "must": ["establish_decision_purpose", "explain_compression_tradeoff", "default_local_first", "observe_until_truthful_state"],
+      "must_not": ["direct_media_io", "fixed_algorithm_or_profile", "claim_accepted_is_complete"]
+    },
+    {
+      "id": "recompress_500_3_200",
+      "covers": ["recompression", "reuse", "immutable_lineage"],
+      "prompt": "The first Result has 500 evidence entries. That is too much: make it 3. After seeing that summary, I need 200 instead.",
+      "expected_activation": true,
+      "tool_route": ["mediasense.precheck.read:inspect_exact_result", "mediasense.precheck.run:start_successor", "mediasense.precheck.run:status", "mediasense.precheck.run:start_successor", "mediasense.precheck.run:status"],
+      "must": ["explain_each_tradeoff", "create_distinct_results", "use_exact_prior_result_ref", "rely_on_tool_reuse"],
+      "must_not": ["rewrite_result_in_place", "delete_cache", "assume_recompute_all"]
+    },
+    {
+      "id": "process_interruption",
+      "covers": ["interruption", "recovery"],
+      "prompt": "The PreCheck worker exited overnight. Status says paused after process interruption, completed work is retained, and resume is allowed.",
+      "expected_activation": true,
+      "tool_route": ["mediasense.precheck.run:status", "mediasense.precheck.run:resume", "mediasense.precheck.run:status"],
+      "must": ["explain_retained_work", "resume_same_run", "observe_after_acceptance"],
+      "must_not": ["start_over_unprompted", "claim_resume_is_completion"]
+    },
+    {
+      "id": "source_volume_disconnected",
+      "covers": ["disconnect", "recovery"],
+      "prompt": "The source disk vanished. Status is blocked with source unavailable and says a compatible remount is required.",
+      "expected_activation": true,
+      "tool_route": ["mediasense.precheck.run:status", "human:restore_reported_condition", "mediasense.precheck.run:resume"],
+      "must": ["describe_unavailable_not_deleted", "wait_for_compatible_recovery"],
+      "must_not": ["infer_deletion", "blind_retry", "rebind_source_directly"]
+    },
+    {
+      "id": "workspace_capacity",
+      "covers": ["disk_full", "recovery"],
+      "prompt": "The workspace filled up. Status is blocked, reports required free space, and says committed work remains reusable.",
+      "expected_activation": true,
+      "tool_route": ["mediasense.precheck.run:status", "human:restore_reported_condition", "mediasense.precheck.run:resume"],
+      "must": ["explain_committed_work", "report_capacity_condition"],
+      "must_not": ["delete_artifacts_directly", "resume_before_condition"]
+    },
+    {
+      "id": "one_corrupt_item",
+      "covers": ["corrupt_item", "localized_failure", "accounting"],
+      "prompt": "One video cannot be decoded, but status says unrelated work continues and the item is accounted as an error.",
+      "expected_activation": true,
+      "tool_route": ["mediasense.precheck.run:status"],
+      "must": ["preserve_item_error", "continue_unrelated_work", "keep_item_reachable"],
+      "must_not": ["fail_whole_run_only_for_item", "invent_visual_evidence"]
+    },
+    {
+      "id": "default_external_disabled",
+      "covers": ["local_first", "external_default_off"],
+      "prompt": "Start PreCheck with the normal privacy-safe defaults.",
+      "expected_activation": true,
+      "tool_route": ["mediasense.precheck.run:start", "mediasense.precheck.run:status"],
+      "must": ["state_external_disabled", "keep_source_read_only"],
+      "must_not": ["remote_model", "online_map", "upload", "billable_api"]
+    },
+    {
+      "id": "geocode_confirm",
+      "covers": ["reverse_geocode", "exact_confirmation"],
+      "prompt": "Status paused for reverse-geocode confirmation: 17 logical queries from the frozen deduplicated coordinate set; proceed and skip are allowed.",
+      "expected_activation": true,
+      "tool_route": ["mediasense.precheck.run:status", "human:confirm_exact_scope", "mediasense.precheck.run:resume_proceed", "mediasense.precheck.run:status"],
+      "must": ["show_17_logical_queries", "explain_coordinate_only_scope", "obtain_matching_human_decision"],
+      "must_not": ["synthesize_confirmation", "widen_egress", "claim_resume_is_completion"]
+    },
+    {
+      "id": "geocode_skip",
+      "covers": ["reverse_geocode", "skip_optional"],
+      "prompt": "The frozen reverse-geocode proposal contains 17 logical queries. I do not want any online call.",
+      "expected_activation": true,
+      "tool_route": ["mediasense.precheck.run:status", "mediasense.precheck.run:resume_skip_optional_work", "mediasense.precheck.run:status"],
+      "must": ["honor_skip", "retain_missing_optional_evidence"],
+      "must_not": ["provider_call", "silent_evidence_claim"]
+    },
+    {
+      "id": "partial_plan_ready",
+      "covers": ["partial_result", "plan_ready", "handoff"],
+      "prompt": "The published Result is coverage partial, readiness plan_ready, integrity valid, with explicit damaged-item qualifications. Can we continue to Plan?",
+      "expected_activation": true,
+      "tool_route": ["mediasense.precheck.read:inspect_exact_result", "plan:handoff_exact_result_ref"],
+      "must": ["interpret_axes_independently", "explain_qualifications", "offer_exact_result_ref"],
+      "must_not": ["describe_coverage_complete", "hide_omissions", "hand_off_cache"]
+    },
+    {
+      "id": "blocked_result",
+      "covers": ["blocked_result", "human_decision"],
+      "prompt": "The immutable Result is valid but readiness is blocked because the evidence cannot support the requested location split.",
+      "expected_activation": true,
+      "tool_route": ["mediasense.precheck.read:inspect_exact_result", "human:choose_continue_rebuild_or_stop"],
+      "must": ["explain_blocking_evidence", "present_bounded_choices"],
+      "must_not": ["claim_plan_ready", "choose_consequential_tradeoff_for_human", "hide_unknown"]
+    },
+    {
+      "id": "exact_plan_handoff",
+      "covers": ["successful_result", "exact_handoff"],
+      "prompt": "PreCheck published precheck-result:summer-7 with complete coverage, plan_ready readiness, and valid integrity. Start planning from it.",
+      "expected_activation": true,
+      "tool_route": ["mediasense.precheck.read:inspect_exact_result", "plan:handoff_exact_result_ref"],
+      "must": ["hand_off_precheck-result:summer-7", "require_plan_reads_precheck_tool"],
+      "must_not": ["hand_off_database", "hand_off_cache", "claim_plan_started"]
+    },
+    {
+      "id": "negative_plan_naming",
+      "covers": ["negative_activation", "plan_boundary"],
+      "prompt": "I am reviewing a Plan preview. Rename the group from Hong Kong Trip to Family Weekend and show the revised preview.",
+      "expected_activation": false,
+      "tool_route": ["mediasense.plan"],
+      "must": ["leave_request_to_plan"],
+      "must_not": ["mediasense.precheck.run", "mediasense.precheck.read", "recompress"]
+    },
+    {
+      "id": "negative_apply_execution",
+      "covers": ["negative_activation", "apply_boundary"],
+      "prompt": "This Frozen Plan is approved. Execute its file moves and recover any interrupted operation.",
+      "expected_activation": false,
+      "tool_route": ["mediasense.apply"],
+      "must": ["leave_request_to_apply"],
+      "must_not": ["mediasense.precheck.run", "mediasense.precheck.read", "direct_filesystem_io"]
+    }
+  ]
+}
