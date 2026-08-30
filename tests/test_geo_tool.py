@@ -99,6 +99,17 @@ def _contract() -> dict[str, object]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def _mock() -> dict[str, object]:
+    path = (
+        Path(__file__).parents[1]
+        / "docs"
+        / "spec"
+        / "spec-260830-2034-geo-query"
+        / "geo-query.mock.json"
+    )
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
 def _request(operation: str = "resolve_place") -> dict[str, object]:
     value: dict[str, object] = {
         "request_id": "request:geo-one",
@@ -157,6 +168,79 @@ def test_tool_contract_accepts_request_preflight_and_success(tmp_path: Path) -> 
     output_validator.validate(
         tool.handle(request, authorization=_authorization(tool, request))
     )
+
+
+def test_geo_reference_outputs_conform_to_contract() -> None:
+    output_validator = Draft202012Validator(_contract()["outputSchema"])
+
+    for key, value in _mock().items():
+        if key in {"authorization_required", "authorization_mismatch", "success", "partial_result"}:
+            output_validator.validate(value)
+
+
+def test_contract_valid_requests_are_runtime_valid(tmp_path: Path) -> None:
+    tool, provider = _tool(tmp_path)
+    input_validator = Draft202012Validator(_contract()["inputSchema"])
+    repeated_subject = _request()
+    repeated_subject["subjects"].append(
+        {
+            "subject_ref": "source-item:one",
+            "coordinate": {
+                "latitude": 31.144,
+                "longitude": 121.658,
+                "datum": "WGS84",
+            },
+        }
+    )
+    requests = [
+        _request(),
+        _request("reverse_geocode"),
+        _request("nearby_places"),
+        repeated_subject,
+    ]
+
+    for index, request in enumerate(requests):
+        request["request_id"] = f"request:conformance-{index}"
+        input_validator.validate(request)
+        response = tool.handle(request)
+        assert response["outcome"] == "authorization_required"
+
+    assert provider.calls == 0
+
+
+def test_contract_invalid_requests_are_not_silently_accepted(tmp_path: Path) -> None:
+    tool, provider = _tool(tmp_path)
+    input_validator = Draft202012Validator(_contract()["inputSchema"])
+    invalid_requests = []
+    missing_datum = _request()
+    del missing_datum["subjects"][0]["coordinate"]["datum"]
+    invalid_requests.append(missing_datum)
+    whitespace_subject = _request()
+    whitespace_subject["subjects"][0]["subject_ref"] = "   "
+    invalid_requests.append(whitespace_subject)
+    whitespace_locale = _request()
+    whitespace_locale["locale"] = " \t "
+    invalid_requests.append(whitespace_locale)
+
+    for request in invalid_requests:
+        assert list(input_validator.iter_errors(request))
+        response = tool.handle(request)
+        assert response["outcome"] == "error"
+        assert response["error"]["code"] == "invalid_request"
+
+    assert provider.calls == 0
+
+
+def test_all_public_outcomes_conform_to_output_schema(tmp_path: Path) -> None:
+    tool, _provider = _tool(tmp_path)
+    output_validator = Draft202012Validator(_contract()["outputSchema"])
+    request = _request()
+    output_validator.validate(tool.handle(request))
+    output_validator.validate(
+        tool.handle(request, authorization=_authorization(tool, request))
+    )
+    invalid = {**request, "source_path": "/private/photos/secret.jpg"}
+    output_validator.validate(tool.handle(invalid))
 
 
 def test_tool_replays_terminal_result_without_repeating_provider_effect(tmp_path: Path) -> None:
@@ -243,7 +327,8 @@ def test_nearby_continuation_requires_its_own_request_identity(tmp_path: Path) -
 
     nearby = _request("nearby_places")
     stale = tool.handle(nearby, authorization=resolved_authorization)
-    assert stale["outcome"] == "refused"
+    assert stale["outcome"] == "authorization_required"
+    assert stale["qualifications"][0]["code"] == "authorization_mismatch"
     assert provider.calls == 1
 
     nearby_authorization = _authorization(tool, nearby)

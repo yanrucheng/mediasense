@@ -132,6 +132,40 @@
           "complete": true
         }
       }
+    },
+    {
+      "name": "missing receipt",
+      "request": {
+        "receipt_ref": "apply-receipt:missing",
+        "action": "inspect"
+      },
+      "response": {
+        "outcome": "error",
+        "action": "inspect",
+        "receipt_ref": "apply-receipt:missing",
+        "error": {
+          "code": "receipt_not_found",
+          "message": "Receipt does not exist."
+        }
+      }
+    },
+    {
+      "name": "cursor does not match query",
+      "request": {
+        "receipt_ref": "apply-receipt:example-001",
+        "action": "traverse",
+        "section": "operations",
+        "page": { "cursor": "opaque:tampered" }
+      },
+      "response": {
+        "outcome": "error",
+        "action": "traverse",
+        "receipt_ref": "apply-receipt:example-001",
+        "error": {
+          "code": "invalid_cursor",
+          "message": "Receipt cursor is invalid or does not match this query."
+        }
+      }
     }
   ]
 }

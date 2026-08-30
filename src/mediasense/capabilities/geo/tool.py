@@ -140,7 +140,7 @@ def _parse_subject(value: object) -> GeoSubject:
         GeoCoordinate(
             _required_number(coordinate.get("latitude"), "latitude"),
             _required_number(coordinate.get("longitude"), "longitude"),
-            MapDatum(str(coordinate.get("datum", "WGS84"))),
+            MapDatum(_required_text(coordinate.get("datum"), "datum")),
         ),
     )
 
@@ -154,7 +154,7 @@ def _required_text(value: object, name: str) -> str:
 def _optional_text(value: object) -> str | None:
     if value is None:
         return None
-    if not isinstance(value, str) or not value:
+    if not isinstance(value, str) or not value.strip():
         raise ValueError("optional text must be a non-empty string")
     return value
 

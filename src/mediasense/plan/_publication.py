@@ -10,7 +10,7 @@ from uuid import uuid4
 
 from jsonschema import Draft202012Validator
 
-from ._candidate import content_identity
+from mediasense.frozen_plan import FrozenPlanValidationError, validate_frozen_plan
 
 
 class PublicationConflict(RuntimeError):
@@ -93,24 +93,10 @@ class FrozenPlanPublisher:
         return value
 
     def verify(self, frozen_plan: dict[str, Any]) -> None:
-        errors = sorted(
-            self.validator.iter_errors(frozen_plan),
-            key=lambda error: tuple(str(part) for part in error.absolute_path),
-        )
-        if errors:
-            raise PublicationConflict(
-                f"Frozen Plan Schema violation: {errors[0].message}"
-            )
-        sealed_content = frozen_plan["sealed_content"]
-        observed_identity = content_identity(sealed_content)
-        seal = frozen_plan["seal"]
-        if seal["content_identity"] != observed_identity:
-            raise PublicationConflict("Frozen Plan content identity mismatch")
-        if (
-            seal["final_confirmation"]["confirmed_content_identity"]
-            != observed_identity
-        ):
-            raise PublicationConflict("Frozen Plan confirmation identity mismatch")
+        try:
+            validate_frozen_plan(frozen_plan, validator=self.validator)
+        except FrozenPlanValidationError as error:
+            raise PublicationConflict(str(error)) from error
 
     @staticmethod
     def _verify_existing(path: Path, expected_bytes: bytes) -> None:

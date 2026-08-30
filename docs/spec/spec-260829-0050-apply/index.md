@@ -48,6 +48,7 @@ AI Album formats, command flags, directory trees, caches, and implicit output be
 ## Authority and boundaries
 
 - The Frozen Plan is authoritative for logical root, relative organization, membership, output names, and accounted non-materialized outcomes.
+- A successful Plan seal response carries the complete Frozen Plan object accepted by forward `prepare`; callers do not resolve Plan-private artifact paths.
 - The exact PreCheck Result is authoritative for Result-scoped Source Items, locators, and the Apply-grade verification basis.
 - The Human is authoritative for the selected real effect, source and destination bindings where needed, final execution authorization, cancellation, acceptance of an incomplete result, and a requested whole-run rewind.
 - `mediasense.apply.run` is authoritative for one Run's prepared operation set, preflight, authorization binding, lifecycle, effects, recovery, verification, and Receipt publication.
@@ -55,12 +56,13 @@ AI Album formats, command flags, directory trees, caches, and implicit output be
 - `mediasense.apply.read` exposes one exact immutable Receipt without mutating state or re-verifying history.
 - `mediasense-apply` is reusable Agent guidance for operating those Tools. It owns no Run state, authorization, filesystem effect, or Receipt fact.
 - The Agent explains, routes, and escalates; it cannot supply Human authorization, invent a collision name, substitute a source, or broaden an execution effect.
+- Apply neither acquires nor interprets geographic evidence. Any place-informed decision reaches Apply only as already-frozen organization intent.
 
 ## First Apply profile
 
 The first profile is `move_originals`, corresponding to AI Album's user-valued `original` outcome. One forward Run binds:
 
-- one complete Frozen Plan artifact;
+- one complete Frozen Plan object returned by Plan seal;
 - one current local-root binding for every `source_root_ref` used by the Result's planned Source Items;
 - one destination parent beneath which the Frozen Plan's `logical_root` is materialized; and
 - one deterministic prepared operation set.
@@ -105,7 +107,21 @@ The active PreCheck Read contract permits open Source Item Observations because 
 - the supported `sha256-full-v1` profile, digest `value`, `size_bytes`, `observed_at`, and `producer`; and
 - observation-level basis, with qualifications only when real limitations exist.
 
-Apply obtains that evidence only through exact `result_ref + source_item_ref` calls to `mediasense.precheck.read`, then binds the current root and re-reads size plus full SHA-256. The contract does not require Dataset-wide snapshots, permanent identity across Results, a new Source Verify Tool, hash duplication in Frozen Plan, or exposure of PreCheck cache keys. Missing, unavailable, unsupported, mismatched, stale, escaping, rebound, or ambiguous evidence makes `prepare` block without media effects.
+Apply expands every Frozen Plan Source Set through a repository-owned deterministic
+interpreter over `mediasense.precheck.read`. The interpreter supports `explicit`,
+`accounts_for`, `represents`, `union`, and `difference`; binds every call and page
+to the exact `result_ref`; and checks reference types, duplicates, pagination
+progress, declared totals, and complete traversal. A caller-supplied
+`complete=true` assertion is not production evidence of completeness.
+
+Apply obtains selected-item evidence only through exact
+`result_ref + source_item_ref` calls to `mediasense.precheck.read`, then binds the
+current root and re-reads size plus full SHA-256. It never reads PreCheck private
+SQLite or caches. The contract does not require Dataset-wide snapshots, permanent
+identity across Results, a new Source Verify Tool, hash duplication in Frozen
+Plan, or exposure of PreCheck cache keys. Missing, unavailable, unsupported,
+mismatched, stale, escaping, rebound, ambiguous, or incompletely traversed evidence
+makes `prepare` fail closed without media effects.
 
 ## Run actions
 
@@ -113,8 +129,14 @@ Apply obtains that evidence only through exact `result_ref + source_item_ref` ca
 
 `prepare` creates one durable Run from exactly one direction source:
 
-- `forward`: a complete Frozen Plan artifact, `move_originals`, the current local-root binding for every referenced source root, and a destination parent; or
+- `forward`: the complete `frozen_plan` object returned by Plan seal, `move_originals`, the current local-root binding for every referenced source root, and a destination parent; or
 - `rewind`: one exact Receipt reference whose rewind window has not expired.
+
+Before it creates a Run or probes supplied paths, forward preparation validates
+the complete object with the authoritative Frozen Plan Schema, rejects unknown
+`encoding_profile` values, verifies the sealed-content identity, and verifies the
+final-confirmation binding. A recomputed digest cannot legitimize an extra
+schema-forbidden field. The public handoff contains no Plan storage path or locator.
 
 The operation is safely retryable by `request_id`. It may be long-running. Preparation resolves complete item coverage, paths, source verification, destination identity, filesystem route, capacity, permissions, collisions, namespace overlap, concurrency conflicts, metadata preservation, and journal availability without changing media.
 
@@ -193,6 +215,20 @@ The Receipt records a rewind deadline, not an eternal claim that rewind is curre
 - `traverse` reads a bounded page from `operations`, `exceptions`, `metadata_discrepancies`, or `created_directories`, optionally narrowed by an exact Source Item or operation result where applicable.
 
 Cursors bind the Receipt, section, filter, order, and page position. A later page cannot silently switch to another Receipt or query. Storage segment names are not exposed as business references.
+
+Every failure returns the Tool's structured error envelope. This includes a missing,
+unavailable, malformed, or integrity-failed Receipt; unsupported action or section;
+invalid page or filter; a malformed or query-mismatched cursor; and an unavailable
+or invalid segmented ledger. Internal `ReceiptError`, schema exceptions, paths, and
+segment details are not public failure semantics.
+
+| Read error code | Meaning |
+| --- | --- |
+| `invalid_request` | The action, section, filter, page, reference shape, or field combination is outside the contract. |
+| `invalid_cursor` | The cursor is malformed or does not bind this Receipt, section, filter, and position. |
+| `receipt_not_found` | No immutable Receipt exists for the valid reference. |
+| `receipt_unavailable` | The Receipt cannot currently be read. |
+| `receipt_untrusted` | The Receipt or a required immutable ledger component fails decoding, schema, identity, completeness, or integrity verification. |
 
 ## Idempotency, concurrency, and publication
 

@@ -2,17 +2,18 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
-from enum import StrEnum
 import json
 import os
-from pathlib import Path
 import sqlite3
 import stat
 import tempfile
+from dataclasses import asdict, dataclass
+from enum import StrEnum
+from pathlib import Path
 from threading import Lock
 from uuid import uuid4
 
+from mediasense.volume import observe_path_identity
 
 _SQLITE_LOCKING_CACHE: dict[int, str] = {}
 _SQLITE_LOCKING_CACHE_LOCK = Lock()
@@ -164,12 +165,13 @@ def probe_source_attachment(
             blocked_reason=reason,
         )
 
+    identity = observe_path_identity(root)
     return SourceAttachmentProbe(
         source_root=root,
         state=AttachmentState.AVAILABLE,
-        volume_identity=f"stat-device-session-v1:{observed.st_dev}",
-        root_identity=f"stat-root-v1:{observed.st_dev}:{observed.st_ino}",
-        identity_strength="session_local",
+        volume_identity=identity.volume_identity,
+        root_identity=identity.root_identity,
+        identity_strength=identity.identity_strength,
         capabilities=_capabilities(
             source_root=root,
             source_stat=observed,
@@ -201,7 +203,7 @@ def _capabilities(
     same_filesystem: bool | None = None
     if source_stat is not None:
         try:
-            readonly_flag = getattr(os, "ST_RDONLY")
+            readonly_flag = os.ST_RDONLY
             mount_read_only = bool(os.statvfs(source_root).f_flag & readonly_flag)
         except (AttributeError, OSError):
             mount_read_only = None

@@ -6,21 +6,23 @@ chooses semantic groups or names; those decisions arrive in candidate content.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Mapping
 from copy import deepcopy
 from dataclasses import dataclass
-import hashlib
-import json
-from pathlib import Path, PurePosixPath
-import re
+from pathlib import PurePosixPath
 from typing import Any
 
-from jsonschema import Draft202012Validator, FormatChecker
+from jsonschema import Draft202012Validator
 
-
-PrecheckReader = Callable[[dict[str, Any]], Mapping[str, Any]]
-
-_SOURCE_REF = re.compile(r"^source-item:[^\s]+$")
+from mediasense.frozen_plan import (
+    FrozenPlanValidationError,
+    content_identity,
+)
+from mediasense.source_sets import (
+    PrecheckReader,
+    ResultSourceSetResolver as ResultResolver,
+    SourceSetResolutionError as ResultAccessError,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -57,38 +59,6 @@ class CandidateValidationError(ValueError):
     """Raised when candidate structure prevents safe analysis."""
 
 
-class ResultAccessError(RuntimeError):
-    """Raised when the immutable Result cannot answer a required query."""
-
-
-def canonical_strings_json(value: Any) -> str:
-    """Serialize the first Frozen Plan encoding profile."""
-
-    if isinstance(value, str):
-        return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
-    if isinstance(value, list):
-        return "[" + ",".join(canonical_strings_json(item) for item in value) + "]"
-    if isinstance(value, dict):
-        if not all(isinstance(key, str) for key in value):
-            raise CandidateValidationError("JSON object keys must be strings")
-        return (
-            "{"
-            + ",".join(
-                canonical_strings_json(key) + ":" + canonical_strings_json(value[key])
-                for key in sorted(value)
-            )
-            + "}"
-        )
-    raise CandidateValidationError(
-        "mediasense-json-strings-sha256-v1 permits only objects, arrays, and strings"
-    )
-
-
-def content_identity(sealed_content: Mapping[str, Any]) -> str:
-    canonical = canonical_strings_json(dict(sealed_content)).encode("utf-8")
-    return "sha256:" + hashlib.sha256(canonical).hexdigest()
-
-
 def materialize_candidate(
     candidate_content: Mapping[str, Any], *, plan_ref: str
 ) -> dict[str, Any]:
@@ -98,190 +68,6 @@ def materialize_candidate(
         **deepcopy(dict(candidate_content)),
     }
     return content
-
-
-def load_frozen_content_validator(
-    schema_path: Path | None = None,
-) -> Draft202012Validator:
-    """Load the authoritative Frozen Plan Schema without copying its rules."""
-
-    path = schema_path or (
-        Path(__file__).resolve().parents[3]
-        / "docs"
-        / "spec"
-        / "spec-260827-1138-frozen-plan"
-        / "frozen-plan.schema.json"
-    )
-    schema = json.loads(path.read_text(encoding="utf-8"))
-    Draft202012Validator.check_schema(schema)
-    sealed_content_schema = {
-        "$schema": schema["$schema"],
-        "$defs": schema["$defs"],
-        "$ref": "#/$defs/sealedContent",
-    }
-    return Draft202012Validator(sealed_content_schema)
-
-
-def load_frozen_plan_validator(
-    schema_path: Path | None = None,
-) -> Draft202012Validator:
-    """Load the complete immutable handoff schema for publication checks."""
-
-    path = schema_path or (
-        Path(__file__).resolve().parents[3]
-        / "docs"
-        / "spec"
-        / "spec-260827-1138-frozen-plan"
-        / "frozen-plan.schema.json"
-    )
-    schema = json.loads(path.read_text(encoding="utf-8"))
-    Draft202012Validator.check_schema(schema)
-    return Draft202012Validator(schema, format_checker=FormatChecker())
-
-
-class ResultResolver:
-    """Resolve Result-local source sets through the public read contract."""
-
-    def __init__(self, result_ref: str, reader: PrecheckReader) -> None:
-        self.result_ref = result_ref
-        self.reader = reader
-        self.source_views: dict[str, Mapping[str, Any]] = {}
-        self.evidence_views: dict[str, Mapping[str, Any]] = {}
-        self._set_cache: dict[str, frozenset[str]] = {}
-
-    def inspect(self, kind: str, ref: str) -> Mapping[str, Any]:
-        cache = self.source_views if kind == "source_item" else self.evidence_views
-        if ref in cache:
-            return cache[ref]
-        response = self._call(
-            {
-                "result_ref": self.result_ref,
-                "action": "inspect",
-                "target": {"kind": kind, "ref": ref},
-            }
-        )
-        target = response.get("target")
-        if not isinstance(target, Mapping) or target.get("kind") != kind:
-            raise ResultAccessError(f"unexpected {kind} view for {ref}")
-        if target.get("ref") != ref:
-            raise ResultAccessError(f"Result returned the wrong target for {ref}")
-        cache[ref] = target
-        return target
-
-    def resolve(self, source_set: Mapping[str, Any]) -> frozenset[str]:
-        key = canonical_strings_json(dict(source_set))
-        cached = self._set_cache.get(key)
-        if cached is not None:
-            return cached
-
-        kind = source_set["kind"]
-        if kind == "explicit":
-            members = frozenset(source_set["source_item_refs"])
-            for ref in members:
-                self.inspect("source_item", ref)
-        elif kind == "precheck_relation":
-            members = self._traverse(
-                source_set["origin"],
-                source_set["relation"],
-                source_set["direction"],
-            )
-        elif kind == "union":
-            expanded: set[str] = set()
-            for member_set in source_set["sets"]:
-                expanded.update(self.resolve(member_set))
-            members = frozenset(expanded)
-        elif kind == "difference":
-            members = self.resolve(source_set["base"]) - self.resolve(
-                source_set["subtract"]
-            )
-        else:  # pragma: no cover - guarded by structural validation
-            raise CandidateValidationError(f"unsupported source-set kind: {kind}")
-
-        self._set_cache[key] = members
-        return members
-
-    def verify_evidence(self, ref: str) -> None:
-        self.inspect("evidence", ref)
-
-    def representative_refs(
-        self, source_set: Mapping[str, Any], members: frozenset[str]
-    ) -> tuple[str, ...]:
-        preferred: list[str] = []
-        kind = source_set["kind"]
-        if kind == "explicit":
-            preferred.extend(source_set["source_item_refs"])
-        elif kind == "precheck_relation" and source_set["relation"] == "represents":
-            evidence = self.inspect("evidence", source_set["origin"])
-            access = evidence.get("access")
-            if isinstance(access, Mapping):
-                ref = access.get("source_item_ref")
-                if isinstance(ref, str):
-                    preferred.append(ref)
-        elif kind == "union":
-            for child in source_set["sets"]:
-                preferred.extend(self.representative_refs(child, self.resolve(child)))
-        elif kind == "difference":
-            base = source_set["base"]
-            preferred.extend(self.representative_refs(base, self.resolve(base)))
-
-        ordered: list[str] = []
-        for ref in [*preferred, *sorted(members)]:
-            if ref in members and ref not in ordered:
-                ordered.append(ref)
-        return tuple(ordered)
-
-    def _traverse(self, origin: str, relation: str, direction: str) -> frozenset[str]:
-        members: list[str] = []
-        cursor: str | None = None
-        seen_cursors: set[str] = set()
-        while True:
-            request: dict[str, Any] = {
-                "result_ref": self.result_ref,
-                "action": "traverse",
-                "relation": relation,
-                "direction": direction,
-                "page": {"limit": 1000},
-            }
-            if origin != self.result_ref:
-                request["target"] = origin
-            if cursor is not None:
-                request["page"]["cursor"] = cursor
-            response = self._call(request)
-            if response.get("origin") != origin:
-                raise ResultAccessError(
-                    f"Result returned the wrong origin for {origin}"
-                )
-            if (
-                response.get("relation") != relation
-                or response.get("direction") != direction
-            ):
-                raise ResultAccessError("Result returned a different relationship")
-            for item in response.get("items", []):
-                target = item.get("target") if isinstance(item, Mapping) else None
-                if not isinstance(target, str) or not _SOURCE_REF.fullmatch(target):
-                    raise ResultAccessError(
-                        f"relationship {relation} did not resolve to Source Items"
-                    )
-                members.append(target)
-            page = response.get("page", {})
-            if page.get("complete") is True:
-                break
-            cursor = page.get("next_cursor")
-            if not isinstance(cursor, str) or cursor in seen_cursors:
-                raise ResultAccessError("Result traversal did not make progress")
-            seen_cursors.add(cursor)
-
-        for ref in set(members):
-            self.inspect("source_item", ref)
-        return frozenset(members)
-
-    def _call(self, request: dict[str, Any]) -> Mapping[str, Any]:
-        response = self.reader(request)
-        if not isinstance(response, Mapping) or response.get("outcome") != "ok":
-            raise ResultAccessError(f"PreCheck read failed for {request!r}")
-        if response.get("result_ref") != self.result_ref:
-            raise ResultAccessError("PreCheck read crossed the bound Result")
-        return response
 
 
 def analyze_candidate(
@@ -375,7 +161,7 @@ def analyze_candidate(
     if not issues:
         try:
             identity = content_identity(sealed_content)
-        except CandidateValidationError as exc:
+        except (CandidateValidationError, FrozenPlanValidationError) as exc:
             issues.append(ValidationIssue("invalid_encoding_profile", str(exc)))
 
     return CandidateAnalysis(

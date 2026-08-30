@@ -29,7 +29,8 @@ Both files are Human-authored review evidence. They are not runtime output, actu
 
 ## Reference boundary
 
-The example reuses the seven-item Frozen Plan from [`../design-260828-2043-plan-local-artifacts/example-plan.json`](../design-260828-2043-plan-local-artifacts/example-plan.json). Its Plan identity, content identity, scope, logical root, group paths, and output names are existing review facts.
+The example uses the same seven Result-local Source Items as the reviewed Frozen
+Plan in [`../design-260828-2043-plan-local-artifacts/example-plan.json`](../design-260828-2043-plan-local-artifacts/example-plan.json), but keeps its own illustrative Plan identity and simplified group shape. At the public boundary, Plan seal returns the complete Frozen Plan object and Apply prepare consumes it directly; neither example file is a path-discovery protocol.
 
 The following are explicit illustrative assumptions needed to exercise Apply:
 
@@ -97,7 +98,12 @@ mediasense.apply.read
   inspect | traverse
 ```
 
-`prepare` accepts exactly one direction source: a Frozen Plan for forward execution or an Apply Receipt for whole-run rewind. Preflight and execution remain in one Run so the exact checked content can be bound to Human authorization and rechecked at each effect boundary.
+`prepare` accepts exactly one direction source: the complete Frozen Plan object
+returned by Plan seal for forward execution, or an Apply Receipt reference for
+whole-run rewind. It validates the full Frozen Plan schema, supported encoding
+profile, identity, and final-confirmation binding before probing paths or creating
+a Run. Preflight and execution remain in one Run so the exact checked content can
+be bound to Human authorization and rechecked at each effect boundary.
 
 `apply.read` exists because a Receipt can cover hundreds of thousands of operations and outlives its mutable Run. It exposes an immutable summary and bounded traversal without exposing storage shards.
 
@@ -105,7 +111,7 @@ The active contract and runtime use these operation names. No Preview Tool, Conf
 
 ## Closed source-binding boundary
 
-PreCheck Read exposes each applicable Result-scoped Source Item with a `source_root_relative_path` locator and an available `source_content_verification` observation. Apply consumes the exact `result_ref + source_item_ref`, binds the locator to the Human-supplied current root, and verifies size plus full SHA-256 before authorization and again at the effect boundary.
+PreCheck Read exposes each applicable Result-scoped Source Item with a `source_root_relative_path` locator and an available `source_content_verification` observation. A repository-owned deterministic resolver expands every Frozen Plan Source Set through only the public `inspect` and `traverse` operations, verifies exact Result binding and complete pagination, and rejects duplicate or mistyped references. Apply then consumes each exact `result_ref + source_item_ref`, binds the locator to the Human-supplied current root, and verifies size plus full SHA-256 before authorization and again at the effect boundary.
 
 The evidence remains owned by the exact PreCheck Result. Apply supports `sha256-full-v1` without copying hashes into Frozen Plan, exposing cache keys, creating a Dataset-wide snapshot, or promising permanent identity across Results. Other profiles may be added deliberately without changing the authority boundary.
 
@@ -181,7 +187,9 @@ The active contracts and implementation make these scenarios mechanically testab
 
 | Scenario | Required observable result |
 | --- | --- |
-| Invalid or incomplete Frozen Plan | `prepare` refuses or blocks before any media or target-directory effect. |
+| Plan seal handoff | The exact returned `frozen_plan` object enters Apply `prepare`; no private Plan path or locator is needed. |
+| Schema-invalid or unsupported-profile Frozen Plan | `prepare` returns an error before Run creation, source/destination probing, or any media or target-directory effect, even if the digest was recomputed. |
+| Incomplete or inconsistent Source Set traversal | The repository-owned resolver rejects preparation; no caller completeness flag can shrink the Plan scope. |
 | Missing Apply-grade source verification | `prepare` identifies every affected item and reports that dangerous execution cannot be authorized. |
 | Source changed after Plan | No affected file moves; the result routes through Plan to a new PreCheck Result instead of silently updating the operation set. |
 | Existing unrelated final target | No overwrite and no automatic rename; `prepare` or the per-effect recheck reports a collision. |

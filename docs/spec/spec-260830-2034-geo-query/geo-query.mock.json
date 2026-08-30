@@ -127,10 +127,10 @@
       "locale": "zh-CN"
     }
   },
-  "refused": {
+  "authorization_mismatch": {
     "tool": "mediasense.geo.query",
     "request_id": "request:geo-disneyland-address",
-    "outcome": "refused",
+    "outcome": "authorization_required",
     "operation": "resolve_place",
     "request_fingerprint": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     "components": [],
@@ -146,13 +146,22 @@
     "observed_at": "2026-08-30T16:31:00+08:00",
     "qualifications": [
       {
-        "code": "authorization_refused",
+        "code": "authorization_mismatch",
         "message": "Authorization does not match the exact request."
       }
     ],
     "route_context": {
       "preferred_provider": null,
       "locale": null
+    },
+    "required_authorization": {
+      "allowed_providers": ["amap"],
+      "allowed_data_classes": ["coordinate", "datum", "locale"],
+      "max_logical_queries": 1,
+      "max_provider_requests": 2,
+      "max_billable_units": null,
+      "allow_unknown_billable_units": true,
+      "retention": "caller_state"
     }
   },
   "partial_result": {

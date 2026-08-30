@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import json
-from pathlib import Path
 import sqlite3
+from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
+
+_SCHEMA_VERSION = 1
 
 
 class GeoIdempotencyConflict(RuntimeError):
@@ -29,8 +31,25 @@ class GeoOperationJournal:
         self.database_path = Path(database_path)
         self.database_path.parent.mkdir(parents=True, exist_ok=True)
         with self._connect() as connection:
-            connection.execute(
+            journal_exists = connection.execute(
+                "SELECT 1 FROM sqlite_master WHERE type = 'table' "
+                "AND name = 'geo_operation_journal'"
+            ).fetchone()
+            schema_exists = connection.execute(
+                "SELECT 1 FROM sqlite_master WHERE type = 'table' "
+                "AND name = 'internal_schema'"
+            ).fetchone()
+            if journal_exists is not None and schema_exists is None:
+                raise RuntimeError("unsupported unversioned Geo journal")
+            connection.executescript(
                 """
+                CREATE TABLE IF NOT EXISTS internal_schema (
+                    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+                    version INTEGER NOT NULL
+                );
+                INSERT OR IGNORE INTO internal_schema (singleton, version)
+                VALUES (1, 1);
+
                 CREATE TABLE IF NOT EXISTS geo_operation_journal (
                     request_id TEXT PRIMARY KEY,
                     request_fingerprint TEXT NOT NULL,
@@ -40,6 +59,11 @@ class GeoOperationJournal:
                 )
                 """
             )
+            version = connection.execute(
+                "SELECT version FROM internal_schema WHERE singleton = 1"
+            ).fetchone()
+            if version is None or int(version["version"]) != _SCHEMA_VERSION:
+                raise RuntimeError("unsupported Geo journal schema version")
 
     def admit(
         self,
@@ -121,7 +145,7 @@ class GeoOperationJournal:
 def _entry(row: sqlite3.Row) -> GeoJournalEntry:
     result = json.loads(str(row["result_json"]))
     if not isinstance(result, dict):
-        raise ValueError("Geo journal result is not an object")
+        raise TypeError("Geo journal result is not an object")
     return GeoJournalEntry(
         request_id=str(row["request_id"]),
         request_fingerprint=str(row["request_fingerprint"]),

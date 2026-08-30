@@ -11,16 +11,33 @@ from mediasense.apply import (
     ApplyRunTool,
 )
 from mediasense.apply.filesystem import EffectObservation, FilesystemEffectError
-from test_apply_preparation import _fixture, _plan, _resolve
+from test_apply_preparation import _fixture, _plan
 
 
 ROOT = Path(__file__).parents[1]
 APPLY_SPEC = ROOT / "docs" / "spec" / "spec-260829-0050-apply"
+FROZEN_PLAN_SCHEMA = (
+    ROOT
+    / "docs"
+    / "spec"
+    / "spec-260827-1138-frozen-plan"
+    / "frozen-plan.schema.json"
+)
 WORKFLOWS = json.loads(
     (ROOT / "tests" / "fixtures" / "apply-skill-workflows-v1.json").read_text(
         encoding="utf-8"
     )
 )["scenarios"]
+
+
+def test_skill_uses_direct_frozen_plan_handoff_and_no_geo() -> None:
+    assert "exact `frozen_plan` object returned by Plan seal" in (
+        ROOT / ".agents" / "skills" / "mediasense-apply" / "SKILL.md"
+    ).read_text(encoding="utf-8")
+    skill = (
+        ROOT / ".agents" / "skills" / "mediasense-apply" / "SKILL.md"
+    ).read_text(encoding="utf-8")
+    assert "Do not request, refresh, or interpret geographic evidence" in skill
 
 
 class _FailFirstItemOnce:
@@ -52,25 +69,23 @@ class _FailFirstItemOnce:
 
 def _new_tool(tmp_path: Path):
     source, destination, _state, files, precheck_read = _fixture(tmp_path)
-    plan_path = tmp_path / "frozen-plan.json"
-    plan_path.write_text(json.dumps(_plan()), encoding="utf-8")
     tool = ApplyRunTool(
         tmp_path / "apply-store",
         precheck_read,
-        _resolve,
         run_schema_path=APPLY_SPEC / "apply-run.tool.json",
+        frozen_plan_schema_path=FROZEN_PLAN_SCHEMA,
         receipt_schema_path=APPLY_SPEC / "apply-receipt.schema.json",
     )
-    return tool, plan_path, source, destination, files, precheck_read
+    return tool, _plan(), source, destination, files, precheck_read
 
 
-def _prepare(tool: ApplyRunTool, plan_path: Path, source: Path, destination: Path):
+def _prepare(tool: ApplyRunTool, frozen_plan: dict, source: Path, destination: Path):
     response = tool.handle(
         {
             "action": "prepare",
             "request_id": "request:skill-prepare",
             "forward": {
-                "frozen_plan_path": str(plan_path),
+                "frozen_plan": frozen_plan,
                 "effect": "move_originals",
                 "current_source_roots": [
                     {
@@ -115,10 +130,10 @@ def test_skill_forward_workflow_reaches_receipt_and_freshly_authorized_rewind(
     tmp_path: Path,
 ) -> None:
     expected = _scenario("forward_receipt_and_rewind")
-    tool, plan_path, source, destination, files, _precheck = _new_tool(tmp_path)
+    tool, frozen_plan, source, destination, files, _precheck = _new_tool(tmp_path)
     checkpoints = []
 
-    status = _prepare(tool, plan_path, source, destination)
+    status = _prepare(tool, frozen_plan, source, destination)
     assert status["state"] == "ready_for_authorization"
     assert status["allowed_actions"] == ["execute", "cancel"]
     checkpoints.append("request_exact_confirmation")
@@ -161,11 +176,11 @@ def test_skill_forward_workflow_reaches_receipt_and_freshly_authorized_rewind(
 
 def test_skill_stops_at_prepare_blocker(tmp_path: Path) -> None:
     expected = _scenario("prepare_blocker")
-    tool, plan_path, source, destination, _files, precheck = _new_tool(tmp_path)
+    tool, frozen_plan, source, destination, _files, precheck = _new_tool(tmp_path)
     observations = precheck.views["source-item:a"].pop("observations")
     checkpoints = []
 
-    status = _prepare(tool, plan_path, source, destination)
+    status = _prepare(tool, frozen_plan, source, destination)
     assert status["state"] == "blocked"
     assert any(
         reason["code"] == "source_verification_missing" for reason in status["reasons"]
@@ -191,9 +206,9 @@ def test_skill_reports_effect_boundary_drift_without_blind_retry(
     tmp_path: Path,
 ) -> None:
     expected = _scenario("effect_boundary_drift")
-    tool, plan_path, source, destination, _files, _precheck = _new_tool(tmp_path)
+    tool, frozen_plan, source, destination, _files, _precheck = _new_tool(tmp_path)
     checkpoints = []
-    status = _prepare(tool, plan_path, source, destination)
+    status = _prepare(tool, frozen_plan, source, destination)
     checkpoints.append("request_exact_confirmation")
     (source / "a.jpg").write_bytes(b"changed after Human review")
     _authorize(tool, status, "request:skill-drift-execute")
@@ -212,7 +227,7 @@ def test_skill_reports_partial_reality_then_resumes_allowed_run(
     tmp_path: Path,
 ) -> None:
     expected = _scenario("localized_failure_and_resume")
-    tool, plan_path, source, destination, _files, _precheck = _new_tool(tmp_path)
+    tool, frozen_plan, source, destination, _files, _precheck = _new_tool(tmp_path)
     tool.executor = ApplyExecutor(
         tool.run_store,
         tool.receipt_store,
@@ -220,7 +235,7 @@ def test_skill_reports_partial_reality_then_resumes_allowed_run(
         clock=lambda: datetime(2026, 8, 30, 3, 0, tzinfo=timezone.utc),
     )
     checkpoints = []
-    status = _prepare(tool, plan_path, source, destination)
+    status = _prepare(tool, frozen_plan, source, destination)
     checkpoints.append("request_exact_confirmation")
     _authorize(tool, status, "request:skill-partial-execute")
     checkpoints.append("observe_execution")

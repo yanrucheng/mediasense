@@ -3,19 +3,25 @@
 from __future__ import annotations
 
 import base64
+import binascii
 from collections.abc import Iterator
 from dataclasses import dataclass
 import hashlib
 import json
 import os
 from pathlib import Path
+import re
 from typing import Mapping
 
-from jsonschema import Draft202012Validator
+from jsonschema import Draft202012Validator, ValidationError
 
 
 class ReceiptError(RuntimeError):
     """A Receipt could not be validated, published, or read safely."""
+
+    def __init__(self, message: str, *, code: str = "receipt_untrusted") -> None:
+        self.code = code
+        super().__init__(message)
 
 
 @dataclass(frozen=True, slots=True)
@@ -182,17 +188,35 @@ class ReceiptStore:
         path = self.artifact_path(receipt_ref) / "receipt.json"
         try:
             document = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError) as error:
+        except FileNotFoundError as error:
             raise ReceiptError(
-                f"Receipt is unavailable or invalid: {receipt_ref}"
+                f"Receipt does not exist: {receipt_ref}", code="receipt_not_found"
             ) from error
-        self._validator.validate(document)
+        except OSError as error:
+            raise ReceiptError(
+                f"Receipt is unavailable: {receipt_ref}", code="receipt_unavailable"
+            ) from error
+        except json.JSONDecodeError as error:
+            raise ReceiptError(
+                f"Receipt is invalid: {receipt_ref}", code="receipt_untrusted"
+            ) from error
+        try:
+            self._validator.validate(document)
+        except ValidationError as error:
+            raise ReceiptError(
+                "Receipt does not conform to its schema", code="receipt_untrusted"
+            ) from error
         if document["sealed_content"]["receipt_ref"] != receipt_ref:
-            raise ReceiptError("Receipt reference does not match artifact path")
+            raise ReceiptError(
+                "Receipt reference does not match its identity",
+                code="receipt_untrusted",
+            )
         if document["seal"]["content_identity"] != content_identity(
             document["sealed_content"]
         ):
-            raise ReceiptError("Receipt integrity verification failed")
+            raise ReceiptError(
+                "Receipt integrity verification failed", code="receipt_untrusted"
+            )
         ledger = document["sealed_content"]["operation_ledger"]
         if ledger["kind"] == "immutable_segments":
             observed_count = sum(
@@ -318,10 +342,10 @@ class ReceiptStore:
     def artifact_path(self, receipt_ref: str) -> Path:
         prefix = "apply-receipt:"
         if not receipt_ref.startswith(prefix):
-            raise ReceiptError("invalid Receipt reference")
+            raise ReceiptError("invalid Receipt reference", code="invalid_request")
         token = receipt_ref.removeprefix(prefix)
         if not token or any(character not in _SAFE_TOKEN for character in token):
-            raise ReceiptError("unsafe Receipt reference")
+            raise ReceiptError("unsafe Receipt reference", code="invalid_request")
         return self.root / token
 
 
@@ -332,85 +356,117 @@ class ApplyReceiptReader:
 
     def __init__(self, store: ReceiptStore, schema_path: Path | None = None) -> None:
         self.store = store
-        self._input = None
-        self._output = None
-        if schema_path is not None:
-            schema = json.loads(Path(schema_path).read_text(encoding="utf-8"))
-            self._input = Draft202012Validator(schema["inputSchema"])
-            self._output = Draft202012Validator(schema["outputSchema"])
+        path = schema_path or (
+            Path(__file__).resolve().parents[3]
+            / "docs"
+            / "spec"
+            / "spec-260829-0050-apply"
+            / "apply-read.tool.json"
+        )
+        schema = json.loads(Path(path).read_text(encoding="utf-8"))
+        self._input = Draft202012Validator(schema["inputSchema"])
+        self._output = Draft202012Validator(schema["outputSchema"])
 
     def read(self, request: Mapping[str, object]) -> dict[str, object]:
-        if self._input is not None:
-            self._input.validate(dict(request))
-        receipt_ref = str(request.get("receipt_ref", ""))
-        action = request.get("action")
-        receipt = self.store.read(receipt_ref)
-        if action == "inspect":
-            response = {
-                "outcome": "ok",
-                "action": "inspect",
-                "receipt_ref": receipt_ref,
-                "receipt": _receipt_summary(receipt),
+        payload = dict(request)
+        try:
+            self._input.validate(payload)
+            receipt_ref = str(payload["receipt_ref"])
+            action = str(payload["action"])
+            receipt = self.store.read(receipt_ref)
+            if action == "inspect":
+                return self._validated_response(
+                    {
+                        "outcome": "ok",
+                        "action": "inspect",
+                        "receipt_ref": receipt_ref,
+                        "receipt": _receipt_summary(receipt),
+                    }
+                )
+            section = str(payload["section"])
+            page = payload.get("page") or {}
+            assert isinstance(page, Mapping)
+            limit = int(page.get("limit", 100))
+            offset = 0
+            filter_value = payload.get("filter")
+            assert filter_value is None or isinstance(filter_value, Mapping)
+            cursor = page.get("cursor")
+            if cursor is not None:
+                offset = _decode_cursor(str(cursor), receipt, section, filter_value)
+            content = receipt["sealed_content"]
+            assert isinstance(content, Mapping)
+            ledger = content["operation_ledger"]
+            if section in {"operations", "exceptions"} and isinstance(ledger, Mapping):
+                selected, total = self.store.operation_page(
+                    receipt_ref=receipt_ref,
+                    receipt=receipt,
+                    section=section,
+                    offset=offset,
+                    limit=limit,
+                    filter_value=filter_value,
+                )
+            else:
+                items = _section_items(receipt, section)
+                if filter_value is not None:
+                    items = _filter_items(items, filter_value)
+                selected = items[offset : offset + limit]
+                total = len(items)
+            next_offset = offset + len(selected)
+            complete = next_offset >= total
+            page_result: dict[str, object] = {
+                "returned": len(selected),
+                "total": total,
+                "complete": complete,
             }
-            if self._output is not None:
-                self._output.validate(response)
-            return response
-        if action != "traverse":
-            raise ReceiptError("unsupported Apply Read action")
-        section = str(request.get("section", ""))
-        page = request.get("page") or {}
-        if not isinstance(page, Mapping):
-            raise ReceiptError("page must be an object")
-        limit = int(page.get("limit", 100))
-        if limit < 1 or limit > 1_000:
-            raise ReceiptError("page limit must be between 1 and 1000")
-        offset = 0
-        filter_value = request.get("filter")
-        if filter_value is not None:
-            if not isinstance(filter_value, Mapping):
-                raise ReceiptError("filter must be an object")
-        cursor = page.get("cursor")
-        if cursor is not None:
-            offset = _decode_cursor(str(cursor), receipt, section, filter_value)
-        content = receipt["sealed_content"]
-        assert isinstance(content, Mapping)
-        ledger = content["operation_ledger"]
-        if section in {"operations", "exceptions"} and isinstance(ledger, Mapping):
-            selected, total = self.store.operation_page(
-                receipt_ref=receipt_ref,
-                receipt=receipt,
-                section=section,
-                offset=offset,
-                limit=limit,
-                filter_value=filter_value,
+            if not complete:
+                page_result["next_cursor"] = _encode_cursor(
+                    receipt, section, next_offset, filter_value
+                )
+            return self._validated_response(
+                {
+                    "outcome": "ok",
+                    "action": "traverse",
+                    "receipt_ref": receipt_ref,
+                    "section": section,
+                    "items": selected,
+                    "page": page_result,
+                }
             )
-        else:
-            items = _section_items(receipt, section)
-            if filter_value is not None:
-                items = _filter_items(items, filter_value)
-            selected = items[offset : offset + limit]
-            total = len(items)
-        next_offset = offset + len(selected)
-        complete = next_offset >= total
-        page_result: dict[str, object] = {
-            "returned": len(selected),
-            "total": total,
-            "complete": complete,
-        }
-        if not complete:
-            page_result["next_cursor"] = _encode_cursor(
-                receipt, section, next_offset, filter_value
+        except ValidationError:
+            return self._error_response(
+                payload,
+                "invalid_request",
+                "Apply Read request does not conform to its contract.",
             )
-        response = {
-            "outcome": "ok",
-            "action": "traverse",
-            "receipt_ref": receipt_ref,
-            "section": section,
-            "items": selected,
-            "page": page_result,
+        except ReceiptError as error:
+            message = {
+                "invalid_cursor": "Receipt cursor is invalid or does not match this query.",
+                "invalid_request": "Apply Read request is invalid.",
+                "receipt_not_found": "Receipt does not exist.",
+                "receipt_unavailable": "Receipt is unavailable.",
+                "receipt_untrusted": "Receipt integrity verification failed.",
+            }.get(error.code, "Receipt read failed.")
+            return self._error_response(payload, error.code, message)
+
+    def _error_response(
+        self,
+        request: Mapping[str, object],
+        code: str,
+        message: str,
+    ) -> dict[str, object]:
+        action = request.get("action")
+        response: dict[str, object] = {
+            "outcome": "error",
+            "action": action if action in {"inspect", "traverse"} else "unknown",
+            "error": {"code": code, "message": message},
         }
-        if self._output is not None:
-            self._output.validate(response)
+        receipt_ref = request.get("receipt_ref")
+        if isinstance(receipt_ref, str) and _RECEIPT_REF.fullmatch(receipt_ref):
+            response["receipt_ref"] = receipt_ref
+        return self._validated_response(response)
+
+    def _validated_response(self, response: dict[str, object]) -> dict[str, object]:
+        self._output.validate(response)
         return response
 
 
@@ -595,8 +651,13 @@ def _decode_cursor(
         if hashlib.sha256(payload).digest() != signature:
             raise ValueError
         value = json.loads(payload)
-    except (ValueError, json.JSONDecodeError) as error:
-        raise ReceiptError("invalid Receipt cursor") from error
+    except (
+        ValueError,
+        UnicodeDecodeError,
+        json.JSONDecodeError,
+        binascii.Error,
+    ) as error:
+        raise ReceiptError("invalid Receipt cursor", code="invalid_cursor") from error
     if (
         not cursor.startswith("opaque:")
         or value.get("receipt_identity") != receipt["seal"]["content_identity"]
@@ -605,7 +666,9 @@ def _decode_cursor(
         or not isinstance(value.get("offset"), int)
         or value["offset"] < 0
     ):
-        raise ReceiptError("Receipt cursor does not bind this query")
+        raise ReceiptError(
+            "Receipt cursor does not bind this query", code="invalid_cursor"
+        )
     return value["offset"]
 
 
@@ -648,3 +711,4 @@ _SAFE_TOKEN = frozenset(
 )
 _OPERATION_INDEX = "operations.index.json"
 _OPERATION_SEGMENT_SIZE = 1_000
+_RECEIPT_REF = re.compile(r"^apply-receipt:[^\s]+$")

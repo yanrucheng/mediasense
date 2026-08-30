@@ -288,7 +288,7 @@ def _geo_evidence_html(observations: tuple[Mapping[str, Any], ...]) -> str:
         items.append(
             "<li><strong>Candidate observation:</strong> "
             + escape(subject_names)
-            + " <span class=\"binding\">Providers: "
+            + ' <span class="binding">Providers: '
             + escape(provider_names)
             + "; outcome: "
             + escape(str(result.get("outcome", "unknown")))
@@ -296,9 +296,7 @@ def _geo_evidence_html(observations: tuple[Mapping[str, Any], ...]) -> str:
         )
     return (
         '<article><h2>地点候选证据</h2><p class="binding">Provider observations; '
-        "not confirmed Plan truth.</p><ul>"
-        + "".join(items)
-        + "</ul></article>"
+        "not confirmed Plan truth.</p><ul>" + "".join(items) + "</ul></article>"
     )
 
 

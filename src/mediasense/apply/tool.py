@@ -9,7 +9,14 @@ import json
 from pathlib import Path
 from typing import Any
 
-from jsonschema import Draft202012Validator
+from jsonschema import Draft202012Validator, ValidationError
+from referencing import Registry, Resource
+
+from mediasense.frozen_plan import load_frozen_plan_schema
+from mediasense.source_sets import (
+    ResultSourceSetResolver,
+    SourceSetResolutionError,
+)
 
 from .execution import ApplyExecutionError, ApplyExecutor
 from .filesystem import canonical_identity
@@ -17,7 +24,7 @@ from .preparation import (
     ApplyPreparationError,
     ApplyRunStore,
     PrecheckReadBoundary,
-    SourceSetResolver,
+    SourceSetExpansion,
 )
 from .receipt import ReceiptError, ReceiptStore
 
@@ -38,26 +45,29 @@ class ApplyRunTool:
         self,
         apply_store: Path,
         precheck_read: PrecheckReadBoundary,
-        resolve_source_set: SourceSetResolver,
         *,
         run_schema_path: Path,
+        frozen_plan_schema_path: Path,
         receipt_schema_path: Path,
     ) -> None:
         self.apply_store = Path(apply_store)
         database = self.apply_store / "work.sqlite3"
         self.run_store = (
-            ApplyRunStore(database)
+            ApplyRunStore(database, frozen_plan_schema_path)
             if database.exists()
-            else ApplyRunStore.initialize(database)
+            else ApplyRunStore.initialize(database, frozen_plan_schema_path)
         )
         self.receipt_store = ReceiptStore(
             self.apply_store / "receipts", receipt_schema_path
         )
         self.executor = ApplyExecutor(self.run_store, self.receipt_store)
         self.precheck_read = precheck_read
-        self.resolve_source_set = resolve_source_set
         schema = json.loads(Path(run_schema_path).read_text(encoding="utf-8"))
-        self._input = Draft202012Validator(schema["inputSchema"])
+        frozen_schema = load_frozen_plan_schema(frozen_plan_schema_path)
+        registry = Registry().with_resource(
+            frozen_schema["$id"], Resource.from_contents(frozen_schema)
+        )
+        self._input = Draft202012Validator(schema["inputSchema"], registry=registry)
         self._output = Draft202012Validator(schema["outputSchema"])
 
     def handle(
@@ -67,8 +77,24 @@ class ApplyRunTool:
         confirmation: ApplyConfirmationContext | None = None,
     ) -> dict[str, object]:
         payload = dict(request)
-        self._input.validate(payload)
-        action = str(payload["action"])
+        action_value = payload.get("action")
+        action = (
+            action_value
+            if isinstance(action_value, str)
+            and action_value
+            in {"prepare", "status", "execute", "pause", "resume", "cancel"}
+            else "unknown"
+        )
+        try:
+            self._input.validate(payload)
+        except ValidationError as error:
+            response = {
+                "outcome": "error",
+                "action": action,
+                "error": {"code": "invalid_request", "message": error.message},
+            }
+            self._output.validate(response)
+            return response
         try:
             if action == "prepare":
                 response = self._prepare(payload)
@@ -134,23 +160,39 @@ class ApplyRunTool:
                 "state": "preparing",
             }
         source = request["forward"]
-        plan_path = Path(source["frozen_plan_path"])
-        try:
-            frozen_plan = json.loads(plan_path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError) as error:
-            raise ApplyPreparationError(
-                "Frozen Plan is unavailable or invalid"
-            ) from error
+        frozen_plan = source["frozen_plan"]
+        if not isinstance(frozen_plan, Mapping):
+            raise ApplyPreparationError("Frozen Plan must be an object")
         roots = {
             item["source_root_ref"]: Path(item["current_root"])
             for item in source["current_source_roots"]
         }
+        resolver = ResultSourceSetResolver(
+            str(frozen_plan["sealed_content"]["result_ref"]),
+            self.precheck_read.read,
+        )
+
+        def resolve_source_set(
+            result_ref: str, expression: Mapping[str, object]
+        ) -> SourceSetExpansion:
+            if result_ref != resolver.result_ref:
+                raise ApplyPreparationError(
+                    "Source Set resolver crossed the Frozen Plan Result binding"
+                )
+            try:
+                members = resolver.resolve(expression)
+            except SourceSetResolutionError as error:
+                raise ApplyPreparationError(
+                    f"source set expansion failed: {error}"
+                ) from error
+            return SourceSetExpansion(tuple(sorted(members)), complete=True)
+
         run = self.run_store.prepare_forward(
             request_id=str(request["request_id"]),
             frozen_plan=frozen_plan,
             source_roots=roots,
             destination_parent=Path(source["destination_parent"]),
-            resolve_source_set=self.resolve_source_set,
+            resolve_source_set=resolve_source_set,
             precheck_read=self.precheck_read,
         )
         return {
@@ -192,6 +234,8 @@ class ApplyRunTool:
 
 
 def _error_code(error: BaseException) -> str:
+    if isinstance(error, ReceiptError):
+        return error.code
     message = str(error)
     if "confirmation" in message or "content identity" in message:
         return "access_denied"
@@ -199,6 +243,8 @@ def _error_code(error: BaseException) -> str:
         return "idempotency_conflict"
     if "revision" in message:
         return "revision_conflict"
+    if "Frozen Plan" in message or "source set" in message.lower():
+        return "invalid_request"
     if "not ready" in message or "cannot" in message:
         return "invalid_state"
     return "operation_failure"

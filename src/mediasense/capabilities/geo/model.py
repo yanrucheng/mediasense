@@ -27,7 +27,6 @@ class GeoOutcome(StrEnum):
     PARTIAL = "partial"
     NO_RESULT = "no_result"
     AUTHORIZATION_REQUIRED = "authorization_required"
-    REFUSED = "refused"
     UNAVAILABLE = "unavailable"
     FAILED = "failed"
     INDETERMINATE = "indeterminate"
@@ -246,9 +245,6 @@ class GeoRequest:
         object.__setattr__(self, "retention", GeoRetention(self.retention))
         if not self.subjects:
             raise ValueError("subjects must be non-empty")
-        refs = [subject.subject_ref for subject in self.subjects]
-        if len(set(refs)) != len(refs):
-            raise ValueError("subject_ref values must be unique")
         if not self.locale or self.locale.isspace():
             raise ValueError("locale must be non-empty")
         if self.radius_meters is not None and self.radius_meters <= 0:
@@ -257,18 +253,16 @@ class GeoRequest:
             raise ValueError("max_places must be positive")
         if self.operation is GeoOperation.NEARBY_PLACES:
             if self.radius_meters is None or self.max_places is None:
-                raise ValueError(
-                    "nearby_places requires radius_meters and max_places"
-                )
+                raise ValueError("nearby_places requires radius_meters and max_places")
         elif self.radius_meters is not None or self.max_places is not None:
-            raise ValueError(
-                "radius_meters and max_places apply only to nearby_places"
-            )
+            raise ValueError("radius_meters and max_places apply only to nearby_places")
 
     @property
     def logical_query_count(self) -> int:
         coordinates = {
-            json.dumps(subject.coordinate.value(), sort_keys=True, separators=(",", ":"))
+            json.dumps(
+                subject.coordinate.value(), sort_keys=True, separators=(",", ":")
+            )
             for subject in self.subjects
         }
         return len(coordinates)
@@ -322,6 +316,8 @@ class GeoAuthorization:
             self.value(), ensure_ascii=False, sort_keys=True, separators=(",", ":")
         ).encode("utf-8")
         return f"sha256:{hashlib.sha256(encoded).hexdigest()}"
+
+
 @dataclass(frozen=True, slots=True)
 class GeoCandidate:
     kind: GeoCandidateKind

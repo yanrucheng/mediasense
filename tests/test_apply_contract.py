@@ -8,6 +8,9 @@ from pathlib import Path
 import pytest
 from jsonschema import Draft202012Validator
 from jsonschema.exceptions import ValidationError
+from referencing import Registry, Resource
+
+from mediasense.frozen_plan import load_frozen_plan_validator, validate_frozen_plan
 
 
 ROOT = Path(__file__).parents[1]
@@ -18,6 +21,13 @@ PLAN_EXAMPLE = (
     / "design"
     / "design-260828-2043-plan-local-artifacts"
     / "example-plan.json"
+)
+FROZEN_PLAN_SCHEMA = (
+    ROOT
+    / "docs"
+    / "spec"
+    / "spec-260827-1138-frozen-plan"
+    / "frozen-plan.schema.json"
 )
 
 
@@ -39,6 +49,12 @@ def _receipt_schema() -> dict:
 
 def _receipt() -> dict:
     return _load(APPLY_SPEC / "receipt.mock.json")
+
+
+def _run_input_validator() -> Draft202012Validator:
+    frozen = _load(FROZEN_PLAN_SCHEMA)
+    registry = Registry().with_resource(frozen["$id"], Resource.from_contents(frozen))
+    return Draft202012Validator(_run_tool()["inputSchema"], registry=registry)
 
 
 def _canonical_identity(value: object) -> str:
@@ -132,12 +148,17 @@ def test_active_schemas_compile() -> None:
 
 def test_run_lifecycle_mock_conforms() -> None:
     tool = _run_tool()
-    inputs = Draft202012Validator(tool["inputSchema"])
+    inputs = _run_input_validator()
     outputs = Draft202012Validator(tool["outputSchema"])
     mock = _load(APPLY_SPEC / "lifecycle.mock.json")
     for exchange in mock["exchanges"]:
         inputs.validate(exchange["request"])
         outputs.validate(exchange["response"])
+    forward_plan = mock["exchanges"][0]["request"]["forward"]["frozen_plan"]
+    validate_frozen_plan(
+        forward_plan,
+        validator=load_frozen_plan_validator(FROZEN_PLAN_SCHEMA),
+    )
 
 
 def test_run_contract_exposes_only_six_actions() -> None:
@@ -155,7 +176,7 @@ def test_run_contract_exposes_only_six_actions() -> None:
 
 
 def test_prepare_requires_exactly_one_direction_source() -> None:
-    validator = Draft202012Validator(_run_tool()["inputSchema"])
+    validator = _run_input_validator()
     request = {
         "action": "prepare",
         "request_id": "request:test",
@@ -163,7 +184,7 @@ def test_prepare_requires_exactly_one_direction_source() -> None:
     with pytest.raises(ValidationError):
         validator.validate(request)
     request["forward"] = {
-        "frozen_plan_path": "plan.json",
+        "frozen_plan": _load(PLAN_EXAMPLE),
         "effect": "move_originals",
         "current_source_roots": [
             {"source_root_ref": "source-root:test", "current_root": "/source"}
@@ -176,7 +197,7 @@ def test_prepare_requires_exactly_one_direction_source() -> None:
 
 
 def test_execute_binds_exact_prepared_content_and_retry_identity() -> None:
-    validator = Draft202012Validator(_run_tool()["inputSchema"])
+    validator = _run_input_validator()
     request = {
         "action": "execute",
         "run_ref": "apply-run:test",
@@ -193,12 +214,12 @@ def test_execute_binds_exact_prepared_content_and_retry_identity() -> None:
 
 
 def test_prepare_forward_and_rewind_shapes_are_strict() -> None:
-    validator = Draft202012Validator(_run_tool()["inputSchema"])
+    validator = _run_input_validator()
     forward = {
         "action": "prepare",
         "request_id": "request:forward",
         "forward": {
-            "frozen_plan_path": "plan.json",
+            "frozen_plan": _load(PLAN_EXAMPLE),
             "effect": "move_originals",
             "current_source_roots": [
                 {"source_root_ref": "source-root:test", "current_root": "/source"}
@@ -621,7 +642,7 @@ def test_read_mock_conforms_and_pages_are_bounded() -> None:
         inputs.validate(exchange["request"])
         outputs.validate(exchange["response"])
         response = exchange["response"]
-        if response["action"] == "traverse":
+        if response["outcome"] == "ok" and response["action"] == "traverse":
             page = response["page"]
             assert page["returned"] == len(response["items"])
             assert page["complete"] == ("next_cursor" not in page)

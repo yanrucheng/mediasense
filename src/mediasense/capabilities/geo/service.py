@@ -126,7 +126,10 @@ class GeoCapability:
             for provider_id in routes:
                 provider = self.providers[provider_id]
                 ceiling = provider.capabilities.max_requests_per_operation
-                if request_count + ceiling > authorization.envelope.max_provider_requests:
+                if (
+                    request_count + ceiling
+                    > authorization.envelope.max_provider_requests
+                ):
                     break
                 billable_ceiling = (
                     provider.capabilities.max_billable_units_per_operation
@@ -273,14 +276,15 @@ class GeoCapability:
                     "No provider request was sent.",
                 ),
             )
-        refusal = self._authorization_refusal(request, authorization, proposed)
-        if refusal is not None:
+        mismatch = self._authorization_mismatch(request, authorization, proposed)
+        if mismatch is not None:
             return self._empty_result(
                 request,
-                GeoOutcome.REFUSED,
+                GeoOutcome.AUTHORIZATION_REQUIRED,
                 fingerprint,
                 route_context,
-                qualification=("authorization_refused", refusal),
+                required_authorization=proposed,
+                qualification=("authorization_mismatch", mismatch),
             )
 
         allowed = set(authorization.envelope.allowed_providers)
@@ -298,9 +302,7 @@ class GeoCapability:
             )
         return None
 
-    def _routes(
-        self, request: GeoRequest, context: GeoRouteContext
-    ) -> tuple[str, ...]:
+    def _routes(self, request: GeoRequest, context: GeoRouteContext) -> tuple[str, ...]:
         routes = self.routing.routes(
             request,
             context,
@@ -310,7 +312,7 @@ class GeoCapability:
             raise ValueError("routing policy selected an unconfigured provider")
         return routes
 
-    def _authorization_refusal(
+    def _authorization_mismatch(
         self,
         request: GeoRequest,
         authorization: GeoAuthorization,
@@ -385,9 +387,7 @@ class GeoCapability:
 def _coordinate_groups(
     request: GeoRequest,
 ) -> tuple[tuple[GeoCoordinate, tuple[str, ...]], ...]:
-    grouped: dict[
-        tuple[float, float, str], tuple[GeoCoordinate, list[str]]
-    ] = {}
+    grouped: dict[tuple[float, float, str], tuple[GeoCoordinate, list[str]]] = {}
     for subject in request.subjects:
         coordinate = subject.coordinate
         key = (coordinate.latitude, coordinate.longitude, coordinate.datum.value)
@@ -437,8 +437,7 @@ def _continuations(
     if request.operation is not GeoOperation.RESOLVE_PLACE:
         return ()
     if not any(
-        component.status
-        in {GeoComponentStatus.SUCCESS, GeoComponentStatus.NO_RESULT}
+        component.status in {GeoComponentStatus.SUCCESS, GeoComponentStatus.NO_RESULT}
         for component in components
     ):
         return ()

@@ -4,7 +4,7 @@ title: "MediaSense Frozen Organization Plan Contract"
 type: spec
 status: active
 created: 2026-08-27
-updated: 2026-08-28
+updated: 2026-08-30
 timezone: "Asia/Shanghai"
 parent: "index-spec"
 depends-on:
@@ -94,6 +94,13 @@ The first encoding profile is `mediasense-json-strings-sha256-v1`. The schema in
 4. bind the final confirmation to the same identity; the `plan_ref` is already covered by that identified content.
 
 Future profiles require explicit contract review and profile identifiers. [`tests/test_frozen_plan_contract.py`](../../../tests/test_frozen_plan_contract.py) carries independent canonical-text vectors and the current Mock digest vector for the first profile.
+
+A consumer must validate the complete document against
+[`frozen-plan.schema.json`](frozen-plan.schema.json) and recognize the named
+encoding profile before interpreting the sealed content. Unknown profiles and
+schema-forbidden fields are rejected even when `content_identity` has been
+recomputed consistently; a matching digest proves byte identity under a known
+profile, not contract compatibility.
 
 The contract records which content was confirmed. Identity-provider authentication and the user interaction used to obtain confirmation are outside this artifact contract.
 

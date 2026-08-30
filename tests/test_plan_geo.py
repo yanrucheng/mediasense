@@ -375,7 +375,7 @@ def test_plan_geo_requires_plan_local_retention(tmp_path: Path) -> None:
     assert provider.calls == 0
 
 
-def test_plan_geo_refuses_stale_authority_without_changing_state(tmp_path: Path) -> None:
+def test_plan_geo_requires_new_authority_without_changing_state(tmp_path: Path) -> None:
     _reader, plan_tool, adapter, provider, capability, created = _setup(tmp_path)
     request = _plan_request(created)
     parsed = _parse_request(request["geo_request"])
@@ -389,7 +389,8 @@ def test_plan_geo_refuses_stale_authority_without_changing_state(tmp_path: Path)
     result = adapter.enrich(request, authorization=stale)
     snapshot = plan_tool.store.snapshot(str(created["work_ref"]))
 
-    assert result["outcome"] == "refused"
+    assert result["outcome"] == "authorization_required"
+    assert result["geo_result"]["qualifications"][0]["code"] == "authorization_mismatch"
     assert snapshot.revision == created["revision"]
     assert snapshot.geo_observations == ()
     assert provider.calls == 0

@@ -24,7 +24,10 @@ selection, Plan interpretation, or Human authorization into the Tool.
 
 This is the active Geo Tool contract. The Tool is available to a configured Plan
 runtime through `mediasense.plan.work` `enrich_geo`; an unconfigured Plan runtime
-reports `capability_unavailable` and performs no Geo effect.
+reports `capability_unavailable` and performs no Geo effect. PreCheck may reuse the
+same provider-neutral kernels and adapters through its own frozen-batch boundary,
+but its Run-level selection, authorization, Work reuse, and Result projection do
+not become calls to this Plan-facing Tool contract.
 
 ## Operations
 
@@ -54,14 +57,24 @@ Changing any bound dimension invalidates the authorization. A continuation reuse
 subject identity and prior evidence but does not inherit permission for a larger
 effect.
 
+Missing authority and non-matching authority are distinct but both effect-free.
+Missing authority returns `authorization_required`; non-matching authority returns
+the same actionable outcome with an `authorization_mismatch` qualification and a
+fresh proposed envelope. A Human refusal is not inferred by this Tool: the calling
+stage records that decision and stops before invocation.
+
 Only coordinates, datum, locale, and provider-required lookup controls may cross
 the provider boundary. Media, renditions, embeddings, prompts, paths, filenames,
 captions, and general metadata are rejected before network access.
 
+Every coordinate supplies `datum` explicitly. Required references and locales must
+contain a non-whitespace character. Neither JSON Schema `default` annotations nor
+runtime parsing silently supply a missing datum.
+
 ## Result meaning
 
 Results distinguish `success`, `partial`, `no_result`,
-`authorization_required`, `refused`, `unavailable`, `failed`, `indeterminate`, and
+`authorization_required`, `unavailable`, `failed`, `indeterminate`, and
 `cancelled`. Each requested evidence component separately distinguishes
 `success`, `no_result`, `failed`, `indeterminate`, and `not_requested`.
 
@@ -93,5 +106,5 @@ coordinate-conversion methods are not permanent contract.
 ## Files
 
 - [`geo-query.tool.json`](geo-query.tool.json) — callable input and output contract.
-- [`geo-query.mock.json`](geo-query.mock.json) — authorization-required, success,
-  refusal, partial, and continuation examples.
+- [`geo-query.mock.json`](geo-query.mock.json) — authorization-required,
+  authorization-mismatch, success, partial, and continuation examples.

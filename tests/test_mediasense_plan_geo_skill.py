@@ -57,6 +57,7 @@ def test_plan_skill_teaches_bounded_geo_enrichment_without_provider_escape() -> 
     }
     assert all(term in SKILL for term in required)
     assert "never call a map provider" in SKILL
+    assert "do not invoke Geo merely to manufacture a `refused`" in SKILL
 
 
 def test_plan_geo_skill_scenarios_cover_selection_authority_and_stopping() -> None:

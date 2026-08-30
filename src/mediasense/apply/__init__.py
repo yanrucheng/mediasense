@@ -11,7 +11,6 @@ from .preparation import (
     PreparedRun,
     SourceEvidenceError,
     SourceItemEvidence,
-    SourceSetExpansion,
     VerificationBasis,
 )
 from .receipt import ApplyReceiptReader, ReceiptError, ReceiptStore
@@ -34,6 +33,5 @@ __all__ = [
     "ReceiptStore",
     "SourceEvidenceError",
     "SourceItemEvidence",
-    "SourceSetExpansion",
     "VerificationBasis",
 ]

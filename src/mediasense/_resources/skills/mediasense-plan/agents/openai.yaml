@@ -1,0 +1,4 @@
+interface:
+  display_name: "MediaSense Plan"
+  short_description: "Review evidence and freeze a complete media organization plan"
+  default_prompt: "Use $mediasense-plan to turn a PreCheck Result into a reviewed, previewed, and frozen organization plan."

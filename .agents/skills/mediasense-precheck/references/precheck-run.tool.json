@@ -1,0 +1,444 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:mediasense:tool:precheck-run",
+  "name": "mediasense.precheck.run",
+  "description": "Manage one mutable, durable PreCheck Working Run and report automatic immutable Result publication without exposing internal execution state.",
+  "inputSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "urn:mediasense:tool:precheck-run-input",
+    "oneOf": [
+      { "$ref": "#/$defs/start_request" },
+      { "$ref": "#/$defs/status_request" },
+      { "$ref": "#/$defs/pause_request" },
+      { "$ref": "#/$defs/resume_request" },
+      { "$ref": "#/$defs/cancel_request" }
+    ],
+    "$defs": {
+      "dataset_ref": {
+        "type": "string",
+        "pattern": "^dataset:[^\\s]+$"
+      },
+      "result_ref": {
+        "type": "string",
+        "pattern": "^precheck-result:[^\\s]+$"
+      },
+      "run_ref": {
+        "type": "string",
+        "pattern": "^precheck-run:[^\\s]+$"
+      },
+      "request_id": {
+        "type": "string",
+        "pattern": "^request:[^\\s]+$"
+      },
+      "confirmation_decision": {
+        "enum": ["proceed", "skip_optional_work"]
+      },
+      "start_request": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["action", "request_id"],
+        "properties": {
+          "action": { "const": "start" },
+          "dataset_ref": { "$ref": "#/$defs/dataset_ref" },
+          "prior_result_ref": { "$ref": "#/$defs/result_ref" },
+          "request_id": { "$ref": "#/$defs/request_id" }
+        },
+        "oneOf": [
+          { "required": ["dataset_ref"] },
+          { "required": ["prior_result_ref"] }
+        ]
+      },
+      "status_request": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["action", "run_ref"],
+        "properties": {
+          "action": { "const": "status" },
+          "run_ref": { "$ref": "#/$defs/run_ref" }
+        }
+      },
+      "pause_request": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["action", "run_ref"],
+        "properties": {
+          "action": { "const": "pause" },
+          "run_ref": { "$ref": "#/$defs/run_ref" }
+        }
+      },
+      "resume_request": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["action", "run_ref"],
+        "properties": {
+          "action": { "const": "resume" },
+          "run_ref": { "$ref": "#/$defs/run_ref" },
+          "decision": { "$ref": "#/$defs/confirmation_decision" }
+        }
+      },
+      "cancel_request": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["action", "run_ref"],
+        "properties": {
+          "action": { "const": "cancel" },
+          "run_ref": { "$ref": "#/$defs/run_ref" }
+        }
+      }
+    }
+  },
+  "outputSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "urn:mediasense:tool:precheck-run-output",
+    "oneOf": [
+      { "$ref": "#/$defs/start_response" },
+      { "$ref": "#/$defs/running_status" },
+      { "$ref": "#/$defs/paused_status" },
+      { "$ref": "#/$defs/blocked_status" },
+      { "$ref": "#/$defs/completed_status" },
+      { "$ref": "#/$defs/cancelled_status" },
+      { "$ref": "#/$defs/failed_status" },
+      { "$ref": "#/$defs/pause_response" },
+      { "$ref": "#/$defs/resume_response" },
+      { "$ref": "#/$defs/cancel_response" },
+      { "$ref": "#/$defs/error_response" }
+    ],
+    "$defs": {
+      "dataset_ref": {
+        "type": "string",
+        "pattern": "^dataset:[^\\s]+$"
+      },
+      "result_ref": {
+        "type": "string",
+        "pattern": "^precheck-result:[^\\s]+$"
+      },
+      "run_ref": {
+        "type": "string",
+        "pattern": "^precheck-run:[^\\s]+$"
+      },
+      "public_state": {
+        "enum": ["running", "paused", "blocked", "completed", "cancelled", "failed"]
+      },
+      "confirmation_decision": {
+        "enum": ["proceed", "skip_optional_work"]
+      },
+      "control_action": {
+        "enum": ["pause", "resume", "cancel"]
+      },
+      "running_actions": {
+        "type": "array",
+        "minItems": 2,
+        "maxItems": 2,
+        "uniqueItems": true,
+        "items": { "$ref": "#/$defs/control_action" },
+        "allOf": [
+          { "contains": { "const": "pause" }, "minContains": 1, "maxContains": 1 },
+          { "contains": { "const": "cancel" }, "minContains": 1, "maxContains": 1 }
+        ]
+      },
+      "resumable_actions": {
+        "type": "array",
+        "minItems": 2,
+        "maxItems": 2,
+        "uniqueItems": true,
+        "items": { "$ref": "#/$defs/control_action" },
+        "allOf": [
+          { "contains": { "const": "resume" }, "minContains": 1, "maxContains": 1 },
+          { "contains": { "const": "cancel" }, "minContains": 1, "maxContains": 1 }
+        ]
+      },
+      "no_actions": {
+        "type": "array",
+        "maxItems": 0
+      },
+      "count_or_unknown": {
+        "oneOf": [
+          { "type": "integer", "minimum": 0 },
+          { "const": "unknown" }
+        ]
+      },
+      "progress": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["discovered", "accounted", "usable", "exceptional", "unresolved"],
+        "properties": {
+          "discovered": { "$ref": "#/$defs/count_or_unknown" },
+          "accounted": { "$ref": "#/$defs/count_or_unknown" },
+          "usable": { "$ref": "#/$defs/count_or_unknown" },
+          "exceptional": { "$ref": "#/$defs/count_or_unknown" },
+          "unresolved": { "$ref": "#/$defs/count_or_unknown" }
+        }
+      },
+      "reason": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["code", "message"],
+        "properties": {
+          "code": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+          "message": { "type": "string", "minLength": 1 },
+          "resume_when": { "type": "string", "minLength": 1 }
+        }
+      },
+      "confirmation": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["summary", "quantity", "unit", "skip_allowed"],
+        "properties": {
+          "summary": { "type": "string", "minLength": 1 },
+          "quantity": { "type": "integer", "minimum": 1 },
+          "unit": { "type": "string", "minLength": 1 },
+          "skip_allowed": { "type": "boolean" }
+        }
+      },
+      "published_result": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["result_ref", "coverage", "readiness", "integrity"],
+        "properties": {
+          "result_ref": { "$ref": "#/$defs/result_ref" },
+          "coverage": {
+            "$ref": "urn:mediasense:tool:precheck-read-output#/$defs/result_view/properties/coverage"
+          },
+          "readiness": {
+            "$ref": "urn:mediasense:tool:precheck-read-output#/$defs/result_view/properties/readiness"
+          },
+          "integrity": {
+            "allOf": [
+              {
+                "$ref": "urn:mediasense:tool:precheck-read-output#/$defs/result_view/properties/integrity"
+              },
+              { "const": "valid" }
+            ]
+          }
+        }
+      },
+      "start_response": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["outcome", "action", "run_ref", "dataset_ref", "state"],
+        "properties": {
+          "outcome": { "const": "ok" },
+          "action": { "const": "start" },
+          "run_ref": { "$ref": "#/$defs/run_ref" },
+          "dataset_ref": { "$ref": "#/$defs/dataset_ref" },
+          "prior_result_ref": { "$ref": "#/$defs/result_ref" },
+          "state": { "const": "running" }
+        }
+      },
+      "status_base": {
+        "type": "object",
+        "required": [
+          "outcome",
+          "action",
+          "run_ref",
+          "dataset_ref",
+          "state",
+          "progress",
+          "allowed_actions"
+        ],
+        "properties": {
+          "outcome": { "const": "ok" },
+          "action": { "const": "status" },
+          "run_ref": { "$ref": "#/$defs/run_ref" },
+          "dataset_ref": { "$ref": "#/$defs/dataset_ref" },
+          "prior_result_ref": { "$ref": "#/$defs/result_ref" },
+          "state": { "$ref": "#/$defs/public_state" },
+          "progress": { "$ref": "#/$defs/progress" },
+          "allowed_actions": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": { "$ref": "#/$defs/control_action" }
+          }
+        }
+      },
+      "running_status": {
+        "allOf": [
+          { "$ref": "#/$defs/status_base" },
+          {
+            "type": "object",
+            "required": ["state", "allowed_actions"],
+            "properties": {
+              "state": { "const": "running" },
+              "allowed_actions": { "$ref": "#/$defs/running_actions" }
+            }
+          }
+        ],
+        "unevaluatedProperties": false
+      },
+      "paused_status": {
+        "allOf": [
+          { "$ref": "#/$defs/status_base" },
+          {
+            "type": "object",
+            "required": ["state", "allowed_actions", "reason"],
+            "properties": {
+              "state": { "const": "paused" },
+              "allowed_actions": { "$ref": "#/$defs/resumable_actions" },
+              "reason": { "$ref": "#/$defs/reason" },
+              "confirmation": { "$ref": "#/$defs/confirmation" }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "reason": {
+                  "properties": {
+                    "code": { "const": "confirmation_required" }
+                  },
+                  "required": ["code"]
+                }
+              },
+              "required": ["reason"]
+            },
+            "then": { "required": ["confirmation"] },
+            "else": { "properties": { "confirmation": false } }
+          }
+        ],
+        "unevaluatedProperties": false
+      },
+      "blocked_status": {
+        "allOf": [
+          { "$ref": "#/$defs/status_base" },
+          {
+            "type": "object",
+            "required": ["state", "allowed_actions", "reason"],
+            "properties": {
+              "state": { "const": "blocked" },
+              "allowed_actions": { "$ref": "#/$defs/resumable_actions" },
+              "reason": { "$ref": "#/$defs/reason" }
+            }
+          }
+        ],
+        "unevaluatedProperties": false
+      },
+      "completed_status": {
+        "allOf": [
+          { "$ref": "#/$defs/status_base" },
+          {
+            "type": "object",
+            "required": ["state", "allowed_actions", "published_result"],
+            "properties": {
+              "state": { "const": "completed" },
+              "allowed_actions": { "$ref": "#/$defs/no_actions" },
+              "progress": {
+                "allOf": [
+                  { "$ref": "#/$defs/progress" },
+                  {
+                    "properties": {
+                      "accounted": { "type": "integer", "minimum": 0 }
+                    }
+                  }
+                ]
+              },
+              "published_result": { "$ref": "#/$defs/published_result" }
+            }
+          }
+        ],
+        "unevaluatedProperties": false
+      },
+      "cancelled_status": {
+        "allOf": [
+          { "$ref": "#/$defs/status_base" },
+          {
+            "type": "object",
+            "required": ["state", "allowed_actions"],
+            "properties": {
+              "state": { "const": "cancelled" },
+              "allowed_actions": { "$ref": "#/$defs/no_actions" }
+            }
+          }
+        ],
+        "unevaluatedProperties": false
+      },
+      "failed_status": {
+        "allOf": [
+          { "$ref": "#/$defs/status_base" },
+          {
+            "type": "object",
+            "required": ["state", "allowed_actions", "reason"],
+            "properties": {
+              "state": { "const": "failed" },
+              "allowed_actions": { "$ref": "#/$defs/no_actions" },
+              "reason": { "$ref": "#/$defs/reason" }
+            }
+          }
+        ],
+        "unevaluatedProperties": false
+      },
+      "pause_response": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["outcome", "action", "run_ref", "observed_state", "target_state"],
+        "properties": {
+          "outcome": { "const": "accepted" },
+          "action": { "const": "pause" },
+          "run_ref": { "$ref": "#/$defs/run_ref" },
+          "observed_state": { "$ref": "#/$defs/public_state" },
+          "target_state": { "const": "paused" }
+        }
+      },
+      "resume_response": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["outcome", "action", "run_ref", "observed_state", "target_state"],
+        "properties": {
+          "outcome": { "const": "accepted" },
+          "action": { "const": "resume" },
+          "run_ref": { "$ref": "#/$defs/run_ref" },
+          "decision": { "$ref": "#/$defs/confirmation_decision" },
+          "observed_state": { "$ref": "#/$defs/public_state" },
+          "target_state": { "const": "running" }
+        }
+      },
+      "cancel_response": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["outcome", "action", "run_ref", "observed_state", "target_state"],
+        "properties": {
+          "outcome": { "const": "accepted" },
+          "action": { "const": "cancel" },
+          "run_ref": { "$ref": "#/$defs/run_ref" },
+          "observed_state": { "$ref": "#/$defs/public_state" },
+          "target_state": { "const": "cancelled" }
+        }
+      },
+      "error_response": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["outcome", "action", "error"],
+        "properties": {
+          "outcome": { "const": "error" },
+          "action": { "enum": ["start", "status", "pause", "resume", "cancel"] },
+          "run_ref": { "$ref": "#/$defs/run_ref" },
+          "error": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["code", "message"],
+            "properties": {
+              "code": {
+                "enum": [
+                  "invalid_request",
+                  "dataset_not_found",
+                  "result_not_found",
+                  "result_untrusted",
+                  "run_not_found",
+                  "invalid_state",
+                  "idempotency_conflict",
+                  "access_denied",
+                  "operation_failed"
+                ]
+              },
+              "message": { "type": "string", "minLength": 1 },
+              "current_state": { "$ref": "#/$defs/public_state" },
+              "allowed_actions": {
+                "type": "array",
+                "uniqueItems": true,
+                "items": { "$ref": "#/$defs/control_action" }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -10,8 +10,12 @@ from typing import Any
 from uuid import uuid4
 
 from mediasense.capabilities.geo import GeoAuthorization, GeoQueryTool
+from mediasense.source_sets import (
+    PrecheckReader,
+    ResultSourceSetResolver,
+    SourceSetResolutionError,
+)
 
-from ._candidate import PrecheckReader, ResultAccessError, ResultResolver
 from ._sqlite import (
     IdempotencyConflict,
     RevisionConflict,
@@ -112,9 +116,7 @@ class PlanGeoAdapter:
         observation = {
             "geo_request_id": geo_result["request_id"],
             "request_fingerprint": geo_result["request_fingerprint"],
-            "authorization": (
-                None if authorization is None else authorization.value()
-            ),
+            "authorization": (None if authorization is None else authorization.value()),
             "result": geo_result,
         }
         response = {
@@ -146,7 +148,7 @@ class PlanGeoAdapter:
         subjects = geo_request.get("subjects")
         if not isinstance(subjects, list) or not subjects:
             raise ValueError("geo_request subjects must be a non-empty array")
-        resolver = ResultResolver(result_ref, self.precheck_read)
+        resolver = ResultSourceSetResolver(result_ref, self.precheck_read)
         for subject in subjects:
             if not isinstance(subject, Mapping):
                 raise ValueError("Geo subject must be an object")
@@ -158,7 +160,7 @@ class PlanGeoAdapter:
                 raise ValueError("Geo subject coordinate must be an object")
             try:
                 view = resolver.inspect("source_item", subject_ref)
-            except ResultAccessError as error:
+            except SourceSetResolutionError as error:
                 raise ValueError(str(error)) from error
             if not _coordinate_is_observed(view, coordinate):
                 raise ValueError(

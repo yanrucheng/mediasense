@@ -1,0 +1,4 @@
+interface:
+  display_name: "MediaSense Apply"
+  short_description: "Safely apply one exact frozen media organization plan"
+  default_prompt: "Use $mediasense-apply to prepare, authorize, execute, verify, and read the Receipt for one Frozen Plan."

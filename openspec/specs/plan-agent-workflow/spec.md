@@ -1,7 +1,9 @@
 # plan-agent-workflow Specification
 
 ## Purpose
-TBD - created by archiving change implement-plan-stage. Update Purpose after archive.
+Define how the Plan Agent turns one exact PreCheck Result and any separately
+authorized Plan-owned observations into a reviewable, Human-confirmed organization
+decision without mutating source media or upstream evidence.
 ## Requirements
 ### Requirement: Agent preserves epistemic boundaries
 The Plan Skill SHALL guide the Agent to keep PreCheck facts and observations, candidate relations, Agent judgments, organization preferences, and Human confirmations distinguishable throughout planning.
@@ -49,11 +51,13 @@ The Agent SHALL apply the Default Organization Profile when no explicit preferen
 ### Requirement: External semantic work remains controlled
 The Agent SHALL make provider locality, transmitted data classes, model usage,
 cost, retention, and material uncertainty visible before optional remote semantic
-work. It MAY request live geographic enrichment only through the accepted Geo Tool
-for exact coordinates from the bound PreCheck Result and only under matching Human
-or standing-policy authority. It SHALL NOT call provider APIs directly, transmit
-media or unrelated metadata, mutate the PreCheck Result, or treat a provider
-observation as a confirmed Plan judgment.
+work. It MAY request additional live geographic observations only through the
+accepted stage-neutral Geo capability for exact coordinates from the bound
+PreCheck Result and only under matching Human or standing-policy authority. Plan
+SHALL own the lookup purpose, selected scope, authorization binding, retained
+observation, and evidence lifecycle. It SHALL NOT call provider APIs directly,
+transmit media or unrelated metadata, mutate the PreCheck Result, reuse PreCheck
+Run authorization, or treat a provider observation as a confirmed Plan judgment.
 
 #### Scenario: Existing place evidence is sufficient
 - **WHEN** the bound Result already contains place evidence sufficient for the current organization decision
@@ -61,11 +65,15 @@ observation as a confirmed Plan judgment.
 
 #### Scenario: Plan lacks material place evidence
 - **WHEN** the bound Result contains an exact coordinate but lacks place evidence that could materially change grouping, naming, disposition, or the decision to stop
-- **THEN** the Agent may request bounded Geo enrichment, discloses the proposed effects, and proceeds only after matching authority is available
+- **THEN** the Agent may request bounded Geo enrichment, discloses the proposed effects, and proceeds only after matching Plan-scoped authority is available
 
-#### Scenario: Geo enrichment is refused
-- **WHEN** the Human declines the proposed coordinate egress or no permitted provider is available
-- **THEN** the Agent continues with available evidence, asks the Human for non-provider context, leaves the location unresolved, or recommends upstream work without fabricating a place
+#### Scenario: Human declines Geo enrichment
+- **WHEN** the Human declines the proposed coordinate egress
+- **THEN** Plan records the refusal if useful, does not invoke Geo to manufacture a `refused` result, and continues with available evidence, Human context, an unresolved location, or an upstream recommendation
+
+#### Scenario: No permitted provider is available
+- **WHEN** the authorized constraints admit no configured provider
+- **THEN** Plan treats the Geo capability as unavailable without fabricating a Human refusal or place observation
 
 ### Requirement: Migration acceptance remains explicit
 The completed Plan capability SHALL compare relevant behavior with AI Album using `preserved`, `intentionally_changed`, `regression`, or `not_comparable` and SHALL include functional coverage, model cost, reuse, user effort, uncertainty visibility, and file safety.
@@ -73,4 +81,3 @@ The completed Plan capability SHALL compare relevant behavior with AI Album usin
 #### Scenario: Plan behavior differs from AI Album
 - **WHEN** an evaluated grouping, naming, evidence, or interaction behavior differs from the legacy output
 - **THEN** the result records the applicable migration class and evidence rather than treating difference alone as regression
-

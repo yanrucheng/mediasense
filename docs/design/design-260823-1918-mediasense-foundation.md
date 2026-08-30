@@ -50,6 +50,7 @@ This relation generates three product stages and three user-facing Skills. The s
 
 - Source media is read-only. Derived artifacts are written to a separate workspace.
 - Remote calls, uploads, reverse-geocoding services, and billable model access are disabled by default and reported explicitly.
+- After compression freezes a normalized, deduplicated representative-coordinate batch, a Run may perform coordinate-only reverse geocoding under one authorization bound to that exact batch and effective profile. This never authorizes media, rendition, embedding, path, filename, prompt, or general-metadata egress.
 - Metadata extraction, decoding, thumbnailing, frame selection, fingerprinting, embedding, indexing, and grouping reuse completed work where valid.
 - Work is observable, bounded in resource use, resumable after interruption, and incrementally invalidated.
 - A disconnected volume is treated as unavailable, not as evidence that its files were deleted.
@@ -61,7 +62,7 @@ Exact implementations—ExifTool, FFmpeg, embedding model, index, clustering alg
 
 ### `mediasense.plan`: interactive convergence
 
-`plan` starts from one static precheck result. It may use a modern multimodal model or an authorization-bound stage-neutral capability, but it must not inspect every asset or acquire new evidence by default. It progressively selects representative, boundary, outlier, and conflict evidence under explicit visual, external-effect, cost, and user-attention budgets. Plan-local observations never rewrite the bound PreCheck Result.
+`plan` starts from one static precheck result. It may use a modern multimodal model or an authorization-bound stage-neutral capability, but it must not inspect every asset or acquire new evidence by default. It progressively selects representative, boundary, outlier, and conflict evidence under explicit visual, external-effect, cost, and user-attention budgets. If additional place evidence is material, Plan owns the exact query purpose, selected Result coordinates, authorization binding, retained observations, and stopping decision; it does not inherit PreCheck Run authority. Plan-local observations never rewrite the bound PreCheck Result.
 
 It must keep these meanings separate:
 
@@ -90,7 +91,7 @@ This separation lets evidence collection improve independently from planning pol
 
 ### `mediasense.apply`: safe and faithful
 
-`apply` accepts only a frozen plan. It performs no captioning, place identification, grouping, or naming. Unexpected conditions are returned to planning rather than resolved semantically by the executor.
+`apply` accepts only a frozen plan. It performs no captioning, geographic acquisition or interpretation, grouping, or naming. Unexpected conditions are returned to planning rather than resolved semantically by the executor.
 
 Its safety guarantees belong in Tools, not merely in Skill instructions:
 

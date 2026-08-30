@@ -1,7 +1,8 @@
 # plan-working-state Specification
 
 ## Purpose
-TBD - created by archiving change implement-plan-stage. Update Purpose after archive.
+Define the mutable, revisioned Plan authority and its deterministic publication of
+one complete Frozen Plan for direct downstream consumption.
 ## Requirements
 ### Requirement: Exact PreCheck entry boundary
 The Plan Working State implementation SHALL consume one exact immutable PreCheck Result only through the `mediasense.precheck.read` contract. It SHALL accept `coverage` of `complete` or bounded `partial` only when `readiness` is `plan_ready` and `integrity` is `valid`, and SHALL NOT read PreCheck SQLite, caches, or internal runtime records.
@@ -78,11 +79,15 @@ Every pagination cursor SHALL be opaque, revision-bound, query-bound, restart-st
 - **THEN** the Tool verifies it with the persisted signing key and continues the bound page correctly
 
 ### Requirement: Trusted and recoverable sealing
-The `seal` action SHALL bind one open Work, exact current revision, exact candidate identity, idempotent request, and trusted Human authentication context. Success SHALL publish one complete immutable Frozen Plan JSON and close the Work only when the file and committed SQLite outcome agree.
+The `seal` action SHALL bind one open Work, exact current revision, exact candidate
+identity, idempotent request, and trusted Human authentication context. Success
+SHALL publish one complete immutable Frozen Plan JSON, close the Work only when the
+file and committed SQLite outcome agree, and return that complete schema-valid
+Frozen Plan object as the formal handoff consumable by Apply prepare.
 
 #### Scenario: Seal the reviewed candidate
 - **WHEN** trusted Human confirmation is bound to the current sealable candidate identity
-- **THEN** the Tool publishes the conforming Frozen Plan, closes the Work, and returns the same authoritative Plan on identical retry
+- **THEN** the Tool publishes the conforming Frozen Plan, closes the Work, returns the complete Frozen Plan object, and returns the same authoritative Plan on identical retry
 
 #### Scenario: Reject stale confirmation
 - **WHEN** confirmation names an older revision or content identity
@@ -93,11 +98,15 @@ The `seal` action SHALL bind one open Work, exact current revision, exact candid
 - **THEN** retry recovers that exact artifact and completes the original transition without allocating a second Plan
 
 ### Requirement: Source safety and stage boundary
-Plan operations SHALL remain read-only with respect to source media and SHALL NOT perform Apply operations, reverse geocoding, or new upstream evidence production.
+Plan operations SHALL remain read-only with respect to source media and SHALL NOT
+perform Apply filesystem operations or new PreCheck evidence production. Candidate
+validation, inspection, preview, and seal SHALL perform no Geo provider request;
+only the explicit `enrich_geo` action MAY invoke the stage-neutral Geo capability
+under matching Plan-scoped authority.
 
 #### Scenario: Plan handles a candidate
 - **WHEN** any Plan action validates, stores, previews, or seals candidate content
-- **THEN** no source media is moved, copied, renamed, deleted, or rewritten
+- **THEN** no source media is moved, copied, renamed, deleted, or rewritten and no implicit Geo request occurs
 
 ### Requirement: Plan-owned Geo observations remain epistemically and operationally separate
 Plan Working State SHALL retain any accepted Geo observation with its exact
@@ -131,14 +140,19 @@ SQLite, Work, caches, provider credentials, or internal runtime records.
 
 ### Requirement: Geo observation storage is revision-bound and idempotent
 The existing `mediasense.plan.work` Tool SHALL provide `enrich_geo` as the
-Plan-owned coordination action. Authorization preflight or refusal SHALL preserve
-the current revision. Persisting a terminal Geo outcome SHALL atomically append its
-observation and authorization evidence, advance the Working State revision, and
-apply Plan request-id replay semantics.
+Plan-owned coordination action. Authorization preflight or mismatch SHALL preserve
+the current revision. A Human refusal recorded by Plan SHALL stop before Geo Tool
+invocation. Persisting a terminal Geo observation outcome SHALL atomically append
+its observation and authorization evidence, advance the Working State revision,
+and apply Plan request-id replay semantics.
 
 #### Scenario: Geo authorization is required
 - **WHEN** `enrich_geo` reaches the Geo boundary without matching authority
 - **THEN** it returns the proposed Geo authorization requirement and leaves Plan Working State unchanged
+
+#### Scenario: Human refuses before invocation
+- **WHEN** the Human declines Plan's proposed Geo request
+- **THEN** Plan performs no Geo invocation and does not create a provider observation revision
 
 #### Scenario: Geo observation is persisted
 - **WHEN** an authorized Geo request returns a terminal observation outcome
@@ -147,4 +161,3 @@ apply Plan request-id replay semantics.
 #### Scenario: Plan enrichment response is lost
 - **WHEN** an identical `enrich_geo` request is replayed after its Plan state transition completed
 - **THEN** the Tool returns the recorded response without another revision or provider request
-

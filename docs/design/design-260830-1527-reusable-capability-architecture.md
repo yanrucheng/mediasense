@@ -517,6 +517,15 @@ The same returned observation may lead to different authorized decisions in
 different stages. Shared implementation does not imply shared business policy,
 state, cache authority, or result interpretation.
 
+Cross-stage deterministic interpretation may also justify a shared internal
+module without a public Tool. `mediasense.frozen_plan` validates the one existing
+handoff contract for both its Plan producer and Apply consumer;
+`mediasense.source_sets` interprets Frozen Plan Source Sets only through the public
+PreCheck Read boundary. Neither module has independent authority, effects, durable
+state, or lifecycle, so promoting either to a Tool or service would add a false
+entity. Their methods remain replaceable while their callers share the same
+contract semantics.
+
 ## Acceptance evidence
 
 An accepted reusable family demonstrates all applicable evidence below:
@@ -585,11 +594,14 @@ operations or adapters unless a real caller proves an independent public purpose
 Provider selection defaults and fallback may stay internal, but the result reports
 providers actually attempted and cannot cross the authorized effect envelope.
 
-PreCheck retains its frozen batch, confirmation, Work, reuse, and Result projection
-through the family batch port. Plan uses `mediasense.plan.work` `enrich_geo` to
-validate exact Result-bound coordinates, invoke `mediasense.geo.query`, and retain
-the returned observation under a new Plan revision. The capability Tool owns only
-effect enforcement, normalized observations, provenance, and safe request replay.
+PreCheck retains its frozen batch, Run-level confirmation, Work, reuse, and Result
+projection through its batch engine and may reuse the family's provider-neutral
+ports and adapters without invoking the public Geo Tool. Plan uses
+`mediasense.plan.work` `enrich_geo` to validate exact Result-bound coordinates,
+invoke `mediasense.geo.query`, and retain the returned observation under a new Plan
+revision. The public capability Tool owns only effect enforcement, normalized
+observations, provenance, and safe request replay; it owns neither stage's query
+selection, authorization record, cache, nor evidence lifecycle.
 
 The active Tool contract is
 [`spec-260830-2034-geo-query`](../spec/spec-260830-2034-geo-query/). Provider

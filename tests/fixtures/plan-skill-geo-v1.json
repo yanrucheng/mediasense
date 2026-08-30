@@ -81,7 +81,7 @@
       "must_not": ["Reuse broader authority silently", "Expose provider-native response fields"]
     },
     {
-      "id": "geo_authorization_refused",
+      "id": "human_refuses_geo",
       "covers": ["refusal", "zero_effect", "usable_fallback"],
       "prompt": "The Human does not permit the coordinate to leave the device.",
       "tool_route": [],

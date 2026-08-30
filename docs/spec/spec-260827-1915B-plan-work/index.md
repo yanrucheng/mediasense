@@ -60,7 +60,7 @@ Only a trusted Human authentication context may authorize `seal`. The ordinary r
 
 Coverage may be `complete` or honestly bounded `partial`. A blocked or invalid Result returns `result_not_ready` or `result_untrusted` and creates no Working State.
 
-A new Working State is `open`. Every accepted `update` replaces its candidate atomically and produces a new opaque revision token. Every retained `enrich_geo` outcome appends Plan-owned evidence and also produces a new revision; authorization preflight and refusal do not. Successful `seal` closes the exact revision and publishes a Frozen Plan. A closed Work remains inspectable but rejects update, enrichment, and a semantically different seal. Later changes require another `create`; draft retention and cloning from a Frozen Plan are outside this contract.
+A new Working State is `open`. Every accepted `update` replaces its candidate atomically and produces a new opaque revision token. Every retained `enrich_geo` observation appends Plan-owned evidence and also produces a new revision; authorization preflight or mismatch does not. A Human refusal stops before Geo invocation and therefore creates no provider observation. Successful `seal` closes the exact revision, publishes a Frozen Plan, and returns that complete Frozen Plan object as the formal input to Apply preparation. A closed Work remains inspectable but rejects update, enrichment, and a semantically different seal. Later changes require another `create`; draft retention and cloning from a Frozen Plan are outside this contract.
 
 ## Safe retry and concurrency
 

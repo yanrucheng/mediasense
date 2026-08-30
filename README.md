@@ -2,13 +2,22 @@
 
 MediaSense is an agent-native system for organizing large personal media collections without requiring an agent to inspect every image or exposing source files to premature, opaque automation.
 
+Install the current checkout with `uv tool install .`, then verify it with
+`mediasense doctor`. MediaSense keeps expensive Dataset work beside media on an
+eligible external volume by default and falls back to the platform-local
+application-data directory when no portable workspace exists. See
+[Installation and first use](readme/installation.md) and
+[Agent integration](readme/agent-integration.md) for the complete flow; see
+[Troubleshooting and recovery](readme/troubleshooting.md) when opening or
+connecting fails.
+
 The product is organized around three user-facing skills:
 
 - `mediasense.precheck` prepares a large media collection with source-read-only, local-first, resumable computation; external evidence calls are disabled by default and require a frozen-scope confirmation.
 - `mediasense.plan` lets an agent and user iteratively turn one immutable Result plus explicitly authorized Plan-local observations into a complete, reviewable organization plan.
 - `mediasense.apply` validates and safely applies a frozen plan without making new semantic decisions.
 
-The three durable handoff roles are the precheck result, the frozen organization plan, and the apply receipt. PreCheck, Plan, and Apply now have active contracts and repository-provided user-facing Skills for the first end-to-end `move_originals` path. The Skills guide Human/Agent interaction while Tools remain authoritative for PreCheck work and Results, Plan validation and freezing, and deterministic Apply effects and Receipts. The stage-neutral `mediasense.geo.query` Tool provides authorization-bound coordinate-only place candidates to PreCheck and Plan without owning either stage's selection, state, or interpretation. Apply verifies every selected source through its exact PreCheck Result, binds trusted Human authorization to one prepared Run identity, refuses overwrite, journals and recovers effects, and publishes one immutable Receipt. Its Darwin cross-filesystem profile verifies content byte for byte and blocks source deletion until any exact user-relevant metadata loss receives new Human authorization.
+The three durable handoff roles are the precheck result, the frozen organization plan, and the apply receipt. PreCheck, Plan, and Apply now have active contracts and repository-provided user-facing Skills for the first end-to-end `move_originals` path. The Skills guide Human/Agent interaction while Tools remain authoritative for PreCheck work and Results, Plan validation and freezing, and deterministic Apply effects and Receipts. PreCheck may perform optional coordinate-only reverse geocoding over one frozen post-compression batch under Run-scoped authorization; Plan may separately use the stage-neutral `mediasense.geo.query` Tool for additional authorization-bound place candidates. Their selection, authorization, state, reuse, and evidence lifecycles remain separate, and Apply performs no geographic acquisition or interpretation. Apply verifies every selected source through its exact PreCheck Result, accepts the complete Frozen Plan object returned by Plan seal, binds trusted Human authorization to one prepared Run identity, refuses overwrite, journals and recovers effects, and publishes one immutable Receipt. Its Darwin cross-filesystem profile verifies content byte for byte and blocks source deletion until any exact user-relevant metadata loss receives new Human authorization.
 
 ## Start here
 
@@ -20,6 +29,11 @@ The three durable handoff roles are the precheck result, the frozen organization
 6. For Apply development, read the [Apply Contract](docs/spec/spec-260829-0050-apply/) and [Apply Activation Evidence](docs/eval/eval-260829-1350-apply-activation-evidence.md).
 
 ## Current phase
+
+The `0.2.0` distribution adds the installed `mediasense` executable, portable-
+first Dataset discovery, one local composition root, packaged Skills and Tool
+contracts, and an on-demand stdio MCP Host. It does not publish a package, edit an
+Agent client's configuration, or enable external providers by default.
 
 PreCheck, Plan, and the first Apply `move_originals` slice are implemented against active contracts. Apply supports its user-facing Skill, durable preparation, exact authorization, same-filesystem moves, the evidence-bounded Darwin cross-filesystem route, pause/resume/cancel, restart reconciliation, immutable Receipts, bounded Receipt reads, and whole-Run rewind. Original-file copy is not a c90 runtime capability despite legacy README wording; persistent relative symbolic links are intentionally deferred because their preview purpose is now Plan-owned and their dangling/rebinding lifecycle is not accepted. Broader cross-filesystem platforms, ACL-bearing cross-filesystem sources, and representative user-storage throughput remain uncertified.
 

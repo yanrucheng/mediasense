@@ -78,7 +78,11 @@ Each file is one complete instance of the existing Frozen Plan Contract. It is t
 - accounted exceptions and concise decision notes; and
 - content identity and trusted final-confirmation record.
 
-The artifact is independently openable, copyable, and verifiable. Apply must be able to interpret it using the Frozen Plan and referenced PreCheck Result contracts without reading `work.sqlite3`.
+The artifact is independently openable, copyable, and verifiable. The successful
+Plan seal response returns the same complete Frozen Plan object, so Apply prepare
+can consume the formal response directly without discovering this private path.
+Apply interprets that object using the Frozen Plan and referenced PreCheck Result
+contracts without reading `work.sqlite3`.
 
 Removing a published JSON artifact would destroy the immutable stage handoff even if a database record remained. The database therefore cannot replace it.
 
@@ -177,7 +181,8 @@ Neither the SQLite store nor Frozen Plan needs a copied Profile document or `pro
 | Observed condition | Required treatment |
 | --- | --- |
 | SQLite contains an open Work and no final artifact exists | Resume or update the Work normally. |
-| Geo authorization is required or refused before a provider effect | Return the bounded requirement or refusal and preserve the current revision. |
+| Geo authority is absent or does not match before a provider effect | Return the bounded authorization requirement and preserve the current revision. |
+| Human declines Plan's proposed Geo request | Record the Plan decision if useful, do not invoke Geo, and preserve the current revision. |
 | An accepted `enrich_geo` response is lost after its state transition | Replay the recorded outcome for the same request without another revision or provider call. |
 | SQLite contains a closed Work and its recorded Frozen Plan validates | Return or resolve the existing Plan. |
 | A verified pending artifact exists but the Work is not closed | Recover the same seal attempt; do not allocate another `plan_ref`. |

@@ -10,8 +10,8 @@ from mediasense.apply import (
     ApplyExecutor,
     ApplyRunStore,
     ReceiptStore,
-    SourceSetExpansion,
 )
+from mediasense.apply.preparation import SourceSetExpansion
 from mediasense.precheck import (
     AccountingStore,
     ImageRenditionProducer,

@@ -3,10 +3,9 @@ from __future__ import annotations
 from copy import deepcopy
 import json
 
+from mediasense.frozen_plan import content_identity, load_frozen_content_validator
 from mediasense.plan._candidate import (
     analyze_candidate,
-    content_identity,
-    load_frozen_content_validator,
     materialize_candidate,
 )
 

@@ -4,7 +4,7 @@ title: "MediaSense PreCheck Implementation Design"
 type: design
 status: active
 created: 2026-08-27
-updated: 2026-08-29
+updated: 2026-08-31
 timezone: "Asia/Shanghai"
 parent: ""
 depends-on:
@@ -53,7 +53,7 @@ The ordinary fixture verifier validates all listed checksums and expected struct
 3. Reuse and invalidation operate on the smallest semantically complete dependency set. No application-wide implementation version or Dataset-wide snapshot invalidates unrelated work.
 4. The first implementation is one local runtime with one internal structured store and one artifact store. The boundaries in this document are responsibility boundaries, not separate services.
 5. SQLite is the initial structured authority for working state and sealed projections. Its schema, indexes, journal mode, and migration mechanics are internal and never enter the cross-stage contract.
-6. PreCheck is source-read-only, local-first, and cost-bounded. External Evidence producers are disabled by default and may run only after their exact pending work is known and the user confirms it. Stage ownership is determined by meaning, not by whether an algorithm happens to be local or remote.
+6. PreCheck is source-read-only, local-first, and cost-bounded. External Evidence producers are disabled by default. Coordinate-only reverse geocoding may run only after compression freezes the normalized, deduplicated representative-coordinate batch and the user authorizes that exact Run batch; one decision covers the batch rather than each coordinate. No media, rendition, embedding, path, filename, prompt, or general metadata may cross that boundary. Stage ownership is determined by meaning, not by whether an algorithm happens to be local or remote.
 7. Multiple compression profiles may reuse the same valid lower-level work while producing different Evidence graphs and immutable Results.
 8. There is no general plugin system. Narrow internal strategies are introduced only where multiple implementations or real replacement pressure exist.
 9. The target architecture is designed as a whole and delivered through independently testable slices.
@@ -885,9 +885,11 @@ Unicode NFC path collisions.
 Operationally, start a Run with external producers disabled, schedule its
 private worker, observe progress through `status`, and use `pause`, `resume`, or
 `cancel` without discarding completed reusable Work. After `resume`, the host
-reschedules the same durable Run. If an enabled external producer freezes pending work,
-the Run reports one confirmation with the exact logical-query count and remains
-paused until the operator chooses `proceed` or `skip_optional_work`. A blocked
+reschedules the same durable Run. If the enabled reverse-geocode producer freezes
+pending work, the Run reports one confirmation with the exact logical-query count
+and remains paused until the operator chooses `proceed` or `skip_optional_work`.
+The confirmed unit is the whole frozen Run batch; PreCheck may use its own batch
+engine and is not required to call the Plan-facing Geo Tool per coordinate. A blocked
 workspace is resumed only after its stated `resume_when` condition is satisfied.
 Successful completion returns one exact `result_ref`; consumers then use only
 `mediasense.precheck.read`. Maintenance first audits, then quarantines or
@@ -974,7 +976,7 @@ does not erase the verified local integration contract.
 
 ## Known risks and explicit follow-up decisions
 
-- Slice 1 now keeps source attachment on each Working Run rather than on Dataset identity. It audits verified root relocation and operator-confirmed rebinding, and isolates unverified rebinding with a new reuse domain. Before removable-volume production use, replace the current session-local device/inode evidence with the strongest supported platform volume identity and validate it on the filesystem matrix.
+- Slice 1 keeps source attachment on each Working Run rather than on Dataset identity. It audits verified root relocation and operator-confirmed rebinding, and isolates unverified rebinding with a new reuse domain. The installed macOS runtime now prefers the stable volume UUID plus source-root inode and falls back explicitly to session-local device/inode evidence when the platform cannot provide a stable volume identity. Real removable-volume and wider filesystem certification remain required before broadening the platform claim.
 - The public Run surface now owns durable control and verified completion, while sealing remains an internal automatic transition rather than a public action. `start` and `resume` return before long work; an application-level worker calls the private coordinator without becoming a second authority.
 - Artifact-backed Work success has immutable publication, integrity verification, ENOSPC fault coverage, Result/active-Run retention pins, conservative reachability collection, quarantine, and integrity-matching restoration. Long-duration retention and concurrent-maintenance soak tests remain operational follow-up.
 - Complete scans retain run-owned removal facts and propagate source changes, removals, and unavailability to direct and transitive Work dependencies. Future population-wide Work must declare its exact membership input before it can claim localized invalidation.

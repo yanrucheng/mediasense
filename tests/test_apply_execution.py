@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from datetime import datetime, timezone
 import errno
 import hashlib
@@ -26,7 +27,6 @@ from mediasense.apply import (
     ApplyConfirmationContext,
     ReceiptError,
     ReceiptStore,
-    SourceSetExpansion,
 )
 from mediasense.apply.filesystem import (
     EffectObservation,
@@ -35,11 +35,18 @@ from mediasense.apply.filesystem import (
     canonical_identity,
 )
 from mediasense.apply.receipt import content_identity
-from test_apply_preparation import _fixture, _plan, _prepare, _resolve
+from test_apply_preparation import _fixture, _plan, _prepare, _tree_facts
 
 
 ROOT = Path(__file__).parents[1]
 APPLY_SPEC = ROOT / "docs" / "spec" / "spec-260829-0050-apply"
+FROZEN_PLAN_SCHEMA = (
+    ROOT
+    / "docs"
+    / "spec"
+    / "spec-260827-1138-frozen-plan"
+    / "frozen-plan.schema.json"
+)
 
 
 def _receipt_with_operations(item_count: int) -> dict[str, object]:
@@ -760,26 +767,118 @@ def test_receipt_read_is_bounded_and_cursor_bound(tmp_path: Path) -> None:
     )
     assert second["page"]["complete"] is True
 
-    with pytest.raises(Exception, match="cursor"):
-        reader.read(
-            {
-                "receipt_ref": receipt_ref,
-                "action": "traverse",
-                "section": "created_directories",
-                "page": {"cursor": first["page"]["next_cursor"]},
-            }
-        )
+    output_validator = Draft202012Validator(
+        json.loads((APPLY_SPEC / "apply-read.tool.json").read_text())["outputSchema"]
+    )
+    wrong_section = reader.read(
+        {
+            "receipt_ref": receipt_ref,
+            "action": "traverse",
+            "section": "created_directories",
+            "page": {"cursor": first["page"]["next_cursor"]},
+        }
+    )
+    wrong_filter = reader.read(
+        {
+            "receipt_ref": receipt_ref,
+            "action": "traverse",
+            "section": "operations",
+            "filter": {"source_item_ref": "source-item:b"},
+            "page": {"cursor": first["page"]["next_cursor"]},
+        }
+    )
+    malformed = reader.read(
+        {
+            "receipt_ref": receipt_ref,
+            "action": "traverse",
+            "section": "operations",
+            "page": {"cursor": "not-an-opaque-cursor"},
+        }
+    )
+    for response in (wrong_section, wrong_filter, malformed):
+        assert response["outcome"] == "error"
+        assert response["error"]["code"] == "invalid_cursor"
+        output_validator.validate(response)
 
-    with pytest.raises(Exception, match="cursor"):
-        reader.read(
-            {
-                "receipt_ref": receipt_ref,
-                "action": "traverse",
-                "section": "operations",
-                "filter": {"source_item_ref": "source-item:b"},
-                "page": {"cursor": first["page"]["next_cursor"]},
-            }
-        )
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"receipt_ref": "apply-receipt:missing", "action": "delete"},
+        {
+            "receipt_ref": "apply-receipt:missing",
+            "action": "traverse",
+            "section": "unknown",
+        },
+        {
+            "receipt_ref": "apply-receipt:missing",
+            "action": "traverse",
+            "section": "operations",
+            "page": {"limit": 0},
+        },
+        {
+            "receipt_ref": "apply-receipt:missing",
+            "action": "traverse",
+            "section": "created_directories",
+            "filter": {"source_item_ref": "source-item:a"},
+        },
+    ],
+)
+def test_apply_read_invalid_requests_return_schema_valid_errors(
+    tmp_path: Path, payload: dict[str, object]
+) -> None:
+    store = ReceiptStore(
+        tmp_path / "receipts", APPLY_SPEC / "apply-receipt.schema.json"
+    )
+    reader = ApplyReceiptReader(store, APPLY_SPEC / "apply-read.tool.json")
+    output_validator = Draft202012Validator(
+        json.loads((APPLY_SPEC / "apply-read.tool.json").read_text())["outputSchema"]
+    )
+
+    response = reader.read(payload)
+
+    assert response["outcome"] == "error"
+    assert response["error"]["code"] == "invalid_request"
+    output_validator.validate(response)
+
+
+def test_apply_read_missing_receipt_returns_schema_valid_error(tmp_path: Path) -> None:
+    store = ReceiptStore(
+        tmp_path / "receipts", APPLY_SPEC / "apply-receipt.schema.json"
+    )
+    reader = ApplyReceiptReader(store, APPLY_SPEC / "apply-read.tool.json")
+    output_validator = Draft202012Validator(
+        json.loads((APPLY_SPEC / "apply-read.tool.json").read_text())["outputSchema"]
+    )
+
+    response = reader.read(
+        {"receipt_ref": "apply-receipt:missing", "action": "inspect"}
+    )
+
+    assert response["outcome"] == "error"
+    assert response["error"]["code"] == "receipt_not_found"
+    output_validator.validate(response)
+
+
+def test_apply_read_corrupt_receipt_returns_schema_valid_error(tmp_path: Path) -> None:
+    store = ReceiptStore(
+        tmp_path / "receipts", APPLY_SPEC / "apply-receipt.schema.json"
+    )
+    artifact = store.artifact_path("apply-receipt:corrupt")
+    artifact.mkdir(parents=True)
+    (artifact / "receipt.json").write_text("{not-json", encoding="utf-8")
+    reader = ApplyReceiptReader(store, APPLY_SPEC / "apply-read.tool.json")
+    output_validator = Draft202012Validator(
+        json.loads((APPLY_SPEC / "apply-read.tool.json").read_text())["outputSchema"]
+    )
+
+    response = reader.read(
+        {"receipt_ref": "apply-receipt:corrupt", "action": "inspect"}
+    )
+
+    assert response["outcome"] == "error"
+    assert response["error"]["code"] == "receipt_untrusted"
+    output_validator.validate(response)
 
 
 def test_large_receipt_is_segmented_and_read_without_exposing_segments(
@@ -833,6 +932,31 @@ def test_large_receipt_is_segmented_and_read_without_exposing_segments(
     segment.write_text('{"tampered":true}\n', encoding="utf-8")
     with pytest.raises(ReceiptError, match="segment integrity"):
         restarted.read("apply-receipt:scale")
+    public_error = reader.read(
+        {
+            "receipt_ref": "apply-receipt:scale",
+            "action": "traverse",
+            "section": "operations",
+        }
+    )
+    assert public_error["outcome"] == "error"
+    assert public_error["error"]["code"] == "receipt_untrusted"
+    Draft202012Validator(
+        json.loads((APPLY_SPEC / "apply-read.tool.json").read_text())["outputSchema"]
+    ).validate(public_error)
+    segment.unlink()
+    unavailable = reader.read(
+        {
+            "receipt_ref": "apply-receipt:scale",
+            "action": "traverse",
+            "section": "operations",
+        }
+    )
+    assert unavailable["outcome"] == "error"
+    assert unavailable["error"]["code"] == "receipt_untrusted"
+    Draft202012Validator(
+        json.loads((APPLY_SPEC / "apply-read.tool.json").read_text())["outputSchema"]
+    ).validate(unavailable)
 
 
 @pytest.mark.scale
@@ -997,10 +1121,8 @@ def test_public_tool_requires_trusted_confirmation_and_returns_acceptance(
     tool = ApplyRunTool(
         tmp_path / "tool-store",
         reader,
-        lambda _result_ref, expression: SourceSetExpansion(
-            iter(expression["source_item_refs"]), complete=True
-        ),
         run_schema_path=APPLY_SPEC / "apply-run.tool.json",
+        frozen_plan_schema_path=FROZEN_PLAN_SCHEMA,
         receipt_schema_path=APPLY_SPEC / "apply-receipt.schema.json",
     )
     # Use the already prepared store to focus this test on the public action.
@@ -1034,13 +1156,11 @@ def test_public_tool_requires_trusted_confirmation_and_returns_acceptance(
 
 def test_public_tool_prepare_status_execute_and_read_end_to_end(tmp_path: Path) -> None:
     source, destination, _state, files, precheck_read = _fixture(tmp_path)
-    plan_path = tmp_path / "frozen-plan.json"
-    plan_path.write_text(json.dumps(_plan()), encoding="utf-8")
     tool = ApplyRunTool(
         tmp_path / "apply-store",
         precheck_read,
-        _resolve,
         run_schema_path=APPLY_SPEC / "apply-run.tool.json",
+        frozen_plan_schema_path=FROZEN_PLAN_SCHEMA,
         receipt_schema_path=APPLY_SPEC / "apply-receipt.schema.json",
     )
     prepared = tool.handle(
@@ -1048,7 +1168,7 @@ def test_public_tool_prepare_status_execute_and_read_end_to_end(tmp_path: Path) 
             "action": "prepare",
             "request_id": "request:tool-prepare",
             "forward": {
-                "frozen_plan_path": str(plan_path),
+                "frozen_plan": _plan(),
                 "effect": "move_originals",
                 "current_source_roots": [
                     {
@@ -1094,13 +1214,130 @@ def test_public_tool_prepare_status_execute_and_read_end_to_end(tmp_path: Path) 
     assert read["receipt"]["completion"] == "complete"
 
 
+@pytest.mark.parametrize("case", ["extra_field", "unknown_profile"])
+def test_public_prepare_rejects_invalid_frozen_plan_with_schema_valid_error(
+    tmp_path: Path, case: str
+) -> None:
+    source, destination, _state, _files, precheck_read = _fixture(tmp_path)
+    plan = deepcopy(_plan())
+    if case == "extra_field":
+        plan["sealed_content"]["unexpected"] = "forbidden"
+        identity = content_identity(plan["sealed_content"])
+        plan["seal"]["content_identity"] = identity
+        plan["seal"]["final_confirmation"]["confirmed_content_identity"] = identity
+    else:
+        plan["seal"]["encoding_profile"] = "future-profile"
+    tool = ApplyRunTool(
+        tmp_path / "apply-invalid-plan",
+        precheck_read,
+        run_schema_path=APPLY_SPEC / "apply-run.tool.json",
+        frozen_plan_schema_path=FROZEN_PLAN_SCHEMA,
+        receipt_schema_path=APPLY_SPEC / "apply-receipt.schema.json",
+    )
+    before_source = _tree_facts(source)
+    before_destination = _tree_facts(destination)
+
+    response = tool.handle(
+        {
+            "action": "prepare",
+            "request_id": f"request:invalid-plan-{case}",
+            "forward": {
+                "frozen_plan": plan,
+                "effect": "move_originals",
+                "current_source_roots": [
+                    {
+                        "source_root_ref": "source-root:test",
+                        "current_root": str(source),
+                    }
+                ],
+                "destination_parent": str(destination),
+            },
+        }
+    )
+
+    assert response["outcome"] == "error"
+    assert response["error"]["code"] == "invalid_request"
+    Draft202012Validator(
+        json.loads((APPLY_SPEC / "apply-run.tool.json").read_text())["outputSchema"]
+    ).validate(response)
+    assert _tree_facts(source) == before_source
+    assert _tree_facts(destination) == before_destination
+
+
+def test_public_prepare_rejects_incomplete_result_traversal(tmp_path: Path) -> None:
+    source, destination, _state, _files, base_reader = _fixture(tmp_path)
+    source_before = _tree_facts(source)
+
+    class IncompleteRead:
+        name = "mediasense.precheck.read"
+
+        def read(self, request: dict[str, object]) -> dict[str, object]:
+            if request["action"] == "traverse":
+                return {
+                    "outcome": "ok",
+                    "result_ref": "precheck-result:prepare-test",
+                    "action": "traverse",
+                    "origin": "precheck-result:prepare-test",
+                    "relation": "accounts_for",
+                    "direction": "outbound",
+                    "items": [{"target": "source-item:a"}],
+                    "page": {"returned": 1, "total": 3, "complete": True},
+                }
+            return base_reader.read(request)
+
+    plan = deepcopy(_plan())
+    relation = {
+        "kind": "precheck_relation",
+        "origin": "precheck-result:prepare-test",
+        "relation": "accounts_for",
+        "direction": "outbound",
+    }
+    plan["sealed_content"]["scope"] = relation
+    identity = content_identity(plan["sealed_content"])
+    plan["seal"]["content_identity"] = identity
+    plan["seal"]["final_confirmation"]["confirmed_content_identity"] = identity
+    tool = ApplyRunTool(
+        tmp_path / "apply-incomplete-traversal",
+        IncompleteRead(),
+        run_schema_path=APPLY_SPEC / "apply-run.tool.json",
+        frozen_plan_schema_path=FROZEN_PLAN_SCHEMA,
+        receipt_schema_path=APPLY_SPEC / "apply-receipt.schema.json",
+    )
+
+    response = tool.handle(
+        {
+            "action": "prepare",
+            "request_id": "request:incomplete-traversal",
+            "forward": {
+                "frozen_plan": plan,
+                "effect": "move_originals",
+                "current_source_roots": [
+                    {
+                        "source_root_ref": "source-root:test",
+                        "current_root": str(source),
+                    }
+                ],
+                "destination_parent": str(destination),
+            },
+        }
+    )
+
+    assert response["outcome"] == "error"
+    assert response["error"]["code"] == "invalid_request"
+    Draft202012Validator(
+        json.loads((APPLY_SPEC / "apply-run.tool.json").read_text())["outputSchema"]
+    ).validate(response)
+    assert _tree_facts(source) == source_before
+    assert not (destination / "Media").exists()
+
+
 def test_public_tool_rejects_mismatched_confirmation_identity(tmp_path: Path) -> None:
     store, run, _source, _destination, _files, reader, *_rest = _prepare(tmp_path)
     tool = ApplyRunTool(
         tmp_path / "tool-store",
         reader,
-        _resolve,
         run_schema_path=APPLY_SPEC / "apply-run.tool.json",
+        frozen_plan_schema_path=FROZEN_PLAN_SCHEMA,
         receipt_schema_path=APPLY_SPEC / "apply-receipt.schema.json",
     )
     tool.run_store = store

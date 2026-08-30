@@ -15,6 +15,7 @@ superseded-by: ""
 
 | ID | Title | Status | Created | Summary |
 | --- | --- | --- | --- | --- |
+| [td-260830-2227-mediasense-distribution](td-260830-2227-mediasense-distribution/index.md) | MediaSense Installation, Tool Hosting, and Versioning | active | 2026-08-30 | Opens a dedicated interactive MediaSense workline to define and deliver a professional installation, callable local Tool experience, and authoritative versioning system. |
 | [td-260830-1325-precheck-skill](td-260830-1325-precheck-skill/index.md) | MediaSense PreCheck Skill Completion | active | 2026-08-30 | Opens a dedicated interactive Agent workline to design, implement, and behaviorally validate the missing user-facing `mediasense-precheck` Skill. |
 | [td-260829-1312-apply-stage-development](td-260829-1312-apply-stage-development/index.md) | MediaSense Apply Stage Interactive Development | active | 2026-08-29 | Opens an isolated interactive Codex workline to close Apply activation gates and implement the first `move_originals` vertical slice under explicit Human checkpoints. |
 | [td-260828-2131-plan-stage-development](td-260828-2131-plan-stage-development/index.md) | MediaSense Plan Stage Interactive Development | active | 2026-08-28 | Opens a user-interactive Codex workline for read-only Plan architecture review before user-authorized implementation slices. |

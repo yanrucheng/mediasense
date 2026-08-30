@@ -256,7 +256,7 @@ def test_capability_preflight_has_zero_effects_and_exact_proposal() -> None:
     assert provider.calls == 0
 
 
-def test_capability_rejects_stale_authority_before_provider_effect() -> None:
+def test_capability_requires_new_authority_for_stale_binding_before_effect() -> None:
     from mediasense.capabilities.geo import GeoCapability
 
     provider = _FakeProvider(
@@ -281,7 +281,9 @@ def test_capability_rejects_stale_authority_before_provider_effect() -> None:
 
     result = capability.invoke(request, authorization=authorization)
 
-    assert result.outcome is GeoOutcome.REFUSED
+    assert result.outcome is GeoOutcome.AUTHORIZATION_REQUIRED
+    assert result.required_authorization == capability.proposed_envelope(request)
+    assert result.qualifications[0]["code"] == "authorization_mismatch"
     assert result.effects.provider_requests == 0
     assert provider.calls == 0
 

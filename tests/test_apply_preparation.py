@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 import hashlib
 import json
 from pathlib import Path
@@ -14,8 +15,8 @@ from mediasense.apply import (
     ApplyRunStore,
     IdempotencyConflict,
     SourceItemEvidence,
-    SourceSetExpansion,
 )
+from mediasense.apply.preparation import SourceSetExpansion
 
 
 ROOT = Path(__file__).parents[1]
@@ -258,6 +259,71 @@ def test_ready_status_conforms_to_active_contract(tmp_path: Path) -> None:
     assert status["summary"]["no_effect_items"] == 1
     assert status["summary"]["verified_sources"] == 2
     assert status["allowed_actions"] == ["execute", "cancel"]
+
+
+def test_prepare_rejects_schema_forbidden_field_with_recomputed_digest(
+    tmp_path: Path,
+) -> None:
+    plan = deepcopy(_plan())
+    plan["sealed_content"]["unexpected"] = "forbidden"
+    identity = _identity(plan["sealed_content"])
+    plan["seal"]["content_identity"] = identity
+    plan["seal"]["final_confirmation"]["confirmed_content_identity"] = identity
+    store = ApplyRunStore.initialize(tmp_path / "state" / "apply.sqlite3")
+
+    with pytest.raises(ApplyPreparationError, match="schema violation"):
+        store.prepare_forward(
+            request_id="request:schema-forbidden",
+            frozen_plan=plan,
+            source_roots={"source-root:test": tmp_path / "missing-source"},
+            destination_parent=tmp_path / "missing-destination",
+            resolve_source_set=_resolve,
+            precheck_read=_FakePrecheckRead([]),
+        )
+    with pytest.raises(KeyError):
+        store.get_run_for_request("request:schema-forbidden")
+
+
+def test_prepare_rejects_unknown_encoding_profile_before_path_probe(
+    tmp_path: Path,
+) -> None:
+    plan = deepcopy(_plan())
+    plan["seal"]["encoding_profile"] = "future-profile"
+    store = ApplyRunStore.initialize(tmp_path / "state" / "apply.sqlite3")
+
+    with pytest.raises(ApplyPreparationError, match="unsupported.*encoding profile"):
+        store.prepare_forward(
+            request_id="request:unknown-profile",
+            frozen_plan=plan,
+            source_roots={"source-root:test": tmp_path / "missing-source"},
+            destination_parent=tmp_path / "missing-destination",
+            resolve_source_set=_resolve,
+            precheck_read=_FakePrecheckRead([]),
+        )
+    with pytest.raises(KeyError):
+        store.get_run_for_request("request:unknown-profile")
+
+
+def test_prepare_rejects_confirmation_mismatch_before_path_probe(
+    tmp_path: Path,
+) -> None:
+    plan = deepcopy(_plan())
+    plan["seal"]["final_confirmation"]["confirmed_content_identity"] = (
+        "sha256:" + "0" * 64
+    )
+    store = ApplyRunStore.initialize(tmp_path / "state" / "apply.sqlite3")
+
+    with pytest.raises(ApplyPreparationError, match="not confirmed"):
+        store.prepare_forward(
+            request_id="request:confirmation-mismatch",
+            frozen_plan=plan,
+            source_roots={"source-root:test": tmp_path / "missing-source"},
+            destination_parent=tmp_path / "missing-destination",
+            resolve_source_set=_resolve,
+            precheck_read=_FakePrecheckRead([]),
+        )
+    with pytest.raises(KeyError):
+        store.get_run_for_request("request:confirmation-mismatch")
 
 
 def test_prepare_rejects_idempotency_key_reuse(tmp_path: Path) -> None:

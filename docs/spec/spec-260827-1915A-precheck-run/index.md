@@ -4,7 +4,7 @@ title: "MediaSense PreCheck Run Tool Contract"
 type: spec
 status: active
 created: 2026-08-27
-updated: 2026-08-29
+updated: 2026-08-30
 timezone: "Asia/Shanghai"
 parent: "index-spec"
 depends-on:
@@ -43,7 +43,7 @@ The Tool is authoritative for:
 - current business progress, blocking facts, and allowed control actions; and
 - whether automatic publication completed and which immutable `result_ref` was published.
 
-The Tool may create and mutate Working Run state and internal derived artifacts. It may not mutate source media or any published Result. External and unusually resource-intensive work remains disabled until its exact pending work is known and the user confirms it through a paused Run checkpoint.
+The Tool may create and mutate Working Run state and internal derived artifacts. It may not mutate source media or any published Result. External and unusually resource-intensive work remains disabled until its exact pending work is known and the user confirms it through a paused Run checkpoint. The permitted online exception is coordinate-only reverse geocoding over the normalized, deduplicated representative-coordinate batch frozen after compression; one matching Run decision covers that batch, not arbitrary later coordinates.
 
 Mutable Work Records, cache keys, checkpoints, leases, SQLite rows, internal producer states, artifact paths, and implementation phases are not public. A stronger implementation may replace any of them without changing this contract.
 
@@ -115,6 +115,13 @@ For an ordinary pause, `resume` carries no decision. For a confirmation pause, `
 - `skip_optional_work` records that optional work as not requested and continues without it, and is accepted only when `confirmation.skip_allowed` is true.
 
 If the pending work changes, the runtime pauses again. A prior decision never authorizes a larger or different work set. No separate authorization action or public resource entity is introduced.
+
+The Run may execute this fixed batch through a PreCheck-owned engine while reusing
+stage-neutral provider adapters. It is not required to translate the batch into
+Plan-style per-coordinate `mediasense.geo.query` calls. The Result must report the
+frozen scope, provider route, logical and actual request counts, outcomes, failures,
+and known or unknown billable effects, while proving that media, renditions,
+embeddings, paths, filenames, prompts, and general metadata were not transmitted.
 
 An accepted control response proves only that the request was accepted and reports the state observed at that moment. Only a later `status` response proves the transition completed. Repeating an already-achieved target is accepted without creating another effect. An incompatible transition returns `invalid_state` and the current state and allowed actions.
 

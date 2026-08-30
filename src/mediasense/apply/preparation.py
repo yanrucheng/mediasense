@@ -21,6 +21,14 @@ from typing import Protocol
 import unicodedata
 from uuid import uuid4
 
+from jsonschema import Draft202012Validator
+
+from mediasense.frozen_plan import (
+    FrozenPlanValidationError,
+    load_frozen_plan_validator,
+    validate_frozen_plan,
+)
+
 from .filesystem import FilesystemEffectError, has_nontrivial_acl
 
 
@@ -206,7 +214,11 @@ class SourceItemEvidence:
 
 @dataclass(frozen=True, slots=True)
 class SourceSetExpansion:
-    """A complete, streaming expansion of one Frozen Plan source-set expression."""
+    """Internal resolver result used by deterministic preparation tests and adapters.
+
+    ``complete`` is trusted only inside this non-public store boundary. The public
+    Apply Tool always constructs it from ``ResultSourceSetResolver``.
+    """
 
     source_item_refs: Iterable[str]
     complete: bool
@@ -233,12 +245,23 @@ class ApplyRunStore:
     execution boundary, which consumes this durable state.
     """
 
-    def __init__(self, database_path: Path) -> None:
+    def __init__(
+        self,
+        database_path: Path,
+        frozen_plan_schema_path: Path | None = None,
+    ) -> None:
         self.database_path = Path(database_path)
+        self._frozen_plan_validator = load_frozen_plan_validator(
+            frozen_plan_schema_path
+        )
         self._verify_schema()
 
     @classmethod
-    def initialize(cls, database_path: Path) -> ApplyRunStore:
+    def initialize(
+        cls,
+        database_path: Path,
+        frozen_plan_schema_path: Path | None = None,
+    ) -> ApplyRunStore:
         path = Path(database_path)
         path.parent.mkdir(parents=True, exist_ok=True)
         with sqlite3.connect(path) as connection:
@@ -409,7 +432,7 @@ class ApplyRunStore:
                 );
                 """
             )
-        return cls(path)
+        return cls(path, frozen_plan_schema_path)
 
     def prepare_forward(
         self,
@@ -421,9 +444,13 @@ class ApplyRunStore:
         resolve_source_set: SourceSetResolver,
         precheck_read: PrecheckReadBoundary,
     ) -> PreparedRun:
-        """Create or resume one deterministic, zero-media-effect forward Run."""
+        """Create or resume one deterministic, zero-media-effect forward Run.
 
-        plan = _validated_plan(frozen_plan)
+        ``resolve_source_set`` is an internal test seam. Public production
+        composition supplies only the repository-owned resolver.
+        """
+
+        plan = _validated_plan(frozen_plan, self._frozen_plan_validator)
         content = _mapping(plan["sealed_content"], "sealed content")
         plan_ref = _nonempty_string(content.get("plan_ref"), "Frozen Plan ref")
         plan_identity = _nonempty_string(
@@ -432,6 +459,10 @@ class ApplyRunStore:
         )
         result_ref = _nonempty_string(content.get("result_ref"), "PreCheck Result ref")
         logical_root = _safe_segment(content.get("logical_root"), "logical root")
+        if precheck_read.name != "mediasense.precheck.read":
+            raise ApplyPreparationError(
+                "source evidence must come from mediasense.precheck.read"
+            )
         destination = _strict_directory(destination_parent, "destination parent")
         destination_stat = destination.stat()
         destination_identity = _filesystem_identity(destination, destination_stat)
@@ -490,10 +521,6 @@ class ApplyRunStore:
             resolve_source_set=resolve_source_set,
         )
 
-        if precheck_read.name != "mediasense.precheck.read":
-            raise ApplyPreparationError(
-                "source evidence must come from mediasense.precheck.read"
-            )
         for source_item_ref in self._pending_materialization_refs(run_ref):
             try:
                 item = _read_source_item(
@@ -2123,22 +2150,17 @@ def _read_source_item(
         raise SourceEvidenceError("source_verification_invalid", str(error)) from error
 
 
-def _validated_plan(plan: Mapping[str, object]) -> Mapping[str, object]:
-    content = _mapping(plan.get("sealed_content"), "sealed content")
-    seal = _mapping(plan.get("seal"), "seal")
-    if content.get("contract") != "mediasense.frozen-plan":
-        raise ApplyPreparationError("unsupported Frozen Plan contract")
-    expected = _nonempty_string(seal.get("content_identity"), "content identity")
-    if expected != _content_identity(content):
-        raise ApplyPreparationError("Frozen Plan content identity mismatch")
-    confirmation = _mapping(seal.get("final_confirmation"), "final confirmation")
-    if confirmation.get("confirmed_content_identity") != expected:
-        raise ApplyPreparationError(
-            "Frozen Plan is not confirmed at its exact identity"
+def _validated_plan(
+    plan: Mapping[str, object],
+    validator: Draft202012Validator | None = None,
+) -> Mapping[str, object]:
+    try:
+        return validate_frozen_plan(
+            plan,
+            validator=validator or load_frozen_plan_validator(),
         )
-    _nonempty_string(confirmation.get("confirmed_by"), "confirming authority")
-    _nonempty_string(confirmation.get("confirmed_at"), "confirmation time")
-    return plan
+    except FrozenPlanValidationError as error:
+        raise ApplyPreparationError(str(error)) from error
 
 
 def _observe_source_roots(

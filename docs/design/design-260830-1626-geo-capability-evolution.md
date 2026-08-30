@@ -19,9 +19,9 @@ superseded-by: ""
 ## Status and accepted direction
 
 This document applies the active reusable-capability architecture to geographic
-lookup. It records the accepted product direction that a future Plan workflow may
-perform live, coordinate-only Geo enrichment when the exact request and its
-effects have been authorized.
+lookup. It records the accepted product direction that Plan may perform live,
+coordinate-only Geo enrichment when the exact request and its effects have been
+authorized.
 
 This is the active Geo capability design. The public
 [`mediasense.geo.query`](../spec/spec-260830-2034-geo-query/) contract and the
@@ -50,7 +50,7 @@ workflow.
 ## Product scenario
 
 Given a PreCheck Result containing the coordinate `31.1434, 121.6579` but no place
-observation, a future Plan Agent may ask for a place candidate.
+observation, a Plan Agent may ask for a place candidate.
 
 ```text
 Plan Agent
@@ -151,7 +151,7 @@ lookup nor needs access to provider credentials.
 
 ```text
 Human declines coordinate egress
-├── Geo Tool reports refused with zero provider requests
+├── Plan records the Human decision and does not invoke the Geo Tool
 ├── Plan records no provider-derived place observation
 └── Plan Agent chooses among:
     ├── continue with a less specific name
@@ -159,8 +159,10 @@ Human declines coordinate egress
     └── leave the location unresolved
 ```
 
-Refusal is a supported outcome. It does not become `no_result`, a provider
-failure, or permission to send another coordinate.
+Human refusal is a caller-stage decision, not a Geo observation. Missing authority
+returns `authorization_required`; authority that does not match the request returns
+`authorization_required` with an `authorization_mismatch` qualification. Neither
+becomes `no_result`, a provider failure, or permission to send another coordinate.
 
 ### Review questions
 
@@ -186,36 +188,32 @@ PreCheck
     ├── binds Human confirmation to its fingerprint
     ├── owns Work retry, reuse, cancellation, and projection
     └── calls
-        └── src/mediasense/geo.py                shared kernel
-            ├── normalized coordinate and result values
-            ├── coordinate conversion
-            ├── HTTP transport
-            ├── adaptive provider composition
-            └── provider adapters
-                ├── AMap
-                └── Google Maps
+        └── PreCheck batch engine
+            └── shared provider-neutral ports and adapters
 
 Plan
-└── reads existing qualified place evidence from the PreCheck Result
+├── reads existing qualified place evidence from the PreCheck Result
+└── PlanGeoAdapter
+    └── mediasense.geo.query                     public Plan-facing Tool
+        ├── normalized request and result values
+        ├── effect guard and idempotency journal
+        ├── request-scoped routing
+        └── shared provider-neutral ports and adapters
 
 Apply
 └── has no geographic lookup responsibility
 ```
 
-The shared kernel does not read PreCheck, Plan, Apply, SQLite, Work, confirmation,
-or Result state. The PreCheck producer correctly owns stage selection,
-authorization, lifecycle, persistence, and projection.
+The provider-neutral implementation does not read PreCheck, Plan, Apply, SQLite,
+Work, confirmation, or Result state. The PreCheck producer owns batch selection,
+Run authorization, lifecycle, persistence, and Result projection. The Plan adapter
+owns Plan selection and observation persistence, while the public Geo Tool owns
+effect-envelope enforcement, normalized results, provenance, and safe replay.
 
-The kernel is not yet a public capability contract:
-
-- one `lookup` combines address lookup, nearby-place lookup, language routing,
-  and fallback;
-- AMap and Google perform materially different request combinations behind the
-  same operation;
-- adaptive provider and language state persists across coordinates;
-- routing policy directly names current providers and regional rules;
-- no callable boundary validates an effect authorization; and
-- results do not expose bounded continuations.
+`src/mediasense/geo.py` remains a compatibility surface for PreCheck's established
+batch composition. `src/mediasense/capabilities/geo/` is the stage-neutral family
+used by the public Tool. Both may share provider implementations without sharing
+stage policy or mutable state.
 
 ## Responsibility allocation
 
@@ -238,23 +236,22 @@ workflow. The Geo Tool independently enforces that the submitted operation,
 inputs, provider constraints, egress, request ceiling, and retention do not exceed
 that authorization.
 
-## Target capability tree
+## Capability tree
 
 ```text
-Human or governing policy
-└── authorizes an exact effect envelope
-    │
-    ├── PreCheckGeoAdapter
-    │   ├── frozen post-compression coordinate batch
-    │   ├── PreCheck Work lifecycle
-    │   └── immutable Result projection
-    │
-    └── PlanGeoAdapter
-        ├── coordinates selected from one exact PreCheck Result
-        ├── Plan-owned authorization binding
-        └── Plan-private candidate observation
-            │
-            ▼
+PreCheck Run
+├── frozen post-compression coordinate batch
+├── Run-scoped authorization and Work reuse
+└── PreCheck batch engine
+    └── shared provider-neutral kernels and adapters
+
+Plan Agent and Human
+└── PlanGeoAdapter
+    ├── coordinates selected from one exact PreCheck Result
+    ├── Plan-owned authorization binding
+    └── Plan-private candidate observation
+        │
+        ▼
 Geo Tool family
 ├── resolve_place                              high-level default
 │   └── continuations
@@ -361,7 +358,8 @@ A result distinguishes:
 - `partial`: at least one requested component produced usable evidence and another
   did not complete;
 - `no_result`: the completed request produced no matching observation;
-- `refused`: the proposed effect exceeded authority or policy;
+- `authorization_required`: authority is absent or does not match; an
+  `authorization_mismatch` qualification distinguishes the latter;
 - `unavailable`: no permitted provider could perform the operation;
 - `failed`: no usable result was produced and failure is known; and
 - `indeterminate`: completion or external effect cannot be established safely.
@@ -434,12 +432,14 @@ execution state, not a geographic cache or source of place truth. Reusing a
 
 PreCheck retains ownership of representative-coordinate selection,
 post-compression batch freezing, exact logical-query confirmation, Work lifecycle,
-reuse, cancellation, and Result projection. Migration to a Geo family port must
-preserve the current public PreCheck contract and evidence.
+reuse, cancellation, and Result projection. It may reuse provider-neutral Geo
+kernels, ports, and adapters, but it is not required to invoke the Plan-facing
+`mediasense.geo.query` Tool or adopt per-coordinate authorization. Any internal
+migration must preserve the current public PreCheck contract and evidence.
 
 ### Plan
 
-Plan may eventually call the Geo Tool only through a Plan-owned integration that:
+Plan calls the Geo Tool only through a Plan-owned integration that:
 
 1. starts from one exact, valid PreCheck Result;
 2. selects only coordinates relevant to the current Plan question;
@@ -489,19 +489,19 @@ not fork between stages.
 
 ### Gate 0: product direction — accepted
 
-The Human accepts future Plan-owned, live, coordinate-only Geo enrichment under
-explicit bounded authorization. This acceptance does not activate the behavior.
+The Human accepted Plan-owned, live, coordinate-only Geo enrichment under explicit
+bounded authorization. The current `enrich_geo` action implements that boundary.
 
 ### Gate 1: human-reviewable Plan scenario — accepted
 
 The accepted review fixture above shows the complete path from a valid PreCheck Result with
 a coordinate but no place observation through authorization, high-level lookup,
 optional nearby-place continuation, Plan evidence storage, Agent interpretation,
-preview, and refusal.
+preview, and caller-owned refusal before invocation.
 
 Acceptance requires that the scenario demonstrates a Plan decision that can
-materially improve without reopening all of PreCheck and that refusal remains a
-usable outcome.
+materially improve without reopening all of PreCheck and that declining the call
+leaves a useful Plan path.
 
 ### Gate 2: capability contract — accepted
 
@@ -557,7 +557,7 @@ The future Tool cannot become active until tests demonstrate:
 10. PreCheck and Plan retain separate mutable state and projection authority;
 11. current PreCheck behavior remains compatible through migration; and
 12. identical request replay does not repeat provider effects, while a conflicting
-    `request_id` is refused; and
+    `request_id` returns an idempotency conflict; and
 13. a real Plan workflow, not only mocks, uses the accepted boundary.
 
 ## Explicit non-goals

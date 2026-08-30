@@ -11,24 +11,22 @@ ROOT = Path(__file__).parents[1]
 SKILL_DIR = ROOT / ".agents" / "skills" / "mediasense-precheck"
 SKILL_PATH = SKILL_DIR / "SKILL.md"
 OPENAI_PATH = SKILL_DIR / "agents" / "openai.yaml"
-RUN_TOOL = json.loads(
-    (
-        ROOT
-        / "docs"
-        / "spec"
-        / "spec-260827-1915A-precheck-run"
-        / "precheck-run.tool.json"
-    ).read_text(encoding="utf-8")
+RUN_TOOL_PATH = (
+    ROOT
+    / "docs"
+    / "spec"
+    / "spec-260827-1915A-precheck-run"
+    / "precheck-run.tool.json"
 )
-READ_TOOL = json.loads(
-    (
-        ROOT
-        / "docs"
-        / "spec"
-        / "spec-260826-1546-precheck-read"
-        / "precheck-read.tool.json"
-    ).read_text(encoding="utf-8")
+READ_TOOL_PATH = (
+    ROOT
+    / "docs"
+    / "spec"
+    / "spec-260826-1546-precheck-read"
+    / "precheck-read.tool.json"
 )
+RUN_TOOL = json.loads(RUN_TOOL_PATH.read_text(encoding="utf-8"))
+READ_TOOL = json.loads(READ_TOOL_PATH.read_text(encoding="utf-8"))
 TOOL_SCHEMAS = {
     RUN_TOOL["name"]: RUN_TOOL["inputSchema"],
     READ_TOOL["name"]: READ_TOOL["inputSchema"],
@@ -60,7 +58,12 @@ def test_skill_package_is_minimal_and_normally_discoverable() -> None:
         for path in SKILL_DIR.rglob("*")
         if path.is_file()
     )
-    assert files == ["SKILL.md", "agents/openai.yaml"]
+    assert files == [
+        "SKILL.md",
+        "agents/openai.yaml",
+        "references/precheck-read.tool.json",
+        "references/precheck-run.tool.json",
+    ]
 
     skill = SKILL_PATH.read_text(encoding="utf-8")
     frontmatter = skill.split("---", 2)[1]
@@ -84,13 +87,24 @@ def test_skill_links_only_to_existing_authoritative_precheck_contracts() -> None
     links = re.findall(r"\]\(([^)]+)\)", skill)
     resolved = {(SKILL_DIR / link).resolve() for link in links}
     expected = {
-        ROOT / "docs/spec/spec-260827-1915A-precheck-run/index.md",
-        ROOT / "docs/spec/spec-260827-1915A-precheck-run/precheck-run.tool.json",
-        ROOT / "docs/spec/spec-260826-1546-precheck-read/index.md",
-        ROOT / "docs/spec/spec-260826-1546-precheck-read/precheck-read.tool.json",
+        SKILL_DIR / "references/precheck-run.tool.json",
+        SKILL_DIR / "references/precheck-read.tool.json",
     }
     assert resolved == expected
     assert all(path.is_file() for path in resolved)
+    assert (
+        SKILL_DIR / "references/precheck-run.tool.json"
+    ).read_bytes() == RUN_TOOL_PATH.read_bytes()
+    assert (
+        SKILL_DIR / "references/precheck-read.tool.json"
+    ).read_bytes() == READ_TOOL_PATH.read_bytes()
+
+
+def test_skill_keeps_reverse_geocoding_run_scoped_and_batch_bound() -> None:
+    skill = SKILL_PATH.read_text(encoding="utf-8")
+    assert "matching proceed or skip decision for the complete frozen" in skill
+    assert "per-coordinate confirmation" in skill
+    assert "do not assume that its\nRun contract is a sequence" in skill
 
 
 def test_forward_scenarios_cover_required_behavior_and_phase_boundaries() -> None:
