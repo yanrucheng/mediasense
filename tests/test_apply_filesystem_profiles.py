@@ -9,9 +9,12 @@ from pathlib import Path
 import plistlib
 import shutil
 import stat
+import subprocess
 import tempfile
 
 import pytest
+
+from mediasense.apply.filesystem import has_nontrivial_acl
 
 
 _RENAME_EXCL = 0x00000004
@@ -263,6 +266,29 @@ def test_darwin_same_filesystem_rename_is_atomic_and_non_overwriting(
     assert (target.stat().st_dev, target.stat().st_ino) == source_identity
     assert _digest(target) == source_digest
     assert _declared_metadata(target) == source_metadata
+
+
+def test_darwin_acl_detection_observes_real_temporary_acl(tmp_path: Path) -> None:
+    if os.uname().sysname != "Darwin":
+        pytest.skip("ACL detection is currently certified only on Darwin")
+    source = tmp_path / "acl-source.bin"
+    source.write_bytes(b"controlled ACL fixture")
+    result = subprocess.run(
+        ["/bin/chmod", "+a", "everyone deny delete", str(source)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    try:
+        assert has_nontrivial_acl(source) is True
+    finally:
+        subprocess.run(
+            ["/bin/chmod", "-a#", "0", str(source)],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
 
 
 def _cross_filesystem_roots() -> tuple[Path, Path]:

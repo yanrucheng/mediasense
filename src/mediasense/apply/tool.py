@@ -79,7 +79,20 @@ class ApplyRunTool:
             elif action == "pause":
                 response = self.executor.pause(str(payload["run_ref"]))
             elif action == "resume":
-                response = self.executor.resume(str(payload["run_ref"]))
+                run_ref = str(payload["run_ref"])
+                if self.run_store.get_run(run_ref).state == "blocked":
+                    self.run_store.resume_preparation(
+                        run_ref=run_ref, precheck_read=self.precheck_read
+                    )
+                    response = {
+                        "outcome": "accepted",
+                        "action": "resume",
+                        "run_ref": run_ref,
+                        "observed_state": "blocked",
+                        "target_state": "preparing",
+                    }
+                else:
+                    response = self.executor.resume(run_ref)
             elif action == "cancel":
                 response = self.executor.cancel(str(payload["run_ref"]))
             else:  # pragma: no cover - guarded by JSON Schema

@@ -8,6 +8,7 @@ import tracemalloc
 import pytest
 from jsonschema import Draft202012Validator
 
+import mediasense.apply.preparation as apply_preparation
 from mediasense.apply import (
     ApplyPreparationError,
     ApplyRunStore,
@@ -691,6 +692,61 @@ def test_pre_execution_cancel_is_idempotent_and_proves_zero_effects(
     assert status["allowed_actions"] == []
     assert _tree_facts(source) == source_before
     assert _tree_facts(destination) == destination_before
+
+
+def test_cross_filesystem_acl_blocks_during_preparation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    store, run, source, destination, *_rest = _prepare(tmp_path)
+    monkeypatch.setattr(apply_preparation.sys, "platform", "darwin")
+    monkeypatch.setattr(apply_preparation, "has_nontrivial_acl", lambda _path: True)
+
+    store._finalize_preparation(
+        run.run_ref,
+        {
+            "source-root:test": (
+                source,
+                "controlled:source-root",
+                destination.stat().st_dev + 1,
+            )
+        },
+        destination.stat().st_dev,
+    )
+
+    status = store.status(run.run_ref)
+    assert status["state"] == "blocked"
+    assert any(
+        reason["code"] == "cross_filesystem_acl_unsupported"
+        for reason in status["reasons"]
+    )
+    assert (source / "a.jpg").exists()
+    assert not (destination / "Media").exists()
+
+
+def test_cross_filesystem_profile_blocks_on_uncertified_platform(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    store, run, source, destination, *_rest = _prepare(tmp_path)
+    monkeypatch.setattr(apply_preparation.sys, "platform", "linux")
+
+    store._finalize_preparation(
+        run.run_ref,
+        {
+            "source-root:test": (
+                source,
+                "controlled:source-root",
+                destination.stat().st_dev + 1,
+            )
+        },
+        destination.stat().st_dev,
+    )
+
+    status = store.status(run.run_ref)
+    assert status["state"] == "blocked"
+    assert any(
+        reason["code"] == "filesystem_profile_unsupported"
+        for reason in status["reasons"]
+    )
 
 
 @pytest.mark.scale

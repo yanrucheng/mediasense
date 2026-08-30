@@ -179,7 +179,10 @@ class ApplyExecutor:
             connection.execute(
                 """
                 UPDATE run_items SET execution_status = 'not_attempted'
-                WHERE run_ref = ? AND execution_status = 'failed'
+                WHERE run_ref = ? AND (
+                    execution_status = 'failed'
+                    OR (execution_status = 'indeterminate' AND attempts = 0)
+                )
                 """,
                 (run_ref,),
             )
@@ -255,6 +258,8 @@ class ApplyExecutor:
         if current_state not in {"executing", "verifying"}:
             raise ApplyExecutionError(f"Run cannot advance from {current_state}")
         self._reconcile_intents(run_ref)
+        if self.run_store.get_run(run_ref).state == "needs_attention":
+            return
         self._reconcile_directory_intents(run_ref)
         while True:
             run, item = self._next_item(run_ref)
@@ -454,7 +459,11 @@ class ApplyExecutor:
                         connection.execute(
                             """
                             UPDATE run_items SET execution_status = 'not_attempted',
-                                recovery_fact = ?
+                                recovery_fact = ?, postcondition_profile = NULL,
+                                postcondition_result = NULL,
+                                postcondition_basis = NULL,
+                                execution_reason_code = NULL,
+                                execution_reason_message = NULL
                             WHERE run_ref = ? AND source_item_ref = ?
                             """,
                             (
@@ -484,7 +493,9 @@ class ApplyExecutor:
                     source_after = ?, target_after = ?,
                     postcondition_profile = ?, postcondition_result = 'verified',
                     postcondition_basis = ?, bytes_moved = ?, temporary_path = NULL,
-                    recovery_fact = COALESCE(?, recovery_fact)
+                    recovery_fact = COALESCE(?, recovery_fact),
+                    execution_reason_code = NULL,
+                    execution_reason_message = NULL
                 WHERE run_ref = ? AND source_item_ref = ?
                 """,
                 (
@@ -517,6 +528,19 @@ class ApplyExecutor:
             status = "refused"
         with self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
+            current = connection.execute(
+                """
+                SELECT execution_status FROM run_items
+                WHERE run_ref = ? AND source_item_ref = ?
+                """,
+                (run_ref, source_item_ref),
+            ).fetchone()
+            if (
+                error.global_risk
+                and current is not None
+                and current["execution_status"] == "intent"
+            ):
+                status = "intent"
             connection.execute(
                 """
                 UPDATE run_items
@@ -648,7 +672,14 @@ class ApplyExecutor:
             ).fetchall()
         if run["direction"] == "forward":
             destination = Path(run["destination_parent"])
-            info = destination.stat()
+            try:
+                info = destination.stat()
+            except OSError as error:
+                raise FilesystemEffectError(
+                    "destination_unavailable",
+                    "destination parent is unavailable at the effect boundary",
+                    global_risk=True,
+                ) from error
             observed = (
                 f"filesystem-object-v1:dev={info.st_dev}:ino={info.st_ino}:"
                 f"path={destination}"
@@ -661,7 +692,14 @@ class ApplyExecutor:
                 )
         for root in roots:
             path = Path(root["current_root"])
-            info = path.stat()
+            try:
+                info = path.stat()
+            except OSError as error:
+                raise FilesystemEffectError(
+                    "source_root_unavailable",
+                    f"source root is unavailable: {root['source_root_ref']}",
+                    global_risk=True,
+                ) from error
             observed = (
                 f"filesystem-object-v1:dev={info.st_dev}:ino={info.st_ino}:path={path}"
             )

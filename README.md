@@ -8,7 +8,7 @@ The product is organized around three user-facing skills:
 - `mediasense.plan` lets an agent and user iteratively turn static evidence into a complete, reviewable organization plan.
 - `mediasense.apply` validates and safely applies a frozen plan without making new semantic decisions.
 
-The three durable handoff roles are the precheck result, the frozen organization plan, and the apply receipt. PreCheck, Plan, and Apply now have active contracts for the first end-to-end `move_originals` path. Apply verifies every selected source through its exact PreCheck Result, binds trusted Human authorization to one prepared Run identity, refuses overwrite, journals and recovers effects, and publishes one immutable Receipt. Its Darwin cross-filesystem profile verifies content byte for byte and blocks source deletion until any exact user-relevant metadata loss receives new Human authorization.
+The three durable handoff roles are the precheck result, the frozen organization plan, and the apply receipt. PreCheck, Plan, and Apply now have active contracts for the first end-to-end `move_originals` path. The repository-provided `mediasense-apply` Skill guides Human/Agent interaction while deterministic Tools verify every selected source through its exact PreCheck Result, bind trusted Human authorization to one prepared Run identity, refuse overwrite, journal and recover effects, and publish one immutable Receipt. Its Darwin cross-filesystem profile verifies content byte for byte and blocks source deletion until any exact user-relevant metadata loss receives new Human authorization.
 
 ## Start here
 
@@ -20,6 +20,6 @@ The three durable handoff roles are the precheck result, the frozen organization
 
 ## Current phase
 
-PreCheck, Plan, and the first Apply `move_originals` slice are implemented against active contracts. Apply supports durable preparation, exact authorization, same-filesystem moves, the evidence-bounded Darwin cross-filesystem route, pause/resume/cancel, restart reconciliation, immutable Receipts, bounded Receipt reads, and whole-Run rewind. Copy/link profiles, broader cross-filesystem platforms, ACL-bearing sources, and representative real-media throughput measurements remain deferred.
+PreCheck, Plan, and the first Apply `move_originals` slice are implemented against active contracts. Apply supports its user-facing Skill, durable preparation, exact authorization, same-filesystem moves, the evidence-bounded Darwin cross-filesystem route, pause/resume/cancel, restart reconciliation, immutable Receipts, bounded Receipt reads, and whole-Run rewind. Original-file copy is not a c90 runtime capability despite legacy README wording; persistent relative symbolic links are intentionally deferred because their preview purpose is now Plan-owned and their dangling/rebinding lifecycle is not accepted. Broader cross-filesystem platforms, ACL-bearing cross-filesystem sources, and representative user-storage throughput remain uncertified.
 
 The former implementation remains in `/Users/chengyanru/repos/personal/photo/ai_album` as historical evidence. MediaSense is a new project and must not take a runtime dependency on that repository.

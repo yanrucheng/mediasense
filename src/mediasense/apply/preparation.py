@@ -16,9 +16,12 @@ import os
 from pathlib import Path, PurePath
 import sqlite3
 import stat
+import sys
 from typing import Protocol
 import unicodedata
 from uuid import uuid4
+
+from .filesystem import FilesystemEffectError, has_nontrivial_acl
 
 
 _SCHEMA_VERSION = 2
@@ -784,6 +787,222 @@ class ApplyRunStore:
             connection.commit()
         return self.get_run(run_ref)
 
+    def resume_preparation(
+        self,
+        *,
+        run_ref: str,
+        precheck_read: PrecheckReadBoundary,
+    ) -> PreparedRun:
+        """Recheck a blocked zero-effect preparation from its durable facts."""
+
+        with self._connect() as connection:
+            run = connection.execute(
+                "SELECT * FROM runs WHERE run_ref = ?", (run_ref,)
+            ).fetchone()
+            if run is None:
+                raise KeyError(run_ref)
+            root_rows = connection.execute(
+                """
+                SELECT * FROM source_roots
+                WHERE run_ref = ? ORDER BY source_root_ref
+                """,
+                (run_ref,),
+            ).fetchall()
+        if run["state"] != "blocked":
+            raise ApplyPreparationError(
+                f"Run cannot resume preparation from {run['state']}"
+            )
+        self._reopen_blocked_preparation(run_ref)
+
+        source_roots: dict[str, tuple[Path, str, int]] = {}
+        binding_failed = False
+        for row in root_rows:
+            path = Path(row["current_root"])
+            try:
+                current = _strict_directory(path, "source root")
+                info = current.stat()
+                identity = _filesystem_identity(current, info)
+            except (OSError, ApplyPreparationError) as error:
+                self._add_finding(
+                    run_ref,
+                    "source_root_unavailable",
+                    f"source root is unavailable: {row['source_root_ref']} ({error})",
+                )
+                binding_failed = True
+                continue
+            if identity != row["observed_identity"]:
+                self._add_finding(
+                    run_ref,
+                    "source_root_rebound",
+                    f"source root identity changed: {row['source_root_ref']}",
+                )
+                binding_failed = True
+                continue
+            source_roots[str(row["source_root_ref"])] = (
+                current,
+                identity,
+                int(info.st_dev),
+            )
+        if binding_failed:
+            self._keep_preparation_blocked(run_ref)
+            return self.get_run(run_ref)
+
+        if run["direction"] == "rewind":
+            self._resume_rewind_items(run, source_roots)
+            self._finalize_rewind_preparation(run_ref, str(run["execution_route"]))
+            return self.get_run(run_ref)
+
+        if precheck_read.name != "mediasense.precheck.read":
+            raise ApplyPreparationError(
+                "source evidence must come from mediasense.precheck.read"
+            )
+        destination = Path(run["destination_parent"])
+        try:
+            destination = _strict_directory(destination, "destination parent")
+            destination_info = destination.stat()
+        except (OSError, ApplyPreparationError) as error:
+            self._add_finding(
+                run_ref,
+                "destination_unavailable",
+                f"destination parent is unavailable ({error})",
+            )
+            self._keep_preparation_blocked(run_ref)
+            return self.get_run(run_ref)
+        if (
+            _filesystem_identity(destination, destination_info)
+            != run["destination_observed_identity"]
+        ):
+            self._add_finding(
+                run_ref,
+                "destination_rebound",
+                "destination parent identity changed after preparation",
+            )
+            self._keep_preparation_blocked(run_ref)
+            return self.get_run(run_ref)
+
+        for source_item_ref in self._pending_materialization_refs(run_ref):
+            try:
+                item = _read_source_item(
+                    precheck_read=precheck_read,
+                    result_ref=str(run["result_ref"]),
+                    source_item_ref=source_item_ref,
+                )
+            except SourceEvidenceError as error:
+                self._block_item(run_ref, source_item_ref, error.code, str(error))
+                continue
+            self._prepare_item(
+                run_ref=run_ref,
+                result_ref=str(run["result_ref"]),
+                item=item,
+                source_roots=source_roots,
+                destination=destination,
+                logical_root=str(run["logical_root"]),
+            )
+        self._finalize_preparation(run_ref, source_roots, int(destination_info.st_dev))
+        return self.get_run(run_ref)
+
+    def _resume_rewind_items(
+        self,
+        run: sqlite3.Row,
+        source_roots: Mapping[str, tuple[Path, str, int]],
+    ) -> None:
+        run_ref = str(run["run_ref"])
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT * FROM run_items
+                WHERE run_ref = ? AND planned_outcome = 'materialize'
+                  AND preparation_status = 'pending'
+                ORDER BY ordinal
+                """,
+                (run_ref,),
+            ).fetchall()
+        for row in rows:
+            source_item_ref = str(row["source_item_ref"])
+            original_location = Path(row["intended_target"])
+            if original_location.exists() or original_location.is_symlink():
+                self._block_item(
+                    run_ref,
+                    source_item_ref,
+                    "rewind_target_collision",
+                    f"original source location is occupied: {original_location}",
+                )
+                continue
+            root_binding = source_roots.get(str(row["source_root_ref"]))
+            if root_binding is None:
+                self._block_item(
+                    run_ref, source_item_ref, "rewind_source_root_unavailable"
+                )
+                continue
+            root = root_binding[0]
+            basis = VerificationBasis(
+                profile=str(row["verification_profile"]),
+                value=str(row["expected_verification"]),
+                size_bytes=int(row["observed_size"]),
+                observed_at=str(row["verification_observed_at"]),
+                producer=str(row["verification_producer"]),
+                basis=json.loads(str(row["verification_basis_json"])),
+                limitations=tuple(
+                    json.loads(str(row["verification_limitations_json"]))
+                ),
+            )
+            try:
+                observed = _verify_source(Path(row["source_path"]), root, basis)
+            except (OSError, ApplyPreparationError) as error:
+                self._block_item(
+                    run_ref,
+                    source_item_ref,
+                    "rewind_source_unverifiable",
+                    str(error),
+                )
+                continue
+            with self._connect() as connection:
+                connection.execute(
+                    """
+                    UPDATE run_items SET preparation_status = 'verified',
+                        issue_code = NULL, observed_verification = ?,
+                        observed_device = ?, observed_inode = ?,
+                        observed_size = ?, observed_mtime_ns = ?
+                    WHERE run_ref = ? AND source_item_ref = ?
+                    """,
+                    (
+                        observed["digest"],
+                        observed["device"],
+                        observed["inode"],
+                        observed["size"],
+                        observed["mtime_ns"],
+                        run_ref,
+                        source_item_ref,
+                    ),
+                )
+
+    def _finalize_rewind_preparation(self, run_ref: str, route: str) -> None:
+        with self._connect() as connection:
+            blocker_count = int(
+                connection.execute(
+                    "SELECT COUNT(*) FROM findings WHERE run_ref = ?", (run_ref,)
+                ).fetchone()[0]
+            )
+            identity = _prepared_identity(connection, run_ref, route)
+            connection.execute(
+                """
+                UPDATE runs SET state = ?, prepared_revision = ?,
+                    prepared_content_identity = ? WHERE run_ref = ?
+                """,
+                (
+                    "blocked" if blocker_count else "ready_for_authorization",
+                    f"prepared-revision:{identity.removeprefix('sha256:')[:24]}",
+                    identity,
+                    run_ref,
+                ),
+            )
+
+    def _keep_preparation_blocked(self, run_ref: str) -> None:
+        with self._connect() as connection:
+            connection.execute(
+                "UPDATE runs SET state = 'blocked' WHERE run_ref = ?", (run_ref,)
+            )
+
     def _pending_materialization_refs(self, run_ref: str) -> Iterable[str]:
         after_ordinal = -1
         while True:
@@ -834,7 +1053,7 @@ class ApplyRunStore:
         return self.get_run(str(row["run_ref"]))
 
     def status(self, run_ref: str) -> dict[str, object]:
-        """Return a review-contract-shaped bounded status view."""
+        """Return an active-contract-shaped bounded status view."""
 
         with self._connect() as connection:
             run = connection.execute(
@@ -851,9 +1070,15 @@ class ApplyRunStore:
                            AND preparation_status = 'verified') AS verified_count,
                        SUM(execution_status = 'completed_and_verified') AS completed_count,
                        SUM(execution_status IN ('failed', 'refused')) AS failed_count,
-                       SUM(execution_status = 'indeterminate') AS indeterminate_count,
+                       SUM(execution_status = 'indeterminate'
+                           OR (execution_status = 'intent'
+                               AND postcondition_result = 'indeterminate'))
+                           AS indeterminate_count,
                        SUM(planned_outcome = 'materialize'
-                           AND execution_status IN ('not_attempted', 'intent')) AS remaining_count
+                           AND (execution_status = 'not_attempted'
+                                OR (execution_status = 'intent'
+                                    AND postcondition_result IS NULL)))
+                           AS remaining_count
                 FROM run_items WHERE run_ref = ?
                 """,
                 (run_ref,),
@@ -910,6 +1135,19 @@ class ApplyRunStore:
                     (run_ref,),
                 )
             ]
+            restored_source_parents = sorted(
+                {
+                    str(Path(row["intended_target"]).parent)
+                    for row in connection.execute(
+                        """
+                        SELECT intended_target FROM run_items
+                        WHERE run_ref = ? AND planned_outcome = 'materialize'
+                          AND intended_target IS NOT NULL
+                        """,
+                        (run_ref,),
+                    )
+                }
+            )
         scope_count = int(counts["scope_count"] or 0)
         operation_count = int(counts["operation_count"] or 0)
         no_effect_count = int(counts["no_effect_count"] or 0)
@@ -919,11 +1157,14 @@ class ApplyRunStore:
         indeterminate_count = int(counts["indeterminate_count"] or 0)
         remaining_count = int(counts["remaining_count"] or 0)
         route = str(run["execution_route"] or "same_filesystem_atomic_move")
-        summary = {
-            "frozen_plan_ref": str(run["frozen_plan_ref"]),
-            "frozen_plan_content_identity": str(run["frozen_plan_content_identity"]),
-            "effect": "move_originals",
-            "execution_binding": {
+        if run["direction"] == "rewind":
+            execution_binding: dict[str, object] = {
+                "kind": "rewind",
+                "rewind_of_receipt_ref": str(run["rewind_of_receipt_ref"]),
+                "restored_source_parents": restored_source_parents,
+            }
+        else:
+            execution_binding = {
                 "kind": "forward",
                 "source_roots": roots,
                 "destination_parent": str(run["destination_parent"]),
@@ -933,7 +1174,12 @@ class ApplyRunStore:
                 "destination_observed_identity": str(
                     run["destination_observed_identity"]
                 ),
-            },
+            }
+        summary = {
+            "frozen_plan_ref": str(run["frozen_plan_ref"]),
+            "frozen_plan_content_identity": str(run["frozen_plan_content_identity"]),
+            "effect": "move_originals",
+            "execution_binding": execution_binding,
             "execution_route": route,
             "metadata_preservation_profile": (
                 "same_filesystem_rename_v1"
@@ -1683,6 +1929,62 @@ class ApplyRunStore:
                 if all(source_roots[ref][2] == destination_device for ref in used_roots)
                 else "verified_cross_filesystem_transfer"
             )
+            if route == "verified_cross_filesystem_transfer":
+                if sys.platform != "darwin":
+                    connection.execute(
+                        """
+                        INSERT OR IGNORE INTO findings (
+                            run_ref, code, source_item_ref, message
+                        ) VALUES (?, 'filesystem_profile_unsupported', '', ?)
+                        """,
+                        (
+                            run_ref,
+                            "cross_filesystem_user_metadata_v1 currently requires Darwin",
+                        ),
+                    )
+                else:
+                    source_rows = connection.execute(
+                        """
+                        SELECT source_item_ref, source_path FROM run_items
+                        WHERE run_ref = ? AND planned_outcome = 'materialize'
+                          AND preparation_status = 'verified'
+                        ORDER BY ordinal
+                        """,
+                        (run_ref,),
+                    ).fetchall()
+                    for source_row in source_rows:
+                        try:
+                            has_acl = has_nontrivial_acl(
+                                Path(source_row["source_path"])
+                            )
+                        except FilesystemEffectError as error:
+                            connection.execute(
+                                """
+                                INSERT OR IGNORE INTO findings (
+                                    run_ref, code, source_item_ref, message
+                                ) VALUES (?, ?, ?, ?)
+                                """,
+                                (
+                                    run_ref,
+                                    error.code,
+                                    str(source_row["source_item_ref"]),
+                                    str(error),
+                                ),
+                            )
+                            continue
+                        if has_acl:
+                            connection.execute(
+                                """
+                                INSERT OR IGNORE INTO findings (
+                                    run_ref, code, source_item_ref, message
+                                ) VALUES (?, 'cross_filesystem_acl_unsupported', ?, ?)
+                                """,
+                                (
+                                    run_ref,
+                                    str(source_row["source_item_ref"]),
+                                    "ACL-bearing source is unsupported by the active cross-filesystem profile",
+                                ),
+                            )
             self._record_concurrency_conflict(connection, run_ref)
             identity = _prepared_identity(connection, run_ref, route)
             revision = f"prepared-revision:{identity.removeprefix('sha256:')[:24]}"

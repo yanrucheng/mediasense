@@ -169,7 +169,8 @@ SQLite, table names, journal mode, file extensions, segment encoding, sharding t
 - broader cross-filesystem platforms and ACL-bearing sources beyond the proven Darwin APFS profile;
 - configurable rewind-window policy beyond the current short-window profile;
 - long-term garbage collection and operational packaging;
-- copy and link Apply profiles; and
+- any newly justified original-copy profile and any Human-reviewed persistent
+  relative-link lifecycle; and
 - CLI and Agent presentation details.
 
 These deferred methods and future profiles do not block the active two-entity model or the Run/Read Tool split. Any broader claim requires its own executable evidence and must preserve the same authority and safety invariants.

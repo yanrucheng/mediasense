@@ -42,6 +42,19 @@ content identity. Repository tests use controlled temporary roots only.
 | File effects, non-overwrite, recovery, verification, Receipt publication | Apply Tool/runtime | Controlled end-to-end and injected-fault tests cover same-filesystem execution; the accepted Darwin probe covers the cross-filesystem profile | Unsupported platforms, ACL-bearing sources, unsafe bindings, and indeterminate effects stop fail-closed |
 | Actual immutable outcome | Apply Receipt | Runtime publication, integrity, bounded Read, restart, incomplete closure, and rewind tests | Receipt history is immutable; repair proceeds through a new Run |
 
+## Agent workflow Skill evidence
+
+`.agents/skills/mediasense-apply/` packages only the reusable interaction
+procedure: prepare one exact Frozen Plan, explain status, obtain exact Human
+confirmation, operate allowed controls, read the immutable Receipt, and prepare
+a newly authorized whole-Run rewind. It does not persist state, manufacture
+confirmation, perform filesystem I/O, or reinterpret organization semantics.
+
+Fixture-driven tests exercise the real Run and Read Tool adapters from Frozen
+Plan through Receipt and rewind. Separate fixtures prove that the workflow stops
+at a preparation blocker, refuses blind retry after source drift, and reports a
+partially completed Run before resuming only an allowed recoverable failure.
+
 ## Activation gate status
 
 | Gate | Status | Executable evidence | Conclusion |
@@ -140,6 +153,16 @@ change times are volatile observations rather than preservation claims.
 Non-empty ACLs remain unsupported and must block preparation until separately
 proved; the present fixture does not claim ACL preservation.
 
+### Certified support matrix
+
+| Boundary | Evidence-backed scope | Uncertified or blocked scope |
+| --- | --- | --- |
+| Same-filesystem move | Darwin APFS, native non-overwriting rename, full pre/post byte verification | Linux code path exists but has no current-host filesystem certification; Windows is unsupported |
+| Cross-filesystem move | Darwin APFS-to-APFS disposable-image probe with `copyfile`, byte equality, declared metadata, and non-overwrite checks | Other filesystem pairs and platforms |
+| ACL-bearing source | Same-filesystem rename retains the source object; detection is tested | Cross-filesystem deletion is blocked until ACL preservation has evidence |
+| Remount/disconnect | Missing and same-path-rebound source/destination roots stop before a later effect and resume only after the original identity returns | No claim that path equality identifies a remounted volume |
+| Run and Receipt storage | Local POSIX SQLite/immutable package paths with injected journal and publication failure recovery | Network/distributed filesystems and storage without verified locking/durability |
+
 ## Runtime, recovery, and scale evidence
 
 The old activation xfail has been replaced by passing consumer enforcement:
@@ -155,10 +178,17 @@ cross-store overlap reservation, local-failure continuation, global-risk stop,
 pause/resume/cancel, exact metadata-loss reauthorization, ACL refusal, immutable
 Receipt publication/read, rewind, and every injected intent/effect/directory/
 publication fault point. Final repository-wide counts are recorded in the
-`implement-apply-stage` change validation before closure. The final fast suite
-reports `390 passed, 11 deselected`; the Apply-focused suite reports `87 passed,
-4 deselected`; and the targeted fault/recovery selection reports `9 passed, 27
+OpenSpec validation before closure. The current full fast suite reports `405
+passed, 12 deselected`; the Apply/Skill-focused suite reports `96 passed, 5
+deselected`; the four fixture-driven Skill workflows pass; and the targeted
+fault/recovery and production-boundary selection reports `18 passed, 57
 deselected`.
+
+Capacity/quota, permission/read-only, disconnected/stale-volume, and generic I/O
+errors are normalized as global-risk outcomes. Durable intent remains available
+for reconciliation; tests prove ENOSPC recovery does not start a later item,
+journal failure precedes media effects, and Receipt permission loss converges on
+the same immutable Receipt after storage recovers.
 
 The opt-in scale suite covers two separate 100,000-item paths. Preparation
 stages a synthetic 100,000-row Run and reads a 1,000-row page with a peak
@@ -167,7 +197,35 @@ content-bound physical segments, republishes safely across a restarted store,
 and reads a 1,000-row page with a separate memory bound. Segment names remain an
 internal method and never become business references. These tests do not claim
 100,000 real-file hashing or move throughput. The complete opt-in scale suite
-reports `5 passed, 396 deselected` on this development host.
+reports `6 passed, 411 deselected` on this development host.
+
+A separate generated 512 MiB regular-file probe exercises the production
+same-filesystem boundary, including full source and target SHA-256 reads. On the
+current local APFS development volume it completed in 0.368 seconds, or 1,392.3
+MiB/s of logical file size. This is warm local-fixture evidence, not a promise
+for external disks, cold cache, network storage, or a real media collection.
+
+## Legacy copy and link closure
+
+The c90 source at `c90aa8f04fd0d3348284e0ad19e18462987b1af2` contradicts
+its README wording: CLI `original` invokes `async_safe_move`, whose pinned
+Jinnang 0.2.2 implementation attempts `os.rename` and silently falls back to
+`copy2` plus deletion. There is no user-facing original-copy branch. Generic
+`copy_with_meta` is used by thumbnail output and tests, tolerates metadata-copy
+failure, and may overwrite through `copy2`; that is not an acceptable Apply
+profile or migration baseline.
+
+c90 `link` invokes `create_relative_symlink`: it creates a relative symbolic
+link named after the source basename, leaves the source in place, and catches
+errors by printing rather than returning durable accounting. Its documented
+value is a pre-run preview before original movement. Plan preview preserves that
+purpose without persistent links. A durable symlink profile remains deferred
+because dangling links, remounted source identity, coexistence with later moves,
+and reverse-operation policy require a separate Human-reviewed lifecycle. It is
+not silently reinterpreted as a hard link. The c90 file-operation history adds
+async wrappers, tests, typing, and formatting but no later journal, collision,
+permission, remount, or recovery hardening that MediaSense would need to carry
+forward.
 
 ## AI Album migration judgment
 
@@ -177,6 +235,8 @@ reports `5 passed, 396 deselected` on this development host.
 | Automatic collision-name injection | `intentionally_changed` | Replaced by deterministic collision refusal |
 | Same-filesystem move | `preserved` | Production-capable orchestration uses non-overwriting native rename and post-verification; temporary integration tests pass |
 | Silent cross-filesystem copy-delete fallback | `intentionally_changed` | Replaced by disclosed verified transfer and metadata-loss reauthorization; distinct-device Darwin APFS probe passed |
+| Original-file copy | `not_comparable` | c90 exposed no such runtime branch despite README wording; a new duplicate-retention profile remains deferred |
+| Relative symbolic-link preview | `intentionally_changed` | The preview purpose is preserved by Plan; persistent symlink materialization remains explicitly deferred rather than weakened or redefined |
 | Durable restart and per-item outcome accounting | `intentionally_changed` | Effect intent, reconciliation, recovery, immutable Receipt publication, and bounded Read are implemented |
 | Mutation throughput and interruption cost | `not_comparable` | Synthetic 100,000-item state and Receipt tests pass, but no representative real-media throughput comparison has been run |
 | Cache reuse | `not_comparable` | Apply consumes immutable upstream evidence and does not adopt AI Album caches |

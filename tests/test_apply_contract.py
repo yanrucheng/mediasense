@@ -121,7 +121,7 @@ def _assert_receipt_semantics(receipt: dict) -> None:
         assert preservation["content_verification"]["result"] == "verified"
 
 
-def test_review_schemas_compile() -> None:
+def test_active_schemas_compile() -> None:
     for schema in (_run_tool(), _read_tool(), _receipt_schema()):
         Draft202012Validator.check_schema(schema)
     Draft202012Validator.check_schema(_run_tool()["inputSchema"])
@@ -213,10 +213,11 @@ def test_prepare_forward_and_rewind_shapes_are_strict() -> None:
     }
     validator.validate(forward)
     validator.validate(rewind)
-    invalid = deepcopy(forward)
-    invalid["forward"]["effect"] = "copy"
-    with pytest.raises(ValidationError):
-        validator.validate(invalid)
+    for deferred_effect in ("copy_originals", "create_relative_symlinks"):
+        invalid = deepcopy(forward)
+        invalid["forward"]["effect"] = deferred_effect
+        with pytest.raises(ValidationError):
+            validator.validate(invalid)
 
 
 def test_control_acknowledgement_does_not_claim_completion() -> None:

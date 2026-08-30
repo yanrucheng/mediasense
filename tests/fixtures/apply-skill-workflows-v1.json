@@ -1,0 +1,49 @@
+{
+  "contract": "mediasense.apply-skill-workflows-v1",
+  "scenarios": [
+    {
+      "name": "forward_receipt_and_rewind",
+      "disturbance": "none",
+      "human_decision": "confirm_then_rewind",
+      "expected_agent_checkpoints": [
+        "request_exact_confirmation",
+        "observe_execution",
+        "read_receipt",
+        "request_fresh_rewind_confirmation",
+        "read_rewind_receipt"
+      ]
+    },
+    {
+      "name": "prepare_blocker",
+      "disturbance": "missing_selected_verification",
+      "human_decision": "repair_then_resume_preparation",
+      "expected_agent_checkpoints": [
+        "explain_blocker",
+        "resume_preparation",
+        "request_exact_confirmation"
+      ]
+    },
+    {
+      "name": "effect_boundary_drift",
+      "disturbance": "change_source_after_prepare",
+      "human_decision": "do_not_retry_blindly",
+      "expected_agent_checkpoints": [
+        "request_exact_confirmation",
+        "observe_execution",
+        "explain_drift_and_reopen_upstream"
+      ]
+    },
+    {
+      "name": "localized_failure_and_resume",
+      "disturbance": "fail_first_item_once",
+      "human_decision": "resume_after_recovery",
+      "expected_agent_checkpoints": [
+        "request_exact_confirmation",
+        "observe_execution",
+        "explain_partial_completion",
+        "resume_allowed_run",
+        "read_receipt"
+      ]
+    }
+  ]
+}

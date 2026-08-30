@@ -139,7 +139,12 @@ class ReceiptStore:
             raise ReceiptError("Receipt content identity does not match sealed content")
         receipt_ref = str(sealed["receipt_ref"])
         artifact = self.artifact_path(receipt_ref)
-        self.root.mkdir(parents=True, exist_ok=True)
+        try:
+            self.root.mkdir(parents=True, exist_ok=True)
+        except OSError as error:
+            raise ReceiptError(
+                f"Receipt root cannot be prepared: {self.root}"
+            ) from error
         if self.root.is_symlink() or not self.root.is_dir():
             raise ReceiptError("Receipt root is not a safe directory")
         try:
@@ -147,27 +152,37 @@ class ReceiptStore:
         except FileExistsError:
             if artifact.is_symlink() or not artifact.is_dir():
                 raise ReceiptError("Receipt artifact path is unsafe")
-        if package.operation_index is not None:
-            for segment in package.operation_segments:
-                index = int(segment["index"])
-                _publish_immutable_file(
-                    artifact / _segment_name(index), canonical_bytes(segment) + b"\n"
-                )
-            _publish_immutable_file(
-                artifact / _OPERATION_INDEX,
-                canonical_bytes(package.operation_index) + b"\n",
-            )
+        except OSError as error:
+            raise ReceiptError(
+                f"Receipt artifact directory cannot be created: {artifact}"
+            ) from error
         final = artifact / "receipt.json"
         encoded = canonical_bytes(document) + b"\n"
-        _publish_immutable_file(final, encoded)
-        _fsync_directory(artifact)
+        try:
+            if package.operation_index is not None:
+                for segment in package.operation_segments:
+                    index = int(segment["index"])
+                    _publish_immutable_file(
+                        artifact / _segment_name(index),
+                        canonical_bytes(segment) + b"\n",
+                    )
+                _publish_immutable_file(
+                    artifact / _OPERATION_INDEX,
+                    canonical_bytes(package.operation_index) + b"\n",
+                )
+            _publish_immutable_file(final, encoded)
+            _fsync_directory(artifact)
+        except ReceiptError:
+            raise
+        except OSError as error:
+            raise ReceiptError("Receipt package publication failed") from error
         return final
 
     def read(self, receipt_ref: str) -> dict[str, object]:
         path = self.artifact_path(receipt_ref) / "receipt.json"
         try:
             document = json.loads(path.read_text(encoding="utf-8"))
-        except (FileNotFoundError, json.JSONDecodeError) as error:
+        except (OSError, json.JSONDecodeError) as error:
             raise ReceiptError(
                 f"Receipt is unavailable or invalid: {receipt_ref}"
             ) from error
@@ -237,7 +252,7 @@ class ReceiptStore:
             raise ReceiptError("Receipt operation index is unavailable or unsafe")
         try:
             index = json.loads(path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError as error:
+        except (OSError, json.JSONDecodeError) as error:
             raise ReceiptError("Receipt operation index is invalid") from error
         if not isinstance(index, dict) or content_identity(index) != ledger.get(
             "content_identity"
@@ -280,7 +295,7 @@ class ReceiptStore:
                 raise ReceiptError("Receipt operation segment is unavailable or unsafe")
             try:
                 segment = json.loads(path.read_text(encoding="utf-8"))
-            except json.JSONDecodeError as error:
+            except (OSError, json.JSONDecodeError) as error:
                 raise ReceiptError("Receipt operation segment is invalid") from error
             if (
                 not isinstance(segment, dict)

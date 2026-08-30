@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import errno
 import hashlib
 import json
 from pathlib import Path
+import sqlite3
 import subprocess
 import sys
+import time
 import tracemalloc
+from types import SimpleNamespace
 
 import pytest
 from jsonschema import Draft202012Validator
@@ -192,6 +196,70 @@ def test_source_object_replaced_with_same_bytes_is_refused(tmp_path: Path) -> No
     assert status["state"] == "needs_attention"
     assert original.exists()
     assert not (destination / "Media" / "Trip" / "a.jpg").exists()
+
+
+def test_source_volume_disappears_before_effect_and_stops_run(tmp_path: Path) -> None:
+    store, run, source, destination, *_rest = _prepare(tmp_path)
+    detached = tmp_path / "detached-source"
+    source.rename(detached)
+    executor = _executor(tmp_path, store)
+
+    status = executor.execute(
+        run_ref=run.run_ref,
+        prepared_revision=run.prepared_revision,
+        prepared_content_identity=run.prepared_content_identity,
+        request_id="request:execute-source-disconnected",
+        authorization_binding="test:trusted-human",
+    )
+
+    assert status["state"] == "needs_attention"
+    assert status["progress"]["indeterminate"] == 1
+    assert any(
+        reason["code"] == "source_root_unavailable" for reason in status["reasons"]
+    )
+    assert (detached / "a.jpg").exists()
+    assert not (destination / "Media" / "Trip" / "a.jpg").exists()
+
+    detached.rename(source)
+    executor.resume(run.run_ref)
+    executor.advance(run.run_ref)
+    closed = store.status(run.run_ref)
+    assert closed["state"] == "closed"
+    receipt = executor.receipt_store.read(closed["published_receipt"]["receipt_ref"])
+    recovered_item = next(
+        item
+        for item in receipt["sealed_content"]["operation_ledger"]["items"]
+        if item["source_item_ref"] == "source-item:a"
+    )
+    assert recovered_item["result"] == "completed_and_verified"
+    assert "reason" not in recovered_item
+
+
+def test_destination_rebind_at_same_path_stops_before_effect(tmp_path: Path) -> None:
+    store, run, source, destination, *_rest = _prepare(tmp_path)
+    detached = tmp_path / "detached-destination"
+    destination.rename(detached)
+    destination.mkdir()
+    executor = _executor(tmp_path, store)
+
+    status = executor.execute(
+        run_ref=run.run_ref,
+        prepared_revision=run.prepared_revision,
+        prepared_content_identity=run.prepared_content_identity,
+        request_id="request:execute-destination-rebound",
+        authorization_binding="test:trusted-human",
+    )
+
+    assert status["state"] == "needs_attention"
+    assert any(reason["code"] == "destination_rebound" for reason in status["reasons"])
+    assert (source / "a.jpg").exists()
+    assert not (destination / "Media").exists()
+
+    destination.rmdir()
+    detached.rename(destination)
+    executor.resume(run.run_ref)
+    executor.advance(run.run_ref)
+    assert store.status(run.run_ref)["state"] == "closed"
 
 
 def test_crash_after_move_reconciles_without_second_effect(tmp_path: Path) -> None:
@@ -479,30 +547,19 @@ def test_crash_after_receipt_publish_recovers_same_receipt(tmp_path: Path) -> No
     assert recovered["published_receipt"]["receipt_ref"].startswith("apply-receipt:")
 
 
-def test_crash_after_receipt_reservation_recovers_same_receipt(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+def test_receipt_store_failure_after_reservation_recovers_same_receipt(
+    tmp_path: Path,
 ) -> None:
     store, run, *_rest = _prepare(tmp_path)
-    receipt_store = ReceiptStore(
-        tmp_path / "receipts", APPLY_SPEC / "apply-receipt.schema.json"
-    )
+    receipt_root = tmp_path / "receipts"
+    receipt_root.write_text("controlled path obstruction", encoding="utf-8")
+    receipt_store = ReceiptStore(receipt_root, APPLY_SPEC / "apply-receipt.schema.json")
     executor = ApplyExecutor(
         store,
         receipt_store,
         clock=lambda: datetime(2026, 8, 30, 1, 0, tzinfo=timezone.utc),
     )
-    original_publish = receipt_store.publish
-    crashed = False
-
-    def fail_once(receipt):
-        nonlocal crashed
-        if not crashed:
-            crashed = True
-            raise RuntimeError("simulated pre-publication crash")
-        return original_publish(receipt)
-
-    monkeypatch.setattr(receipt_store, "publish", fail_once)
-    with pytest.raises(RuntimeError, match="pre-publication crash"):
+    with pytest.raises(ReceiptError, match="Receipt root"):
         executor.execute(
             run_ref=run.run_ref,
             prepared_revision=run.prepared_revision,
@@ -512,6 +569,7 @@ def test_crash_after_receipt_reservation_recovers_same_receipt(
         )
     assert store.status(run.run_ref)["state"] == "verifying"
 
+    receipt_root.unlink()
     recovered = ApplyExecutor(
         store,
         ReceiptStore(tmp_path / "receipts", APPLY_SPEC / "apply-receipt.schema.json"),
@@ -855,6 +913,13 @@ def test_rewind_blocks_when_original_location_is_occupied(tmp_path: Path) -> Non
     )
     assert rewind.state == "blocked"
     assert (source / "a.jpg").read_bytes() == b"unrelated"
+
+    (source / "a.jpg").unlink()
+    resumed = store.resume_preparation(
+        run_ref=rewind.run_ref,
+        precheck_read=SimpleNamespace(name="mediasense.precheck.read"),
+    )
+    assert resumed.state == "ready_for_authorization"
 
 
 def test_rewind_rejects_an_expired_window(tmp_path: Path) -> None:
@@ -1355,7 +1420,7 @@ def test_cross_filesystem_acl_is_blocked_before_copy(
     target_parent.mkdir()
     target = target_parent / "source.jpg"
     monkeypatch.setattr(apply_filesystem.sys, "platform", "darwin")
-    monkeypatch.setattr(apply_filesystem, "_has_nontrivial_acl", lambda _path: True)
+    monkeypatch.setattr(apply_filesystem, "has_nontrivial_acl", lambda _path: True)
     copied = False
 
     def unexpected_copy(_source: Path, _target: Path) -> None:
@@ -1377,3 +1442,197 @@ def test_cross_filesystem_acl_is_blocked_before_copy(
     assert copied is False
     assert source.read_bytes() == b"source"
     assert not target.exists()
+
+
+@pytest.mark.parametrize(
+    ("error_number", "expected_code"),
+    [
+        (errno.ENOSPC, "insufficient_capacity"),
+        (errno.EACCES, "permission_denied"),
+        (errno.ENODEV, "volume_unavailable"),
+    ],
+)
+def test_storage_errors_are_normalized_as_global_risk(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    error_number: int,
+    expected_code: str,
+) -> None:
+    source = tmp_path / "source.jpg"
+    source.write_bytes(b"source")
+    target_parent = tmp_path / "target"
+    target_parent.mkdir()
+    target = target_parent / "source.jpg"
+    observed = source.stat()
+
+    def fail_publish(_source: Path, _target: Path) -> None:
+        raise OSError(error_number, "controlled storage fault")
+
+    monkeypatch.setattr(apply_filesystem, "rename_exclusive", fail_publish)
+    with pytest.raises(FilesystemEffectError) as captured:
+        LocalFilesystem().move(
+            source=source,
+            target=target,
+            expected_digest="sha256:" + hashlib.sha256(b"source").hexdigest(),
+            expected_size=6,
+            route="same_filesystem_atomic_move",
+            temporary_path=None,
+            expected_source_stat=(
+                observed.st_dev,
+                observed.st_ino,
+                observed.st_mtime_ns,
+            ),
+        )
+    assert captured.value.code == expected_code
+    assert captured.value.global_risk is True
+    assert source.read_bytes() == b"source"
+    assert not target.exists()
+
+
+def test_target_race_is_normalized_as_local_collision(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source = tmp_path / "source.jpg"
+    source.write_bytes(b"source")
+    target_parent = tmp_path / "target"
+    target_parent.mkdir()
+    target = target_parent / "source.jpg"
+    observed = source.stat()
+
+    def collide(_source: Path, _target: Path) -> None:
+        raise FileExistsError(errno.EEXIST, "controlled collision")
+
+    monkeypatch.setattr(apply_filesystem, "rename_exclusive", collide)
+    with pytest.raises(FilesystemEffectError) as captured:
+        LocalFilesystem().move(
+            source=source,
+            target=target,
+            expected_digest="sha256:" + hashlib.sha256(b"source").hexdigest(),
+            expected_size=6,
+            route="same_filesystem_atomic_move",
+            temporary_path=None,
+            expected_source_stat=(
+                observed.st_dev,
+                observed.st_ino,
+                observed.st_mtime_ns,
+            ),
+        )
+    assert captured.value.code == "target_collision"
+    assert captured.value.global_risk is False
+    assert source.exists()
+    assert not target.exists()
+
+
+def test_enospc_after_intent_stops_then_recovers_from_filesystem_facts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    store, run, source, destination, *_rest = _prepare(tmp_path)
+    executor = _executor(tmp_path, store)
+    original_rename = apply_filesystem.rename_exclusive
+    failed = False
+
+    def fail_once(source_path: Path, target_path: Path) -> None:
+        nonlocal failed
+        if not failed:
+            failed = True
+            raise OSError(errno.ENOSPC, "controlled capacity loss")
+        original_rename(source_path, target_path)
+
+    monkeypatch.setattr(apply_filesystem, "rename_exclusive", fail_once)
+    first = executor.execute(
+        run_ref=run.run_ref,
+        prepared_revision=run.prepared_revision,
+        prepared_content_identity=run.prepared_content_identity,
+        request_id="request:execute-enospc",
+        authorization_binding="test:trusted-human",
+    )
+    assert first["state"] == "needs_attention"
+    assert first["progress"]["indeterminate"] == 1
+    assert first["progress"]["completed_and_verified"] == 0
+    assert (source / "a.jpg").exists()
+    assert (source / "b.jpg").exists()
+    assert not (destination / "Media" / "Trip" / "a.jpg").exists()
+
+    executor.resume(run.run_ref)
+    executor.advance(run.run_ref)
+    assert store.status(run.run_ref)["state"] == "closed"
+
+
+def test_journal_write_failure_precedes_any_media_effect_and_is_retryable(
+    tmp_path: Path,
+) -> None:
+    store, run, source, destination, *_rest = _prepare(tmp_path)
+    with store._connect() as connection:
+        connection.execute(
+            """
+            CREATE TRIGGER controlled_journal_failure
+            BEFORE UPDATE OF execution_status ON run_items
+            WHEN NEW.execution_status = 'intent'
+            BEGIN
+                SELECT RAISE(ABORT, 'controlled journal write failure');
+            END
+            """
+        )
+        connection.commit()
+    executor = _executor(tmp_path, store)
+    with pytest.raises(sqlite3.IntegrityError, match="journal write failure"):
+        executor.execute(
+            run_ref=run.run_ref,
+            prepared_revision=run.prepared_revision,
+            prepared_content_identity=run.prepared_content_identity,
+            request_id="request:execute-journal-failure",
+            authorization_binding="test:trusted-human",
+        )
+    assert (source / "a.jpg").exists()
+    assert (source / "b.jpg").exists()
+    assert not (destination / "Media" / "Trip" / "a.jpg").exists()
+
+    with store._connect() as connection:
+        connection.execute("DROP TRIGGER controlled_journal_failure")
+        connection.commit()
+    executor.advance(run.run_ref)
+    assert store.status(run.run_ref)["state"] == "closed"
+
+
+@pytest.mark.scale
+def test_generated_large_file_move_has_verified_local_throughput(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "large-source.bin"
+    target_parent = tmp_path / "target"
+    target_parent.mkdir()
+    target = target_parent / source.name
+    block = bytes(range(256)) * 4096
+    block_count = 512
+    digest = hashlib.sha256()
+    with source.open("wb") as stream:
+        for _index in range(block_count):
+            stream.write(block)
+            digest.update(block)
+    observed = source.stat()
+    size = len(block) * block_count
+    started = time.monotonic()
+    result = LocalFilesystem().move(
+        source=source,
+        target=target,
+        expected_digest="sha256:" + digest.hexdigest(),
+        expected_size=size,
+        route="same_filesystem_atomic_move",
+        temporary_path=None,
+        expected_source_stat=(
+            observed.st_dev,
+            observed.st_ino,
+            observed.st_mtime_ns,
+        ),
+    )
+    elapsed = time.monotonic() - started
+    throughput_mib_s = size / (1024 * 1024) / max(elapsed, 0.000_001)
+    print(
+        f"controlled_large_file_mib={size / (1024 * 1024):.0f} "
+        f"elapsed_seconds={elapsed:.3f} "
+        f"verified_move_mib_per_second={throughput_mib_s:.1f}"
+    )
+    assert result.status == "completed"
+    assert result.bytes_moved == size
+    assert target.stat().st_size == size
+    assert throughput_mib_s > 1

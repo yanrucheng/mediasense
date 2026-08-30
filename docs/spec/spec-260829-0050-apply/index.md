@@ -53,6 +53,7 @@ AI Album formats, command flags, directory trees, caches, and implicit output be
 - `mediasense.apply.run` is authoritative for one Run's prepared operation set, preflight, authorization binding, lifecycle, effects, recovery, verification, and Receipt publication.
 - The Apply Receipt is authoritative for what actually happened. It never changes Plan semantics to match reality.
 - `mediasense.apply.read` exposes one exact immutable Receipt without mutating state or re-verifying history.
+- `mediasense-apply` is reusable Agent guidance for operating those Tools. It owns no Run state, authorization, filesystem effect, or Receipt fact.
 - The Agent explains, routes, and escalates; it cannot supply Human authorization, invent a collision name, substitute a source, or broaden an execution effect.
 
 ## First Apply profile
@@ -78,7 +79,20 @@ a non-empty ACL fixture proves preservation; preparation must block rather than
 silently omit such ACLs. Any declared-field difference follows the discrepancy,
 new prepared identity, and new Human authorization rule above.
 
-Copy and link remain explicit deferred profiles. A Run never combines effect profiles.
+`move_originals` remains the only active materialization profile. The c90 CLI's
+`original` branch called `safe_move`; its README phrase "Copy original" did not
+describe a separate original-copy implementation. A future copy profile would
+need independently reviewed duplicate-retention, authorization, accounting, and
+rewind semantics and is `not_comparable`, not a missing implementation of c90
+`original`.
+
+The c90 `link` branch created relative symbolic links and left sources in place.
+Its documented purpose was preview before moving originals. MediaSense preserves
+that user purpose through Plan preview without persistent filesystem effects.
+A durable link profile remains intentionally deferred because dangling-link,
+source-volume rebinding, coexistence with later moves, and rewind policy are not
+part of the active contract. It must not be silently redefined as a hard link.
+A Run never combines effect profiles.
 
 ## Source compatibility gate
 
@@ -193,6 +207,24 @@ The Tool contracts use structured errors. The minimum owned classes are invalid 
 
 Messages and recovery hints are evidence, not authorization. Errors that can resume must state a verifiable recovery condition. An indeterminate effect is never collapsed into a generic failure.
 
+At the active filesystem boundary, exhausted capacity or quota, permission or
+read-only changes, stale or disconnected volumes, and unclassified I/O failures
+are global risk. They stop issuance of later effects and preserve durable intent
+for fact-based recovery. A target that appears during final publication remains
+a localized collision refusal and is never overwritten.
+
+## Certified platform and filesystem scope
+
+| Profile or boundary | Current scope | Status |
+| --- | --- | --- |
+| Same-filesystem `move_originals` | Darwin APFS with native non-overwriting rename | Certified by controlled integration tests |
+| Same-filesystem implementation | Linux `renameat2(RENAME_NOREPLACE)` with a guarded single-link fallback | Implemented but not certified on the current Darwin host |
+| Cross-filesystem `move_originals` | Darwin APFS-to-APFS using `copyfile`, byte verification, declared metadata comparison, and non-overwriting publication | Certified by the accepted disposable-image evidence |
+| ACL-bearing cross-filesystem source | None | Detected and blocked fail-closed; no preservation claim |
+| Windows and non-POSIX filesystems | None | Unsupported by the active runtime |
+| Source/destination disconnect or remount | Identity revalidation at every effect boundary | Missing or rebound roots stop before another effect; continuation rechecks the original binding |
+| Run/Receipt store | Local POSIX filesystem with verified SQLite and immutable publication behavior | Tested with injected journal and publication failures; network/distributed stores are not certified |
+
 ## Local persistence boundary
 
 The minimum local shape has one durable mutable Run authority and one immutable Receipt authority:
@@ -214,7 +246,11 @@ Preserved capabilities include original-media movement, complete bundle expansio
 
 Intentional changes include collision refusal instead of automatic parent-name injection, explicit target authorization instead of an implicit unique output, explicit verified cross-filesystem transfer instead of silent copy-delete fallback, non-overwriting publication, per-item outcome accounting, durable restart, post-verification, and immutable Receipt publication.
 
-Thumbnail/summary preview is preserved outside Apply in Plan. Copy and relative-link effects remain deferred and cannot be claimed as delivered. Combining multiple effect profiles in one Run is intentionally unsupported.
+Thumbnail/summary preview is preserved outside Apply in Plan. Original-file copy
+is `not_comparable` to the c90 `original` implementation because that branch
+moved files. Relative symbolic-link materialization is `intentionally_changed`:
+its preview purpose is preserved by Plan, while persistent links remain deferred
+until their lifecycle is explicitly accepted. Neither is claimed as delivered.
 
 ## Acceptance and ongoing verification
 

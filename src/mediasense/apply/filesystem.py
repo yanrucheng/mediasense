@@ -6,6 +6,7 @@ from collections.abc import Callable
 from contextlib import contextmanager
 from dataclasses import dataclass
 import ctypes
+import errno
 import fcntl
 import hashlib
 import json
@@ -101,7 +102,12 @@ def _with_effect_reservation(
             target=target,
             expected_source_stat=kwargs.get("expected_source_stat"),
         ):
-            return method(self, **kwargs)
+            try:
+                return method(self, **kwargs)
+            except FilesystemEffectError:
+                raise
+            except OSError as error:
+                raise _normalized_filesystem_error(error) from error
 
     return reserved
 
@@ -278,7 +284,7 @@ class LocalFilesystem:
         temporary = temporary_path or target.with_name(
             f".{target.name}.mediasense-partial"
         )
-        if _has_nontrivial_acl(source):
+        if has_nontrivial_acl(source):
             raise FilesystemEffectError(
                 "filesystem_profile_unsupported",
                 "cross-filesystem move blocks ACL-bearing sources until the profile is proven",
@@ -539,7 +545,7 @@ def _copyfile_all_exclusive(source: Path, target: Path) -> None:
         raise OSError(code, os.strerror(code), str(target))
 
 
-def _has_nontrivial_acl(path: Path) -> bool:
+def has_nontrivial_acl(path: Path) -> bool:
     """Detect Darwin ACL entries without treating ordinary mode text as an ACL."""
 
     result = subprocess.run(
@@ -555,7 +561,7 @@ def _has_nontrivial_acl(path: Path) -> bool:
             global_risk=True,
         )
     return any(
-        line[:1].isdigit() and ":" in line for line in result.stdout.splitlines()
+        line.lstrip().partition(":")[0].isdigit() for line in result.stdout.splitlines()
     )
 
 
@@ -650,3 +656,26 @@ def _effect_reservation(
 
 def _lexists(path: Path) -> bool:
     return os.path.lexists(path)
+
+
+def _normalized_filesystem_error(error: OSError) -> FilesystemEffectError:
+    code = error.errno
+    if code in {errno.ENOSPC, getattr(errno, "EDQUOT", -1)}:
+        reason = "insufficient_capacity"
+    elif code in {errno.EACCES, errno.EPERM, errno.EROFS}:
+        reason = "permission_denied"
+    elif code in {
+        errno.ENODEV,
+        errno.ENXIO,
+        errno.EIO,
+        getattr(errno, "ESTALE", -1),
+        getattr(errno, "ENOTCONN", -1),
+    }:
+        reason = "volume_unavailable"
+    elif code == errno.EEXIST:
+        return FilesystemEffectError(
+            "target_collision", f"final target appeared during publication: {error}"
+        )
+    else:
+        reason = "filesystem_io_failure"
+    return FilesystemEffectError(reason, str(error), global_risk=True)
