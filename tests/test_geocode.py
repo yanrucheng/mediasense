@@ -8,6 +8,7 @@ from pathlib import Path
 from jsonschema import Draft202012Validator
 from PIL import Image
 
+from mediasense.capabilities.geo import GeoComponentStatus, GeoOperation
 from mediasense.geo import (
     AMapReverseGeocoder,
     AdaptiveReverseGeocoder,
@@ -285,6 +286,172 @@ def test_google_preserves_reverse_plus_nearby_and_partial_failure() -> None:
     assert partial.status == "partial"
     assert partial.location is not None
     assert partial.error_message == "nearby timeout"
+
+
+def test_amap_capability_adapter_requests_only_the_selected_operation() -> None:
+    transport = FakeTransport(
+        get_response={
+            "status": "1",
+            "regeocode": {
+                "formatted_address": "北京市东城区",
+                "addressComponent": {"country": "中国", "city": "北京市"},
+                "pois": [
+                    {
+                        "name": "故宫",
+                        "location": "116.397000,39.916000",
+                        "distance": "50",
+                        "type": "风景名胜;公园广场",
+                        "address": "景山前街",
+                    }
+                ],
+            },
+        }
+    )
+    provider = AMapReverseGeocoder(
+        "secret",
+        transport=transport,
+        converter=IdentityConverter(),
+        minimum_interval=0,
+    )
+    coordinate = GeoCoordinate(39.916, 116.397, MapDatum.WGS84)
+
+    address = provider.execute(
+        GeoOperation.REVERSE_GEOCODE, coordinate, locale="en"
+    )
+    nearby = provider.execute(
+        GeoOperation.NEARBY_PLACES,
+        coordinate,
+        locale="en",
+        radius_meters=100,
+        max_places=1,
+    )
+
+    assert address.component.status is GeoComponentStatus.SUCCESS
+    assert address.component.candidates[0].kind == "address"
+    assert nearby.component.status is GeoComponentStatus.SUCCESS
+    assert nearby.component.candidates[0].name == "故宫"
+    assert transport.gets[0][1]["extensions"] == "base"
+    assert transport.gets[1][1]["extensions"] == "all"
+    assert transport.gets[1][1]["radius"] == 100
+
+
+def test_google_capability_adapter_does_not_bundle_unrequested_work() -> None:
+    transport = FakeTransport(
+        get_response={
+            "status": "OK",
+            "results": [
+                {
+                    "formatted_address": "Shibuya, Tokyo, Japan",
+                    "address_components": [
+                        {
+                            "long_name": "Japan",
+                            "short_name": "JP",
+                            "types": ["country"],
+                        }
+                    ],
+                }
+            ],
+        },
+        post_response={
+            "places": [
+                {
+                    "displayName": {"text": "Shibuya Station"},
+                    "formattedAddress": "Shibuya",
+                    "location": {"latitude": 35.6581, "longitude": 139.7014},
+                    "types": ["train_station"],
+                }
+            ]
+        },
+    )
+    provider = GoogleMapsReverseGeocoder(
+        "secret",
+        transport=transport,
+        converter=IdentityConverter(),
+        minimum_interval=0,
+    )
+    coordinate = GeoCoordinate(35.6580, 139.7013, MapDatum.WGS84)
+
+    address = provider.execute(
+        GeoOperation.REVERSE_GEOCODE, coordinate, locale="ja"
+    )
+    assert address.component.status is GeoComponentStatus.SUCCESS
+    assert len(transport.gets) == 1
+    assert transport.posts == []
+
+    nearby = provider.execute(
+        GeoOperation.NEARBY_PLACES,
+        coordinate,
+        locale="ja",
+        radius_meters=250,
+        max_places=1,
+    )
+    assert nearby.component.status is GeoComponentStatus.SUCCESS
+    assert nearby.component.candidates[0].name == "Shibuya Station"
+    assert len(transport.gets) == 1
+    assert len(transport.posts) == 1
+    assert transport.posts[0][1]["locationRestriction"]["circle"]["radius"] == 250
+
+
+def test_capability_adapters_normalize_provider_failures_without_credentials() -> None:
+    coordinate = GeoCoordinate(39.916, 116.397, MapDatum.WGS84)
+    amap = AMapReverseGeocoder(
+        "amap-secret",
+        transport=FakeTransport(
+            get_response={
+                "status": "0",
+                "infocode": "10001",
+                "info": "invalid key",
+            }
+        ),
+        converter=IdentityConverter(),
+        minimum_interval=0,
+    )
+    amap_result = amap.execute(
+        GeoOperation.REVERSE_GEOCODE, coordinate, locale="zh-CN"
+    )
+
+    google = GoogleMapsReverseGeocoder(
+        "google-secret",
+        transport=FakeTransport(
+            get_response={"status": "REQUEST_DENIED", "error_message": "denied"}
+        ),
+        converter=IdentityConverter(),
+        minimum_interval=0,
+    )
+    google_result = google.execute(
+        GeoOperation.REVERSE_GEOCODE, coordinate, locale="en"
+    )
+
+    assert amap_result.component.status is GeoComponentStatus.FAILED
+    assert amap_result.attempt.provider_requests == 1
+    assert google_result.component.status is GeoComponentStatus.FAILED
+    assert google_result.attempt.provider_requests == 1
+    assert "amap-secret" not in repr(amap_result)
+    assert "google-secret" not in repr(google_result)
+
+
+def test_capability_adapter_preserves_indeterminate_transmitted_request() -> None:
+    transport = FakeTransport(
+        post_response=GeoTransientError("nearby timeout", request_count=1)
+    )
+    provider = GoogleMapsReverseGeocoder(
+        "secret",
+        transport=transport,
+        converter=IdentityConverter(),
+        minimum_interval=0,
+    )
+
+    result = provider.execute(
+        GeoOperation.NEARBY_PLACES,
+        GeoCoordinate(35.6580, 139.7013),
+        locale="ja",
+        radius_meters=250,
+        max_places=5,
+    )
+
+    assert result.component.status is GeoComponentStatus.INDETERMINATE
+    assert result.attempt.provider_requests == 1
+    assert result.attempt.billable_units is None
 
 
 def test_optional_batch_pauses_before_exact_deduplicated_queries(

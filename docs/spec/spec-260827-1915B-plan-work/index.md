@@ -4,13 +4,14 @@ title: "MediaSense Plan Working State Tool Contract"
 type: spec
 status: active
 created: 2026-08-27
-updated: 2026-08-28
+updated: 2026-08-30
 timezone: "Asia/Shanghai"
 parent: "index-spec"
 depends-on:
   - "design-260823-1918-mediasense-foundation"
   - "spec-260826-1546-precheck-read"
   - "spec-260827-1138-frozen-plan"
+  - "spec-260830-2034-geo-query"
   - "clarify-260827-1604-tool-operation-contracts"
 superseded-by: ""
 tags: ["mediasense", "plan", "tool-contract", "working-state"]
@@ -24,7 +25,7 @@ tags: ["mediasense", "plan", "tool-contract", "working-state"]
 
 [`plan-work.tool.json`](plan-work.tool.json) is the authoritative request and response shape. [`hong-kong.mock.json`](hong-kong.mock.json) is a complete human-readable transcript validated by [`tests/test_plan_work_contract.py`](../../../tests/test_plan_work_contract.py).
 
-The Tool has exactly four actions: `create`, `update`, `inspect`, and `seal`. There is no `preview`, `validate`, independent Confirm Tool, or Frozen Plan read Tool.
+The Tool has five actions: `create`, `update`, `enrich_geo`, `inspect`, and `seal`. There is no `preview`, `validate`, independent Confirm Tool, or Frozen Plan read Tool.
 
 ## Backward Compatibility Policy
 
@@ -41,6 +42,8 @@ The Tool is authoritative for:
 
 - one `work_ref`, its exact bound `result_ref`, open or closed lifecycle, and revision tokens;
 - the current organization preference snapshot and complete candidate organization content;
+- Plan-owned Geo observations, their exact Result and Source Item binding,
+  authorization evidence, provenance, and observed effects;
 - deterministic validation issues and the global identity of an exact sealable candidate; and
 - the successful transition from an exact confirmed candidate to one `plan_ref`.
 
@@ -57,11 +60,11 @@ Only a trusted Human authentication context may authorize `seal`. The ordinary r
 
 Coverage may be `complete` or honestly bounded `partial`. A blocked or invalid Result returns `result_not_ready` or `result_untrusted` and creates no Working State.
 
-A new Working State is `open`. Every accepted `update` replaces its candidate atomically and produces a new opaque revision token. Successful `seal` closes the exact revision and publishes a Frozen Plan. A closed Work remains inspectable but rejects update and a semantically different seal. Later changes require another `create`; draft retention and cloning from a Frozen Plan are outside this contract.
+A new Working State is `open`. Every accepted `update` replaces its candidate atomically and produces a new opaque revision token. Every retained `enrich_geo` outcome appends Plan-owned evidence and also produces a new revision; authorization preflight and refusal do not. Successful `seal` closes the exact revision and publishes a Frozen Plan. A closed Work remains inspectable but rejects update, enrichment, and a semantically different seal. Later changes require another `create`; draft retention and cloning from a Frozen Plan are outside this contract.
 
 ## Safe retry and concurrency
 
-`create`, `update`, and `seal` require `request_id`:
+`create`, `update`, `enrich_geo`, and `seal` require `request_id`:
 
 - the same ID with the same request returns the same result;
 - the same ID with a different request returns `idempotency_conflict`; and
@@ -104,6 +107,31 @@ Every cursor binds `work_ref`, revision, collection, query shape, and continuati
 
 Validation issues are deterministic Tool findings, not Agent judgments. `seal_ready: true` requires a complete candidate content identity. `seal_ready: false` returns issues and no sealable identity.
 
+The optional `geo_evidence` section returns Plan-owned Geo observations attached to
+the current revision. Each item retains its exact Result and Source Item binding,
+authorization evidence, provider provenance, effects, candidate status, and
+qualifications. Reading this section performs no provider request.
+
+## `enrich_geo`
+
+`enrich_geo` coordinates one bounded [`mediasense.geo.query`](../spec-260830-2034-geo-query/)
+request with Plan Working State. It accepts only coordinates already present as
+available observations on Source Items in the exact bound PreCheck Result. It never
+reads PreCheck SQLite, Work, caches, or provider credentials.
+
+Authorization remains out of band through a trusted context. Without matching
+authority, the action returns the Geo authorization requirement and preserves the
+current Plan revision. Refusal is likewise non-mutating.
+
+A terminal authorized outcome is appended as Plan-owned candidate evidence and
+advances the opaque revision, even when candidate organization content is
+unchanged. This keeps inspection and preview deterministic. The observation remains
+distinct from PreCheck fact, Agent interpretation, and Human confirmation.
+
+The Plan request and nested Geo request have separate idempotency identities. An
+identical Plan replay returns its original revision and response; the nested Geo
+Tool independently prevents a lost response from repeating provider effects.
+
 ## `seal`
 
 `seal` requires:
@@ -140,6 +168,7 @@ Errors use the shared `outcome: "error"` envelope with action, optional resolved
 - `invalid_cursor`;
 - `candidate_invalid`;
 - `content_identity_mismatch`;
+- `capability_unavailable`;
 - `confirmation_required`;
 - `access_denied`; and
 - `operation_failed`.
@@ -150,7 +179,7 @@ Existing Result-local reference failures retain the meanings established by the 
 
 This Tool does not expose or define:
 
-- SQLite, storage layout, caches, checkpoints, model calls, or planning algorithms;
+- SQLite, storage layout, caches, checkpoints, provider APIs, model calls, or planning algorithms;
 - CLI syntax, UI presentation, identity-provider implementation, or credentials;
 - event recognition, semantic grouping, naming, or user-question strategy;
 - copy, move, link, filesystem destination, Apply authorization, or execution receipts; or
@@ -158,6 +187,6 @@ This Tool does not expose or define:
 
 ## Mock and conformance
 
-The Mock uses the exact plan-ready, valid partial Result from the existing PreCheck read Mock and returns the exact Frozen Plan from the existing Frozen Plan Mock. It demonstrates create, atomic update, current-revision inspect, paged inspection, trusted Human seal, safe seal retry, and closed-work rejection.
+The primary Mock uses the exact plan-ready, valid partial Result from the existing PreCheck read Mock and returns the exact Frozen Plan from the existing Frozen Plan Mock. It demonstrates create, atomic update, current-revision inspect, paged inspection, trusted Human seal, safe seal retry, and closed-work rejection. The active Geo Tool Mock and Plan Geo workflow fixtures additionally demonstrate authorization preflight, revision-bound enrichment, refusal, continuation, partial failure, and restart-safe replay.
 
 JSON Schema validates all request and response shapes with Draft 2020-12 strict compilation and registered external schemas. Semantic tests additionally prove Result entry gates, revision conflicts, cursor binding, one global candidate identity, Human confirmation boundaries, idempotency, Working State closure, and complete Frozen Plan conformance.

@@ -9,7 +9,7 @@ from pathlib import Path
 import subprocess
 from typing import Protocol, TypeVar, cast
 
-from mediasense.geo import AdaptiveReverseGeocoder
+from mediasense.capabilities.geo import ReverseGeocodeBatchEngine
 
 from ._accounting_types import AccountedItem
 from ._compression_producer import (
@@ -240,7 +240,7 @@ class PrecheckExecutionDependencies:
     ffmpeg_version: str | None = None
     embedding_encoder: ImageEmbeddingEncoder | None = None
     sensitivity_detector: SensitivityDetector | None = None
-    geocoder: AdaptiveReverseGeocoder | None = None
+    geocoder: ReverseGeocodeBatchEngine | None = None
 
 
 class PrecheckOrchestrator:

@@ -15,6 +15,8 @@ superseded-by: ""
 
 | ID | Title | Status | Created | Summary |
 | --- | --- | --- | --- | --- |
+| [design-260830-1626-geo-capability-evolution](design-260830-1626-geo-capability-evolution.md) | MediaSense Geo Capability Evolution | active | 2026-08-30 | Applies the reusable-capability framework to Geo, activates bounded Plan enrichment through one shared Tool family, and retains gated decisions for any future Skill, cache, registry, artifact, or service. |
+| [design-260830-1527-reusable-capability-architecture](design-260830-1527-reusable-capability-architecture.md) | MediaSense Reusable Capability Architecture | active | 2026-08-30 | Defines how stage- and business-agnostic capability families progress from reusable kernels through adapters, Tools, Skills, artifacts, and services without speculative entities or lost authority. |
 | [design-260829-0038-apply-reference-handoff](design-260829-0038-apply-reference-handoff/) | MediaSense Apply Reference Handoff | review | 2026-08-29 | Preserves the Human-authored lifecycle, recovery, verification, and rewind examples that support the active Apply contract. |
 | [design-260828-2043-plan-local-artifacts](design-260828-2043-plan-local-artifacts/) | MediaSense Plan Local Artifact Design | active | 2026-08-28 | Defines SQLite as the mutable Plan Working State authority and immutable Frozen Plan JSON files as the minimal cross-stage handoff. |
 | [design-260827-0022-precheck-implementation](design-260827-0022-precheck-implementation.md) | MediaSense PreCheck Implementation Design | active | 2026-08-27 | Defines the target local PreCheck runtime, fine-grained reuse and invalidation, Evidence compression, sealing, recovery, resource control, and staged delivery. |

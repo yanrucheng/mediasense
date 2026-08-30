@@ -5,8 +5,9 @@
 Before architecture, contract, Skill, Tool, or migration work:
 
 1. Read `docs/design/design-260823-1918-mediasense-foundation.md`.
-2. For legacy comparison, read `docs/eval/eval-260823-1918-ai-album-migration-baseline/index.md` and its linked modules.
-3. Before using the Hong Kong fixture, read `eval/fixtures/ai-album-hk-representative-v1.yaml`, then the package's own `README.md` and `docs/RESEARCH-AND-HANDOFF.zh-CN.md`. Run the package verifier before trusting its contents.
+2. Before creating or reviewing a shared module, provider adapter, stage-neutral Tool, capability Skill, artifact, registry, or service, read `docs/design/design-260830-1527-reusable-capability-architecture.md`.
+3. For legacy comparison, read `docs/eval/eval-260823-1918-ai-album-migration-baseline/index.md` and its linked modules.
+4. Before using the Hong Kong fixture, read `eval/fixtures/ai-album-hk-representative-v1.yaml`, then the package's own `README.md` and `docs/RESEARCH-AND-HANDOFF.zh-CN.md`. Run the package verifier before trusting its contents.
 
 ## Authority and boundaries
 

@@ -49,6 +49,7 @@ class PreviewDocument:
     logical_root: str
     directories: tuple[PreviewDirectory, ...]
     other_outcomes: tuple[PreviewOutcome, ...]
+    geo_observations: tuple[Mapping[str, Any], ...] = ()
 
 
 class PlanPreviewRenderer:
@@ -101,6 +102,7 @@ class PlanPreviewRenderer:
                     strict=True,
                 )
             ),
+            geo_observations=snapshot.geo_observations,
         )
 
     def render_html(self, document: PreviewDocument, *, member_limit: int = 100) -> str:
@@ -128,6 +130,7 @@ class PlanPreviewRenderer:
             len(outcome.member_refs) for outcome in document.other_outcomes
         )
         tree = _tree_text(document)
+        geo_evidence = _geo_evidence_html(document.geo_observations)
         return f"""<!doctype html>
 <html lang="zh-CN">
 <head>
@@ -160,6 +163,7 @@ class PlanPreviewRenderer:
   <article><h2>最终目录结构</h2><pre>{escape(tree)}</pre></article>
   <main>{directories}</main>
   <article><h2>其他已交代结果</h2><ul>{outcomes}</ul></article>
+  {geo_evidence}
 </body>
 </html>
 """
@@ -253,6 +257,49 @@ class PlanPreviewRenderer:
   <div class="samples">{"".join(samples)}</div>
   <details><summary>展开查看目录内容</summary><ol>{member_items}</ol>{more}</details>
 </article>"""
+
+
+def _geo_evidence_html(observations: tuple[Mapping[str, Any], ...]) -> str:
+    if not observations:
+        return ""
+    items: list[str] = []
+    for observation in observations:
+        result = observation.get("result")
+        result = result if isinstance(result, Mapping) else {}
+        names: list[str] = []
+        components = result.get("components")
+        for component in components if isinstance(components, list) else ():
+            if not isinstance(component, Mapping):
+                continue
+            candidates = component.get("candidates")
+            for candidate in candidates if isinstance(candidates, list) else ():
+                if isinstance(candidate, Mapping) and isinstance(
+                    candidate.get("name"), str
+                ):
+                    names.append(str(candidate["name"]))
+        attempts = result.get("attempts")
+        providers = [
+            str(attempt["provider"])
+            for attempt in (attempts if isinstance(attempts, list) else ())
+            if isinstance(attempt, Mapping) and isinstance(attempt.get("provider"), str)
+        ]
+        subject_names = ", ".join(names) or "No place candidate"
+        provider_names = ", ".join(providers) or "No provider attempt"
+        items.append(
+            "<li><strong>Candidate observation:</strong> "
+            + escape(subject_names)
+            + " <span class=\"binding\">Providers: "
+            + escape(provider_names)
+            + "; outcome: "
+            + escape(str(result.get("outcome", "unknown")))
+            + "</span></li>"
+        )
+    return (
+        '<article><h2>地点候选证据</h2><p class="binding">Provider observations; '
+        "not confirmed Plan truth.</p><ul>"
+        + "".join(items)
+        + "</ul></article>"
+    )
 
 
 def _source_label(ref: str, view: Mapping[str, Any]) -> str:

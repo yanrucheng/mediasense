@@ -15,6 +15,7 @@ ROOT = Path(__file__).parents[1]
 WORK_SPEC = ROOT / "docs" / "spec" / "spec-260827-1915B-plan-work"
 PLAN_SPEC = ROOT / "docs" / "spec" / "spec-260827-1138-frozen-plan"
 READ_SPEC = ROOT / "docs" / "spec" / "spec-260826-1546-precheck-read"
+GEO_SPEC = ROOT / "docs" / "spec" / "spec-260830-2034-geo-query"
 
 
 def _load(path: Path):
@@ -35,7 +36,13 @@ def _frozen_schema() -> dict:
 
 def _registry() -> Registry:
     frozen = _frozen_schema()
-    return Registry().with_resource(frozen["$id"], Resource.from_contents(frozen))
+    geo = _load(GEO_SPEC / "geo-query.tool.json")
+    registry = Registry().with_resource(frozen["$id"], Resource.from_contents(frozen))
+    for resource in (geo["inputSchema"], geo["outputSchema"]):
+        registry = registry.with_resource(
+            resource["$id"], Resource.from_contents(resource)
+        )
+    return registry
 
 
 def _validators() -> tuple[Draft202012Validator, Draft202012Validator]:
@@ -145,13 +152,13 @@ def test_mock_requests_and_responses_conform() -> None:
         output_validator.validate(exchange["response"])
 
 
-def test_contract_exposes_only_four_actions() -> None:
+def test_contract_exposes_only_five_actions() -> None:
     input_defs = _tool()["inputSchema"]["$defs"]
     assert {
         schema["properties"]["action"]["const"]
         for name, schema in input_defs.items()
         if name.endswith("_request") and "action" in schema.get("properties", {})
-    } == {"create", "update", "inspect", "seal"}
+    } == {"create", "update", "enrich_geo", "inspect", "seal"}
     serialized = json.dumps(_tool())
     for forbidden in ('"preview"', '"validate"', '"confirm"'):
         assert forbidden not in serialized

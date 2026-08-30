@@ -5,7 +5,6 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from enum import StrEnum
 import json
 import socket
 from threading import Lock
@@ -15,122 +14,26 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
-
-class MapDatum(StrEnum):
-    WGS84 = "WGS84"
-    GCJ02 = "GCJ02"
-
-
-class GeoLookupError(RuntimeError):
-    """Base error for one provider attempt."""
-
-    def __init__(self, message: str, *, request_count: int = 0) -> None:
-        self.request_count = request_count
-        super().__init__(message)
-
-
-class GeoTransientError(GeoLookupError):
-    """The provider attempt may succeed when retried later."""
-
-
-class GeoPermanentError(GeoLookupError):
-    """The provider attempt cannot succeed without changing its inputs."""
-
-
-@dataclass(frozen=True, slots=True)
-class GeoCoordinate:
-    latitude: float
-    longitude: float
-    datum: MapDatum = MapDatum.WGS84
-
-    def __post_init__(self) -> None:
-        object.__setattr__(self, "datum", MapDatum(self.datum))
-        if not -90 <= self.latitude <= 90:
-            raise ValueError("latitude must be between -90 and 90")
-        if not -180 <= self.longitude <= 180:
-            raise ValueError("longitude must be between -180 and 180")
-
-    def value(self) -> dict[str, object]:
-        return {
-            "latitude": self.latitude,
-            "longitude": self.longitude,
-            "datum": self.datum.value,
-        }
-
-
-@dataclass(frozen=True, slots=True)
-class GeoProviderResult:
-    status: str
-    provider: str
-    language: str
-    input_coordinate: GeoCoordinate
-    provider_coordinate: GeoCoordinate
-    location: Mapping[str, object] | None
-    pois: tuple[Mapping[str, object], ...]
-    request_count: int
-    error_code: str | None = None
-    error_message: str | None = None
-
-    def __post_init__(self) -> None:
-        if self.status not in {"success", "partial", "no_result", "failed"}:
-            raise ValueError("unknown provider result status")
-        if not self.provider or not self.language:
-            raise ValueError("provider and language must be non-empty")
-        if self.request_count < 0:
-            raise ValueError("request_count cannot be negative")
-
-
-@dataclass(frozen=True, slots=True)
-class GeoLookupResult:
-    status: str
-    provider: str
-    language: str
-    input_coordinate: GeoCoordinate
-    provider_coordinate: GeoCoordinate
-    location: Mapping[str, object] | None
-    pois: tuple[Mapping[str, object], ...]
-    attempts: tuple[dict[str, object], ...]
-    qualifications: tuple[dict[str, str], ...]
-    observed_at: str
-    error_code: str | None = None
-    error_message: str | None = None
-
-    @property
-    def logical_query_count(self) -> int:
-        return 1
-
-    @property
-    def provider_request_count(self) -> int:
-        return sum(int(attempt["provider_requests"]) for attempt in self.attempts)
-
-    def work_value(self) -> dict[str, object]:
-        value: dict[str, object] = {
-            "input_coordinate": self.input_coordinate.value(),
-            "provider_coordinate": self.provider_coordinate.value(),
-            "provider": self.provider,
-            "language": self.language,
-            "location": None if self.location is None else dict(self.location),
-            "pois": [dict(poi) for poi in self.pois],
-            "observed_at": self.observed_at,
-            "logical_query_count": self.logical_query_count,
-            "provider_request_count": self.provider_request_count,
-            "attempts": list(self.attempts),
-        }
-        if self.error_code is not None:
-            value["error"] = {
-                "code": self.error_code,
-                "message": self.error_message or self.error_code,
-            }
-        return value
-
-
-class ReverseGeocodeProvider(Protocol):
-    provider_id: str
-    datum: MapDatum
-
-    def lookup(
-        self, coordinate: GeoCoordinate, *, language: str
-    ) -> GeoProviderResult: ...
+from .capabilities.geo.model import (
+    GeoCandidate,
+    GeoCandidateKind,
+    GeoComponentResult,
+    GeoComponentStatus,
+    GeoCoordinate,
+    GeoLookupError,
+    GeoLookupResult,
+    GeoOperation,
+    GeoPermanentError,
+    GeoProviderAttempt,
+    GeoProviderResult,
+    GeoTransientError,
+    MapDatum,
+)
+from .capabilities.geo.protocol import (
+    GeoProviderCapabilities,
+    GeoProviderExecution,
+    ReverseGeocodeProvider,
+)
 
 
 class JsonTransport(Protocol):
@@ -265,6 +168,11 @@ class _RateLimiter:
 class AMapReverseGeocoder:
     provider_id = "amap"
     datum = MapDatum.GCJ02
+    capabilities = GeoProviderCapabilities(
+        provider_id,
+        (GeoOperation.REVERSE_GEOCODE, GeoOperation.NEARBY_PLACES),
+        datum,
+    )
 
     def __init__(
         self,
@@ -290,6 +198,56 @@ class AMapReverseGeocoder:
         self._limiter = _RateLimiter(minimum_interval)
 
     def lookup(self, coordinate: GeoCoordinate, *, language: str) -> GeoProviderResult:
+        return self._lookup(
+            coordinate,
+            language=language,
+            include_nearby=True,
+            radius_meters=self.radius_meters,
+        )
+
+    def execute(
+        self,
+        operation: GeoOperation,
+        coordinate: GeoCoordinate,
+        *,
+        locale: str,
+        radius_meters: float | None = None,
+        max_places: int | None = None,
+    ) -> GeoProviderExecution:
+        operation = GeoOperation(operation)
+        if operation not in self.capabilities.operations:
+            raise ValueError(f"AMap does not support {operation.value}")
+        converted = self._converter.convert(coordinate, self.datum)
+        try:
+            result = self._lookup(
+                coordinate,
+                language=locale,
+                include_nearby=operation is GeoOperation.NEARBY_PLACES,
+                radius_meters=radius_meters or self.radius_meters,
+            )
+        except GeoLookupError as error:
+            return _provider_error_execution(
+                self.provider_id,
+                operation,
+                coordinate,
+                converted,
+                error,
+            )
+        return _provider_execution(
+            result,
+            operation,
+            max_places=max_places,
+        )
+
+    def _lookup(
+        self,
+        coordinate: GeoCoordinate,
+        *,
+        language: str,
+        include_nearby: bool,
+        radius_meters: float,
+    ) -> GeoProviderResult:
+        del language
         converted = self._converter.convert(coordinate, self.datum)
         self._limiter.wait()
         response = self._transport.get_json(
@@ -297,8 +255,8 @@ class AMapReverseGeocoder:
             params={
                 "key": self._api_key,
                 "output": "json",
-                "extensions": "all",
-                "radius": self.radius_meters,
+                "extensions": "all" if include_nearby else "base",
+                "radius": radius_meters,
                 "location": f"{converted.longitude:.6f},{converted.latitude:.6f}",
             },
             headers={"Accept-Language": "zh"},
@@ -326,7 +284,7 @@ class AMapReverseGeocoder:
             regeocode = {}
         formatted_address = _text(regeocode.get("formatted_address"))
         components = _string_mapping(regeocode.get("addressComponent"))
-        pois_value = regeocode.get("pois")
+        pois_value = regeocode.get("pois") if include_nearby else ()
         pois = tuple(
             _amap_poi(item)
             for item in (pois_value if isinstance(pois_value, Sequence) else ())
@@ -352,6 +310,11 @@ class AMapReverseGeocoder:
 class GoogleMapsReverseGeocoder:
     provider_id = "google_maps"
     datum = MapDatum.WGS84
+    capabilities = GeoProviderCapabilities(
+        provider_id,
+        (GeoOperation.REVERSE_GEOCODE, GeoOperation.NEARBY_PLACES),
+        datum,
+    )
 
     def __init__(
         self,
@@ -385,18 +348,8 @@ class GoogleMapsReverseGeocoder:
         self._limiter = _RateLimiter(minimum_interval)
 
     def lookup(self, coordinate: GeoCoordinate, *, language: str) -> GeoProviderResult:
-        converted = self._converter.convert(coordinate, self.datum)
-        normalized_language = _google_language(language)
-        self._limiter.wait()
-        reverse = self._transport.get_json(
-            self.reverse_endpoint,
-            params={
-                "key": self._api_key,
-                "latlng": f"{converted.latitude},{converted.longitude}",
-                "language": normalized_language,
-            },
-            headers=None,
-            timeout=self.timeout,
+        converted, normalized_language, reverse = self._reverse(
+            coordinate, language=language
         )
         request_count = 1
         nearby: Mapping[str, object] = {}
@@ -404,32 +357,11 @@ class GoogleMapsReverseGeocoder:
         if self.include_nearby:
             request_count += 1
             try:
-                self._limiter.wait()
-                nearby = self._transport.post_json(
-                    self.nearby_endpoint,
-                    payload={
-                        "includedTypes": [],
-                        "maxResultCount": self.max_pois,
-                        "rankPreference": "DISTANCE",
-                        "languageCode": normalized_language,
-                        "locationRestriction": {
-                            "circle": {
-                                "center": {
-                                    "latitude": converted.latitude,
-                                    "longitude": converted.longitude,
-                                },
-                                "radius": self.nearby_radius_meters,
-                            }
-                        },
-                    },
-                    headers={
-                        "X-Goog-Api-Key": self._api_key,
-                        "X-Goog-FieldMask": (
-                            "places.displayName,places.formattedAddress,"
-                            "places.primaryTypeDisplayName,places.location,places.types"
-                        ),
-                    },
-                    timeout=self.timeout,
+                nearby = self._nearby(
+                    converted,
+                    language=normalized_language,
+                    radius_meters=self.nearby_radius_meters,
+                    max_places=self.max_pois,
                 )
             except GeoLookupError as error:
                 nearby_error = str(error) or type(error).__name__
@@ -468,6 +400,149 @@ class GoogleMapsReverseGeocoder:
             request_count,
             None if error_message is None else "google_maps_error",
             error_message,
+        )
+
+    def execute(
+        self,
+        operation: GeoOperation,
+        coordinate: GeoCoordinate,
+        *,
+        locale: str,
+        radius_meters: float | None = None,
+        max_places: int | None = None,
+    ) -> GeoProviderExecution:
+        operation = GeoOperation(operation)
+        if operation not in self.capabilities.operations:
+            raise ValueError(f"Google Maps does not support {operation.value}")
+        converted = self._converter.convert(coordinate, self.datum)
+        normalized_language = _google_language(locale)
+        try:
+            if operation is GeoOperation.REVERSE_GEOCODE:
+                converted, normalized_language, response = self._reverse(
+                    coordinate, language=locale
+                )
+                location = _google_location(response)
+                reverse_error = None
+                if response.get("status") not in {"OK", "ZERO_RESULTS"}:
+                    reverse_error = _text(response.get("error_message")) or str(
+                        response.get("status") or "google_maps_error"
+                    )
+                result = GeoProviderResult(
+                    "failed"
+                    if reverse_error is not None
+                    else "success"
+                    if location is not None
+                    else "no_result",
+                    self.provider_id,
+                    normalized_language,
+                    coordinate,
+                    converted,
+                    location,
+                    (),
+                    1,
+                    None if reverse_error is None else "google_maps_error",
+                    reverse_error,
+                )
+            else:
+                response = self._nearby(
+                    converted,
+                    language=normalized_language,
+                    radius_meters=radius_meters or self.nearby_radius_meters,
+                    max_places=max_places or self.max_pois,
+                )
+                places = response.get("places")
+                pois = tuple(
+                    _google_poi(item, converted)
+                    for item in (places if isinstance(places, Sequence) else ())
+                    if isinstance(item, Mapping)
+                )
+                nearby_error = response.get("error")
+                nearby_error = (
+                    nearby_error if isinstance(nearby_error, Mapping) else None
+                )
+                error_message = (
+                    _text(nearby_error.get("message"))
+                    if nearby_error is not None
+                    else None
+                )
+                result = GeoProviderResult(
+                    "failed"
+                    if nearby_error is not None
+                    else "success"
+                    if pois
+                    else "no_result",
+                    self.provider_id,
+                    normalized_language,
+                    coordinate,
+                    converted,
+                    None,
+                    pois,
+                    1,
+                    None if nearby_error is None else "google_maps_error",
+                    error_message,
+                )
+        except GeoLookupError as error:
+            return _provider_error_execution(
+                self.provider_id,
+                operation,
+                coordinate,
+                converted,
+                error,
+            )
+        return _provider_execution(result, operation, max_places=max_places)
+
+    def _reverse(
+        self, coordinate: GeoCoordinate, *, language: str
+    ) -> tuple[GeoCoordinate, str, Mapping[str, object]]:
+        converted = self._converter.convert(coordinate, self.datum)
+        normalized_language = _google_language(language)
+        self._limiter.wait()
+        reverse = self._transport.get_json(
+            self.reverse_endpoint,
+            params={
+                "key": self._api_key,
+                "latlng": f"{converted.latitude},{converted.longitude}",
+                "language": normalized_language,
+            },
+            headers=None,
+            timeout=self.timeout,
+        )
+        return converted, normalized_language, reverse
+
+    def _nearby(
+        self,
+        converted: GeoCoordinate,
+        *,
+        language: str,
+        radius_meters: float,
+        max_places: int,
+    ) -> Mapping[str, object]:
+        self._limiter.wait()
+        return self._transport.post_json(
+            self.nearby_endpoint,
+            payload={
+                "includedTypes": [],
+                "maxResultCount": max_places,
+                "rankPreference": "DISTANCE",
+                "languageCode": language,
+                "locationRestriction": {
+                    "circle": {
+                        "center": {
+                            "latitude": converted.latitude,
+                            "longitude": converted.longitude,
+                        },
+                        "radius": radius_meters,
+                    }
+                },
+            },
+            headers={
+                "X-Goog-Api-Key": self._api_key,
+                "X-Goog-FieldMask": (
+                    "places.displayName,places.formattedAddress,"
+                    "places.primaryTypeDisplayName,places.location,places.types"
+                ),
+            },
+            timeout=self.timeout,
         )
 
 
@@ -921,6 +996,157 @@ def _number(value: object, default: float) -> float:
         return float(value)
     except (TypeError, ValueError):
         return default
+
+
+def _provider_execution(
+    result: GeoProviderResult,
+    operation: GeoOperation,
+    *,
+    max_places: int | None,
+) -> GeoProviderExecution:
+    candidates: tuple[GeoCandidate, ...]
+    if operation is GeoOperation.REVERSE_GEOCODE:
+        candidates = _address_candidates(result)
+    elif operation is GeoOperation.NEARBY_PLACES:
+        candidates = _place_candidates(result, max_places=max_places)
+    else:  # pragma: no cover - guarded by provider capabilities
+        raise ValueError(f"unsupported provider operation: {operation.value}")
+
+    if result.status == "failed":
+        status = GeoComponentStatus.FAILED
+    elif candidates:
+        status = GeoComponentStatus.SUCCESS
+    else:
+        status = GeoComponentStatus.NO_RESULT
+    qualifications = ()
+    if result.error_code is not None or result.error_message is not None:
+        qualifications = (
+            {
+                "code": result.error_code or "provider_error",
+                "message": result.error_message or "Provider request failed.",
+            },
+        )
+    return GeoProviderExecution(
+        GeoComponentResult(
+            operation,
+            status,
+            (),
+            result.input_coordinate,
+            candidates,
+            qualifications,
+        ),
+        GeoProviderAttempt(
+            result.provider,
+            operation,
+            status,
+            result.input_coordinate,
+            result.provider_coordinate,
+            result.request_count,
+            None,
+            result.error_code,
+            result.error_message,
+        ),
+    )
+
+
+def _provider_error_execution(
+    provider: str,
+    operation: GeoOperation,
+    input_coordinate: GeoCoordinate,
+    provider_coordinate: GeoCoordinate,
+    error: GeoLookupError,
+) -> GeoProviderExecution:
+    status = (
+        GeoComponentStatus.INDETERMINATE
+        if isinstance(error, GeoTransientError) and error.request_count
+        else GeoComponentStatus.FAILED
+    )
+    code = "transient" if isinstance(error, GeoTransientError) else "permanent"
+    message = str(error) or type(error).__name__
+    qualification = ({"code": code, "message": message},)
+    return GeoProviderExecution(
+        GeoComponentResult(
+            operation,
+            status,
+            (),
+            input_coordinate,
+            qualifications=qualification,
+        ),
+        GeoProviderAttempt(
+            provider,
+            operation,
+            status,
+            input_coordinate,
+            provider_coordinate,
+            error.request_count,
+            None,
+            code,
+            message,
+        ),
+    )
+
+
+def _address_candidates(result: GeoProviderResult) -> tuple[GeoCandidate, ...]:
+    location = result.location
+    if not isinstance(location, Mapping):
+        return ()
+    name = _text(location.get("formatted_address"))
+    if not name:
+        return ()
+    raw_components = location.get("components")
+    components = _string_mapping(raw_components)
+    return (
+        GeoCandidate(
+            GeoCandidateKind.ADDRESS,
+            name,
+            formatted_address=name,
+            coordinate=result.input_coordinate,
+            components=tuple(
+                sorted((str(key), str(value)) for key, value in components.items())
+            ),
+        ),
+    )
+
+
+def _place_candidates(
+    result: GeoProviderResult, *, max_places: int | None
+) -> tuple[GeoCandidate, ...]:
+    candidates: list[GeoCandidate] = []
+    for item in result.pois[:max_places]:
+        name = _text(item.get("name"))
+        if not name:
+            continue
+        latitude = _number(item.get("latitude"), float("nan"))
+        longitude = _number(item.get("longitude"), float("nan"))
+        coordinate = None
+        try:
+            coordinate = GeoCoordinate(
+                latitude,
+                longitude,
+                result.provider_coordinate.datum,
+            )
+        except ValueError:
+            pass
+        components = tuple(
+            (key, value)
+            for key, value in (
+                ("type", _text(item.get("type"))),
+                ("class", _text(item.get("class"))),
+            )
+            if value
+        )
+        distance = _number(item.get("distance_meters"), -1)
+        candidates.append(
+            GeoCandidate(
+                GeoCandidateKind.PLACE,
+                name,
+                formatted_address=_text(item.get("address")) or None,
+                coordinate=coordinate,
+                distance_meters=distance if distance >= 0 else None,
+                components=components,
+            )
+        )
+    return tuple(candidates)
 
 
 __all__ = [

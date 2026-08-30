@@ -11,7 +11,7 @@ import sqlite3
 from typing import Any, Iterator
 
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 class PlanStoreError(RuntimeError):
@@ -49,6 +49,7 @@ class WorkSnapshot:
     organization_preferences: dict[str, Any]
     candidate: dict[str, Any] | None
     candidate_identity: str | None
+    geo_observations: tuple[dict[str, Any], ...]
     plan_ref: str
     published_path: str | None
 
@@ -192,6 +193,55 @@ class SQLitePlanStore:
             row = self._row(connection, work_ref)
         return _snapshot(row)
 
+    def record_geo_observation(
+        self,
+        *,
+        request_id: str,
+        request_digest: str,
+        work_ref: str,
+        base_revision: str,
+        revision: str,
+        observation: dict[str, Any],
+        response: dict[str, Any],
+    ) -> dict[str, Any]:
+        with self._transaction() as connection:
+            replay = self._replay(connection, request_id, request_digest)
+            if replay is not None:
+                return replay
+            row = self._row(connection, work_ref)
+            if row["state"] != "open":
+                raise WorkClosed(work_ref)
+            reserved = connection.execute(
+                "SELECT request_id FROM plan_seal_reservations WHERE work_ref = ?",
+                (work_ref,),
+            ).fetchone()
+            if reserved is not None:
+                raise SealConflict("a seal attempt is pending recovery")
+            if row["revision"] != base_revision:
+                raise RevisionConflict(row["revision"])
+            observations = json.loads(row["geo_observations_json"])
+            if not isinstance(observations, list):
+                raise RuntimeError("Plan Geo observations are invalid")
+            observations.append(observation)
+            connection.execute(
+                """
+                UPDATE plan_works
+                SET revision = ?, geo_observations_json = ?,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE work_ref = ?
+                """,
+                (revision, _json(observations), work_ref),
+            )
+            self._record_request(
+                connection,
+                request_id,
+                request_digest,
+                "enrich_geo",
+                work_ref,
+                response,
+            )
+        return response
+
     def reserve_seal(
         self,
         *,
@@ -324,7 +374,7 @@ class SQLitePlanStore:
                     singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
                     version INTEGER NOT NULL
                 );
-                INSERT OR IGNORE INTO internal_schema(singleton, version) VALUES (1, 1);
+                INSERT OR IGNORE INTO internal_schema(singleton, version) VALUES (1, 2);
 
                 CREATE TABLE IF NOT EXISTS plan_works (
                     work_ref TEXT PRIMARY KEY,
@@ -334,6 +384,7 @@ class SQLitePlanStore:
                     organization_preferences_json TEXT NOT NULL,
                     candidate_json TEXT,
                     candidate_identity TEXT,
+                    geo_observations_json TEXT NOT NULL DEFAULT '[]',
                     plan_ref TEXT NOT NULL UNIQUE,
                     published_path TEXT,
                     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -372,6 +423,24 @@ class SQLitePlanStore:
             version = connection.execute(
                 "SELECT version FROM internal_schema WHERE singleton = 1"
             ).fetchone()[0]
+            if version == 1:
+                columns = {
+                    row[1]
+                    for row in connection.execute(
+                        "PRAGMA table_info(plan_works)"
+                    ).fetchall()
+                }
+                if "geo_observations_json" not in columns:
+                    connection.execute(
+                        """
+                        ALTER TABLE plan_works
+                        ADD COLUMN geo_observations_json TEXT NOT NULL DEFAULT '[]'
+                        """
+                    )
+                connection.execute(
+                    "UPDATE internal_schema SET version = 2 WHERE singleton = 1"
+                )
+                version = 2
             if version != SCHEMA_VERSION:
                 raise RuntimeError(f"unsupported Plan schema version: {version}")
 
@@ -447,6 +516,7 @@ def _snapshot(row: sqlite3.Row) -> WorkSnapshot:
         if row["candidate_json"] is None
         else json.loads(row["candidate_json"]),
         candidate_identity=row["candidate_identity"],
+        geo_observations=tuple(json.loads(row["geo_observations_json"])),
         plan_ref=row["plan_ref"],
         published_path=row["published_path"],
     )

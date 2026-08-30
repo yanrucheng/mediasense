@@ -10,11 +10,11 @@ import json
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from mediasense.geo import (
-    AdaptiveReverseGeocoder,
+from mediasense.capabilities.geo import (
     GeoCoordinate,
     GeoLookupResult,
     MapDatum,
+    ReverseGeocodeBatchEngine,
 )
 
 from ._work_types import (
@@ -123,7 +123,7 @@ class ReverseGeocodeProducer:
         self,
         database_path: Path,
         run_tool: PrecheckRunTool,
-        geocoder: AdaptiveReverseGeocoder | None = None,
+        geocoder: ReverseGeocodeBatchEngine | None = None,
     ) -> None:
         self.database_path = Path(database_path)
         self.run_tool = run_tool

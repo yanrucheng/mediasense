@@ -4,7 +4,7 @@ title: "MediaSense Foundation"
 type: design
 status: active
 created: 2026-08-23
-updated: 2026-08-25
+updated: 2026-08-30
 timezone: "Asia/Shanghai"
 parent: "index-design"
 depends-on: []
@@ -61,7 +61,7 @@ Exact implementations—ExifTool, FFmpeg, embedding model, index, clustering alg
 
 ### `mediasense.plan`: interactive convergence
 
-`plan` works from a static precheck result. It may use a modern multimodal model, but it must not inspect every asset by default. It progressively selects representative, boundary, outlier, and conflict evidence under explicit visual and user-attention budgets.
+`plan` starts from one static precheck result. It may use a modern multimodal model or an authorization-bound stage-neutral capability, but it must not inspect every asset or acquire new evidence by default. It progressively selects representative, boundary, outlier, and conflict evidence under explicit visual, external-effect, cost, and user-attention budgets. Plan-local observations never rewrite the bound PreCheck Result.
 
 It must keep these meanings separate:
 
@@ -78,7 +78,7 @@ The stage ends only when every in-scope asset has an explicit disposition, confl
 
 ## Evidence acquisition and downstream policy
 
-`precheck` owns evidence acquisition; `plan` owns the policy for interpreting and using that evidence. A downstream policy's current choice not to consume an observation is not, by itself, a reason to remove an independently useful upstream evidence capability.
+`precheck` owns reusable source-derived evidence acquisition and its immutable Result projection; `plan` owns the policy for interpreting and using that evidence. Plan may additionally retain a bounded observation acquired for one planning question through an authorization-bound stage-neutral capability. That observation is Plan-owned, revision-bound candidate evidence and never edits or impersonates PreCheck evidence. A downstream policy's current choice not to consume an observation is not, by itself, a reason to remove an independently useful upstream evidence capability.
 
 - `precheck` may produce local, source-derived candidate signals, including content-sensitivity observations. Such signals must retain their producer, effective profile, score or quality where available, completion or failure state, and other provenance needed to challenge or regenerate them. They are evidence, not semantic truth, user authorization, or a routing decision.
 - The exact detector, model, labels, thresholds, and implementation remain replaceable. The stage boundary preserves the evidence capability and its traceability, not one historical classifier or taxonomy.
