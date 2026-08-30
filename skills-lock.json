@@ -21,6 +21,20 @@
       "sourceType": "git",
       "skillPath": "skills/design-principles/human-oriented-cli-design/SKILL.md",
       "computedHash": "b75ed073ae9e972406a345899789709d316c514eab304b27847d05a4ff013fff"
+    },
+    "product-contract-author": {
+      "source": "git@github.com:yanrucheng/skill-garden.git",
+      "sourceUrl": "git@github.com:yanrucheng/skill-garden.git",
+      "sourceType": "git",
+      "skillPath": "skills/documentation/product-contract-author/SKILL.md",
+      "computedHash": "205f245eda2487759d1b462988fa2ef81b2e1bc0aab55c40157c5f5a651846e4"
+    },
+    "skill-writing-bible": {
+      "source": "git@github.com:yanrucheng/skill-garden.git",
+      "sourceUrl": "git@github.com:yanrucheng/skill-garden.git",
+      "sourceType": "git",
+      "skillPath": "skills/design-principles/skill-writing-bible/SKILL.md",
+      "computedHash": "e6468557c233f7961efc18cc4e65ea2205c18638a8ba94e6ac0400a7b3103532"
     }
   }
 }
