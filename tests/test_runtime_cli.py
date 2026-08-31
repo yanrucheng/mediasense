@@ -150,7 +150,7 @@ def test_packaged_resources_match_repository_authorities() -> None:
     root = Path(__file__).resolve().parents[1]
     authorities = {
         "mediasense.dataset.open": root
-        / "openspec/changes/productize-mediasense-distribution/contracts/dataset-open.tool.json",
+        / "docs/spec/spec-260831-0009-dataset-open/dataset-open.tool.json",
         "mediasense.precheck.run": root
         / "docs/spec/spec-260827-1915A-precheck-run/precheck-run.tool.json",
         "mediasense.precheck.read": root

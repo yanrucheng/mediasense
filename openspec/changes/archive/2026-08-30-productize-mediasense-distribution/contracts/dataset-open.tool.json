@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:mediasense:tool:dataset-open",
+  "name": "mediasense.dataset.open",
+  "description": "Resolve or create one exact MediaSense Dataset workspace without reading or modifying source media.",
+  "inputSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["source_root"],
+    "properties": {
+      "source_root": { "type": "string", "minLength": 1 },
+      "workspace": { "type": "string", "minLength": 1 }
+    }
+  },
+  "outputSchema": {
+    "oneOf": [
+      {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "outcome",
+          "dataset_ref",
+          "source_root",
+          "workspace",
+          "selection_tier",
+          "created",
+          "manifest_version",
+          "store_versions",
+          "configuration",
+          "warnings"
+        ],
+        "properties": {
+          "outcome": { "const": "ok" },
+          "dataset_ref": { "type": "string", "pattern": "^dataset:[^\\s]+$" },
+          "source_root": { "type": "string", "minLength": 1 },
+          "workspace": { "type": "string", "minLength": 1 },
+          "selection_tier": {
+            "enum": ["explicit", "external_volume", "local"]
+          },
+          "created": { "type": "boolean" },
+          "manifest_version": { "type": "integer", "minimum": 1 },
+          "store_versions": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["precheck", "plan", "geo", "apply"],
+            "properties": {
+              "precheck": { "type": "integer", "minimum": 1 },
+              "plan": { "type": "integer", "minimum": 1 },
+              "geo": { "type": "integer", "minimum": 1 },
+              "apply": { "type": "integer", "minimum": 1 }
+            }
+          },
+          "configuration": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["offline", "sources", "credentials"],
+            "properties": {
+              "offline": { "type": "boolean" },
+              "sources": {
+                "type": "array",
+                "items": { "type": "string", "minLength": 1 }
+              },
+              "credentials": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["amap", "google_maps"],
+                "properties": {
+                  "amap": { "enum": ["configured", "not_configured"] },
+                  "google_maps": { "enum": ["configured", "not_configured"] }
+                }
+              }
+            }
+          },
+          "warnings": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 }
+          }
+        }
+      },
+      {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["outcome", "error"],
+        "properties": {
+          "outcome": { "const": "error" },
+          "path": { "type": "string", "minLength": 1 },
+          "error": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["code", "message"],
+            "properties": {
+              "code": { "type": "string", "minLength": 1 },
+              "message": { "type": "string", "minLength": 1 }
+            }
+          }
+        }
+      }
+    ]
+  }
+}

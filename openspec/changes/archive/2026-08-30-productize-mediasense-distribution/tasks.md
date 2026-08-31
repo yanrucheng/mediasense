@@ -33,4 +33,4 @@
 - [x] 5.3 Exercise installed help, version, doctor, automatic Dataset opening, repeated opening, Tool discovery, real subprocess MCP initialize, and a non-destructive Tool call.
 - [x] 5.4 Run Ruff, all non-live tests, OpenSpec strict validation, documentation frontmatter/index/link checks, package inspection, and `git diff --check`.
 - [x] 5.5 Present the complete implementation, limitations, clean-install transcript, and migration comparison to the user; leave this change active and unarchived.
-- [ ] 5.6 Only after explicit user acceptance, replace the delegation result placeholder while preserving its frontmatter; do not commit, merge, push, publish, or close the delegation.
+- [x] 5.6 Only after explicit user acceptance, replace the delegation result placeholder while preserving its frontmatter; do not commit, merge, push, publish, or close the delegation.

@@ -4,7 +4,7 @@ title: "Specifications"
 type: index
 status: active
 created: 2026-08-26
-updated: 2026-08-30
+updated: 2026-08-31
 timezone: "Asia/Shanghai"
 parent: "index-docs"
 depends-on: []
@@ -15,6 +15,7 @@ superseded-by: ""
 
 | ID | Title | Status | Created | Summary |
 | --- | --- | --- | --- | --- |
+| [spec-260831-0009-dataset-open](spec-260831-0009-dataset-open/) | MediaSense Dataset Open Tool Contract | active | 2026-08-31 | Defines deterministic explicit, external-volume, and local Dataset workspace resolution, identity-safe reuse, and observable configuration provenance. |
 | [spec-260830-2034-geo-query](spec-260830-2034-geo-query/) | MediaSense Geo Query Tool Contract | active | 2026-08-30 | Defines strict, authorization-bound high- and lower-level geographic candidate observations, provider-independent effects, provenance, continuations, and replay safety. |
 | [spec-260829-0050-apply](spec-260829-0050-apply/) | MediaSense Apply Contract | active | 2026-08-29 | Defines direct Frozen Plan handoff, trusted Source Set expansion, complete validation, structured Receipt reads, authorization, recovery, and verification for `move_originals`. |
 | [spec-260828-2026-default-organization-profile](spec-260828-2026-default-organization-profile/) | MediaSense Default Organization Profile | active | 2026-08-28 | Defines the event-first, adaptive-depth default product policy for naming, related media, auxiliary material, unresolved media, and damaged items during Plan. |
