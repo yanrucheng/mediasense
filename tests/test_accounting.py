@@ -32,6 +32,13 @@ def _complete_run(
     return store.process_run(run_id, batch_size=2)
 
 
+def test_dataset_registration_requires_an_internal_id(tmp_path: Path) -> None:
+    store = AccountingStore(tmp_path / "working.sqlite3")
+
+    with pytest.raises(ValueError, match="non-prefixed Dataset identifier"):
+        store.register_dataset("dataset:dataset-a")
+
+
 @pytest.mark.parametrize("old_version", [11, 12, 13, 14])
 def test_supported_schema_is_upgraded_without_discarding_existing_state(
     tmp_path: Path,

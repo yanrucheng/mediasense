@@ -10,6 +10,8 @@ from pathlib import Path
 import sqlite3
 import unicodedata
 
+from mediasense.dataset_reference import dataset_ref_from_id
+
 from ._working_schema import SCHEMA, SCHEMA_VERSION
 from ._accounting_types import (
     AccountedItem,
@@ -102,21 +104,54 @@ class SQLiteAccounting:
 
     def register_dataset(self, dataset_id: str) -> None:
         now = _now()
+        # The first DatasetRuntime release accidentally stored the public
+        # reference here. Affected rows have no normal downstream records because
+        # PreCheck rejected start before creating them. Preserve any unexpected
+        # referenced row, but remove the known orphan after registering its
+        # canonical internal identity.
+        legacy_dataset_id = dataset_ref_from_id(dataset_id)
         with self.connect() as connection:
             existing = connection.execute(
-                "SELECT dataset_id FROM datasets WHERE dataset_id = ?",
+                "SELECT dataset_id, created_at, updated_at "
+                "FROM datasets WHERE dataset_id = ?",
                 (dataset_id,),
             ).fetchone()
-            if existing is not None:
-                return
-
-            connection.execute(
-                """
-                INSERT INTO datasets (dataset_id, created_at, updated_at)
-                VALUES (?, ?, ?)
-                """,
-                (dataset_id, now, now),
-            )
+            legacy = connection.execute(
+                "SELECT created_at, updated_at FROM datasets WHERE dataset_id = ?",
+                (legacy_dataset_id,),
+            ).fetchone()
+            if existing is None:
+                connection.execute(
+                    """
+                    INSERT INTO datasets (dataset_id, created_at, updated_at)
+                    VALUES (?, ?, ?)
+                    """,
+                    (
+                        dataset_id,
+                        now if legacy is None else str(legacy["created_at"]),
+                        now if legacy is None else str(legacy["updated_at"]),
+                    ),
+                )
+            if legacy is not None:
+                connection.execute(
+                    """
+                    DELETE FROM datasets
+                    WHERE dataset_id = ?
+                      AND NOT EXISTS (
+                          SELECT 1 FROM working_runs WHERE dataset_id = ?
+                      )
+                      AND NOT EXISTS (
+                          SELECT 1 FROM source_state WHERE dataset_id = ?
+                      )
+                      AND NOT EXISTS (
+                          SELECT 1 FROM source_content_proofs WHERE dataset_id = ?
+                      )
+                      AND NOT EXISTS (
+                          SELECT 1 FROM sealed_results WHERE dataset_id = ?
+                      )
+                    """,
+                    (legacy_dataset_id,) * 5,
+                )
 
     def dataset(self, dataset_id: str) -> sqlite3.Row:
         with self.connect() as connection:

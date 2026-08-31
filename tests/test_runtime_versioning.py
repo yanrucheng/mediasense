@@ -10,7 +10,7 @@ from mediasense.apply.preparation import _SCHEMA_VERSION as APPLY_SCHEMA_VERSION
 from mediasense.capabilities.geo import GeoOperationJournal
 from mediasense.capabilities.geo.journal import _SCHEMA_VERSION as GEO_SCHEMA_VERSION
 from mediasense.plan._sqlite import SCHEMA_VERSION as PLAN_SCHEMA_VERSION
-from mediasense.precheck import PrecheckExecutionConfig
+from mediasense.precheck._orchestrator import PrecheckExecutionConfig
 from mediasense.precheck._working_schema import (
     SCHEMA_VERSION as PRECHECK_SCHEMA_VERSION,
 )

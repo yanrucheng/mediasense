@@ -10,6 +10,8 @@ import sqlite3
 from typing import Iterator
 from uuid import uuid4
 
+from mediasense.dataset_reference import dataset_ref_from_id
+
 from ._working_schema import SCHEMA_VERSION
 
 
@@ -103,8 +105,7 @@ class SQLiteRunStore:
             raise RunIdempotencyConflict(request_id)
         return _record(row)
 
-    def dataset_exists(self, dataset_ref: str) -> bool:
-        dataset_id = dataset_ref.removeprefix("dataset:")
+    def dataset_exists(self, dataset_id: str) -> bool:
         with self._connect() as connection:
             row = connection.execute(
                 "SELECT 1 FROM datasets WHERE dataset_id = ?", (dataset_id,)
@@ -123,7 +124,7 @@ class SQLiteRunStore:
             ).fetchone()
             if accounting is None:
                 raise RunBindingError("accounting Run does not exist")
-            dataset_ref = f"dataset:{accounting['dataset_id']}"
+            dataset_ref = dataset_ref_from_id(accounting["dataset_id"])
             if dataset_ref != record["dataset_ref"]:
                 raise RunBindingError("accounting Run belongs to a different Dataset")
             current = record["accounting_run_id"]
@@ -187,8 +188,7 @@ class SQLiteRunStore:
                 (checkpoint, _now(), run_ref),
             )
 
-    def unfinished_accounting_run(self, dataset_ref: str) -> str | None:
-        dataset_id = dataset_ref.removeprefix("dataset:")
+    def unfinished_accounting_run(self, dataset_id: str) -> str | None:
         with self._connect() as connection:
             row = connection.execute(
                 """

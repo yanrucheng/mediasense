@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+from mediasense.dataset_reference import dataset_id_from_ref, dataset_ref_from_id
 from mediasense.precheck.source_attachment import (
     AttachmentState,
     SourceAttachmentError,
@@ -116,10 +117,12 @@ class DatasetManifest:
                 path=path,
             )
         dataset_ref = value["dataset_ref"]
-        if not isinstance(dataset_ref, str) or not dataset_ref.startswith("dataset:"):
+        try:
+            dataset_id_from_ref(dataset_ref)
+        except ValueError:
             raise DatasetOpenError(
                 "manifest_invalid", "Dataset reference is invalid.", path=path
-            )
+            ) from None
         source_value = value["source"]
         if not isinstance(source_value, Mapping):
             raise DatasetOpenError(
@@ -197,6 +200,12 @@ class DatasetManifest:
             "source": asdict(self.source),
             "stores": dict(self.stores),
         }
+
+    @property
+    def dataset_id(self) -> str:
+        """Return the internal identifier carried by the public manifest ref."""
+
+        return dataset_id_from_ref(self.dataset_ref)
 
 
 @dataclass(frozen=True, slots=True)
@@ -446,7 +455,14 @@ class DatasetResolver:
                 )
             for store in _STORES:
                 (staging / store).mkdir(exist_ok=True)
-            dataset_ref = f"dataset:{self._id_factory()}"
+            try:
+                dataset_ref = dataset_ref_from_id(self._id_factory())
+            except ValueError as error:
+                raise DatasetOpenError(
+                    "workspace_unsafe",
+                    f"The generated Dataset identifier is invalid: {error}",
+                    path=workspace,
+                ) from error
             manifest = DatasetManifest(
                 format=_FORMAT,
                 format_version=DATASET_MANIFEST_VERSION,

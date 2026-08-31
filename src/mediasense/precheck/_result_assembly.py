@@ -7,6 +7,8 @@ from pathlib import Path
 import sqlite3
 from typing import Iterable, Mapping
 
+from mediasense.dataset_reference import dataset_ref_from_id
+
 from ._accounting_types import WorkingRunStatus
 from ._artifact_types import ArtifactIntegrity, ArtifactRecord
 from ._result_evidence_projection import (
@@ -636,7 +638,7 @@ def build_minimal_result(
     return ResultDraft(
         run_id=run_id,
         dataset_id=dataset_id,
-        dataset_ref=f"dataset:{dataset_id}",
+        dataset_ref=dataset_ref_from_id(dataset_id),
         dataset_name=dataset_name,
         dataset_context=tuple(dataset_context),
         coverage=coverage,

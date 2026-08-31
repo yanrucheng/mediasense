@@ -144,10 +144,30 @@ async def _mcp_scenario(
         )
         if opened.is_error or opened.structured_content is None:
             raise AssertionError("installed MCP Dataset open failed")
+        dataset_ref = opened.structured_content["dataset_ref"]
+        started = await session.call_tool(
+            "mediasense.precheck.run",
+            {
+                "dataset_ref": dataset_ref,
+                "request": {
+                    "action": "start",
+                    "dataset_ref": dataset_ref,
+                    "request_id": "request:installed-first-use",
+                },
+            },
+        )
+        if started.is_error or started.structured_content is None:
+            raise AssertionError("installed MCP PreCheck start failed")
+        if started.structured_content.get("outcome") != "ok" or not str(
+            started.structured_content.get("run_ref", "")
+        ).startswith("precheck-run:"):
+            raise AssertionError(
+                f"installed MCP PreCheck start was not accepted: {started.structured_content}"
+            )
         status = await session.call_tool(
             "mediasense.precheck.run",
             {
-                "dataset_ref": opened.structured_content["dataset_ref"],
+                "dataset_ref": dataset_ref,
                 "request": {
                     "action": "status",
                     "run_ref": "precheck-run:not-found",

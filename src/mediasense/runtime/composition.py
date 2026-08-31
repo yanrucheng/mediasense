@@ -89,7 +89,8 @@ class DatasetRuntime:
         self.config = config
         workspace = opened.workspace
         precheck_database = workspace / "precheck" / "work.sqlite3"
-        AccountingStore(precheck_database).register_dataset(opened.manifest.dataset_ref)
+        self.dataset_id = opened.manifest.dataset_id
+        AccountingStore(precheck_database).register_dataset(self.dataset_id)
         self.precheck_run = PrecheckRunTool(precheck_database)
         self.precheck_read = PrecheckReadTool(precheck_database)
         self.geo_query = _geo_tool(workspace / "geo", config)
@@ -168,7 +169,7 @@ class DatasetRuntime:
                 raise HostRequestError("rebind_reason must be a string")
             try:
                 AccountingStore(self.precheck_run.database_path).start_or_resume_run(
-                    self.opened.manifest.dataset_ref,
+                    self.dataset_id,
                     self.opened.source_root,
                     rebind_reason=rebind_reason,
                 )

@@ -61,6 +61,7 @@ def test_external_dataset_is_created_on_volume_and_reopened(tmp_path: Path) -> N
     assert created.tier is WorkspaceTier.EXTERNAL_VOLUME
     assert created.workspace.parent == volume / ".mediasense" / "datasets"
     assert created.manifest.dataset_ref == "dataset:portable"
+    assert created.manifest.dataset_id == "portable"
     assert reopened.manifest.dataset_ref == created.manifest.dataset_ref
     assert reopened.workspace == created.workspace
     assert created.created is True
@@ -291,8 +292,8 @@ def test_portable_workspace_preserves_precheck_reuse_after_mount_move(
     opened = resolver.open(source)
     database = opened.workspace / "precheck" / "work.sqlite3"
     store = AccountingStore(database)
-    store.register_dataset(opened.manifest.dataset_ref)
-    first_run = store.start_or_resume_run(opened.manifest.dataset_ref, source)
+    store.register_dataset(opened.manifest.dataset_id)
+    first_run = store.start_or_resume_run(opened.manifest.dataset_id, source)
     store.process_run(first_run)
     first_attachment = store.get_source_attachment(first_run)
 
@@ -306,7 +307,7 @@ def test_portable_workspace_preserves_precheck_reuse_after_mount_move(
     ).open(moved_source)
     moved_store = AccountingStore(reopened.workspace / "precheck" / "work.sqlite3")
     second_run = moved_store.start_or_resume_run(
-        reopened.manifest.dataset_ref, moved_source
+        reopened.manifest.dataset_id, moved_source
     )
     second_attachment = moved_store.get_source_attachment(second_run)
 

@@ -7,6 +7,8 @@ import hashlib
 from pathlib import Path
 import sqlite3
 
+from mediasense.dataset_reference import dataset_id_from_ref
+
 from ._run_sqlite import (
     RunDecisionError,
     RunExecutionConflict,
@@ -223,7 +225,7 @@ class PrecheckRunTool:
         accounting_run_id = record["accounting_run_id"]
         if accounting_run_id is None:
             accounting_run_id = self._store.unfinished_accounting_run(
-                str(record["dataset_ref"])
+                dataset_id_from_ref(record["dataset_ref"])
             )
             if accounting_run_id is None:
                 return self._status_record(record)
@@ -262,12 +264,12 @@ class PrecheckRunTool:
                 ),
             )
 
-    def _prepare_execution(self, record: Mapping[str, object]) -> None:
+    def _prepare_execution(
+        self, record: Mapping[str, object], *, dataset_id: str
+    ) -> None:
         """Bind and configure a new Run without starting long-running work."""
 
-        accounting_run_id = self._store.unfinished_accounting_run(
-            str(record["dataset_ref"])
-        )
+        accounting_run_id = self._store.unfinished_accounting_run(dataset_id)
         if accounting_run_id is None:
             return
         run_ref = str(record["run_ref"])
@@ -369,7 +371,8 @@ class PrecheckRunTool:
         prior_result_ref = request.get("prior_result_ref")
         if prior_result_ref is None:
             dataset_ref = str(request["dataset_ref"])
-            if not self._store.dataset_exists(dataset_ref):
+            dataset_id = dataset_id_from_ref(dataset_ref)
+            if not self._store.dataset_exists(dataset_id):
                 return _error("start", "dataset_not_found", "Dataset does not exist")
         else:
             result_ref = str(prior_result_ref)
@@ -383,7 +386,8 @@ class PrecheckRunTool:
                 return _error("start", code, verified)
             result_view, _package = verified
             dataset_ref = str(result_view["dataset_ref"])
-            if not self._store.dataset_exists(dataset_ref):
+            dataset_id = dataset_id_from_ref(dataset_ref)
+            if not self._store.dataset_exists(dataset_id):
                 return _error(
                     "start",
                     "dataset_not_found",
@@ -403,7 +407,7 @@ class PrecheckRunTool:
                 "idempotency_conflict",
                 "request_id was already used with different start inputs",
             )
-        self._prepare_execution(record)
+        self._prepare_execution(record, dataset_id=dataset_id)
         return _start_response(record)
 
     def _status(self, run_ref: str) -> dict[str, object]:
@@ -533,8 +537,10 @@ def _validate_request(action: str, request: dict[str, object]) -> None:
         if len(upstream) != 1:
             raise ValueError("start requires exactly one upstream reference")
         field = upstream[0]
-        prefix = "dataset:" if field == "dataset_ref" else "precheck-result:"
-        _require_ref(request[field], prefix, field)
+        if field == "dataset_ref":
+            dataset_id_from_ref(request[field])
+        else:
+            _require_ref(request[field], "precheck-result:", field)
         return
     _require_ref(request.get("run_ref"), "precheck-run:", "run_ref")
     if action == "resume" and "decision" in request:

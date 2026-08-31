@@ -69,3 +69,49 @@ def test_stdio_mcp_handshake_discovery_and_non_destructive_call(
             assert status.structured_content["error"]["code"] == "run_not_found"
 
     anyio.run(scenario)
+
+
+def test_stdio_mcp_opened_dataset_can_start_precheck(tmp_path: Path) -> None:
+    source = tmp_path / "source"
+    source.mkdir()
+    workspace = tmp_path / "workspace"
+
+    async def scenario() -> None:
+        parameters = StdioServerParameters(
+            command=sys.executable,
+            args=["-m", "mediasense", "mcp"],
+            cwd=str(Path(__file__).resolve().parents[1]),
+        )
+        async with (
+            stdio_client(parameters) as (read_stream, write_stream),
+            ClientSession(read_stream, write_stream) as session,
+        ):
+            await session.initialize()
+            opened = await session.call_tool(
+                "mediasense.dataset.open",
+                {"source_root": str(source), "workspace": str(workspace)},
+            )
+            assert opened.is_error is False
+            assert opened.structured_content is not None
+            dataset_ref = opened.structured_content["dataset_ref"]
+
+            started = await session.call_tool(
+                "mediasense.precheck.run",
+                {
+                    "dataset_ref": dataset_ref,
+                    "request": {
+                        "action": "start",
+                        "dataset_ref": dataset_ref,
+                        "request_id": "request:stdio-first-use",
+                    },
+                },
+            )
+
+            assert started.is_error is False
+            assert started.structured_content is not None
+            assert started.structured_content["outcome"] == "ok"
+            assert str(started.structured_content["run_ref"]).startswith(
+                "precheck-run:"
+            )
+
+    anyio.run(scenario)
