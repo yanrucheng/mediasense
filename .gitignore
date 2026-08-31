@@ -22,6 +22,18 @@ Desktop.ini
 !.env.*.example
 /.local/
 
+# Local agent harnesses
+/.agents/
+/.claude/
+/.codex/
+
+# Python environment, tool cache, and build artifacts
+/.venv/
+/.ruff_cache/
+/build/
+/dist/
+*.egg-info/
+
 # Repository-local scratch and process state
 /.cache/
 /.tmp/
