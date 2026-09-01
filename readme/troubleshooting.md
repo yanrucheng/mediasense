@@ -54,9 +54,33 @@ Then run `mediasense mcp` from a terminal. It intentionally waits for MCP messag
 and writes protocol frames only to stdout. Stop it with Ctrl-C after confirming it
 starts without an immediate error.
 
-For Codex, inspect its own MCP registration rather than asking MediaSense to edit
-it. Re-register the server with the installed executable if the command path has
-changed.
+For Codex, inspect the selected Honeycomb's exact `.codex/config.toml`. The
+MediaSense registration must be:
+
+```toml
+[mcp_servers.mediasense]
+command = "mediasense"
+args = ["mcp"]
+```
+
+Check these cases distinctly:
+
+- if `mediasense` is not in the Agent process's `PATH`, fix or reinstall the CLI
+  only after identifying the trusted source and destination;
+- if the project is untrusted, Codex skips its `.codex/` layer, so trust the
+  intended project through the client's normal trust flow before retrying;
+- if the same table exists with different values, treat it as a conflict and do
+  not overwrite it;
+- if the table was added during the current session, start a new Agent session
+  from that Honeycomb;
+- in the new session, verify all seven MediaSense Tools through discovery rather
+  than treating file presence as success.
+
+From a directory with no applicable local MediaSense configuration and no
+explicit user-wide advanced setup, Codex should not list MediaSense. The stdio
+server exits when the client connection closes; if a MediaSense MCP process
+persists, capture its command and parent process because that is not the intended
+lifecycle.
 
 ## Optional media capability is unavailable
 

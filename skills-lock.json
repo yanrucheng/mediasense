@@ -29,6 +29,13 @@
       "skillPath": "skills/documentation/product-contract-author/SKILL.md",
       "computedHash": "205f245eda2487759d1b462988fa2ef81b2e1bc0aab55c40157c5f5a651846e4"
     },
+    "skill-blind-evaluation": {
+      "source": "git@github.com:yanrucheng/skill-garden.git",
+      "sourceUrl": "git@github.com:yanrucheng/skill-garden.git",
+      "sourceType": "git",
+      "skillPath": "skills/eval/skill-blind-evaluation/SKILL.md",
+      "computedHash": "6cd0c9eaab58886f35231bcbeca45575c95388326aa0d4f2ca36c6185fd28dd1"
+    },
     "skill-writing-bible": {
       "source": "git@github.com:yanrucheng/skill-garden.git",
       "sourceUrl": "git@github.com:yanrucheng/skill-garden.git",

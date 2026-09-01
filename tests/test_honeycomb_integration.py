@@ -1,0 +1,145 @@
+from __future__ import annotations
+
+from pathlib import Path
+import re
+import tomllib
+
+import pytest
+
+from mediasense.cli import build_parser, run
+
+
+ROOT = Path(__file__).parents[1]
+TOOL_NAMES = {
+    "mediasense.dataset.open",
+    "mediasense.precheck.run",
+    "mediasense.precheck.read",
+    "mediasense.plan.work",
+    "mediasense.geo.query",
+    "mediasense.apply.run",
+    "mediasense.apply.read",
+}
+
+
+def test_project_codex_config_registers_only_cli_bundled_mcp() -> None:
+    config = tomllib.loads((ROOT / ".codex" / "config.toml").read_text())
+
+    assert config == {
+        "mcp_servers": {"mediasense": {"command": "mediasense", "args": ["mcp"]}}
+    }
+
+
+def test_skills_install_requires_and_uses_only_explicit_target(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys
+) -> None:
+    with pytest.raises(SystemExit) as missing:
+        build_parser().parse_args(["skills", "install"])
+    assert missing.value.code == 2
+
+    home = tmp_path / "home"
+    dataset_workspace = tmp_path / "dataset-workspace"
+    honeycomb = tmp_path / "chosen-honeycomb"
+    home.mkdir()
+    dataset_workspace.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("MEDIASENSE_DATA_HOME", str(dataset_workspace))
+    target = honeycomb / ".agents" / "skills"
+
+    assert run(["skills", "install", "--target", str(target), "--json"]) == 0
+    capsys.readouterr()
+    assert {path.name for path in target.iterdir()} == {
+        "mediasense",
+        "mediasense-precheck",
+        "mediasense-plan",
+        "mediasense-apply",
+    }
+    assert not (home / ".codex").exists()
+    assert not (home / ".agents").exists()
+    assert list(dataset_workspace.iterdir()) == []
+
+
+def test_entry_skill_owns_bootstrap_and_stage_local_prerequisites() -> None:
+    skill_root = ROOT / ".agents" / "skills"
+    entry = (skill_root / "mediasense" / "SKILL.md").read_text()
+    precheck = (skill_root / "mediasense-precheck" / "SKILL.md").read_text()
+    plan = (skill_root / "mediasense-plan" / "SKILL.md").read_text()
+    apply = (skill_root / "mediasense-apply" / "SKILL.md").read_text()
+
+    assert "Establish readiness" in entry
+    assert "<honeycomb>/.codex/config.toml" in entry
+    assert "trusted project" in entry
+    assert "MediaSense `0.3.x` CLI" in entry
+    assert "MediaSense `0.2.x` CLI" not in entry
+    assert "current Agent session" in entry
+    assert "cannot load it dynamically" in entry
+    assert TOOL_NAMES <= set(re.findall(r"`(mediasense\.[a-z.]+)`", entry))
+    assert "Route to the owning stage" in entry
+    for stage_name in (
+        "mediasense-precheck",
+        "mediasense-plan",
+        "mediasense-apply",
+    ):
+        assert stage_name in entry
+    assert "uv tool install" not in precheck
+    for stage in (precheck, plan, apply):
+        assert "mediasense` product entry Skill's local" in stage
+        assert "bootstrap" in stage
+        assert "uv tool install" not in stage
+
+
+def test_active_guidance_has_no_obsolete_default_commands() -> None:
+    roots = [
+        ROOT / "README.md",
+        ROOT / "CHANGELOG.md",
+        ROOT / "readme",
+        ROOT / ".agents" / "skills" / "mediasense",
+        ROOT / ".agents" / "skills" / "mediasense-precheck",
+        ROOT / ".agents" / "skills" / "mediasense-plan",
+        ROOT / ".agents" / "skills" / "mediasense-apply",
+        ROOT / "src" / "mediasense" / "_resources" / "skills",
+        ROOT / "docs" / "design",
+        ROOT / "docs" / "spec",
+        ROOT / "docs" / "eval",
+        ROOT / "docs" / "delegation",
+        ROOT / "openspec" / "specs",
+        ROOT / "openspec" / "changes",
+    ]
+    files: list[Path] = []
+    for root in roots:
+        files.extend([root] if root.is_file() else root.rglob("*.md"))
+    forbidden = {
+        "user-level Codex MCP command": re.compile(
+            r"(?m)^\s*codex mcp add mediasense -- mediasense mcp\s*$"
+        ),
+        "user-level Codex Skill target": re.compile(
+            r"(?m)^\s*mediasense skills install --target ~/\.codex/skills\s*$"
+        ),
+    }
+
+    findings = []
+    for path in files:
+        text = path.read_text(encoding="utf-8")
+        for label, pattern in forbidden.items():
+            historical = path == (
+                ROOT
+                / "docs"
+                / "delegation"
+                / "td-260830-2227-mediasense-distribution"
+                / "01-result-mediasense.md"
+            )
+            if pattern.search(text) and not historical:
+                findings.append(f"{path.relative_to(ROOT)}: {label}")
+    assert findings == []
+
+    historical_text = (
+        ROOT
+        / "docs"
+        / "delegation"
+        / "td-260830-2227-mediasense-distribution"
+        / "01-result-mediasense.md"
+    ).read_text(encoding="utf-8")
+    warning = historical_text.index("Historical Agent connection (superseded)")
+    assert warning < historical_text.index("codex mcp add mediasense -- mediasense mcp")
+    assert warning < historical_text.index(
+        "mediasense skills install --target ~/.codex/skills"
+    )

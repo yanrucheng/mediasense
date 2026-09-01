@@ -1,11 +1,23 @@
 # Installation and first use
 
-MediaSense 0.2 is a pre-release local product for Python 3.11 or newer. macOS is
+MediaSense 0.3 is a pre-release local product for Python 3.11 or newer. macOS is
 the first product-certified platform. Linux can run the Python package, but its
 removable-volume and Apply filesystem behavior is not yet certified. Windows is
 not currently supported.
 
 ## Install
+
+For Agent-guided first use, first install the `mediasense` product entry Skill
+through the Agent client's standard local-Skill mechanism into the Honeycomb you
+selected. For Codex, that location is `<honeycomb>/.agents/skills/`. The loaded
+entry Skill can then inspect the machine and explain the exact CLI install,
+complete release-matched Skill installation, and project MCP configuration before
+requesting permission to change them. A Skill cannot load itself, so this initial
+entry-Skill acquisition is the one prerequisite outside the MediaSense workflow.
+
+To install the CLI directly, use a trusted checkout or release artifact. This is
+a machine-level executable installation, independent of any Honeycomb and any
+Dataset workspace.
 
 From a trusted MediaSense checkout, install the package and its locked Python
 dependencies with:
@@ -16,13 +28,14 @@ dependencies with:
 
 The script is intentionally small and reviewable. It invokes `uv tool install`
 for the current checkout and does not bootstrap `uv`, system packages, optional
-models, or Agent configuration. Use `--offline` to prohibit dependency downloads
-or `--force` to explicitly replace an existing MediaSense tool environment.
+models, Agent Skills, user-level configuration, or project-level configuration.
+Use `--offline` to prohibit dependency downloads or `--force` to explicitly
+replace an existing MediaSense tool environment.
 
 For a built release artifact, install the exact wheel instead:
 
 ```bash
-uv tool install ./dist/mediasense-0.2.0-py3-none-any.whl
+uv tool install ./dist/mediasense-0.3.0-py3-none-any.whl
 ```
 
 `uv` may download declared Python dependencies. MediaSense does not install
@@ -42,6 +55,10 @@ mediasense doctor
 needed for complete metadata extraction. FFmpeg and ffprobe are needed for video
 inspection and frame extraction. Their absence does not make installation itself
 invalid.
+
+Installing a CLI in `PATH` does not make MediaSense available to every Agent. A
+specific Honeycomb must separately contain its local Skills and MCP registration;
+see [Agent integration](agent-integration.md).
 
 ## Open a Dataset
 
@@ -71,7 +88,8 @@ Every successful open reports the exact source, stable `dataset_ref`, workspace,
 selection tier, loaded configuration files, and offline policy. Dataset databases,
 derived Artifacts, Results, Plans, Apply journals, and Receipts remain together in
 that workspace. Credentials, Agent-client settings, and shared model downloads do
-not travel with the Dataset.
+not travel with the Dataset. Neither a source path nor a Dataset workspace selects
+or implies a Honeycomb directory.
 
 Inspect an existing workspace without opening stage stores:
 
@@ -122,6 +140,15 @@ trusted channel used to install it. MediaSense checks manifest and component-sto
 versions before ordinary use and refuses newer or unsupported state without
 rewriting it.
 
+The Honeycomb-local integration is a breaking `0.3.0` change. Replace an installed
+`0.2.x` tool environment with the exact trusted `0.3.0` artifact; do not keep both
+under the same `mediasense` command or infer compatibility from seven-Tool
+discovery alone:
+
+```bash
+uv tool install --force ./dist/mediasense-0.3.0-py3-none-any.whl
+```
+
 Application versions follow SemVer during `0.y.z`: minor releases may contain
 documented breaking CLI, Host, manifest, or store changes; patch releases are
 compatible fixes. A changed application version alone never invalidates all
@@ -131,7 +158,7 @@ The initial supported combination is:
 
 | Surface | Supported value |
 | --- | --- |
-| Application | `0.2.x` |
+| Application | `0.3.x` |
 | Dataset manifest | `1` |
 | PreCheck store | `15` |
 | Plan store | `2` |

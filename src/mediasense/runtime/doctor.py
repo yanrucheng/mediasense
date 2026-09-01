@@ -65,7 +65,10 @@ def diagnose() -> dict[str, object]:
             Diagnostic(
                 "resources",
                 "ok",
-                f"{len(CONTRACT_FILES)} Tool contracts and 3 Skills are available.",
+                (
+                    f"{len(CONTRACT_FILES)} Tool contracts and "
+                    f"{len(skill_roots())} Skills are available."
+                ),
                 True,
             )
         )

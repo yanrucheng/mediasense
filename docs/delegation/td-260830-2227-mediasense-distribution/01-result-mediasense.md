@@ -32,6 +32,33 @@ claimed first-use path. The archived OpenSpec record remains historical evidence
 not current acceptance evidence. Overall acceptance and delegation closure remain
 pending explicit user confirmation after this correction.
 
+## Local Honeycomb follow-up — not yet user-accepted
+
+The installation scope recorded below was also found to be too broad. The current
+authority is the archived OpenSpec change
+`2026-08-31-adopt-local-honeycomb-integration` together with
+`/Users/chengyanru/repos/personal/mediasense/readme/agent-integration.md`:
+
+- the `mediasense` CLI may be installed machine-wide;
+- Skills belong by default under the Human-selected Honeycomb's
+  `.agents/skills/` directory;
+- the Codex MCP registration belongs in that Honeycomb's
+  `.codex/config.toml` and starts `mediasense mcp` for a session; and
+- the Dataset workspace is independent from all three.
+
+The old user-level commands retained later in this result are historical evidence
+only and must not be followed as current setup instructions. This follow-up does
+not reinstate overall product acceptance, close the delegation, or certify any
+non-Codex client. A fresh project-in/project-out Codex comparison and renewed Human
+acceptance are still required.
+
+The review-blocker correction now assigns the compatible release identity
+`0.3.0`. The prior global `0.2.0` uv tool was replaced by the exact locally built
+`0.3.0` wheel, and an absolute-path probe outside repository command resolution
+completed seven-Tool discovery and
+`mediasense.dataset.open → mediasense.precheck.run start`. This is corrective
+evidence, not renewed Human acceptance; the delegation remains active.
+
 ## User experience delivered
 
 ### Install and verify
@@ -96,7 +123,11 @@ The permanent Tool authority is:
 
 `/Users/chengyanru/repos/personal/mediasense/docs/spec/spec-260831-0009-dataset-open/index.md`
 
-### Connect an Agent through standard MCP
+### Historical Agent connection (superseded)
+
+The following commands record the 2026-08-30 installation approach. They were
+superseded on 2026-08-31 because both commands create user-wide discovery rather
+than the required Honeycomb-local scope. Do not use them as current guidance.
 
 MediaSense starts a local stdio MCP server on demand:
 
@@ -117,7 +148,8 @@ identical installation as idempotent. The complete integration guide is:
 
 `/Users/chengyanru/repos/personal/mediasense/readme/agent-integration.md`
 
-The intended first conversation can be as simple as:
+Under the replacement local setup, the intended first conversation can still be
+as simple as:
 
 ```text
 Prepare /Volumes/PhotoDisk/Photos with MediaSense. Keep the source read-only and
@@ -137,7 +169,8 @@ stage boundaries.
   authoritative version source.
 - The control surface includes help, version, Dataset open/inspect, doctor, Tool
   list/show/call, Skill path/install, and MCP startup.
-- Wheel and sdist resources include the public contracts and all three Skills;
+- Wheel and sdist resources include the public contracts, one product entry Skill,
+  and all three stage Skills;
   parity tests compare them byte-for-byte with repository authorities.
 - Installation, first use, Agent connection, upgrade, rollback, uninstall,
   cleanup, and troubleshooting are documented under

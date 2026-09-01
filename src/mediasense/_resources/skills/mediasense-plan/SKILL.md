@@ -7,6 +7,15 @@ description: "Turns one exact MediaSense PreCheck Result into a complete, previe
 
 Produce an organization decision the Human can understand and correct before any filesystem change. Preserve the exact PreCheck Result as factual authority, the Working State as mutable draft authority, and the Frozen Plan as the confirmed cross-stage authority.
 
+## Tool Host prerequisite
+
+Proceed only when the current Honeycomb session exposes a compatible MediaSense
+`0.3.x` Tool Host and `mediasense.plan.work` is discoverable. A CLI found in
+`PATH` or an MCP table present on disk is not sufficient. If the Host is absent or
+incompatible, stop Plan work and use the `mediasense` product entry Skill's local
+Honeycomb bootstrap; do not duplicate setup, edit user-level Agent configuration,
+or claim the current session reloaded a newly written project configuration.
+
 ## Boundaries
 
 - Read source facts and prepared Evidence only through `mediasense.precheck.read`; never inspect PreCheck databases or caches.

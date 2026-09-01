@@ -82,12 +82,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
     path_parser.add_argument("--json", action="store_true")
     install_parser = skill_commands.add_parser(
-        "install", help="Install Skills without overwriting an existing target."
+        "install",
+        help="Install Skills only under an explicit target, without overwriting.",
     )
     install_parser.add_argument("--target", required=True)
     install_parser.add_argument("--json", action="store_true")
 
-    subcommands.add_parser("mcp", help="Run the local MCP server over stdio.")
+    subcommands.add_parser(
+        "mcp", help="Run the session-scoped local MCP server over stdio."
+    )
     return parser
 
 

@@ -81,3 +81,16 @@ The completed Plan capability SHALL compare relevant behavior with AI Album usin
 #### Scenario: Plan behavior differs from AI Album
 - **WHEN** an evaluated grouping, naming, evidence, or interaction behavior differs from the legacy output
 - **THEN** the result records the applicable migration class and evidence rather than treating difference alone as regression
+
+### Requirement: Plan requires the current Honeycomb Tool Host
+
+The Plan Skill SHALL require a compatible MediaSense Tool Host already loaded in
+the current Honeycomb session. It SHALL route a missing or incompatible Host to
+the `mediasense` product entry Skill rather than duplicating installation
+instructions, editing user-level configuration, or treating CLI presence as Tool
+discovery.
+
+#### Scenario: Plan Tool is unavailable
+
+- **WHEN** `mediasense.plan.work` is not discoverable in the current session
+- **THEN** the Agent stops Plan work, explains the local integration prerequisite, and routes setup through the `mediasense` Skill before a new session retries discovery

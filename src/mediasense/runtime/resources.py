@@ -56,7 +56,12 @@ def skill_roots() -> tuple[Path, ...]:
     root = resource_root() / "skills"
     paths = tuple(
         root / name
-        for name in ("mediasense-precheck", "mediasense-plan", "mediasense-apply")
+        for name in (
+            "mediasense",
+            "mediasense-precheck",
+            "mediasense-plan",
+            "mediasense-apply",
+        )
     )
     missing = tuple(path for path in paths if not (path / "SKILL.md").is_file())
     if missing:

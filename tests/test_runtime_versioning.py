@@ -19,7 +19,7 @@ from mediasense.runtime.versioning import application_version
 
 
 def test_package_version_is_runtime_metadata() -> None:
-    assert mediasense.__version__ == application_version() == "0.2.0"
+    assert mediasense.__version__ == application_version() == "0.3.0"
 
 
 def test_application_version_is_not_a_precheck_validity_input() -> None:

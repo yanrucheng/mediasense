@@ -4,7 +4,7 @@ title: "MediaSense Foundation"
 type: design
 status: active
 created: 2026-08-23
-updated: 2026-08-30
+updated: 2026-08-31
 timezone: "Asia/Shanghai"
 parent: "index-design"
 depends-on: []
@@ -34,7 +34,10 @@ large source collection
   -> verifiable receipt
 ```
 
-This relation generates three product stages and three user-facing Skills. The stages are not required to map one-to-one to internal Tool calls.
+This relation generates three product stages and three stage Skills. One separate
+`mediasense` product entry Skill owns installation guidance, readiness verification,
+and routing without becoming a fourth stage or duplicating stage methods. The
+stages are not required to map one-to-one to internal Tool calls.
 
 ## The three stages
 
@@ -126,6 +129,23 @@ These are conceptual roles, not approved schemas. Their exact filenames, storage
 
 A substantially stronger future Agent must be able to use better reasoning and visual understanding without replacing the stage contracts or dismantling local indexing and safety enforcement.
 
+## Local Agent integration boundary
+
+MediaSense uses ordinary client-local integration rather than owning an Agent
+runtime. The machine may have one globally available `mediasense` CLI; the same
+package supplies the session-scoped `mediasense mcp` stdio entry point. A
+Human-selected Honeycomb owns its `.agents/skills/` copies and client connection
+configuration. The independent Dataset workspace owns Dataset state and derived
+artifacts. No one path is inferred from another.
+
+MCP transports structured discovery and calls but does not own business semantics
+or state. The CLI supplies diagnostics and entry points. The `mediasense` Skill
+owns product setup guidance and stage routing; the three stage Skills guide their
+own Agent interaction. The seven MediaSense Tools own their bounded business
+operations and observable outcomes. A client loads project configuration only
+under its own trust policy, and configuration presence is not proof that an
+already-running session has discovered the Tools.
+
 ## Development method
 
 Each stage follows the same contract-first sequence:
@@ -158,7 +178,8 @@ The following remain deliberately open:
 - Programming language, Agent framework, database, vector index, and model provider.
 - Exact clustering and representative-selection algorithm.
 - Mind-map or other planning UI technology.
-- Packaging and distribution of the three Skills.
+- Client-specific Skill acquisition beyond repository-local discovery and the
+  first certified Codex integration.
 - Cross-filesystem transfer support beyond the safety boundary described above.
 
 These questions should be settled only when a reviewed handoff example, measured constraint, or implementation experiment can discriminate between alternatives.

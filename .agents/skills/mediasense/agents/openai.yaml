@@ -1,0 +1,4 @@
+interface:
+  display_name: "MediaSense"
+  short_description: "Set up MediaSense and enter the correct workflow stage"
+  default_prompt: "Use $mediasense to set up MediaSense or continue my media-organization workflow."

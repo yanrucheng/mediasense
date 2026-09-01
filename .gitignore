@@ -23,7 +23,11 @@ Desktop.ini
 /.local/
 
 # Local agent harnesses
-/.agents/
+/.agents/*
+!/.agents/skills/
+/.agents/skills/*
+!/.agents/skills/mediasense/
+!/.agents/skills/mediasense/**
 /.claude/
 /.codex/
 

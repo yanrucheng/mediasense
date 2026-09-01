@@ -4,7 +4,7 @@ title: "MediaSense Installation, Tool Hosting, and Versioning"
 type: delegation
 status: active
 created: 2026-08-30
-updated: 2026-08-30
+updated: 2026-08-31
 timezone: "Asia/Shanghai"
 parent: "index-delegation"
 depends-on:
@@ -68,3 +68,5 @@ Turn the completed MediaSense stage engines, public Tool contracts, and Agent Sk
 - 2026-08-30 22:31 Asia/Shanghai — A first transport attempt was rejected because shell interpretation altered the prompt before submission; its temporary workspace was stopped and closed rather than treated as a valid handoff.
 - 2026-08-30 22:32 Asia/Shanghai — Created non-focusing workspace `D811C805-1A60-4412-887D-021BC0BF5EC0` with terminal surface `CBFDDBF0-213B-4686-9A03-05D88D57FF06` in the invoking window; direct entry: `cmux://workspace/D811C805-1A60-4412-887D-021BC0BF5EC0/surface/CBFDDBF0-213B-4686-9A03-05D88D57FF06`.
 - 2026-08-30 22:32 Asia/Shanghai — Verified the MediaSense cwd, ordinary interactive Codex UI, unchanged original focus, complete initial task delivery, and the recipient's read-only opening before product discussion.
+- 2026-08-31 12:37 Asia/Shanghai — A local Honeycomb follow-up found that the recorded user-level Skill and MCP examples had the wrong scope. `2026-08-31-adopt-local-honeycomb-integration` now records the replacement model; revalidation and explicit user acceptance remain pending, so this delegation stays active.
+- 2026-08-31 14:59 Asia/Shanghai — Corrected the three review blockers: released and installed `0.3.0`, proved the exact global executable can complete Dataset Open → PreCheck Start, and archived the Honeycomb OpenSpec change through one successful delta-to-main-spec synchronization. This is new evidence for review, not delegation closure.

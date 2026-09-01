@@ -36,13 +36,17 @@ def main() -> int:
         root = Path(temporary)
         tool_root = root / "tools"
         bin_root = root / "bin"
+        home = root / "home"
+        honeycomb = root / "honeycomb"
         source = root / "source"
+        home.mkdir()
         source.mkdir()
         environment = os.environ.copy()
         environment.update(
             {
                 "UV_TOOL_DIR": str(tool_root),
                 "UV_TOOL_BIN_DIR": str(bin_root),
+                "HOME": str(home),
                 "MEDIASENSE_DATA_HOME": str(root / "data"),
                 "MEDIASENSE_CONFIG_HOME": str(root / "config"),
             }
@@ -65,6 +69,7 @@ def main() -> int:
         )
         if expected_version not in version:
             raise AssertionError(f"unexpected installed version: {version}")
+        _assert_no_agent_configuration(home)
         doctor = _json_run(
             [str(executable), "doctor", "--json"],
             environment=environment,
@@ -91,7 +96,7 @@ def main() -> int:
         )
         if first["dataset_ref"] != second["dataset_ref"] or second["created"]:
             raise AssertionError("installed Dataset open is not idempotent")
-        skills_target = root / "skills"
+        skills_target = honeycomb / ".agents" / "skills"
         _json_run(
             [
                 str(executable),
@@ -104,6 +109,21 @@ def main() -> int:
             environment=environment,
             cwd=root,
         )
+        if not all(
+            (skills_target / name / "SKILL.md").is_file()
+            for name in (
+                "mediasense",
+                "mediasense-precheck",
+                "mediasense-plan",
+                "mediasense-apply",
+            )
+        ):
+            raise AssertionError("Skills were not installed under the explicit target")
+        _assert_no_agent_configuration(home)
+        if (Path(first["workspace"]) / ".agents").exists() or (
+            Path(first["workspace"]) / ".codex"
+        ).exists():
+            raise AssertionError("Skill installation was coupled to Dataset state")
         anyio.run(_mcp_scenario, executable, root, environment)
         _run(
             ["uv", "tool", "uninstall", "mediasense"],
@@ -114,6 +134,15 @@ def main() -> int:
             raise AssertionError("uv tool uninstall left the executable in place")
     print("distribution smoke: ok")
     return 0
+
+
+def _assert_no_agent_configuration(home: Path) -> None:
+    if (home / ".codex" / "config.toml").exists():
+        raise AssertionError("CLI installation wrote user-level Codex configuration")
+    if (home / ".codex" / "skills").exists():
+        raise AssertionError("CLI installation wrote user-level Codex Skills")
+    if (home / ".agents" / "skills").exists():
+        raise AssertionError("CLI installation wrote user-level Agent Skills")
 
 
 async def _mcp_scenario(
@@ -197,7 +226,7 @@ def _verify_wheel(wheel: Path, expected_version: str) -> None:
         raise AssertionError("wheel metadata version does not match pyproject.toml")
     if "mediasense = mediasense.cli:main" not in entry_points:
         raise AssertionError("wheel does not contain the mediasense entry point")
-    if len(contracts) != 9 or len(skill_files) != 8:
+    if len(contracts) != 9 or len(skill_files) != 10:
         raise AssertionError("wheel does not contain the required contracts and Skills")
 
 

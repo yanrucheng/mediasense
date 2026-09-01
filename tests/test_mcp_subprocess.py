@@ -2,10 +2,24 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+import subprocess
+import tomllib
 
 import anyio
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
+
+
+ROOT = Path(__file__).resolve().parents[1]
+EXPECTED_TOOLS = {
+    "mediasense.dataset.open",
+    "mediasense.precheck.run",
+    "mediasense.precheck.read",
+    "mediasense.plan.work",
+    "mediasense.geo.query",
+    "mediasense.apply.run",
+    "mediasense.apply.read",
+}
 
 
 def test_stdio_mcp_handshake_discovery_and_non_destructive_call(
@@ -29,15 +43,7 @@ def test_stdio_mcp_handshake_discovery_and_non_destructive_call(
             assert initialized.server_info.name == "mediasense"
             listed = await session.list_tools()
             names = {tool.name for tool in listed.tools}
-            assert names == {
-                "mediasense.dataset.open",
-                "mediasense.precheck.run",
-                "mediasense.precheck.read",
-                "mediasense.plan.work",
-                "mediasense.geo.query",
-                "mediasense.apply.run",
-                "mediasense.apply.read",
-            }
+            assert names == EXPECTED_TOOLS
             precheck_run = next(
                 tool for tool in listed.tools if tool.name == "mediasense.precheck.run"
             )
@@ -69,6 +75,53 @@ def test_stdio_mcp_handshake_discovery_and_non_destructive_call(
             assert status.structured_content["error"]["code"] == "run_not_found"
 
     anyio.run(scenario)
+
+
+def test_project_codex_config_starts_current_path_mcp(tmp_path: Path) -> None:
+    """Validate config composition; installed-global evidence uses its own probe."""
+    config = tomllib.loads((ROOT / ".codex" / "config.toml").read_text())
+    server = config["mcp_servers"]["mediasense"]
+    source = tmp_path / "source"
+    workspace = tmp_path / "workspace"
+    source.mkdir()
+
+    async def scenario() -> None:
+        parameters = StdioServerParameters(
+            command=server["command"],
+            args=server["args"],
+            cwd=str(ROOT),
+        )
+        async with (
+            stdio_client(parameters) as (read_stream, write_stream),
+            ClientSession(read_stream, write_stream) as session,
+        ):
+            initialized = await session.initialize()
+            assert initialized.server_info.name == "mediasense"
+            listed = await session.list_tools()
+            assert {tool.name for tool in listed.tools} == EXPECTED_TOOLS
+            opened = await session.call_tool(
+                "mediasense.dataset.open",
+                {"source_root": str(source), "workspace": str(workspace)},
+            )
+            assert opened.is_error is False
+            assert opened.structured_content is not None
+            assert opened.structured_content["outcome"] == "ok"
+
+    anyio.run(scenario)
+
+
+def test_stdio_mcp_exits_when_client_closes_input() -> None:
+    completed = subprocess.run(
+        [sys.executable, "-m", "mediasense", "mcp"],
+        input="",
+        text=True,
+        capture_output=True,
+        cwd=ROOT,
+        timeout=5,
+        check=False,
+    )
+
+    assert completed.returncode == 0
 
 
 def test_stdio_mcp_opened_dataset_can_start_precheck(tmp_path: Path) -> None:

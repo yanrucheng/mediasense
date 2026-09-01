@@ -1,69 +1,142 @@
 # Agent integration
 
-MediaSense exposes a local Model Context Protocol server over stdio:
+MediaSense uses the ordinary local integration points of an Agent client. It does
+not create or launch a dedicated Agent environment.
 
-```bash
-mediasense mcp
+```text
+machine executable path
+└── mediasense
+    └── mediasense mcp
+
+user-selected Honeycomb
+├── .agents/skills/mediasense/
+├── .agents/skills/mediasense-precheck/
+├── .agents/skills/mediasense-plan/
+├── .agents/skills/mediasense-apply/
+└── .codex/config.toml
+
+independent location
+└── Dataset workspace
 ```
 
-The server is started on demand by an MCP client. It does not listen on a network
-port or remain running as a daemon.
+The CLI may be installed once for the machine. Skill discovery and MCP
+registration are local to each Honeycomb that should expose MediaSense. Dataset
+state follows the Dataset policy and may live beside an external volume or in the
+platform application-data directory; it is never an Agent configuration root.
 
-Outside MCP, inspect the installed Tool catalog and one exact contract with:
+## What each surface owns
 
-```bash
-mediasense tools list
-mediasense tools show mediasense.precheck.run --json
+- A MediaSense **Tool** is a concrete business capability:
+  `mediasense.dataset.open`, `mediasense.precheck.run`,
+  `mediasense.precheck.read`, `mediasense.plan.work`,
+  `mediasense.geo.query`, `mediasense.apply.run`, or
+  `mediasense.apply.read`.
+- The **CLI** is the installed local executable. It provides diagnostics, Human
+  control surfaces, and runtime entry points.
+- **`mediasense mcp`** is the CLI package's stdio server. MCP transports Tool
+  discovery and calls; it does not own Tool meaning, authorization, or Dataset
+  state.
+- A **Skill** tells an Agent when and how to use Tools, when to ask the Human, and
+  how to preserve stage boundaries. Loading a Skill grants no mutation authority.
+- **`.codex/config.toml`** tells Codex in this Honeycomb how to start the stdio
+  child process. The process exits with the client connection and is not a daemon.
+
+A globally available `mediasense` command therefore does not give every Agent
+MediaSense capability. Automatic discovery requires the local product entry and
+stage Skills plus the MCP configuration that apply to that Agent session.
+
+## New-user bootstrap
+
+The first step uses the Agent client's standard mechanism to place the
+`mediasense` product entry Skill under the selected Honeycomb:
+
+```text
+<honeycomb>/.agents/skills/
 ```
 
-## Codex
+For this repository, that exact local target is:
 
-Register the installed executable through Codex's native MCP command:
-
-```bash
-codex mcp add mediasense -- mediasense mcp
+```text
+/Users/chengyanru/repos/personal/mediasense/.agents/skills/
 ```
 
-Codex owns this registration in its configuration. MediaSense does not edit
-`~/.codex/config.toml` itself. Confirm the registration with the Codex MCP listing
-command documented by the installed Codex version. See the
-[official Codex MCP documentation](https://developers.openai.com/codex/mcp/).
+Start the Agent from the Honeycomb. Once `mediasense` is loaded, it owns the
+remaining setup guidance and installs the complete release-matched Skill set:
 
-Install the three packaged MediaSense Skills explicitly into a chosen Codex Skill
-root:
+1. Confirm the Honeycomb root. The current directory is only a candidate when the
+   Human has not explicitly selected a root; no write occurs until its absolute
+   path is shown and confirmed. Dataset paths are never used to infer it.
+2. Check `command -v mediasense` and `mediasense --version`. The current Skill set
+   requires `0.3.x`; an installed `0.2.x` host is incompatible and must not be
+   accepted merely because it exposes the expected Tool names.
+3. If the CLI is absent or incompatible, explain the exact trusted source,
+   executable destination, and possible network access. Install only after Human
+   authorization. Installation does not modify Agent configuration.
+4. If the release-matched Skill set is incomplete, show the exact target and,
+   after authorization, run:
 
-```bash
-mediasense skills install --target ~/.codex/skills
-```
+   ```bash
+   mediasense skills install --target <absolute-honeycomb>/.agents/skills
+   ```
 
-The command is idempotent when an installed Skill is byte-identical and refuses to
-overwrite a different existing Skill. To inspect the packaged sources without
-copying them, run:
+   Identical content is idempotent. Different existing content is a conflict and
+   is not overwritten.
+5. Inspect and parse `<absolute-honeycomb>/.codex/config.toml`. Show that complete
+   target path and request authorization before creating the file or minimally
+   merging:
 
-```bash
-mediasense skills path
-```
+   ```toml
+   [mcp_servers.mediasense]
+   command = "mediasense"
+   args = ["mcp"]
+   ```
 
-After registration, the intended conversation can begin with only a source path:
+   Preserve every unrelated TOML value and other MCP server. If a MediaSense
+   table already has different content, or the file is invalid or not writable,
+   report the conflict and stop. Do not silently replace the file or fall back to
+   user-level configuration.
+6. Start a new Agent session from the trusted Honeycomb. Codex only loads project
+   `.codex/` configuration for trusted projects, and an already-running session
+   normally does not acquire a newly added MCP server.
+7. Discover Tools in the new session and verify all seven exact names listed
+   above. File presence or CLI availability alone is not acceptance evidence.
+8. Only then route the request: begin PreCheck for a source that needs preparation,
+   enter Plan for an exact Plan-ready `result_ref`, or enter Apply for an exact
+   Frozen Plan.
+
+The intended first request can remain simple:
 
 ```text
 Prepare /Volumes/PhotoDisk/Photos with MediaSense. Keep the source read-only and
 do not use network providers.
 ```
 
-The Agent first calls `mediasense.dataset.open`, reports the selected portable or
-local workspace, and hands the returned exact `dataset_ref` to PreCheck.
+## Codex scope and trust
+
+Codex discovers local Skills from `.agents/skills/` along the working-directory
+to repository-root chain. It accepts project-scoped MCP servers from
+`.codex/config.toml`, gives project configuration precedence over user
+configuration, and skips project `.codex/` layers for untrusted projects. See the
+official documentation:
+
+- [Codex Skills](https://developers.openai.com/codex/skills/)
+- [Codex MCP](https://developers.openai.com/codex/mcp/)
+- [Codex configuration](https://developers.openai.com/codex/config-basic/)
+
+The native `codex mcp add` command currently targets user configuration, so it is
+not the default MediaSense setup route. User-wide Skill installation is likewise
+an explicit advanced choice, never the first-use default.
 
 ## Other MCP clients
 
 The Tool Host uses standard local stdio MCP and is not intentionally coupled to
-Codex. Claude Desktop, Claude Code, VS Code, Cursor, and other stdio MCP clients can
-launch the same `mediasense mcp` command using their own configuration mechanisms.
+Codex. Other clients may launch `mediasense mcp` through their own local
+configuration mechanisms.
 
-The initial product certification covers the complete Skill-guided workflow on
-Codex. Other clients are protocol-compatible, but their client-specific Skill,
-approval, display, and recovery behavior is not claimed as certified until it has
-its own acceptance run.
+Only Codex currently has complete MediaSense certification. Other clients are
+protocol-compatible, but their Skill discovery, configuration scope, approval,
+display, restart, and recovery behavior is not certified until exercised in a
+client-specific acceptance matrix.
 
 ## Trust boundary
 
@@ -71,4 +144,4 @@ The initial Host is local and single-user. The operating-system account and the
 client-launched stdio process form the transport trust boundary. Tool business
 requests remain distinct from transport-only confirmation and authorization
 context. A future network transport requires a separate authentication and threat
-model; changing the transport must not change Tool meaning.
+model; changing transport must not change Tool meaning.

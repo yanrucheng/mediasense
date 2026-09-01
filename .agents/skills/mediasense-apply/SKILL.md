@@ -10,6 +10,16 @@ Apply Tools. Let the Agent explain and coordinate; let the Human authorize; let
 the Tools own Run state, safety gates, filesystem effects, recovery, and Receipt
 truth.
 
+## Tool Host prerequisite
+
+Proceed only when the current Honeycomb session exposes a compatible MediaSense
+`0.3.x` Tool Host and both `mediasense.apply.run` and `mediasense.apply.read` are
+discoverable. A CLI found in `PATH` or an MCP table present on disk is not
+sufficient. If the Host is absent or incompatible, stop before preparation and
+use the `mediasense` product entry Skill's local Honeycomb bootstrap; do not duplicate
+setup, edit user-level Agent configuration, or perform filesystem effects
+directly.
+
 ## Boundaries
 
 - Accept organization semantics only from one immutable Frozen Plan. Never add,

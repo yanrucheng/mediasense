@@ -154,3 +154,14 @@ made explicit.
 - **WHEN** the Human proceeds with a valid plan-ready Result
 - **THEN** the Agent hands Plan the exact `result_ref` and directs all later PreCheck fact and Evidence access through `mediasense.precheck.read`
 
+### Requirement: PreCheck requires the current Honeycomb Tool Host
+
+The PreCheck Skill SHALL require a compatible MediaSense Tool Host already loaded
+in the current Honeycomb session. It SHALL route a missing or incompatible Host
+to the `mediasense` product entry Skill rather than owning installation,
+project-scoped MCP configuration, session restart, or whole-product readiness.
+
+#### Scenario: PreCheck Tools are unavailable
+
+- **WHEN** `mediasense.dataset.open`, `mediasense.precheck.run`, or `mediasense.precheck.read` is not discoverable in the current session
+- **THEN** the Agent stops before Dataset work, explains the local integration prerequisite, and routes setup through the `mediasense` Skill before a new session retries discovery

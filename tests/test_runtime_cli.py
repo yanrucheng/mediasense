@@ -33,6 +33,12 @@ def test_doctor_distinguishes_optional_missing_dependencies(
     result = json.loads(capsys.readouterr().out)
     checks = {item["name"]: item for item in result["checks"]}
     assert result["status"] == "ok"
+    assert checks["resources"] == {
+        "name": "resources",
+        "status": "ok",
+        "message": "7 Tool contracts and 4 Skills are available.",
+        "required": True,
+    }
     assert checks["exiftool"]["status"] == "warning"
     assert checks["ffmpeg"]["status"] == "warning"
     assert checks["local_models"]["status"] == "warning"
@@ -197,6 +203,7 @@ def test_skill_install_is_idempotent_and_refuses_overwrite(tmp_path: Path) -> No
     second = install_skills(target)
 
     assert first["installed"] == [
+        "mediasense",
         "mediasense-precheck",
         "mediasense-plan",
         "mediasense-apply",

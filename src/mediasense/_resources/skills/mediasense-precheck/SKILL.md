@@ -10,6 +10,16 @@ later reasoning. Keep heavy work economical and observable without treating
 thoroughness, a particular implementation, or a large Evidence count as the
 goal.
 
+## Tool Host prerequisite
+
+Proceed only when the current Honeycomb session exposes a compatible MediaSense
+`0.3.x` Tool Host and `mediasense.dataset.open`, `mediasense.precheck.run`, and
+`mediasense.precheck.read` are discoverable. A CLI found in `PATH` or an MCP table
+present on disk is not sufficient. If the Host is absent or incompatible, stop
+PreCheck work and use the `mediasense` product entry Skill's local Honeycomb
+bootstrap; do not duplicate setup, edit user-level Agent configuration, or claim
+the current session reloaded a newly written project configuration.
+
 ## Boundaries
 
 - Stay in PreCheck. Plan owns final grouping, naming, disposition, and Plan-local
