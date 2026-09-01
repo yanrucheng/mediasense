@@ -4,7 +4,7 @@ title: "MediaSense PreCheck Implementation Design"
 type: design
 status: active
 created: 2026-08-27
-updated: 2026-08-31
+updated: 2026-09-01
 timezone: "Asia/Shanghai"
 parent: ""
 depends-on:
@@ -606,6 +606,37 @@ The operator must be able to inspect:
 - observed source writes, network attempts, provider calls, retry/fallback calls, and billable cost, compared with the confirmed boundary and expected to remain zero for local-only runs.
 
 Detailed events belong to the mutable operational record. A sealed Result keeps only the proof and qualifications needed for downstream trust.
+
+The public Run projection deliberately separates two authorities. `progress`
+continues to describe Source Item accounting closure. `activity` describes the
+mutable execution needed to produce evidence: one coarse capability phase,
+phase-local completed/reused/failed/remaining/total counts, the latest durable
+progress time, current liveness, and a bounded failure summary. Consequently a
+long metadata, rendition, video, embedding, or compression phase remains
+observable even when no Source Item changes condition.
+
+The existing Working Run row is the durable home for the current coarse phase
+and worker heartbeat. Existing Work Records remain authoritative for item
+outcomes, reuse, and timestamps; `status` aggregates them on read. There is no
+second progress ledger, event stream, scheduler service, or per-item status
+write. Phase transitions write one checkpoint, and a live worker writes one
+bounded-cadence heartbeat. Normal Work commits already carry the item-level
+facts used by the projection.
+
+Worker liveness and durable progress are different facts. A fresh heartbeat
+with an old progress timestamp is reported as `no_recent_progress`, because a
+single operation may legitimately be slow. An expired heartbeat after work has
+begun is `suspected_stalled`, not proof of failure. An in-process worker exit
+that can still execute cleanup moves the Run to resumable `paused`; after a hard
+host loss, a later host may reclaim the expired worker lease and continue the
+same `run_ref`. These labels expose uncertainty without inventing percentage,
+ETA, throughput, or success guarantees.
+
+Public error summaries aggregate current failed Work by at most five public
+capability phases. They do not expose internal Work IDs, source or cache paths,
+raw exception messages, SQLite structure, or provider payloads. A localized
+failure therefore becomes visible before publication without incorrectly
+turning the whole Run into `failed`.
 
 ## AI Album capability disposition
 

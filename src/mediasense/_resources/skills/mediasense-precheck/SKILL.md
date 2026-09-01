@@ -92,6 +92,23 @@ act on. An accepted start, pause, resume, skip, or cancel request says only that
 the transition was accepted; continue observing until the Tool reports a
 truthful attention or terminal state.
 
+Keep the two status views distinct. `progress` is Source Item accounting;
+`activity` is current execution evidence. Report `activity.phase`, its exact or
+explicitly unknown completed/reused/failed/remaining/total Work counts,
+`last_progress_at`, and any bounded error summary when a Run is long-lived. Do
+not derive a percentage, ETA, throughput, or success promise from those counts.
+Localized activity errors do not make the whole Run failed while unrelated Work
+can continue.
+
+Interpret liveness conservatively: `working` means both worker liveness and
+recent durable progress are observed; `no_recent_progress` means the worker is
+responsive but no durable Work or phase boundary has advanced recently;
+`suspected_stalled` means liveness itself is stale after execution began.
+Neither quiet state proves failure. Preserve the `run_ref`, report the last
+progress time and available controls, and recheck the same Run rather than
+starting a duplicate. `waiting`, `paused`, and `finished` must be interpreted
+together with the top-level state, reason, confirmation, and published Result.
+
 Follow the Tool's localized recovery facts:
 
 - after interruption, resume the same durable Run when allowed so valid

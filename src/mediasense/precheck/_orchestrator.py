@@ -98,6 +98,15 @@ class _RunControl(Protocol):
         resume_when: str,
     ) -> dict[str, object]: ...
 
+    def record_phase(
+        self,
+        run_ref: str,
+        phase: str,
+        *,
+        complete: bool = False,
+        total: int | str | None = None,
+    ) -> None: ...
+
     def publish_result(self, run_ref: str, draft) -> dict[str, object]: ...
 
 
@@ -265,7 +274,7 @@ class PrecheckOrchestrator:
         if not self._running(run_ref):
             return self.run_control.sync_accounting(run_ref)
         accounting = AccountingStore(self.database_path)
-        self._checkpoint(run_ref, "accounting")
+        self._checkpoint(run_ref, "accounting", total="unknown")
         accounting.process_run(
             accounting_run_id,
             should_continue=lambda: self._running(run_ref),
@@ -273,6 +282,8 @@ class PrecheckOrchestrator:
         status = self.run_control.sync_accounting(run_ref)
         if status["state"] != "running":
             return status
+        if not self._finish_phase(run_ref, "accounting"):
+            return self.run_control.sync_accounting(run_ref)
         items = accounting.get_run_items(accounting_run_id)
         media = tuple(
             item
@@ -288,19 +299,60 @@ class PrecheckOrchestrator:
         )
         executor = BoundedWorkExecutor(config.resource_budget)
 
+        self._checkpoint(
+            run_ref,
+            "metadata",
+            total=len(media) if config.metadata else 0,
+        )
         metadata = self._metadata(run_ref, accounting_run_id, media, config, executor)
         if not self._finish_phase(run_ref, "metadata"):
             return self.run_control.sync_accounting(run_ref)
+        rendition_profiles = (
+            2
+            if config.embedding_profile is not None
+            or config.sensitivity_profile is not None
+            else 1
+        )
+        self._checkpoint(
+            run_ref,
+            "renditions",
+            total=(
+                sum(item.kind in _STILL_KINDS for item in media) * rendition_profiles
+                if config.image_renditions
+                else 0
+            ),
+        )
         renditions = self._renditions(
             run_ref, accounting_run_id, media, config, executor
         )
         if not self._finish_phase(run_ref, "renditions"):
             return self.run_control.sync_accounting(run_ref)
+        self._checkpoint(
+            run_ref,
+            "video",
+            total=(
+                "unknown"
+                if config.video and any(item.kind == "video" for item in media)
+                else 0
+            ),
+        )
         probes, frames, sheets = self._video(
             run_ref, accounting_run_id, media, config, executor
         )
         if not self._finish_phase(run_ref, "video"):
             return self.run_control.sync_accounting(run_ref)
+        self._checkpoint(
+            run_ref,
+            "gpx",
+            total=(
+                sum(
+                    outcome.work.status is WorkStatus.SUCCEEDED
+                    for outcome in metadata.values()
+                )
+                if config.gpx and gpx_paths
+                else 0
+            ),
+        )
         gpx = self._gpx(
             run_ref,
             accounting_run_id,
@@ -311,6 +363,11 @@ class PrecheckOrchestrator:
         )
         if not self._finish_phase(run_ref, "gpx"):
             return self.run_control.sync_accounting(run_ref)
+        self._checkpoint(
+            run_ref,
+            "embeddings",
+            total="unknown" if config.embedding_profile is not None else 0,
+        )
         embeddings, key_frames = self._embeddings(
             run_ref,
             accounting_run_id,
@@ -321,6 +378,11 @@ class PrecheckOrchestrator:
         )
         if not self._finish_phase(run_ref, "embeddings"):
             return self.run_control.sync_accounting(run_ref)
+        self._checkpoint(
+            run_ref,
+            "sensitivity",
+            total="unknown" if config.sensitivity_profile is not None else 0,
+        )
         sensitivity = self._sensitivity(
             run_ref,
             accounting_run_id,
@@ -331,9 +393,19 @@ class PrecheckOrchestrator:
         )
         if not self._finish_phase(run_ref, "sensitivity"):
             return self.run_control.sync_accounting(run_ref)
+        self._checkpoint(
+            run_ref,
+            "bundles",
+            total="unknown" if config.bundles else 0,
+        )
         bundles = self._bundles(accounting_run_id, metadata, config)
         if not self._finish_phase(run_ref, "bundles"):
             return self.run_control.sync_accounting(run_ref)
+        self._checkpoint(
+            run_ref,
+            "compression",
+            total="unknown" if config.compression_target is not None else 0,
+        )
         compression, representative_paths = self._compression(
             accounting_run_id,
             renditions,
@@ -348,6 +420,7 @@ class PrecheckOrchestrator:
         )
         if not self._finish_phase(run_ref, "compression"):
             return self.run_control.sync_accounting(run_ref)
+        self._checkpoint(run_ref, "external_evidence", total="unknown")
         geocode = self._geocode(
             run_ref,
             accounting_run_id,
@@ -383,7 +456,7 @@ class PrecheckOrchestrator:
             dataset_name=config.dataset_name,
             external_policy_status=geocode.status,
         )
-        self._checkpoint(run_ref, "sealing")
+        self._checkpoint(run_ref, "publishing", total=1)
         return self.run_control.publish_result(run_ref, draft)
 
     def _metadata(
@@ -938,12 +1011,13 @@ class PrecheckOrchestrator:
     def _running(self, run_ref: str) -> bool:
         return self.run_control.current_state(run_ref) == "running"
 
-    def _checkpoint(self, run_ref: str, phase: str) -> None:
-        store = getattr(self.run_control, "_store")
-        store.set_execution_checkpoint(run_ref, phase)
+    def _checkpoint(
+        self, run_ref: str, phase: str, *, total: int | str | None = None
+    ) -> None:
+        self.run_control.record_phase(run_ref, phase, total=total)
 
     def _finish_phase(self, run_ref: str, phase: str) -> bool:
-        self._checkpoint(run_ref, f"{phase}:complete")
+        self.run_control.record_phase(run_ref, phase, complete=True)
         self._after_phase(run_ref, phase)
         return self._running(run_ref)
 

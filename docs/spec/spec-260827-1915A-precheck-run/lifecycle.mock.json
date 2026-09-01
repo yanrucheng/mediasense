@@ -35,6 +35,23 @@
           "exceptional": "unknown",
           "unresolved": "unknown"
         },
+        "activity": {
+          "state": "working",
+          "phase": "metadata",
+          "work": {
+            "completed": 71,
+            "reused": 120,
+            "failed": 1,
+            "remaining": 1944,
+            "total": 2136
+          },
+          "last_progress_at": "2026-08-27T03:12:14Z",
+          "errors": {
+            "total": 1,
+            "by_phase": [{ "phase": "metadata", "count": 1 }],
+            "truncated": false
+          }
+        },
         "allowed_actions": ["cancel", "pause"]
       }
     },
@@ -68,6 +85,23 @@
           "usable": "unknown",
           "exceptional": "unknown",
           "unresolved": "unknown"
+        },
+        "activity": {
+          "state": "paused",
+          "phase": "metadata",
+          "work": {
+            "completed": 71,
+            "reused": 120,
+            "failed": 1,
+            "remaining": 1944,
+            "total": 2136
+          },
+          "last_progress_at": "2026-08-27T03:12:14Z",
+          "errors": {
+            "total": 1,
+            "by_phase": [{ "phase": "metadata", "count": 1 }],
+            "truncated": false
+          }
         },
         "allowed_actions": ["resume", "cancel"],
         "reason": {
@@ -107,6 +141,23 @@
           "usable": 223,
           "exceptional": 1,
           "unresolved": 0
+        },
+        "activity": {
+          "state": "finished",
+          "phase": "complete",
+          "work": {
+            "completed": 1,
+            "reused": 0,
+            "failed": 0,
+            "remaining": 0,
+            "total": 1
+          },
+          "last_progress_at": "2026-08-27T03:22:31Z",
+          "errors": {
+            "total": 1,
+            "by_phase": [{ "phase": "metadata", "count": 1 }],
+            "truncated": false
+          }
         },
         "allowed_actions": [],
         "published_result": {
@@ -151,6 +202,23 @@
           "exceptional": "unknown",
           "unresolved": "unknown"
         },
+        "activity": {
+          "state": "waiting",
+          "phase": "source_accounting",
+          "work": {
+            "completed": 0,
+            "reused": 0,
+            "failed": 0,
+            "remaining": "unknown",
+            "total": "unknown"
+          },
+          "last_progress_at": "2026-08-27T04:01:00Z",
+          "errors": {
+            "total": 0,
+            "by_phase": [],
+            "truncated": false
+          }
+        },
         "allowed_actions": ["cancel", "resume"],
         "reason": {
           "code": "source_unavailable",
@@ -190,6 +258,23 @@
           "usable": "unknown",
           "exceptional": "unknown",
           "unresolved": "unknown"
+        },
+        "activity": {
+          "state": "finished",
+          "phase": "source_accounting",
+          "work": {
+            "completed": 0,
+            "reused": 0,
+            "failed": 0,
+            "remaining": "unknown",
+            "total": "unknown"
+          },
+          "last_progress_at": "2026-08-27T04:01:00Z",
+          "errors": {
+            "total": 0,
+            "by_phase": [],
+            "truncated": false
+          }
         },
         "allowed_actions": []
       }

@@ -221,6 +221,7 @@ def test_confirmation_pause_reuses_resume_without_adding_an_action() -> None:
         "unit": "logical_queries",
         "skip_allowed": True,
     }
+    paused["activity"]["state"] = "waiting"
     output_validator.validate(paused)
     paused.pop("confirmation")
     with pytest.raises(ValidationError):
@@ -372,6 +373,10 @@ def test_localized_media_failure_does_not_force_run_failure() -> None:
     completed = _mock()["exchanges"][5]["response"]
     assert completed["state"] == "completed"
     assert completed["progress"]["exceptional"] == 1
+    assert completed["activity"]["errors"]["total"] == 1
+    assert completed["activity"]["errors"]["by_phase"] == [
+        {"phase": "metadata", "count": 1}
+    ]
     assert completed["published_result"]["integrity"] == "valid"
 
 
@@ -448,6 +453,66 @@ def test_failed_status_requires_reason_and_cannot_publish() -> None:
     failed.pop("reason")
     with pytest.raises(ValidationError):
         validator.validate(failed)
+
+
+def test_activity_exposes_bounded_non_percentage_progress() -> None:
+    _, validator = _validators()
+    running = deepcopy(_mock()["exchanges"][1]["response"])
+    activity = running["activity"]
+
+    assert activity["state"] == "working"
+    assert activity["phase"] == "metadata"
+    assert activity["work"] == {
+        "completed": 71,
+        "reused": 120,
+        "failed": 1,
+        "remaining": 1944,
+        "total": 2136,
+    }
+    assert activity["errors"] == {
+        "total": 1,
+        "by_phase": [{"phase": "metadata", "count": 1}],
+        "truncated": False,
+    }
+    assert set(activity) == {
+        "state",
+        "phase",
+        "work",
+        "last_progress_at",
+        "errors",
+    }
+    assert set(activity["work"]) == {
+        "completed",
+        "reused",
+        "failed",
+        "remaining",
+        "total",
+    }
+
+    missing = deepcopy(running)
+    missing.pop("activity")
+    with pytest.raises(ValidationError):
+        validator.validate(missing)
+
+    unknown = deepcopy(running)
+    unknown["activity"]["work"]["remaining"] = "unknown"
+    unknown["activity"]["work"]["total"] = "unknown"
+    validator.validate(unknown)
+
+
+def test_activity_rejects_private_execution_details_and_unbounded_errors() -> None:
+    _, validator = _validators()
+    running = deepcopy(_mock()["exchanges"][1]["response"])
+    running["activity"]["worker_id"] = "private-worker"
+    with pytest.raises(ValidationError):
+        validator.validate(running)
+
+    running = deepcopy(_mock()["exchanges"][1]["response"])
+    running["activity"]["errors"]["by_phase"] = [
+        {"phase": "metadata", "count": 1} for _ in range(6)
+    ]
+    with pytest.raises(ValidationError):
+        validator.validate(running)
 
 
 def test_internal_storage_and_phase_names_are_not_schema_fields() -> None:

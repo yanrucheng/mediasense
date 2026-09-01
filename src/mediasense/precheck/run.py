@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
+from datetime import datetime, timedelta, timezone
 import hashlib
 from pathlib import Path
 import sqlite3
+from threading import Event, Thread
+from uuid import uuid4
 
 from mediasense.dataset_reference import dataset_id_from_ref
 
@@ -43,6 +46,43 @@ _PROGRESS_KEYS = {
     "unresolved",
 }
 _EXCEPTIONAL_CONDITIONS = {"unsupported", "invalid", "error"}
+_PHASE_NAMES = {
+    "queued": "queued",
+    "accounting": "source_accounting",
+    "metadata": "metadata",
+    "renditions": "renditions",
+    "video": "video",
+    "gpx": "gpx",
+    "embeddings": "embeddings",
+    "sensitivity": "sensitivity",
+    "bundles": "bundling",
+    "compression": "compression",
+    "external_evidence": "external_evidence",
+    "publishing": "publishing",
+    "sealing": "publishing",
+}
+_PHASE_CAPABILITIES = {
+    "metadata": {"source-metadata"},
+    "renditions": {"image-rendition"},
+    "video": {"video-probe", "video-frame", "video-contact-sheet"},
+    "gpx": {"gpx-location-candidate"},
+    "embeddings": {"image-embedding", "video-key-frame-candidate"},
+    "sensitivity": {"content-sensitivity"},
+    "bundling": {"bundle-candidate"},
+    "compression": {"adaptive-compression-group"},
+    "external_evidence": {"reverse-geocode-observation"},
+}
+_CAPABILITY_PHASE = {
+    capability: phase
+    for phase, capabilities in _PHASE_CAPABILITIES.items()
+    for capability in capabilities
+}
+_WORK_FAILURE_STATES = {
+    "retryable_failure",
+    "terminal_failure",
+    "blocked",
+}
+_ERROR_PHASE_LIMIT = 5
 
 
 class PrecheckRunTool:
@@ -57,11 +97,28 @@ class PrecheckRunTool:
         sqlite_timeout: float = 30,
         execution_config: PrecheckExecutionConfig | None = None,
         execution_dependencies: PrecheckExecutionDependencies | None = None,
+        clock: Callable[[], datetime] | None = None,
+        heartbeat_interval_seconds: float = 30,
+        worker_stale_seconds: float = 120,
+        progress_stale_seconds: float = 300,
     ) -> None:
+        if heartbeat_interval_seconds <= 0:
+            raise ValueError("heartbeat interval must be positive")
+        if worker_stale_seconds <= heartbeat_interval_seconds:
+            raise ValueError("worker stale interval must exceed heartbeat interval")
+        if progress_stale_seconds <= 0:
+            raise ValueError("progress stale interval must be positive")
         self.database_path = Path(database_path)
-        self._store = SQLiteRunStore(self.database_path, sqlite_timeout=sqlite_timeout)
+        self._store = SQLiteRunStore(
+            self.database_path,
+            sqlite_timeout=sqlite_timeout,
+            clock=clock,
+        )
         self._reader = PrecheckReadTool(self.database_path)
         self._execution_config = execution_config or PrecheckExecutionConfig()
+        self._heartbeat_interval_seconds = heartbeat_interval_seconds
+        self._worker_stale_after = timedelta(seconds=worker_stale_seconds)
+        self._progress_stale_after = timedelta(seconds=progress_stale_seconds)
         self._orchestrator = PrecheckOrchestrator(
             self.database_path,
             self,
@@ -110,6 +167,25 @@ class PrecheckRunTool:
         _validate_progress(normalized)
         record = self._store.set_progress(run_ref, normalized)
         return self._status_record(record)
+
+    def record_phase(
+        self,
+        run_ref: str,
+        phase: str,
+        *,
+        complete: bool = False,
+        total: int | str | None = None,
+    ) -> None:
+        """Persist one coarse execution boundary, never one write per source item."""
+
+        if phase not in _PHASE_NAMES or phase == "queued":
+            raise ValueError(f"unknown execution phase: {phase}")
+        self._store.set_execution_checkpoint(
+            run_ref,
+            phase,
+            complete=complete,
+            total=total,
+        )
 
     def bind_working_run(
         self, run_ref: str, accounting_run_id: str
@@ -234,35 +310,89 @@ class PrecheckRunTool:
         if configuration is None:
             configuration = self._execution_config.value()
             self._store.configure_execution(run_ref, configuration)
+        worker_token = uuid4().hex
+        if not self._store.claim_execution_worker(
+            run_ref,
+            worker_token,
+            stale_after=self._worker_stale_after,
+        ):
+            return self._status_record(self._store.get(run_ref))
+        heartbeat_stop = Event()
+        heartbeat = Thread(
+            target=self._heartbeat_worker,
+            args=(run_ref, worker_token, heartbeat_stop),
+            name=f"mediasense-heartbeat-{run_ref}",
+            daemon=True,
+        )
+        heartbeat.start()
         try:
-            config = PrecheckExecutionConfig.from_value(configuration)
-            return self._orchestrator.advance(run_ref, str(accounting_run_id), config)
-        except _BlockedExecution as error:
-            return self.mark_blocked(
-                run_ref,
-                code=error.code,
-                message=error.message,
-                resume_when=error.resume_when,
-            )
-        except (RunExecutionConflict, ValueError, OSError) as error:
-            return self.mark_blocked(
-                run_ref,
-                code="execution_prerequisite_unavailable",
-                message=str(error)
-                or "PreCheck execution prerequisites are unavailable.",
-                resume_when="Correct the execution prerequisite and resume this Run.",
-            )
-        except Exception as error:
-            current = self._store.get(run_ref)
-            if current["state"] != "running":
-                return self._status_record(current)
-            return self.mark_interrupted(
-                run_ref,
-                message=(
-                    "The worker stopped before this Run completed: "
-                    f"{error or type(error).__name__}."
-                ),
-            )
+            try:
+                config = PrecheckExecutionConfig.from_value(configuration)
+                result = self._orchestrator.advance(
+                    run_ref, str(accounting_run_id), config
+                )
+            except _BlockedExecution as error:
+                result = self.mark_blocked(
+                    run_ref,
+                    code=error.code,
+                    message=error.message,
+                    resume_when=error.resume_when,
+                )
+            except (RunExecutionConflict, ValueError, OSError):
+                result = self.mark_blocked(
+                    run_ref,
+                    code="execution_prerequisite_unavailable",
+                    message="A required local execution prerequisite is unavailable.",
+                    resume_when=(
+                        "Correct the execution prerequisite and resume this Run."
+                    ),
+                )
+            except Exception:
+                current = self._store.get(run_ref)
+                if current["state"] != "running":
+                    result = self._status_record(current)
+                else:
+                    result = self.mark_interrupted(
+                        run_ref,
+                        message="The execution worker stopped unexpectedly.",
+                    )
+            except BaseException:
+                current = self._store.get(run_ref)
+                if current["state"] == "running":
+                    self.mark_interrupted(
+                        run_ref,
+                        message="The execution worker stopped unexpectedly.",
+                    )
+                raise
+            if self._store.get(run_ref)["state"] == "running":
+                return self.mark_interrupted(
+                    run_ref,
+                    message=(
+                        "The execution worker ended before reaching an attention "
+                        "or terminal state."
+                    ),
+                )
+            return result
+        finally:
+            heartbeat_stop.set()
+            heartbeat.join(timeout=1)
+            try:
+                self._store.release_execution_worker(run_ref, worker_token)
+            except sqlite3.Error:
+                pass
+
+    def _heartbeat_worker(
+        self,
+        run_ref: str,
+        worker_token: str,
+        stop: Event,
+    ) -> None:
+        while not stop.wait(self._heartbeat_interval_seconds):
+            try:
+                if not self._store.heartbeat_execution_worker(run_ref, worker_token):
+                    return
+            except sqlite3.Error:
+                continue
 
     def _prepare_execution(
         self, record: Mapping[str, object], *, dataset_id: str
@@ -346,12 +476,11 @@ class PrecheckRunTool:
                 code="result_validation_failed",
                 message=str(error) or "Result validation failed.",
             )
-        except OSError as error:
+        except OSError:
             return self.mark_blocked(
                 run_ref,
                 code="workspace_write_failed",
-                message=str(error)
-                or "Result publication could not write the workspace.",
+                message="Result publication could not write the workspace.",
                 resume_when="Workspace storage is writable with sufficient free space.",
             )
         return self.complete_with_result(run_ref, sealed.result_ref)
@@ -415,6 +544,11 @@ class PrecheckRunTool:
             record = self._store.get(run_ref)
         except KeyError:
             return _error("status", "run_not_found", "Run does not exist", run_ref)
+        if record["state"] != "completed" and record["accounting_run_id"] is not None:
+            progress, _accounting_state, _blocked_reason = (
+                self._store.accounting_progress(run_ref)
+            )
+            record = {**record, "progress": progress}
         if record["state"] == "completed":
             published = record["published_result"]
             if not isinstance(published, dict):
@@ -497,8 +631,7 @@ class PrecheckRunTool:
             return "sealed Result does not provide valid integrity"
         return result_view, package
 
-    @staticmethod
-    def _status_record(record: dict[str, object]) -> dict[str, object]:
+    def _status_record(self, record: dict[str, object]) -> dict[str, object]:
         response: dict[str, object] = {
             "outcome": "ok",
             "action": "status",
@@ -506,6 +639,7 @@ class PrecheckRunTool:
             "dataset_ref": record["dataset_ref"],
             "state": record["state"],
             "progress": record["progress"],
+            "activity": self._activity_record(record),
             "allowed_actions": list(_ALLOWED_ACTIONS[str(record["state"])]),
         }
         if record["prior_result_ref"] is not None:
@@ -517,6 +651,209 @@ class PrecheckRunTool:
         if record["state"] == "completed":
             response["published_result"] = record["published_result"]
         return response
+
+    def _activity_record(self, record: dict[str, object]) -> dict[str, object]:
+        checkpoint = record["execution_checkpoint"]
+        assert isinstance(checkpoint, dict)
+        internal_phase = str(checkpoint["phase"])
+        phase = _PHASE_NAMES.get(internal_phase, "unknown")
+        facts = self._store.execution_facts(
+            None
+            if record["accounting_run_id"] is None
+            else str(record["accounting_run_id"])
+        )
+        work, work_last_progress_at = _phase_work_progress(
+            internal_phase,
+            complete=bool(checkpoint["complete"]),
+            total_hint=checkpoint["total"],
+            facts=facts,
+            run_state=str(record["state"]),
+        )
+        last_progress_at = _latest_timestamp(
+            str(checkpoint["last_progress_at"]), work_last_progress_at
+        )
+        if record["state"] == "completed":
+            phase = "complete"
+            last_progress_at = _latest_timestamp(
+                last_progress_at, str(record["updated_at"])
+            )
+        activity_state = self._activity_state(
+            record,
+            last_progress_at=last_progress_at,
+        )
+        return {
+            "state": activity_state,
+            "phase": phase,
+            "work": work,
+            "last_progress_at": last_progress_at,
+            "errors": _error_summary(facts),
+        }
+
+    def _activity_state(
+        self,
+        record: Mapping[str, object],
+        *,
+        last_progress_at: str,
+    ) -> str:
+        state = str(record["state"])
+        if state in {"completed", "cancelled", "failed"}:
+            return "finished"
+        if state == "blocked":
+            return "waiting"
+        if state == "paused":
+            reason = record.get("reason")
+            if (
+                isinstance(reason, dict)
+                and reason.get("code") == "confirmation_required"
+            ):
+                return "waiting"
+            return "paused"
+        checkpoint = record["execution_checkpoint"]
+        assert isinstance(checkpoint, dict)
+        worker = checkpoint.get("worker")
+        if not isinstance(worker, dict) or not isinstance(
+            worker.get("heartbeat_at"), str
+        ):
+            return "queued"
+        now = _as_datetime(self._store.now())
+        if now - _as_datetime(str(worker["heartbeat_at"])) > self._worker_stale_after:
+            return "suspected_stalled"
+        if (
+            last_progress_at != "unknown"
+            and now - _as_datetime(last_progress_at) > self._progress_stale_after
+        ):
+            return "no_recent_progress"
+        return "working"
+
+
+def _phase_work_progress(
+    phase: str,
+    *,
+    complete: bool,
+    total_hint: object,
+    facts: Mapping[str, object],
+    run_state: str,
+) -> tuple[dict[str, object], str | None]:
+    if phase == "queued":
+        return _work_counts(0, 0, 0, "unknown", "unknown"), None
+    if phase == "accounting":
+        accounting = facts.get("accounting")
+        if not isinstance(accounting, dict):
+            return _unknown_work_counts(), None
+        counts = accounting.get("counts")
+        if not isinstance(counts, dict):
+            return _unknown_work_counts(), str(accounting["last_progress_at"])
+        completed = int(counts.get("new", 0)) + int(counts.get("changed", 0))
+        reused = int(counts.get("reused", 0))
+        failed = int(counts.get("error", 0))
+        observed = completed + reused + failed
+        finished = complete or accounting.get("state") == "completed"
+        return (
+            _work_counts(
+                completed,
+                reused,
+                failed,
+                0 if finished else "unknown",
+                observed if finished else "unknown",
+            ),
+            str(accounting["last_progress_at"]),
+        )
+    if phase == "publishing":
+        completed = int(run_state == "completed")
+        return _work_counts(completed, 0, 0, 1 - completed, 1), None
+
+    capabilities = _PHASE_CAPABILITIES.get(_PHASE_NAMES.get(phase, "unknown"), set())
+    rows = facts.get("work")
+    if not isinstance(rows, tuple):
+        return _unknown_work_counts(), None
+    completed = reused = failed = 0
+    observed = 0
+    last_progress_at: str | None = None
+    for row in rows:
+        if not isinstance(row, dict) or row.get("capability") not in capabilities:
+            continue
+        count = int(row["count"])
+        observed += count
+        status = str(row["status"])
+        if status == "succeeded":
+            if row["attempted_here"]:
+                completed += count
+            else:
+                reused += count
+        elif status in _WORK_FAILURE_STATES:
+            failed += count
+        last_progress_at = _latest_timestamp(
+            last_progress_at, str(row["last_progress_at"])
+        )
+    settled = completed + reused + failed
+    if complete:
+        total = max(observed, settled)
+        remaining: int | str = max(total - settled, 0)
+    elif isinstance(total_hint, int) and not isinstance(total_hint, bool):
+        total = max(total_hint, observed, settled)
+        remaining = max(total - settled, 0)
+    else:
+        total = "unknown"
+        remaining = "unknown"
+    return (
+        _work_counts(completed, reused, failed, remaining, total),
+        last_progress_at,
+    )
+
+
+def _error_summary(facts: Mapping[str, object]) -> dict[str, object]:
+    rows = facts.get("work")
+    counts: dict[str, int] = {}
+    if isinstance(rows, tuple):
+        for row in rows:
+            if (
+                not isinstance(row, dict)
+                or row.get("status") not in _WORK_FAILURE_STATES
+            ):
+                continue
+            phase = _CAPABILITY_PHASE.get(str(row.get("capability")), "unknown")
+            counts[phase] = counts.get(phase, 0) + int(row["count"])
+    ordered = sorted(counts.items(), key=lambda item: (-item[1], item[0]))
+    shown = ordered[:_ERROR_PHASE_LIMIT]
+    return {
+        "total": sum(counts.values()),
+        "by_phase": [{"phase": phase, "count": count} for phase, count in shown],
+        "truncated": len(ordered) > len(shown),
+    }
+
+
+def _work_counts(
+    completed: int | str,
+    reused: int | str,
+    failed: int | str,
+    remaining: int | str,
+    total: int | str,
+) -> dict[str, object]:
+    return {
+        "completed": completed,
+        "reused": reused,
+        "failed": failed,
+        "remaining": remaining,
+        "total": total,
+    }
+
+
+def _unknown_work_counts() -> dict[str, object]:
+    return _work_counts("unknown", "unknown", "unknown", "unknown", "unknown")
+
+
+def _latest_timestamp(left: str | None, right: str | None) -> str:
+    known = [value for value in (left, right) if value not in {None, "unknown"}]
+    if not known:
+        return "unknown"
+    return max(known, key=_as_datetime)
+
+
+def _as_datetime(value: str) -> datetime:
+    parsed = datetime.fromisoformat(value)
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        raise ValueError("Run timestamp must include a timezone")
+    return parsed.astimezone(timezone.utc)
 
 
 def _validate_request(action: str, request: dict[str, object]) -> None:

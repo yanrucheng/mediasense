@@ -12,11 +12,7 @@ SKILL_DIR = ROOT / ".agents" / "skills" / "mediasense-precheck"
 SKILL_PATH = SKILL_DIR / "SKILL.md"
 OPENAI_PATH = SKILL_DIR / "agents" / "openai.yaml"
 RUN_TOOL_PATH = (
-    ROOT
-    / "docs"
-    / "spec"
-    / "spec-260827-1915A-precheck-run"
-    / "precheck-run.tool.json"
+    ROOT / "docs" / "spec" / "spec-260827-1915A-precheck-run" / "precheck-run.tool.json"
 )
 READ_TOOL_PATH = (
     ROOT
@@ -105,6 +101,16 @@ def test_skill_keeps_reverse_geocoding_run_scoped_and_batch_bound() -> None:
     assert "matching proceed or skip decision for the complete frozen" in skill
     assert "per-coordinate confirmation" in skill
     assert "do not assume that its\nRun contract is a sequence" in skill
+
+
+def test_skill_distinguishes_source_accounting_from_execution_liveness() -> None:
+    skill = SKILL_PATH.read_text(encoding="utf-8")
+
+    assert "`progress` is Source Item accounting" in skill
+    assert "`activity` is current execution evidence" in skill
+    assert "`no_recent_progress`" in skill
+    assert "`suspected_stalled`" in skill
+    assert "percentage, ETA, throughput, or success promise" in skill
 
 
 def test_forward_scenarios_cover_required_behavior_and_phase_boundaries() -> None:

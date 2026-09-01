@@ -4,7 +4,7 @@ title: "MediaSense PreCheck Run Tool Contract"
 type: spec
 status: active
 created: 2026-08-27
-updated: 2026-08-30
+updated: 2026-09-01
 timezone: "Asia/Shanghai"
 parent: "index-spec"
 depends-on:
@@ -40,12 +40,17 @@ The Tool is authoritative for:
 
 - one `run_ref` and its public state;
 - the Dataset and optional prior Result lineage bound at start;
-- current business progress, blocking facts, and allowed control actions; and
+- current Source Item accounting, execution activity, blocking facts, and allowed
+  control actions; and
 - whether automatic publication completed and which immutable `result_ref` was published.
 
 The Tool may create and mutate Working Run state and internal derived artifacts. It may not mutate source media or any published Result. External and unusually resource-intensive work remains disabled until its exact pending work is known and the user confirms it through a paused Run checkpoint. The permitted online exception is coordinate-only reverse geocoding over the normalized, deduplicated representative-coordinate batch frozen after compression; one matching Run decision covers that batch, not arbitrary later coordinates.
 
-Mutable Work Records, cache keys, checkpoints, leases, SQLite rows, internal producer states, artifact paths, and implementation phases are not public. A stronger implementation may replace any of them without changing this contract.
+Mutable Work Records, cache keys, checkpoints, leases, SQLite rows, internal
+producer states, artifact paths, and orchestration mechanics are not public. The
+coarse `activity.phase` vocabulary names user-relevant evidence capabilities and
+publication boundaries; it does not expose or prescribe their internal order,
+storage, worker topology, or implementation.
 
 ## Actions
 
@@ -71,6 +76,9 @@ entity.
 - its exact Dataset and optional prior Result lineage;
 - one public state;
 - the fixed business progress counters `discovered`, `accounted`, `usable`, `exceptional`, and `unresolved`, each a nonnegative integer or the explicit string `unknown`;
+- one `activity` projection with the current coarse phase, liveness classification,
+  phase-local completed/reused/failed/remaining/total Work counts, the last
+  durable progress time, and a bounded cross-phase error summary;
 - the currently permitted state-changing actions;
 - a structured reason and observable recovery condition where required; and
 - for `completed`, the published `result_ref` and the Result's exact `coverage`, `readiness`, and `integrity` values.
@@ -98,6 +106,52 @@ accounted = usable + exceptional + unresolved
 If only some bucket values are known, their sum must not exceed a known `accounted`. If both `discovered` and `accounted` are known, `accounted` must not exceed `discovered`. A completed status must know `accounted`; unknown bucket values remain allowed when the published Result does not expose enough evidence to prove them.
 
 For a completed Run, conformance requires more than shape validation: `accounted` must equal the published Result's Accounting Closure. Concrete bucket values must be derivable from the complete Result relationship or another Result-owned proof. Fixture population size, a sampled page, or a prior Run is not a substitute for this Run's discovered or accounted count.
+
+#### Execution activity semantics
+
+`activity` is distinct from Source Item accounting. Its phase-local `work`
+counters may change while all five `progress` counters remain unchanged. They
+refer to bounded logical operations in the named phase, not files, Evidence,
+percent completion, throughput, or an ETA.
+
+| Field | Stable meaning |
+| --- | --- |
+| `phase` | The current user-relevant capability boundary: queued, source accounting, metadata, renditions, video, GPX, embeddings, sensitivity, bundling, compression, optional external evidence, publication, complete, or explicitly unknown. It does not promise one fixed implementation order. |
+| `work.completed` | Phase operations successfully computed in this Working Run. |
+| `work.reused` | Phase operations satisfied by valid work committed before this Working Run. |
+| `work.failed` | Phase operations with a current failed, blocked, or exhausted outcome; these do not alone make the whole Run `failed`. |
+| `work.remaining` | Exact unfinished phase operations when knowable, otherwise `unknown`. |
+| `work.total` | Exact phase operation set when knowable, otherwise `unknown`. |
+| `last_progress_at` | UTC time of the latest durable phase transition, accounting commit, Work transition, or Result publication known to this Run, or `unknown` when an older retained checkpoint cannot prove it. A worker heartbeat alone does not advance it. |
+| `errors` | Current failed Work count grouped by at most five public phases. `truncated` says whether more phase groups exist. Raw paths, Work IDs, cache locations, provider payloads, and internal exception text are never included. |
+
+Known phase Work counts close as:
+
+```text
+total = completed + reused + failed + remaining
+```
+
+Unknown totals or remaining counts stay the literal `unknown`; the Tool does not
+derive percentages, ETA, throughput, or success promises from incomplete work.
+Error counts are operational summaries and remain separate from `progress`
+Source Item conditions and immutable Result qualifications.
+
+`activity.state` makes the evidence behind liveness explicit:
+
+| Activity state | Meaning |
+| --- | --- |
+| `queued` | The durable Run is waiting for a worker to begin or resume. |
+| `working` | A worker is responsive and durable progress is recent. |
+| `no_recent_progress` | A worker is responsive, but no durable phase or Work transition has been observed recently. This may be a legitimately slow operation and is not an ETA or failure claim. |
+| `suspected_stalled` | The Run remains `running`, but durable worker liveness is stale or absent after work began. The host may safely reconcile and reclaim the same Run. |
+| `waiting` | Progress depends on a reported external or Human condition, such as a blocked source or confirmation. |
+| `paused` | The Run is durably paused and requires `resume` to continue. |
+| `finished` | The Run is completed, cancelled, or failed; the top-level state provides the exact outcome. |
+
+Heartbeat cadence and stale thresholds are runtime policy, not contract values.
+They are not exposed as progress. The same `run_ref` reconstructs `activity`
+from durable Run, accounting, and Work facts after client disconnection or host
+restart.
 
 ### `pause`, `resume`, and `cancel`
 
@@ -129,13 +183,17 @@ The host is responsible for invoking or rescheduling the private coordinator
 after `start` or `resume`. This internal call is not exposed as a sixth Tool
 action. A worker may finish already-admitted bounded work while a pause or
 cancel request is being committed, but it must observe the durable state before
-admitting further Work or publishing a Result.
+admitting further Work or publishing a Result. Worker liveness is durably
+heartbeated at a bounded cadence. An in-process worker exit that does not reach an
+attention or terminal state changes the Run to resumable `paused`; a process loss
+that cannot run cleanup becomes `suspected_stalled` after its heartbeat expires
+and may be reclaimed by a later host without changing `run_ref`.
 
 ## Public lifecycle
 
 | State | Meaning | Required status facts | New control actions |
 | --- | --- | --- | --- |
-| `running` | Work is able to progress. | Progress; no published Result. | `pause`, `cancel` |
+| `running` | Work is queued, active, or awaiting liveness reconciliation. | Progress and activity; no published Result. | `pause`, `cancel` |
 | `paused` | No work is progressing, but the Run is durably resumable. | Reason distinguishing at least requested pause from process interruption; recovery condition when useful. | `resume`, `cancel` |
 | `blocked` | An observable external condition prevents progress. | Reason and a verifiable condition under which resume may succeed. | `resume`, `cancel` |
 | `completed` | A Result has been atomically published. | `published_result`; no further controls. | none |
@@ -146,7 +204,10 @@ admitting further Work or publishing a Result.
 
 `allowed_actions` is an unordered set. Its JSON array representation must contain exactly the permitted action names without duplicates; array order has no business meaning and adapters may render it differently.
 
-One unsupported, invalid, or failed media item does not by itself make a Run `failed`. It contributes to `exceptional` or `unresolved` accounting and, when a Result is published, to the existing Result accounting and qualification semantics.
+One unsupported, invalid, or failed media item does not by itself make a Run
+`failed`. Its current operational failure is visible in `activity.errors`; it
+contributes to `exceptional` or `unresolved` accounting and, when a Result is
+published, to the existing Result accounting and qualification semantics.
 
 ## Automatic Result publication
 
@@ -186,9 +247,13 @@ Errors use the shared `outcome: "error"` envelope with an action, optional resol
 The lifecycle Mock demonstrates:
 
 - first start and successor start from `prior_result_ref`;
-- running progress, requested pause, interruption-safe resume, and cancellation;
+- running phase progress, bounded localized errors, requested pause,
+  interruption-safe resume, and cancellation;
 - blocked recovery information;
 - a partial, plan-ready, valid 224-item Result whose public accounting matches the existing Result Mock; and
 - no Result on paused, blocked, or cancelled states.
 
-JSON Schema proves the closed request and response shapes. Semantic conformance tests additionally prove state/action rules, idempotency, lineage, automatic publication, localized media failure, and exact agreement with the existing PreCheck Result Mock.
+JSON Schema proves the closed request and response shapes. Semantic conformance
+tests additionally prove state/action rules, idempotency, lineage, activity
+liveness and count semantics, automatic publication, localized media failure,
+and exact agreement with the existing PreCheck Result Mock.

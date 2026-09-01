@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from datetime import datetime, timedelta, timezone
 import errno
 import json
 from pathlib import Path
@@ -93,6 +94,17 @@ def _draft_for_running_run(
 
 def _assert_valid(response: dict[str, object]) -> None:
     _output_validator().validate(response)
+
+
+class _FakeClock:
+    def __init__(self) -> None:
+        self.current = datetime(2026, 9, 1, tzinfo=timezone.utc)
+
+    def __call__(self) -> datetime:
+        return self.current
+
+    def advance(self, seconds: float) -> None:
+        self.current += timedelta(seconds=seconds)
 
 
 def test_start_is_durable_idempotent_and_conflict_safe(tmp_path: Path) -> None:
@@ -215,6 +227,7 @@ def test_confirmation_binds_authority_to_the_frozen_work_set(tmp_path: Path) -> 
     )
     _assert_valid(paused)
     assert paused["state"] == "paused"
+    assert paused["activity"]["state"] == "waiting"
     assert paused["confirmation"]["quantity"] == 237
 
     missing_decision = tool.run({"action": "resume", "run_ref": run_ref})
@@ -274,10 +287,12 @@ def test_block_interruption_and_failure_remain_observable(tmp_path: Path) -> Non
     )
     _assert_valid(blocked)
     assert blocked["state"] == "blocked"
+    assert blocked["activity"]["state"] == "waiting"
     tool.run({"action": "resume", "run_ref": first_ref})
     interrupted = tool.mark_interrupted(first_ref)
     _assert_valid(interrupted)
     assert interrupted["reason"]["code"] == "process_interrupted"
+    assert interrupted["activity"]["state"] == "paused"
 
     second = tool.run(
         {
@@ -293,6 +308,7 @@ def test_block_interruption_and_failure_remain_observable(tmp_path: Path) -> Non
     )
     _assert_valid(failed)
     assert failed["state"] == "failed"
+    assert failed["activity"]["state"] == "finished"
     assert "published_result" not in failed
 
 
@@ -324,6 +340,8 @@ def test_completion_verifies_result_and_successor_lineage(tmp_path: Path) -> Non
         "readiness": "plan_ready",
         "integrity": "valid",
     }
+    assert completed["activity"]["state"] == "finished"
+    assert completed["activity"]["phase"] == "complete"
 
     successor = tool.run(
         {
@@ -574,6 +592,153 @@ def test_progress_rejects_nonclosing_or_derived_counts(tmp_path: Path) -> None:
         assert "exceed" in str(error)
     else:
         raise AssertionError("non-closing progress was accepted")
+
+
+def test_status_projects_work_progress_while_source_accounting_is_unchanged(
+    tmp_path: Path,
+) -> None:
+    database, accounting = _workspace(tmp_path, "dataset-a")
+    source = tmp_path / "source"
+    source.mkdir()
+    Image.new("RGB", (20, 20), "blue").save(source / "reused.jpg")
+    first_run = accounting.start_or_resume_run("dataset-a", source)
+    accounting.process_run(first_run)
+    ImageRenditionProducer(database).produce(first_run, Path("reused.jpg"))
+
+    Image.new("RGB", (20, 20), "green").save(source / "new.jpg")
+    second_run = accounting.start_or_resume_run("dataset-a", source)
+    accounting.process_run(second_run)
+    tool = PrecheckRunTool(database)
+    started = tool.run(
+        {
+            "action": "start",
+            "dataset_ref": "dataset:dataset-a",
+            "request_id": "request:visible-work",
+        }
+    )
+    run_ref = str(started["run_ref"])
+    tool.bind_working_run(run_ref, second_run)
+    tool.record_phase(run_ref, "renditions", total=2)
+    before = tool.run({"action": "status", "run_ref": run_ref})
+
+    reused = ImageRenditionProducer(database).produce(second_run, Path("reused.jpg"))
+    after_reuse = tool.run({"action": "status", "run_ref": run_ref})
+    created = ImageRenditionProducer(database).produce(second_run, Path("new.jpg"))
+    after_create = tool.run({"action": "status", "run_ref": run_ref})
+
+    assert reused.reused is True
+    assert created.reused is False
+    assert before["progress"] == after_reuse["progress"] == after_create["progress"]
+    assert before["activity"]["work"] == {
+        "completed": 0,
+        "reused": 0,
+        "failed": 0,
+        "remaining": 2,
+        "total": 2,
+    }
+    assert after_reuse["activity"]["work"] == {
+        "completed": 0,
+        "reused": 1,
+        "failed": 0,
+        "remaining": 1,
+        "total": 2,
+    }
+    assert after_create["activity"]["work"] == {
+        "completed": 1,
+        "reused": 1,
+        "failed": 0,
+        "remaining": 0,
+        "total": 2,
+    }
+    assert after_create["activity"]["phase"] == "renditions"
+    assert (
+        after_create["activity"]["last_progress_at"]
+        >= after_reuse["activity"]["last_progress_at"]
+    )
+
+
+def test_status_distinguishes_recent_work_no_progress_and_stale_worker(
+    tmp_path: Path,
+) -> None:
+    database, _accounting = _workspace(tmp_path, "dataset-a")
+    clock = _FakeClock()
+    tool = PrecheckRunTool(
+        database,
+        clock=clock,
+        heartbeat_interval_seconds=10,
+        worker_stale_seconds=30,
+        progress_stale_seconds=20,
+    )
+    started = tool.run(
+        {
+            "action": "start",
+            "dataset_ref": "dataset:dataset-a",
+            "request_id": "request:liveness",
+        }
+    )
+    run_ref = str(started["run_ref"])
+    tool.record_phase(run_ref, "metadata", total=3)
+    assert tool._store.claim_execution_worker(
+        run_ref, "worker:test", stale_after=timedelta(seconds=30)
+    )
+    assert not tool._store.claim_execution_worker(
+        run_ref, "worker:other", stale_after=timedelta(seconds=30)
+    )
+
+    working = tool.run({"action": "status", "run_ref": run_ref})
+    clock.advance(21)
+    assert tool._store.heartbeat_execution_worker(run_ref, "worker:test")
+    quiet = tool.run({"action": "status", "run_ref": run_ref})
+    clock.advance(31)
+    reopened = PrecheckRunTool(
+        database,
+        clock=clock,
+        heartbeat_interval_seconds=10,
+        worker_stale_seconds=30,
+        progress_stale_seconds=20,
+    )
+    stale = reopened.run({"action": "status", "run_ref": run_ref})
+
+    for response in (working, quiet, stale):
+        _assert_valid(response)
+    assert working["activity"]["state"] == "working"
+    assert quiet["activity"]["state"] == "no_recent_progress"
+    assert stale["state"] == "running"
+    assert stale["activity"]["state"] == "suspected_stalled"
+    assert (
+        stale["activity"]["last_progress_at"]
+        == (working["activity"]["last_progress_at"])
+    )
+    assert reopened._store.claim_execution_worker(
+        run_ref, "worker:replacement", stale_after=timedelta(seconds=30)
+    )
+    recovered = reopened.run({"action": "status", "run_ref": run_ref})
+    _assert_valid(recovered)
+    assert recovered["run_ref"] == run_ref
+    assert recovered["activity"]["state"] == "no_recent_progress"
+
+
+def test_status_recovers_a_legacy_plain_phase_checkpoint(tmp_path: Path) -> None:
+    database, _accounting = _workspace(tmp_path, "dataset-a")
+    tool = PrecheckRunTool(database)
+    started = tool.run(
+        {
+            "action": "start",
+            "dataset_ref": "dataset:dataset-a",
+            "request_id": "request:legacy-checkpoint",
+        }
+    )
+    with sqlite3.connect(database) as connection:
+        connection.execute(
+            "UPDATE precheck_runs SET execution_checkpoint = ? WHERE run_ref = ?",
+            ("metadata:complete", started["run_ref"]),
+        )
+
+    status = tool.run({"action": "status", "run_ref": started["run_ref"]})
+
+    _assert_valid(status)
+    assert status["activity"]["phase"] == "metadata"
+    assert status["activity"]["work"]["remaining"] == 0
 
 
 def test_database_lock_returns_temporary_failure_without_state_change(

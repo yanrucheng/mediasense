@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from collections.abc import Callable
+from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
 import sqlite3
@@ -40,11 +41,18 @@ class RunExecutionConflict(ValueError):
 
 
 class SQLiteRunStore:
-    def __init__(self, database_path: Path, *, sqlite_timeout: float = 30) -> None:
+    def __init__(
+        self,
+        database_path: Path,
+        *,
+        sqlite_timeout: float = 30,
+        clock: Callable[[], datetime] | None = None,
+    ) -> None:
         if sqlite_timeout < 0:
             raise ValueError("sqlite_timeout cannot be negative")
         self.database_path = Path(database_path)
         self.sqlite_timeout = sqlite_timeout
+        self._clock = clock or (lambda: datetime.now(timezone.utc))
         self._verify_schema()
 
     def start(
@@ -56,7 +64,7 @@ class SQLiteRunStore:
     ) -> tuple[dict[str, object], bool]:
         request_json = _json(request)
         request_id = str(request["request_id"])
-        observed_at = _now()
+        observed_at = self.now()
         with self._transaction() as connection:
             existing = connection.execute(
                 "SELECT * FROM precheck_runs WHERE request_id = ?", (request_id,)
@@ -141,7 +149,7 @@ class SQLiteRunStore:
                     SET accounting_run_id = ?, updated_at = ?
                     WHERE run_ref = ?
                     """,
-                    (accounting_run_id, _now(), run_ref),
+                    (accounting_run_id, self.now(), run_ref),
                 )
             return _record(self._require(connection, run_ref))
 
@@ -168,25 +176,209 @@ class SQLiteRunStore:
                     SET execution_config_json = ?, updated_at = ?
                     WHERE run_ref = ?
                     """,
-                    (encoded, _now(), run_ref),
+                    (encoded, self.now(), run_ref),
                 )
             return _record(self._require(connection, run_ref))
 
-    def set_execution_checkpoint(self, run_ref: str, checkpoint: str) -> None:
+    def set_execution_checkpoint(
+        self,
+        run_ref: str,
+        checkpoint: str,
+        *,
+        complete: bool = False,
+        total: int | str | None = None,
+    ) -> None:
         if not checkpoint.strip():
             raise ValueError("execution checkpoint must be non-empty")
+        if (
+            total != "unknown"
+            and total is not None
+            and (not isinstance(total, int) or isinstance(total, bool) or total < 0)
+        ):
+            raise ValueError(
+                "execution checkpoint total must be nonnegative or unknown"
+            )
         with self._transaction() as connection:
             record = _record(self._require(connection, run_ref))
             if record["state"] not in {"running", "paused", "blocked"}:
                 raise RunStateConflict(record)
-            connection.execute(
-                """
-                UPDATE precheck_runs
-                SET execution_checkpoint = ?, updated_at = ?
-                WHERE run_ref = ?
-                """,
-                (checkpoint, _now(), run_ref),
+            observed_at = self.now()
+            previous = record["execution_checkpoint"]
+            assert isinstance(previous, dict)
+            previous_phase = previous["phase"]
+            if total is None:
+                total = previous["total"] if previous_phase == checkpoint else "unknown"
+            value = {
+                "version": 1,
+                "phase": checkpoint,
+                "complete": complete,
+                "total": total,
+                "last_progress_at": (
+                    previous["last_progress_at"]
+                    if previous_phase == checkpoint
+                    and previous["complete"] == complete
+                    and previous["total"] == total
+                    else observed_at
+                ),
+                "worker": previous["worker"],
+            }
+            self._write_execution_checkpoint(
+                connection, run_ref, value, observed_at=observed_at
             )
+
+    def claim_execution_worker(
+        self,
+        run_ref: str,
+        worker_token: str,
+        *,
+        stale_after: timedelta,
+    ) -> bool:
+        """Claim one Run worker unless another current heartbeat still owns it."""
+
+        if not worker_token.strip():
+            raise ValueError("worker token must be non-empty")
+        if stale_after <= timedelta(0):
+            raise ValueError("worker stale interval must be positive")
+        with self._transaction() as connection:
+            record = _record(self._require(connection, run_ref))
+            if record["state"] != "running":
+                return False
+            observed_at = self.now()
+            checkpoint = record["execution_checkpoint"]
+            assert isinstance(checkpoint, dict)
+            worker = checkpoint["worker"]
+            if isinstance(worker, dict) and worker.get("token") != worker_token:
+                heartbeat_at = _as_datetime(str(worker["heartbeat_at"]))
+                if _as_datetime(observed_at) - heartbeat_at <= stale_after:
+                    return False
+            checkpoint["worker"] = {
+                "token": worker_token,
+                "heartbeat_at": observed_at,
+            }
+            self._write_execution_checkpoint(
+                connection, run_ref, checkpoint, observed_at=observed_at
+            )
+        return True
+
+    def heartbeat_execution_worker(self, run_ref: str, worker_token: str) -> bool:
+        """Refresh one owned worker heartbeat without claiming execution progress."""
+
+        with self._transaction() as connection:
+            record = _record(self._require(connection, run_ref))
+            if record["state"] != "running":
+                return False
+            checkpoint = record["execution_checkpoint"]
+            assert isinstance(checkpoint, dict)
+            worker = checkpoint["worker"]
+            if not isinstance(worker, dict) or worker.get("token") != worker_token:
+                return False
+            observed_at = self.now()
+            worker["heartbeat_at"] = observed_at
+            self._write_execution_checkpoint(
+                connection, run_ref, checkpoint, observed_at=observed_at
+            )
+        return True
+
+    def release_execution_worker(self, run_ref: str, worker_token: str) -> None:
+        """Release only the caller's worker ownership, preserving Run progress."""
+
+        with self._transaction() as connection:
+            record = _record(self._require(connection, run_ref))
+            checkpoint = record["execution_checkpoint"]
+            assert isinstance(checkpoint, dict)
+            worker = checkpoint["worker"]
+            if not isinstance(worker, dict) or worker.get("token") != worker_token:
+                return
+            checkpoint["worker"] = None
+            self._write_execution_checkpoint(
+                connection, run_ref, checkpoint, observed_at=self.now()
+            )
+
+    def execution_facts(self, accounting_run_id: str | None) -> dict[str, object]:
+        """Read bounded aggregate facts used by the public activity projection."""
+
+        if accounting_run_id is None:
+            return {"accounting": None, "work": ()}
+        with self._connect() as connection:
+            accounting = connection.execute(
+                "SELECT status, updated_at FROM working_runs WHERE run_id = ?",
+                (accounting_run_id,),
+            ).fetchone()
+            if accounting is None:
+                raise RunBindingError("bound accounting Run does not exist")
+            accounting_counts = connection.execute(
+                """
+                SELECT change_kind, COUNT(*) AS count
+                FROM run_items WHERE run_id = ? GROUP BY change_kind
+                """,
+                (accounting_run_id,),
+            ).fetchall()
+            work_rows = connection.execute(
+                """
+                SELECT work_records.capability, work_records.status,
+                       CASE WHEN EXISTS (
+                           SELECT 1 FROM work_attempts
+                           WHERE work_attempts.work_id = work_records.work_id
+                             AND work_attempts.run_id = run_work_records.run_id
+                       ) THEN 1 ELSE 0 END AS attempted_here,
+                       COUNT(*) AS count,
+                       MAX(CASE WHEN EXISTS (
+                           SELECT 1 FROM work_attempts
+                           WHERE work_attempts.work_id = work_records.work_id
+                             AND work_attempts.run_id = run_work_records.run_id
+                       ) THEN work_records.updated_at
+                       ELSE run_work_records.requested_at END) AS last_progress_at
+                FROM run_work_records
+                JOIN work_records USING (work_id)
+                WHERE run_work_records.run_id = ?
+                GROUP BY work_records.capability, work_records.status, attempted_here
+                ORDER BY work_records.capability, work_records.status, attempted_here
+                """,
+                (accounting_run_id,),
+            ).fetchall()
+        return {
+            "accounting": {
+                "state": str(accounting["status"]),
+                "last_progress_at": str(accounting["updated_at"]),
+                "counts": {
+                    str(row["change_kind"]): int(row["count"])
+                    for row in accounting_counts
+                },
+            },
+            "work": tuple(
+                {
+                    "capability": str(row["capability"]),
+                    "status": str(row["status"]),
+                    "attempted_here": bool(row["attempted_here"]),
+                    "count": int(row["count"]),
+                    "last_progress_at": str(row["last_progress_at"]),
+                }
+                for row in work_rows
+            ),
+        }
+
+    def now(self) -> str:
+        observed = self._clock()
+        if observed.tzinfo is None or observed.utcoffset() is None:
+            raise ValueError("Run clock must return a timezone-aware datetime")
+        return observed.astimezone(timezone.utc).isoformat(timespec="microseconds")
+
+    @staticmethod
+    def _write_execution_checkpoint(
+        connection: sqlite3.Connection,
+        run_ref: str,
+        checkpoint: dict[str, object],
+        *,
+        observed_at: str,
+    ) -> None:
+        connection.execute(
+            """
+            UPDATE precheck_runs
+            SET execution_checkpoint = ?, updated_at = ?
+            WHERE run_ref = ?
+            """,
+            (_json(checkpoint), observed_at, run_ref),
+        )
 
     def unfinished_accounting_run(self, dataset_id: str) -> str | None:
         with self._connect() as connection:
@@ -441,7 +633,7 @@ class SQLiteRunStore:
                 UPDATE precheck_runs SET progress_json = ?, updated_at = ?
                 WHERE run_ref = ?
                 """,
-                (_json(progress), _now(), run_ref),
+                (_json(progress), self.now(), run_ref),
             )
             row = self._require(connection, run_ref)
         return _record(row)
@@ -466,7 +658,7 @@ class SQLiteRunStore:
                     confirmation_fingerprint = NULL, updated_at = ?
                 WHERE run_ref = ?
                 """,
-                (_json(published_result), _now(), run_ref),
+                (_json(published_result), self.now(), run_ref),
             )
             row = self._require(connection, run_ref)
         return _record(row)
@@ -496,7 +688,7 @@ class SQLiteRunStore:
                 None if confirmation is None else _json(confirmation),
                 confirmation_fingerprint,
                 confirmation_decision,
-                _now(),
+                self.now(),
                 run_ref,
             ),
         )
@@ -561,7 +753,11 @@ def _record(row: sqlite3.Row) -> dict[str, object]:
         "published_result": _optional_json(row["published_result_json"]),
         "accounting_run_id": row["accounting_run_id"],
         "execution_config": _optional_json(row["execution_config_json"]),
-        "execution_checkpoint": row["execution_checkpoint"],
+        "execution_checkpoint": _execution_checkpoint(
+            row["execution_checkpoint"], fallback_at=str(row["created_at"])
+        ),
+        "created_at": str(row["created_at"]),
+        "updated_at": str(row["updated_at"]),
     }
 
 
@@ -589,8 +785,48 @@ def _json(value: object) -> str:
     )
 
 
-def _now() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="microseconds")
+def _execution_checkpoint(value: object, *, fallback_at: str) -> dict[str, object]:
+    if isinstance(value, dict):
+        decoded = value
+    elif isinstance(value, str):
+        try:
+            candidate = json.loads(value)
+        except json.JSONDecodeError:
+            candidate = None
+        if isinstance(candidate, dict):
+            decoded = candidate
+        else:
+            complete = value.endswith(":complete")
+            decoded = {
+                "phase": value.removesuffix(":complete"),
+                "complete": complete,
+                "total": "unknown",
+                "last_progress_at": "unknown",
+                "worker": None,
+            }
+    else:
+        decoded = {
+            "phase": "queued",
+            "complete": False,
+            "total": "unknown",
+            "last_progress_at": fallback_at,
+            "worker": None,
+        }
+    return {
+        "version": 1,
+        "phase": str(decoded.get("phase", "queued")),
+        "complete": bool(decoded.get("complete", False)),
+        "total": decoded.get("total", "unknown"),
+        "last_progress_at": str(decoded.get("last_progress_at", fallback_at)),
+        "worker": decoded.get("worker"),
+    }
+
+
+def _as_datetime(value: str) -> datetime:
+    parsed = datetime.fromisoformat(value)
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        raise ValueError("persisted Run timestamp must include a timezone")
+    return parsed.astimezone(timezone.utc)
 
 
 __all__ = [

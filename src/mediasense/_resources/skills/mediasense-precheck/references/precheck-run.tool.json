@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:mediasense:tool:precheck-run",
   "name": "mediasense.precheck.run",
-  "description": "Manage one mutable, durable PreCheck Working Run and report automatic immutable Result publication without exposing internal execution state.",
+  "description": "Manage one mutable, durable PreCheck Working Run, report observable execution activity, and report automatic immutable Result publication without exposing private working records.",
   "inputSchema": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "$id": "urn:mediasense:tool:precheck-run-input",
@@ -157,6 +157,87 @@
           { "const": "unknown" }
         ]
       },
+      "execution_phase": {
+        "enum": [
+          "queued",
+          "source_accounting",
+          "metadata",
+          "renditions",
+          "video",
+          "gpx",
+          "embeddings",
+          "sensitivity",
+          "bundling",
+          "compression",
+          "external_evidence",
+          "publishing",
+          "complete",
+          "unknown"
+        ]
+      },
+      "activity_state": {
+        "enum": [
+          "queued",
+          "working",
+          "no_recent_progress",
+          "suspected_stalled",
+          "waiting",
+          "paused",
+          "finished"
+        ]
+      },
+      "phase_work": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["completed", "reused", "failed", "remaining", "total"],
+        "properties": {
+          "completed": { "$ref": "#/$defs/count_or_unknown" },
+          "reused": { "$ref": "#/$defs/count_or_unknown" },
+          "failed": { "$ref": "#/$defs/count_or_unknown" },
+          "remaining": { "$ref": "#/$defs/count_or_unknown" },
+          "total": { "$ref": "#/$defs/count_or_unknown" }
+        }
+      },
+      "error_phase_summary": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["phase", "count"],
+        "properties": {
+          "phase": { "$ref": "#/$defs/execution_phase" },
+          "count": { "type": "integer", "minimum": 1 }
+        }
+      },
+      "error_summary": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["total", "by_phase", "truncated"],
+        "properties": {
+          "total": { "type": "integer", "minimum": 0 },
+          "by_phase": {
+            "type": "array",
+            "maxItems": 5,
+            "items": { "$ref": "#/$defs/error_phase_summary" }
+          },
+          "truncated": { "type": "boolean" }
+        }
+      },
+      "activity": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["state", "phase", "work", "last_progress_at", "errors"],
+        "properties": {
+          "state": { "$ref": "#/$defs/activity_state" },
+          "phase": { "$ref": "#/$defs/execution_phase" },
+          "work": { "$ref": "#/$defs/phase_work" },
+          "last_progress_at": {
+            "anyOf": [
+              { "type": "string", "format": "date-time" },
+              { "const": "unknown" }
+            ]
+          },
+          "errors": { "$ref": "#/$defs/error_summary" }
+        }
+      },
       "progress": {
         "type": "object",
         "additionalProperties": false,
@@ -234,6 +315,7 @@
           "dataset_ref",
           "state",
           "progress",
+          "activity",
           "allowed_actions"
         ],
         "properties": {
@@ -244,6 +326,7 @@
           "prior_result_ref": { "$ref": "#/$defs/result_ref" },
           "state": { "$ref": "#/$defs/public_state" },
           "progress": { "$ref": "#/$defs/progress" },
+          "activity": { "$ref": "#/$defs/activity" },
           "allowed_actions": {
             "type": "array",
             "uniqueItems": true,
@@ -259,6 +342,23 @@
             "required": ["state", "allowed_actions"],
             "properties": {
               "state": { "const": "running" },
+              "activity": {
+                "allOf": [
+                  { "$ref": "#/$defs/activity" },
+                  {
+                    "properties": {
+                      "state": {
+                        "enum": [
+                          "queued",
+                          "working",
+                          "no_recent_progress",
+                          "suspected_stalled"
+                        ]
+                      }
+                    }
+                  }
+                ]
+              },
               "allowed_actions": { "$ref": "#/$defs/running_actions" }
             }
           }
@@ -273,6 +373,16 @@
             "required": ["state", "allowed_actions", "reason"],
             "properties": {
               "state": { "const": "paused" },
+              "activity": {
+                "allOf": [
+                  { "$ref": "#/$defs/activity" },
+                  {
+                    "properties": {
+                      "state": { "enum": ["waiting", "paused"] }
+                    }
+                  }
+                ]
+              },
               "allowed_actions": { "$ref": "#/$defs/resumable_actions" },
               "reason": { "$ref": "#/$defs/reason" },
               "confirmation": { "$ref": "#/$defs/confirmation" }
@@ -304,6 +414,12 @@
             "required": ["state", "allowed_actions", "reason"],
             "properties": {
               "state": { "const": "blocked" },
+              "activity": {
+                "allOf": [
+                  { "$ref": "#/$defs/activity" },
+                  { "properties": { "state": { "const": "waiting" } } }
+                ]
+              },
               "allowed_actions": { "$ref": "#/$defs/resumable_actions" },
               "reason": { "$ref": "#/$defs/reason" }
             }
@@ -319,6 +435,17 @@
             "required": ["state", "allowed_actions", "published_result"],
             "properties": {
               "state": { "const": "completed" },
+              "activity": {
+                "allOf": [
+                  { "$ref": "#/$defs/activity" },
+                  {
+                    "properties": {
+                      "state": { "const": "finished" },
+                      "phase": { "const": "complete" }
+                    }
+                  }
+                ]
+              },
               "allowed_actions": { "$ref": "#/$defs/no_actions" },
               "progress": {
                 "allOf": [
@@ -344,6 +471,12 @@
             "required": ["state", "allowed_actions"],
             "properties": {
               "state": { "const": "cancelled" },
+              "activity": {
+                "allOf": [
+                  { "$ref": "#/$defs/activity" },
+                  { "properties": { "state": { "const": "finished" } } }
+                ]
+              },
               "allowed_actions": { "$ref": "#/$defs/no_actions" }
             }
           }
@@ -358,6 +491,12 @@
             "required": ["state", "allowed_actions", "reason"],
             "properties": {
               "state": { "const": "failed" },
+              "activity": {
+                "allOf": [
+                  { "$ref": "#/$defs/activity" },
+                  { "properties": { "state": { "const": "finished" } } }
+                ]
+              },
               "allowed_actions": { "$ref": "#/$defs/no_actions" },
               "reason": { "$ref": "#/$defs/reason" }
             }

@@ -390,9 +390,72 @@ def test_local_item_failure_isolated_while_other_source_completes(
         "exceptional": 1,
         "unresolved": 0,
     }
+    assert status["activity"]["state"] == "finished"
+    assert status["activity"]["phase"] == "complete"
+    assert status["activity"]["errors"] == {
+        "total": 1,
+        "by_phase": [{"phase": "renditions", "count": 1}],
+        "truncated": False,
+    }
     works = WorkStore(database).list_run_work(accounting_run_id)
     assert sum(work.status.value == "succeeded" for work in works) >= 2
     assert sum(work.status.value == "terminal_failure" for work in works) == 1
+
+
+def test_local_item_failure_is_visible_before_result_publication(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    database, source, _accounting_run_id = _prepare_source_bound_run(tmp_path)
+    Image.new("RGB", (40, 30), "green").save(source / "good.jpg")
+    (source / "broken.jpg").write_bytes(b"not an image")
+    config = PrecheckExecutionConfig(
+        metadata=False,
+        gpx=False,
+        video=False,
+        bundles=False,
+        compression_target=1,
+    )
+    reached_boundary = Event()
+    release_worker = Event()
+
+    def wait_after_rendition(
+        _orchestrator: PrecheckOrchestrator, _run_ref: str, phase: str
+    ) -> None:
+        if phase == "renditions":
+            reached_boundary.set()
+            assert release_worker.wait(timeout=5)
+
+    monkeypatch.setattr(PrecheckOrchestrator, "_after_phase", wait_after_rendition)
+    tool = PrecheckRunTool(database, execution_config=config)
+    started = tool.run(
+        {
+            "action": "start",
+            "dataset_ref": "dataset:dataset-a",
+            "request_id": "request:visible-isolated-failure",
+        }
+    )
+    results: list[dict[str, object]] = []
+    worker = Thread(
+        target=lambda: results.append(tool.advance(str(started["run_ref"])))
+    )
+    worker.start()
+    assert reached_boundary.wait(timeout=5)
+
+    status = tool.run({"action": "status", "run_ref": started["run_ref"]})
+    assert status["state"] == "running"
+    assert status["activity"]["phase"] == "renditions"
+    assert status["activity"]["work"]["failed"] == 1
+    assert status["activity"]["errors"] == {
+        "total": 1,
+        "by_phase": [{"phase": "renditions", "count": 1}],
+        "truncated": False,
+    }
+
+    release_worker.set()
+    worker.join(timeout=5)
+    assert not worker.is_alive()
+    assert results[0]["state"] == "completed"
 
 
 def test_user_pause_resume_and_cancel_are_honored_between_phases(
@@ -435,6 +498,11 @@ def test_user_pause_resume_and_cancel_are_honored_between_phases(
     )
     worker.start()
     assert reached_boundary.wait(timeout=5)
+    boundary = tool.run({"action": "status", "run_ref": started["run_ref"]})
+    assert boundary["state"] == "running"
+    assert boundary["activity"]["state"] == "working"
+    assert boundary["activity"]["phase"] == "renditions"
+    assert boundary["activity"]["work"]["remaining"] == 0
     accepted_pause = tool.run({"action": "pause", "run_ref": started["run_ref"]})
     release_worker.set()
     worker.join(timeout=5)
@@ -444,6 +512,7 @@ def test_user_pause_resume_and_cancel_are_honored_between_phases(
     paused = tool.run({"action": "status", "run_ref": started["run_ref"]})
     assert paused["state"] == "paused"
     assert paused["reason"]["code"] == "user_requested"
+    assert paused["activity"]["state"] == "paused"
 
     monkeypatch.setattr(PrecheckOrchestrator, "_after_phase", original)
     accepted_resume = tool.run({"action": "resume", "run_ref": started["run_ref"]})
@@ -537,6 +606,10 @@ def test_process_interruption_resumes_without_repeating_completed_work(
     run_ref = str(started["run_ref"])
     with pytest.raises(KeyboardInterrupt, match="simulated process loss"):
         first_tool.advance(run_ref)
+    interrupted = first_tool.run({"action": "status", "run_ref": run_ref})
+    assert interrupted["state"] == "paused"
+    assert interrupted["reason"]["code"] == "process_interrupted"
+    assert interrupted["activity"]["phase"] == "renditions"
     before = {
         work.work_id
         for work in WorkStore(database).list_run_work(accounting_run_id)
@@ -685,7 +758,9 @@ def test_crash_after_result_registration_rebinds_run_completion(
     record = tool._store.get(str(started["run_ref"]))
     available = ResultStore(database).audit().available
     assert len(available) == 1
-    assert record["state"] == "running"
+    assert record["state"] == "paused"
+    interrupted = tool.run({"action": "status", "run_ref": record["run_ref"]})
+    assert interrupted["reason"]["code"] == "process_interrupted"
 
     monkeypatch.setattr(PrecheckRunTool, "complete_with_result", original)
     restarted = PrecheckRunTool(database, execution_config=config)
