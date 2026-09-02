@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any
+from uuid import uuid4
 
 import anyio
 from mcp import types
@@ -13,6 +15,9 @@ from mcp.server.stdio import stdio_server
 from .composition import HostRequestError, ToolDescriptor, tool_descriptors
 from .host import RuntimeHost
 from .versioning import application_version
+
+
+_LOGGER = logging.getLogger(__name__)
 
 
 def create_mcp_server(host: RuntimeHost | None = None) -> Server[Any]:
@@ -63,10 +68,27 @@ def create_mcp_server(host: RuntimeHost | None = None) -> Server[Any]:
                         authority=authority,
                     )
                 )
-        except (HostRequestError, TypeError, ValueError) as error:
+        except HostRequestError as error:
             result = {
                 "outcome": "error",
                 "error": {"code": "host_invalid_request", "message": str(error)},
+            }
+            return _tool_result(result, is_error=True)
+        except Exception:
+            diagnostic_id = f"diagnostic:{uuid4()}"
+            _LOGGER.exception(
+                "MediaSense Tool call failed [diagnostic_id=%s]", diagnostic_id
+            )
+            result = {
+                "outcome": "error",
+                "error": {
+                    "code": "host_operation_failed",
+                    "message": (
+                        "The Tool Host encountered an internal operation failure; "
+                        "no completion is implied. Retry after diagnosis."
+                    ),
+                    "diagnostic_id": diagnostic_id,
+                },
             }
             return _tool_result(result, is_error=True)
         return _tool_result(result)

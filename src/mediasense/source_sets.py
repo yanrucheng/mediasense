@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Mapping
 import json
 import re
 from typing import Any
 
-
-PrecheckReader = Callable[[dict[str, Any]], Mapping[str, Any]]
+from mediasense.precheck.read import (
+    PrecheckReadBoundary,
+    require_precheck_read_boundary,
+)
 
 _RESULT_REF = re.compile(r"^precheck-result:[^\s]+$")
 _SOURCE_REF = re.compile(r"^source-item:[^\s]+$")
@@ -22,9 +24,9 @@ class SourceSetResolutionError(RuntimeError):
 class ResultSourceSetResolver:
     """Resolve one Result's Source Sets without reading stage-private storage."""
 
-    def __init__(self, result_ref: str, reader: PrecheckReader) -> None:
+    def __init__(self, result_ref: str, reader: PrecheckReadBoundary) -> None:
         self.result_ref = _require_ref(result_ref, _RESULT_REF, "result_ref")
-        self.reader = reader
+        self.reader = require_precheck_read_boundary(reader)
         self.source_views: dict[str, Mapping[str, Any]] = {}
         self.evidence_views: dict[str, Mapping[str, Any]] = {}
         self._set_cache: dict[str, frozenset[str]] = {}
@@ -289,7 +291,7 @@ class ResultSourceSetResolver:
 
     def _call(self, request: dict[str, Any]) -> Mapping[str, Any]:
         try:
-            response = self.reader(request)
+            response = self.reader.read(request)
         except Exception as error:
             raise SourceSetResolutionError(
                 "PreCheck read failed while resolving a Source Set"
@@ -321,7 +323,6 @@ def _require_ref(value: object, pattern: re.Pattern[str], label: str) -> str:
 
 
 __all__ = [
-    "PrecheckReader",
     "ResultSourceSetResolver",
     "SourceSetResolutionError",
 ]

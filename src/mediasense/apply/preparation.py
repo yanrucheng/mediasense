@@ -17,7 +17,6 @@ from pathlib import Path, PurePath
 import sqlite3
 import stat
 import sys
-from typing import Protocol
 import unicodedata
 from uuid import uuid4
 
@@ -28,6 +27,7 @@ from mediasense.frozen_plan import (
     load_frozen_plan_validator,
     validate_frozen_plan,
 )
+from mediasense.precheck.read import PrecheckReadBoundary
 
 from .filesystem import FilesystemEffectError, has_nontrivial_acl
 
@@ -51,14 +51,6 @@ class SourceEvidenceError(ApplyPreparationError):
     def __init__(self, code: str, message: str) -> None:
         super().__init__(message)
         self.code = code
-
-
-class PrecheckReadBoundary(Protocol):
-    """Structural boundary of the accepted ``mediasense.precheck.read`` Tool."""
-
-    name: str
-
-    def read(self, request: dict[str, object]) -> dict[str, object]: ...
 
 
 @dataclass(frozen=True, slots=True)

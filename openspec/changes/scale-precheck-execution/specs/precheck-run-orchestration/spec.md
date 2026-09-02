@@ -6,7 +6,11 @@ metadata needed for grouping before demanding detailed metadata, visual
 renditions, video frames, embeddings, or sensitivity observations. Initial
 expensive media Work SHALL be limited to deterministic representatives, useful
 boundaries, and explicit exceptions while Result coverage continues to account
-for every Source Item.
+for every Source Item. When successful compression Work provides a validated
+normal-frontier `represents` route from entry Evidence to an included member,
+the absence of a direct per-item visual Artifact MUST NOT alone leave that
+Source Item `unresolved`; limitations in comparison evidence SHALL remain
+visible on the relationship and SHALL NOT be upgraded into direct Evidence.
 
 #### Scenario: Large Dataset reaches a bounded visual demand set
 - **WHEN** index metadata groups many eligible Source Items into fewer bundle candidates
@@ -14,7 +18,13 @@ for every Source Item.
 
 #### Scenario: An unrendered member remains covered
 - **WHEN** an accounted Source Item is outside the bounded initial visual frontier
-- **THEN** Result navigation retains that Source Item directly without fabricating per-item visual Evidence or claiming a public bundle relationship that the Result does not contain
+- **AND** successful compression Work includes it in a validated `represents` route from entry Evidence
+- **THEN** Result navigation retains that Source Item as usable without fabricating per-item visual Evidence
+- **AND** the relationship preserves every material comparison qualification for Plan
+
+#### Scenario: An unrendered member lacks a normal-frontier route
+- **WHEN** an included Source Item has neither usable direct Evidence nor a validated representation from entry Evidence
+- **THEN** it remains `unresolved` and prevents the Result from claiming `plan_ready`
 
 #### Scenario: Directed evidence remains internal
 - **WHEN** a caller uses the public `mediasense.precheck.run` start or successor request

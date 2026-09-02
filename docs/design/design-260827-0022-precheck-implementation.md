@@ -4,7 +4,7 @@ title: "MediaSense PreCheck Implementation Design"
 type: design
 status: active
 created: 2026-08-27
-updated: 2026-09-01
+updated: 2026-09-02
 timezone: "Asia/Shanghai"
 parent: ""
 depends-on:
@@ -77,6 +77,15 @@ Every Source Item named by `accounts_for` must also satisfy one of these routes:
 2. **Explicit exception route:** it is reachable through its `accounts_for` scope or non-usable condition, including the derived attention view where applicable.
 
 The normal route does not require one visual Evidence item per Source Item. A structured index, timeline, contact sheet, representative rendition, several key frames, or another inspectable form may cover one or many Source Items. The exception route prevents an item with no useful visual representation from being hidden.
+
+`usable` describes whether an included Source Item has a valid route for Plan;
+it does not mean that the Source Item owns a direct visual Artifact or that all
+semantic comparison axes are complete. Once validated compression Work creates
+a `represents` route from entry Evidence to one of its declared members, that
+member is usable. Missing embeddings, coordinates, or other comparison axes
+remain explicit `limits_interpretation` qualifications on the relationship.
+Only an included Source Item with neither usable direct Evidence nor a validated
+normal-frontier representation remains `unresolved` and blocks `plan_ready`.
 
 `derived_from` is provenance, not coverage. It cannot substitute for `represents` or the exception route.
 

@@ -6,6 +6,8 @@ Versioning, with documented breaking changes permitted in minor releases before
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-09-02
+
 ### Changed
 
 - **Breaking:** every PreCheck `status` response now includes a durable
@@ -15,10 +17,24 @@ Versioning, with documented breaking changes permitted in minor releases before
 
 ### Fixed
 
+- Bounded PreCheck compression now projects represented Source Items as usable
+  without inventing direct per-item Evidence, while retaining incomplete
+  comparison qualifications and continuing to block genuinely unrepresented
+  media.
 - PreCheck no longer appears unchanged throughout long producer phases merely
   because Source Item accounting is stable. In-process worker exits become a
   resumable pause, while expired worker liveness is reported as
   `suspected_stalled` and can be reclaimed under the same `run_ref`.
+
+## [0.4.1] - 2026-09-02
+
+### Fixed
+
+- Unified the process-local PreCheck Read port used by Plan, Source Set
+  expansion, and Apply, so the production composition can create a Plan Working
+  State from a valid Result instead of treating `PrecheckReadTool` as a callable.
+- Distinguished invalid Host envelopes from unexpected implementation failures,
+  and stopped Apply status reads from scheduling execution work.
 
 ## [0.3.0] - 2026-08-31
 

@@ -24,6 +24,12 @@
 - [x] 4.2 Reorder orchestration to build bundle candidates after index metadata and before rendition, video, embedding, and sensitivity demand.
 - [x] 4.3 Derive the bounded initial evidence set from representatives, distinct boundaries, explicit exceptions, and internal directed rebuild requests.
 - [x] 4.4 Preserve Result accounting/navigation for unrendered members and document that directed additions have no public request contract yet.
+- [x] 4.5 Add a Result regression where a successful compression frontier
+  represents included members that have no direct visual Artifact, and prove
+  those members become usable while relationship limitations remain visible.
+- [x] 4.6 Keep genuinely unrepresented included Source Items unresolved and
+  blocking, then exercise the corrected projection through the default
+  production RuntimeHost path.
 
 ## 5. Resource resolution and pipelining
 
@@ -42,6 +48,10 @@
 ## 7. Acceptance and migration evidence
 
 - [x] 7.1 Compare affected AI Album behaviors and classify metadata, video, cache, recovery, and resource differences as preserved, intentionally changed, regression, or not comparable.
-- [ ] 7.2 Run focused unit/integration tests, the full default non-live suite, Ruff, and strict OpenSpec validation without fixture mutation, fresh models, or network access.
-  - The unmodified default command reports 557 passed, 2 failed, and 16 deselected; both failures require the absent project-local `.codex/config.toml`. With those exact two environment checks explicitly deselected, 557 passed and 18 were deselected. The 4 explicit scale tests pass separately. This is not recorded as a complete default-suite pass.
+- [x] 7.2 Run focused unit/integration tests, the full default non-live suite, Ruff, and strict OpenSpec validation without fixture mutation, fresh models, or network access.
+  - Post-regression acceptance reports 46 focused tests passed, 583 default
+    non-live tests passed with 16 deselected, and 10 explicit generated scale
+    tests passed with 589 deselected. Full Ruff, changed-file format, all 18
+    strict OpenSpec items, isolated wheel/MCP smoke, documentation contract,
+    and diff whitespace gates passed without fixture execution or mutation.
 - [x] 7.3 Update authoritative design and migration documentation with measured evidence, necessary versus avoidable O(N), internal-only directed evidence, remaining physical-storage/model gates, and the zero-BC fresh-start policy.

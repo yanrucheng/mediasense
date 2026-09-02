@@ -23,11 +23,7 @@ from mediasense.precheck import (
 ROOT = Path(__file__).parents[1]
 APPLY_SPEC = ROOT / "docs" / "spec" / "spec-260829-0050-apply"
 FROZEN_PLAN_SCHEMA = (
-    ROOT
-    / "docs"
-    / "spec"
-    / "spec-260827-1138-frozen-plan"
-    / "frozen-plan.schema.json"
+    ROOT / "docs" / "spec" / "spec-260827-1138-frozen-plan" / "frozen-plan.schema.json"
 )
 
 
@@ -37,9 +33,6 @@ class RecordingPrecheckRead:
     def __init__(self, tool: PrecheckReadTool) -> None:
         self.tool = tool
         self.calls: list[dict[str, object]] = []
-
-    def __call__(self, request: dict[str, object]) -> dict[str, object]:
-        return self.read(request)
 
     def read(self, request: dict[str, object]) -> dict[str, object]:
         self.calls.append(deepcopy(request))
@@ -128,9 +121,7 @@ def test_public_precheck_plan_apply_prepare_handoff_has_no_hidden_protocol(
                     {
                         "relative_path": ["Verified"],
                         "members": all_sources,
-                        "source_naming": {
-                            "default": "preserve_source_basename"
-                        },
+                        "source_naming": {"default": "preserve_source_basename"},
                     }
                 ],
                 "other_outcomes": [],
@@ -188,9 +179,7 @@ def test_public_precheck_plan_apply_prepare_handoff_has_no_hidden_protocol(
         },
     }
     prepared = apply_tool.handle(prepare_request)
-    status = apply_tool.handle(
-        {"action": "status", "run_ref": prepared["run_ref"]}
-    )
+    status = apply_tool.handle({"action": "status", "run_ref": prepared["run_ref"]})
 
     assert prepared["outcome"] == "ok"
     assert status["state"] == "ready_for_authorization"
@@ -198,16 +187,18 @@ def test_public_precheck_plan_apply_prepare_handoff_has_no_hidden_protocol(
     assert status["summary"]["materialization_operations"] == 1
     assert "frozen_plan_path" not in str(prepare_request)
     assert all(call["result_ref"] == result.result_ref for call in read_boundary.calls)
-    assert all(call["action"] in {"inspect", "traverse"} for call in read_boundary.calls)
+    assert all(
+        call["action"] in {"inspect", "traverse"} for call in read_boundary.calls
+    )
     assert (source / "original.jpg").read_bytes() == source_before
     assert list(destination.iterdir()) == []
 
     assert "resolve_source_set" not in inspect.signature(ApplyRunTool).parameters
 
     output_validator = Draft202012Validator(
-        json.loads(
-            (APPLY_SPEC / "apply-run.tool.json").read_text(encoding="utf-8")
-        )["outputSchema"]
+        json.loads((APPLY_SPEC / "apply-run.tool.json").read_text(encoding="utf-8"))[
+            "outputSchema"
+        ]
     )
     for case in ("extra_field", "unknown_profile"):
         invalid_plan = deepcopy(sealed["frozen_plan"])
@@ -215,9 +206,9 @@ def test_public_precheck_plan_apply_prepare_handoff_has_no_hidden_protocol(
             invalid_plan["sealed_content"]["unexpected"] = "forbidden"
             identity = content_identity(invalid_plan["sealed_content"])
             invalid_plan["seal"]["content_identity"] = identity
-            invalid_plan["seal"]["final_confirmation"][
-                "confirmed_content_identity"
-            ] = identity
+            invalid_plan["seal"]["final_confirmation"]["confirmed_content_identity"] = (
+                identity
+            )
         else:
             invalid_plan["seal"]["encoding_profile"] = "future-profile"
         rejected = apply_tool.handle(

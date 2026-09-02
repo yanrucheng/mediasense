@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator, Set
+from dataclasses import replace
 import json
 from pathlib import Path
 import sqlite3
-from collections.abc import Iterator, Set
 from typing import Iterable, Mapping
 
 from mediasense.dataset_reference import dataset_ref_from_id
@@ -344,9 +345,7 @@ def build_minimal_result(
         if gpx_work is not None:
             if WorkStatus(gpx_work["status"]) is WorkStatus.SUCCEEDED:
                 gpx_output = json.loads(gpx_work["output_json"])
-                observations.extend(
-                    _metadata_result_observations(gpx_output, run_id)
-                )
+                observations.extend(_metadata_result_observations(gpx_output, run_id))
             elif WorkStatus(gpx_work["status"]) is WorkStatus.TERMINAL_FAILURE:
                 observations.append(
                     {
@@ -602,7 +601,7 @@ def build_minimal_result(
         )
 
     if compression_groups:
-        evidence = _apply_compression_frontier(
+        evidence, represented_source_refs = _apply_compression_frontier(
             compression_groups,
             run_id,
             primary_evidence_by_path,
@@ -610,6 +609,16 @@ def build_minimal_result(
             entry_evidence,
             relationships,
         )
+        sources = [
+            replace(source, condition="usable")
+            if (
+                source.scope == "source_media"
+                and source.condition == "unresolved"
+                and source.ref in represented_source_refs
+            )
+            else source
+            for source in sources
+        ]
 
     unresolved_source_media = tuple(
         source.ref

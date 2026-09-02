@@ -124,7 +124,23 @@ def main() -> int:
             Path(first["workspace"]) / ".codex"
         ).exists():
             raise AssertionError("Skill installation was coupled to Dataset state")
-        anyio.run(_mcp_scenario, executable, root, environment)
+        result_ref = _seed_plan_ready_result(
+            executable,
+            Path(first["workspace"]),
+            source,
+            str(first["dataset_ref"]),
+            environment,
+            root,
+        )
+        anyio.run(
+            _mcp_scenario,
+            executable,
+            source,
+            Path(first["workspace"]),
+            environment,
+            result_ref,
+            expected_version,
+        )
         _run(
             ["uv", "tool", "uninstall", "mediasense"],
             environment=environment,
@@ -145,16 +161,59 @@ def _assert_no_agent_configuration(home: Path) -> None:
         raise AssertionError("CLI installation wrote user-level Agent Skills")
 
 
+def _seed_plan_ready_result(
+    executable: Path,
+    workspace: Path,
+    source: Path,
+    dataset_ref: str,
+    environment: dict[str, str],
+    cwd: Path,
+) -> str:
+    script = """
+from pathlib import Path
+from PIL import Image
+from mediasense.dataset_reference import dataset_id_from_ref
+from mediasense.precheck import AccountingStore, ImageRenditionProducer, ResultStore
+
+workspace = Path(__import__('sys').argv[1])
+source = Path(__import__('sys').argv[2])
+dataset_ref = __import__('sys').argv[3]
+media = source / 'original.jpg'
+Image.new('RGB', (80, 40), 'purple').save(media)
+database = workspace / 'precheck' / 'work.sqlite3'
+accounting = AccountingStore(database)
+run_id = accounting.start_or_resume_run(dataset_id_from_ref(dataset_ref), source)
+accounting.process_run(run_id)
+rendition = ImageRenditionProducer(database).produce(run_id, Path('original.jpg'))
+store = ResultStore(database)
+print(store.seal(store.build_minimal(run_id, [rendition.work.work_id])).result_ref)
+"""
+    return _run(
+        [
+            str(executable.resolve().parent / "python"),
+            "-c",
+            script,
+            str(workspace),
+            str(source),
+            dataset_ref,
+        ],
+        environment=environment,
+        cwd=cwd,
+    ).strip()
+
+
 async def _mcp_scenario(
-    executable: Path, root: Path, environment: dict[str, str]
+    executable: Path,
+    source: Path,
+    workspace: Path,
+    environment: dict[str, str],
+    result_ref: str,
+    expected_version: str,
 ) -> None:
-    source = root / "mcp-source"
-    source.mkdir()
-    workspace = root / "mcp-workspace"
     parameters = StdioServerParameters(
         command=str(executable),
         args=["mcp"],
-        cwd=str(root),
+        cwd=str(source.parent),
         env=environment,
     )
     async with (
@@ -164,9 +223,23 @@ async def _mcp_scenario(
         initialized = await session.initialize()
         if initialized.server_info.name != "mediasense":
             raise AssertionError("installed MCP server identity is incorrect")
+        if initialized.server_info.version != expected_version:
+            raise AssertionError(
+                "installed MCP server version is not the installed CLI version"
+            )
         listed = await session.list_tools()
         if len(listed.tools) != 7:
             raise AssertionError("installed MCP discovery did not return seven Tools")
+        for tool in listed.tools:
+            metadata = tool.meta or {}
+            if not str(metadata.get("contract_id", "")).startswith("urn:mediasense:"):
+                raise AssertionError(
+                    f"installed MCP Tool lacks contract identity: {tool.name}"
+                )
+            if not str(metadata.get("contract_digest", "")).startswith("sha256:"):
+                raise AssertionError(
+                    f"installed MCP Tool lacks contract digest: {tool.name}"
+                )
         opened = await session.call_tool(
             "mediasense.dataset.open",
             {"source_root": str(source), "workspace": str(workspace)},
@@ -207,6 +280,27 @@ async def _mcp_scenario(
             raise AssertionError("installed MCP non-destructive Tool call failed")
         if status.structured_content.get("error", {}).get("code") != "run_not_found":
             raise AssertionError("installed MCP Tool returned an unexpected outcome")
+
+        created = await session.call_tool(
+            "mediasense.plan.work",
+            {
+                "dataset_ref": dataset_ref,
+                "request": {
+                    "action": "create",
+                    "result_ref": result_ref,
+                    "request_id": "request:installed-plan-create",
+                },
+            },
+        )
+        if created.is_error or created.structured_content is None:
+            raise AssertionError("installed MCP Plan create failed")
+        if created.structured_content.get("outcome") != "ok" or not str(
+            created.structured_content.get("work_ref", "")
+        ).startswith("plan-work:"):
+            raise AssertionError(
+                f"installed MCP Plan create returned an unexpected outcome: "
+                f"{created.structured_content}"
+            )
 
 
 def _verify_wheel(wheel: Path, expected_version: str) -> None:

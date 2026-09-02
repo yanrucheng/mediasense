@@ -20,7 +20,10 @@ from mediasense.frozen_plan import (
     load_frozen_content_validator,
     load_frozen_plan_validator,
 )
-from mediasense.source_sets import PrecheckReader
+from mediasense.precheck.read import (
+    PrecheckReadBoundary,
+    require_precheck_read_boundary,
+)
 
 from ._candidate import (
     CandidateAnalysis,
@@ -80,16 +83,17 @@ class PlanWorkTool:
     def __init__(
         self,
         plan_store: Path,
-        precheck_read: PrecheckReader,
+        precheck_read: PrecheckReadBoundary,
         *,
         id_factory: Callable[[str], str] | None = None,
         frozen_plan_schema: Path | None = None,
         geo_tool: GeoQueryTool | None = None,
     ) -> None:
+        precheck_boundary = require_precheck_read_boundary(precheck_read)
         self.plan_store = Path(plan_store)
         self.store = SQLitePlanStore(self.plan_store / "work.sqlite3")
         self.frozen_dir = self.plan_store / "frozen"
-        self.precheck_read = precheck_read
+        self.precheck_read = precheck_boundary
         self._id_factory = id_factory or (lambda prefix: f"{prefix}:{uuid4()}")
         self._frozen_content_validator = load_frozen_content_validator(
             frozen_plan_schema
@@ -270,7 +274,9 @@ class PlanWorkTool:
         if replay is not None:
             return replay
 
-        response = self.precheck_read({"result_ref": result_ref, "action": "inspect"})
+        response = self.precheck_read.read(
+            {"result_ref": result_ref, "action": "inspect"}
+        )
         if not isinstance(response, Mapping) or response.get("outcome") != "ok":
             raise PlanFailure(
                 "result_not_found", "The exact PreCheck Result is unavailable."

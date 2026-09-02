@@ -18,8 +18,8 @@ from mediasense.frozen_plan import (
     FrozenPlanValidationError,
     content_identity,
 )
+from mediasense.precheck.read import PrecheckReadBoundary
 from mediasense.source_sets import (
-    PrecheckReader,
     ResultSourceSetResolver as ResultResolver,
     SourceSetResolutionError as ResultAccessError,
 )
@@ -75,7 +75,7 @@ def analyze_candidate(
     *,
     result_ref: str,
     plan_ref: str,
-    reader: PrecheckReader,
+    reader: PrecheckReadBoundary,
     schema_validator: Draft202012Validator,
 ) -> CandidateAnalysis:
     sealed_content = materialize_candidate(candidate_content, plan_ref=plan_ref)

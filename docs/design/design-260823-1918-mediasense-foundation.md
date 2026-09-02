@@ -4,7 +4,7 @@ title: "MediaSense Foundation"
 type: design
 status: active
 created: 2026-08-23
-updated: 2026-08-31
+updated: 2026-09-02
 timezone: "Asia/Shanghai"
 parent: "index-design"
 depends-on: []
@@ -161,6 +161,54 @@ Each stage follows the same contract-first sequence:
 7. Compare the resulting capability with AI Album and classify every material difference.
 
 Human-reviewed fixtures allow the three implementation tracks to proceed in parallel without coupling downstream work to unstable upstream internals.
+
+## Production composition assurance
+
+Contract-first parallel development is complete only after the independently
+developed parts are proven through the production composition. A fixture proves
+that a consumer can use the promised message semantics; it does not prove that
+the shipped provider object, consumer object, runtime assembly, Host dispatch,
+and release artifact can invoke one another.
+
+The following responsibilities therefore remain distinct:
+
+- Each public Tool contract owns its request, result, effects, authority, state,
+  and failure semantics.
+- One production composition root owns construction and local compatibility of
+  the exact implementations supplied to those contracts. It does not acquire
+  stage authority or business semantics.
+- Each replaceable internal port has one minimal authoritative shape. Production
+  implementations and test doubles must satisfy the same conformance evidence;
+  a test double must not make an otherwise invalid production connection pass by
+  exposing extra invocation forms.
+- Release acceptance owns proof that every material cross-stage edge executes
+  through the shipped composition and Host. Tool discovery, schema compilation,
+  isolated component tests, and one unrelated successful Tool call are not
+  substitutes for that proof.
+
+A material edge is one whose failure can change stage continuity, authority,
+durable state, external effects, or the truth of a release-readiness claim. Each
+such edge requires one deterministic, zero-effect or safely bounded vertical
+test with real internal components. Expensive provider calls, large media, and
+every action permutation are not required when focused contract and semantic
+tests already cover them. Installed-artifact smoke tests cover the minimal Host
+dispatch needed to detect packaging or assembly drift.
+
+JSON Schema remains authoritative for exchanged values, not for process-local
+object compatibility. Static checks, construction checks, conformance suites,
+and vertical tests may change as implementation methods improve, but together
+they must fail before release when the shipped composition cannot perform a
+promised path. Host envelope errors must remain distinguishable from Tool
+business failures and unexpected composition or implementation failures.
+
+This assurance does not require every stage Agent to reconstruct the whole
+system, and it does not justify a registry, coordination service, universal
+workflow, or fourth product stage. Stage Agents may continue to develop against
+reviewed contracts and fixtures; the composition and release owners close the
+executable boundary before claiming the integrated product works.
+
+The evidence and initial cross-stage assurance matrix are recorded in the
+[Cross-Stage Production Composition Assurance Review](../eval/eval-260902-1438-cross-stage-composition-assurance.md).
 
 ## Three managed budgets
 

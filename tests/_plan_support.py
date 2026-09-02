@@ -62,6 +62,8 @@ class StableIdFactory:
 class MockPrecheckReader:
     """Contract-shaped reader assembled from the published PreCheck Mock."""
 
+    name = "mediasense.precheck.read"
+
     def __init__(self) -> None:
         mock = load_json(READ_SPEC / "hong-kong.mock.json")
         self.result_ref = mock["result_ref"]
@@ -97,7 +99,7 @@ class MockPrecheckReader:
                     if normalized not in bucket:
                         bucket.append(normalized)
 
-    def __call__(self, request: dict[str, Any]) -> dict[str, Any]:
+    def read(self, request: dict[str, Any]) -> dict[str, Any]:
         self.calls.append(deepcopy(request))
         if request.get("result_ref") != self.result_ref:
             return _read_error(request, "result_not_found")

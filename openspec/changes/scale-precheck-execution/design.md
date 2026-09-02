@@ -9,6 +9,13 @@ The Human has confirmed two product boundaries:
 - PreCheck protects against ordinary source changes, not an adversary that changes bytes while restoring size, timestamps, inode-visible identity, and other observations.
 - Initial expensive visual evidence may cover representatives, useful boundaries, and explicit exceptions rather than every accounted Source Item.
 
+The first installed acceptance after that reordering exposed a projection bug,
+not a need to restore eager media processing. Compression Work had successfully
+created qualified `represents` relationships from entry Evidence to every
+included member, but Result assembly continued to use direct rendition/contact
+sheet presence as the only transition from `unresolved` to `usable`. The Result
+therefore contradicted its own navigable evidence graph and blocked Plan.
+
 Source media remains read-only. Remote and billable access remains disabled by default. Apply retains deterministic exact-byte gates for selected filesystem effects.
 
 ## Goals / Non-Goals
@@ -22,6 +29,9 @@ Source media remains read-only. Remote and billable access remains disabled by d
 - Resolve safe, useful resource capacities from the host and storage context and persist the effective values with the Run.
 - Remove scale-critical `O(N^2)` behavior and establish acceptance evidence through one million generated Source Items without running paid, remote, or fresh model work.
 - Preserve existing Run, Work, Artifact, Result, Dataset, cancellation, failure-isolation, and source-read-only authority.
+- Preserve Plan usability for Source Items reached through a justified bounded
+  evidence frontier without overstating the quality or completeness of that
+  evidence.
 
 ### Non-Goals
 
@@ -67,9 +77,30 @@ The orchestrator uses four dependency layers:
 
 Accounting coverage is never reduced. A Source Item without initial visual Work remains present in the Result's Source Item authority. Directed evidence exists only as an internal orchestration seam; the public Run request does not expose it until authorization, Result binding, and failure semantics receive a separate contract review.
 
+Source usability and evidence richness are separate claims. Direct rendition or
+contact-sheet Work proves that one Source Item has its own visual Artifact. A
+successful compression Work proves a bounded navigation claim from one entry
+Evidence item to its declared Source Item members. Once Result validation has
+accepted that Work, an included member reached by its `represents` edge is
+usable by Plan even when it has no direct visual Artifact. Missing embeddings,
+coordinates, or other comparison axes remain relationship qualifications and
+may cause Plan to inspect or reopen PreCheck; they do not by themselves mean
+that the source file is unresolved or unavailable.
+
+An included Source Item that has neither direct usable Evidence nor a validated
+compression representation remains `unresolved` and continues to block
+`plan_ready`. Result assembly, rather than the scheduler or Agent, owns this
+projection because it already owns immutable Source Item conditions,
+relationships, qualifications, and readiness.
+
 The initial index metadata profile contains only facts required for stable grouping and routing: source media type, capture time, orientation, numeric coordinates where present, and the provenance needed to challenge them. Richer fields remain an optional profile of the same metadata capability; a new Tool or public artifact type is unnecessary.
 
 Alternative rejected: preserve the current phase order and merely raise worker counts. It retains all-item decode/model demand and cannot scale even with ideal parallelism.
+
+Alternative rejected: restore direct rendition/video Work for every Source
+Item whenever optional embeddings are disabled. That makes one replaceable
+evidence method a permanent prerequisite, discards the accepted scale boundary,
+and confuses limited interpretation with unusable source state.
 
 ### 2. Keep per-item Work semantics while batching provider execution
 
@@ -145,6 +176,10 @@ Existing activity projection and Work outcomes report phase totals, computed/reu
 - [Ordinary-change checks can miss adversarial same-stat byte replacement] → The accepted threat model excludes it; Apply still computes and rechecks exact bytes for selected effects, and Result limitations remain explicit.
 - [A failing ExifTool batch can obscure which item failed] → Require trustworthy row mapping; otherwise subdivide the batch to single-item outcomes with bounded attempts.
 - [Early representative reduction can hide useful variation] → Include distinct boundaries and explicit exceptions by default and retain complete accounting. A future public directed-evidence request requires its own reviewed authorization, Result-binding, and failure contract; the current selector remains internal only.
+- [A weak representation could be mistaken for rich direct evidence] → Upgrade
+  only the represented member's Source condition, preserve the exact qualified
+  `represents` edge, and never fabricate a direct rendition, embedding, or
+  unqualified comparison claim.
 - [Host heuristics may choose poor concurrency on unusual storage] → Start conservatively for unknown/remote storage, persist effective values, expose ceiling overrides, and measure queue wait and throughput before widening.
 - [SQLite write contention can erase concurrency gains] → Claim and commit bounded item groups, keep media work outside transactions, and test contention before increasing lanes.
 - [Fresh-start replacement invalidates private Work and Results] → Fail clearly on an incompatible workspace, leave source media untouched, and require creation of a fresh workspace rather than carrying compatibility branches.
@@ -160,6 +195,9 @@ Existing activity projection and Work outcomes report phase totals, computed/reu
 6. Resolve and persist host-aware resource ceilings; separate source I/O, workspace I/O, external process, codec, and model admission while retaining one bounded executor authority.
 7. Remove remaining eager and quadratic paths, then run generated 100,000- and 1,000,000-item coordination acceptance plus short local ExifTool/media micro-tests.
 8. Update migration evidence and product/design documentation, run focused and full non-live tests, Ruff, and strict OpenSpec validation.
+9. Regress the installed default path with more included Source Items than
+   direct visual Evidence and require `plan_ready` only when every remaining
+   member has a validated normal-frontier route.
 
 Rollback during development is a normal code revert plus recreation of private workspaces. No runtime downgrade or dual-schema rollback path is maintained.
 

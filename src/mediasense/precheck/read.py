@@ -9,10 +9,30 @@ import hashlib
 import json
 from pathlib import Path
 import sqlite3
-from typing import Iterator
+from typing import Iterator, Protocol, cast
 from urllib.parse import quote
 
 from ._working_schema import SCHEMA_VERSION
+
+
+class PrecheckReadBoundary(Protocol):
+    """Process-local port for the public ``mediasense.precheck.read`` Tool."""
+
+    name: str
+
+    def read(self, request: dict[str, object]) -> dict[str, object]: ...
+
+
+def require_precheck_read_boundary(value: object) -> PrecheckReadBoundary:
+    """Reject incompatible local wiring before any stage operation starts."""
+
+    if getattr(value, "name", None) != "mediasense.precheck.read" or not callable(
+        getattr(value, "read", None)
+    ):
+        raise TypeError(
+            "precheck_read must expose mediasense.precheck.read through read(request)"
+        )
+    return cast(PrecheckReadBoundary, value)
 
 
 class PrecheckReadTool:

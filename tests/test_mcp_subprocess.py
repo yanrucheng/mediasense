@@ -3,10 +3,13 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 import subprocess
+import json
 
 import anyio
-from mcp import ClientSession, StdioServerParameters
+from mcp import ClientSession, StdioServerParameters, types
 from mcp.client.stdio import stdio_client
+
+from mediasense.runtime.mcp_host import create_mcp_server
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -19,6 +22,62 @@ EXPECTED_TOOLS = {
     "mediasense.apply.run",
     "mediasense.apply.read",
 }
+
+
+class FailingRuntimeHost:
+    def __init__(self, error: Exception) -> None:
+        self.error = error
+
+    def call_tool(self, *_args, **_kwargs):
+        raise self.error
+
+
+def _host_error(
+    error: Exception, *, arguments: dict | None = None
+) -> dict[str, object]:
+    async def scenario() -> dict[str, object]:
+        server = create_mcp_server(FailingRuntimeHost(error))  # type: ignore[arg-type]
+        entry = server.get_request_handler("tools/call")
+        assert entry is not None
+        result = await entry.handler(
+            None,
+            types.CallToolRequestParams(
+                name="mediasense.plan.work",
+                arguments=(
+                    {"dataset_ref": "dataset:test", "request": {}}
+                    if arguments is None
+                    else arguments
+                ),
+            ),
+        )
+        assert result.is_error is True
+        assert result.structured_content is None
+        return json.loads(result.content[0].text)
+
+    return anyio.run(scenario)
+
+
+def test_mcp_host_reports_request_binding_failure() -> None:
+    result = _host_error(AssertionError("runtime must not be called"), arguments={})
+
+    assert result == {
+        "outcome": "error",
+        "error": {
+            "code": "host_invalid_request",
+            "message": "dataset_ref must be a non-empty string",
+        },
+    }
+
+
+def test_mcp_host_sanitizes_unexpected_operation_failure(caplog) -> None:
+    result = _host_error(TypeError("sensitive implementation detail"))
+
+    assert result["outcome"] == "error"
+    assert result["error"]["code"] == "host_operation_failed"
+    assert str(result["error"]["diagnostic_id"]).startswith("diagnostic:")
+    assert "sensitive implementation detail" not in result["error"]["message"]
+    assert str(result["error"]["diagnostic_id"]) in caplog.text
+    assert "TypeError" in caplog.text
 
 
 def test_stdio_mcp_handshake_discovery_and_non_destructive_call(
@@ -90,7 +149,7 @@ def test_stdio_mcp_exits_when_client_closes_input() -> None:
     assert completed.returncode == 0
 
 
-def test_stdio_mcp_opened_dataset_can_start_precheck(tmp_path: Path) -> None:
+def test_stdio_mcp_plan_create_reaches_precheck_read_boundary(tmp_path: Path) -> None:
     source = tmp_path / "source"
     source.mkdir()
     workspace = tmp_path / "workspace"
@@ -114,23 +173,20 @@ def test_stdio_mcp_opened_dataset_can_start_precheck(tmp_path: Path) -> None:
             assert opened.structured_content is not None
             dataset_ref = opened.structured_content["dataset_ref"]
 
-            started = await session.call_tool(
-                "mediasense.precheck.run",
+            created = await session.call_tool(
+                "mediasense.plan.work",
                 {
                     "dataset_ref": dataset_ref,
                     "request": {
-                        "action": "start",
-                        "dataset_ref": dataset_ref,
-                        "request_id": "request:stdio-first-use",
+                        "action": "create",
+                        "result_ref": "precheck-result:not-found",
+                        "request_id": "request:stdio-plan-create",
                     },
                 },
             )
-
-            assert started.is_error is False
-            assert started.structured_content is not None
-            assert started.structured_content["outcome"] == "ok"
-            assert str(started.structured_content["run_ref"]).startswith(
-                "precheck-run:"
-            )
+            assert created.is_error is False
+            assert created.structured_content is not None
+            assert created.structured_content["outcome"] == "error"
+            assert created.structured_content["error"]["code"] == "result_not_found"
 
     anyio.run(scenario)

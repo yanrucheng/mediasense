@@ -39,7 +39,7 @@ replace an existing MediaSense tool environment.
 For a built release artifact, install the exact wheel instead:
 
 ```bash
-uv tool install ./dist/mediasense-0.4.0-py3-none-any.whl
+uv tool install ./dist/mediasense-0.5.0-py3-none-any.whl
 ```
 
 `uv` may download declared Python dependencies. MediaSense does not install
@@ -144,13 +144,13 @@ trusted channel used to install it. MediaSense checks manifest and component-sto
 versions before ordinary use and refuses newer or unsupported state without
 rewriting it.
 
-The PreCheck source-scope review is a breaking `0.4.0` change. Replace an
-installed `0.3.x` tool environment with the exact trusted `0.4.0` artifact; do
-not keep both under the same `mediasense` command or infer compatibility from
-seven-Tool discovery alone:
+The PreCheck source-scope review was introduced as a breaking `0.4.0` change.
+Replace an installed `0.3.x` tool environment with the exact trusted current
+`0.4.x` artifact; do not keep both under the same `mediasense` command or infer
+compatibility from seven-Tool discovery alone:
 
 ```bash
-uv tool install --force ./dist/mediasense-0.4.0-py3-none-any.whl
+uv tool install --force ./dist/mediasense-0.5.0-py3-none-any.whl
 ```
 
 Application versions follow SemVer during `0.y.z`: minor releases may contain

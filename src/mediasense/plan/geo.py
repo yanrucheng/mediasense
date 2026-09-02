@@ -10,8 +10,11 @@ from typing import Any
 from uuid import uuid4
 
 from mediasense.capabilities.geo import GeoAuthorization, GeoQueryTool
+from mediasense.precheck.read import (
+    PrecheckReadBoundary,
+    require_precheck_read_boundary,
+)
 from mediasense.source_sets import (
-    PrecheckReader,
     ResultSourceSetResolver,
     SourceSetResolutionError,
 )
@@ -44,13 +47,13 @@ class PlanGeoAdapter:
     def __init__(
         self,
         store: SQLitePlanStore,
-        precheck_read: PrecheckReader,
+        precheck_read: PrecheckReadBoundary,
         geo_tool: GeoQueryTool,
         *,
         id_factory: Callable[[str], str] | None = None,
     ) -> None:
         self.store = store
-        self.precheck_read = precheck_read
+        self.precheck_read = require_precheck_read_boundary(precheck_read)
         self.geo_tool = geo_tool
         self._id_factory = id_factory or (lambda prefix: f"{prefix}:{uuid4()}")
 

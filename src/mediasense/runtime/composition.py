@@ -144,8 +144,8 @@ class DatasetRuntime:
             )
             run_ref = response.get("run_ref")
             if isinstance(run_ref, str) and (
-                response.get("state") in {"preparing", "executing"}
-                or response.get("target_state") in {"preparing", "executing"}
+                response.get("state") == "executing"
+                or response.get("target_state") == "executing"
             ):
                 self._schedule_apply(run_ref)
         elif name == "mediasense.apply.read":
@@ -313,32 +313,40 @@ def _geo_authorization(value: Mapping[str, Any]) -> GeoAuthorization | None:
     required = {"principal_ref", "request_fingerprint", "authorized_at"}
     if not required <= set(value) or not isinstance(envelope, Mapping):
         return None
-    return GeoAuthorization(
-        principal_ref=str(value["principal_ref"]),
-        request_fingerprint=str(value["request_fingerprint"]),
-        authorized_at=_datetime(value["authorized_at"]),
-        envelope=GeoEffectEnvelope(
-            allowed_providers=tuple(envelope.get("allowed_providers", ())),
-            allowed_data_classes=tuple(envelope.get("allowed_data_classes", ())),
-            max_logical_queries=int(envelope.get("max_logical_queries", 0)),
-            max_provider_requests=int(envelope.get("max_provider_requests", 0)),
-            max_billable_units=(
-                None
-                if envelope.get("max_billable_units") is None
-                else int(envelope["max_billable_units"])
+    try:
+        return GeoAuthorization(
+            principal_ref=str(value["principal_ref"]),
+            request_fingerprint=str(value["request_fingerprint"]),
+            authorized_at=_datetime(value["authorized_at"]),
+            envelope=GeoEffectEnvelope(
+                allowed_providers=tuple(envelope.get("allowed_providers", ())),
+                allowed_data_classes=tuple(envelope.get("allowed_data_classes", ())),
+                max_logical_queries=int(envelope.get("max_logical_queries", 0)),
+                max_provider_requests=int(envelope.get("max_provider_requests", 0)),
+                max_billable_units=(
+                    None
+                    if envelope.get("max_billable_units") is None
+                    else int(envelope["max_billable_units"])
+                ),
+                allow_unknown_billable_units=bool(
+                    envelope.get("allow_unknown_billable_units", False)
+                ),
+                retention=GeoRetention(str(envelope.get("retention", "none"))),
             ),
-            allow_unknown_billable_units=bool(
-                envelope.get("allow_unknown_billable_units", False)
-            ),
-            retention=GeoRetention(str(envelope.get("retention", "none"))),
-        ),
-    )
+        )
+    except (TypeError, ValueError) as error:
+        raise HostRequestError(f"invalid Geo authorization: {error}") from error
 
 
 def _datetime(value: object) -> datetime:
     if not isinstance(value, str):
         raise HostRequestError("authorization time must be an ISO-8601 string")
-    parsed = datetime.fromisoformat(value)
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError as error:
+        raise HostRequestError(
+            "authorization time must be a valid ISO-8601 timestamp"
+        ) from error
     if parsed.tzinfo is None:
         raise HostRequestError("authorization time must include a timezone")
     return parsed

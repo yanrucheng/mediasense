@@ -41,6 +41,14 @@ def _create(tool: PlanWorkTool, *, request_id: str = "request:create-1") -> dict
     )
 
 
+def test_constructor_rejects_callable_without_read_boundary(tmp_path: Path) -> None:
+    def callable_only(_request: dict[str, object]) -> dict[str, object]:
+        return {"outcome": "ok"}
+
+    with pytest.raises(TypeError, match=r"read\(request\)"):
+        PlanWorkTool(tmp_path / "plan-store", callable_only)  # type: ignore[arg-type]
+
+
 def _update(
     tool: PlanWorkTool,
     created: dict,

@@ -13,6 +13,10 @@ from jsonschema import Draft202012Validator, ValidationError
 from referencing import Registry, Resource
 
 from mediasense.frozen_plan import load_frozen_plan_schema
+from mediasense.precheck.read import (
+    PrecheckReadBoundary,
+    require_precheck_read_boundary,
+)
 from mediasense.source_sets import (
     ResultSourceSetResolver,
     SourceSetResolutionError,
@@ -23,7 +27,6 @@ from .filesystem import canonical_identity
 from .preparation import (
     ApplyPreparationError,
     ApplyRunStore,
-    PrecheckReadBoundary,
     SourceSetExpansion,
 )
 from .receipt import ReceiptError, ReceiptStore
@@ -50,6 +53,7 @@ class ApplyRunTool:
         frozen_plan_schema_path: Path,
         receipt_schema_path: Path,
     ) -> None:
+        precheck_boundary = require_precheck_read_boundary(precheck_read)
         self.apply_store = Path(apply_store)
         database = self.apply_store / "work.sqlite3"
         self.run_store = (
@@ -61,7 +65,7 @@ class ApplyRunTool:
             self.apply_store / "receipts", receipt_schema_path
         )
         self.executor = ApplyExecutor(self.run_store, self.receipt_store)
-        self.precheck_read = precheck_read
+        self.precheck_read = precheck_boundary
         schema = json.loads(Path(run_schema_path).read_text(encoding="utf-8"))
         frozen_schema = load_frozen_plan_schema(frozen_plan_schema_path)
         registry = Registry().with_resource(
@@ -169,7 +173,7 @@ class ApplyRunTool:
         }
         resolver = ResultSourceSetResolver(
             str(frozen_plan["sealed_content"]["result_ref"]),
-            self.precheck_read.read,
+            self.precheck_read,
         )
 
         def resolve_source_set(

@@ -38,6 +38,16 @@ business request.
 - **WHEN** an operation requires confirmation or external-effect authority and the Host has no matching trusted context
 - **THEN** the call fails before the effect with a structured actionable outcome
 
+#### Scenario: Host request is invalid
+
+- **WHEN** the transport envelope or business request cannot be bound to the advertised Tool contract
+- **THEN** the Host returns `host_invalid_request` without invoking a larger effect
+
+#### Scenario: Tool implementation fails unexpectedly
+
+- **WHEN** a validly bound Tool call raises an unexpected implementation or composition exception
+- **THEN** the Host returns a sanitized `host_operation_failed` result with a diagnostic identifier and does not describe the caller's request as invalid
+
 ### Requirement: The local MCP Host is a conforming stdio subprocess
 
 The installed `mediasense` CLI distribution SHALL include `mediasense mcp` as an

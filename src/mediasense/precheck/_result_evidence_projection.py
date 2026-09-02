@@ -31,7 +31,7 @@ def _apply_compression_frontier(
     evidence: list[ResultEvidence],
     entry_evidence: list[str],
     relationships: list[ResultRelationship],
-) -> list[ResultEvidence]:
+) -> tuple[list[ResultEvidence], set[str]]:
     grouped_paths: set[str] = set()
     roles: dict[str, list[dict[str, object]]] = {}
     relationship_keys = {
@@ -39,6 +39,7 @@ def _apply_compression_frontier(
         for item in relationships
     }
     representative_refs = []
+    represented_source_refs: set[str] = set()
     for group in groups:
         members = tuple(str(path) for path in group["members"])
         overlap = grouped_paths & set(members)
@@ -90,6 +91,7 @@ def _apply_compression_frontier(
         )
         for path in members:
             source_ref = result_local_reference("source-item", run_id, path)
+            represented_source_refs.add(source_ref)
             key = (representative_ref, "represents", source_ref, "source_item")
             if key not in relationship_keys:
                 relationships.append(
@@ -128,10 +130,16 @@ def _apply_compression_frontier(
     entry_evidence[:] = [
         ref for ref in entry_evidence if ref not in grouped_primary
     ] + list(dict.fromkeys(representative_refs))
-    return [
-        replace(item, observations=item.observations + tuple(roles.get(item.ref, ())))
-        for item in evidence
-    ]
+    return (
+        [
+            replace(
+                item,
+                observations=item.observations + tuple(roles.get(item.ref, ())),
+            )
+            for item in evidence
+        ],
+        represented_source_refs,
+    )
 
 
 def _role_observation(role: str, group_id: str) -> dict[str, object]:

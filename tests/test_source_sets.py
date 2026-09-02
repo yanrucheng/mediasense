@@ -14,6 +14,8 @@ RESULT_REF = "precheck-result:source-sets"
 
 
 class ContractReader:
+    name = "mediasense.precheck.read"
+
     def __init__(self) -> None:
         self.sources = {
             ref: {"kind": "source_item", "ref": ref, "locator": {"kind": "test"}}
@@ -28,7 +30,7 @@ class ContractReader:
         }
         self.calls: list[dict] = []
 
-    def __call__(self, request: dict) -> dict:
+    def read(self, request: dict) -> dict:
         self.calls.append(deepcopy(request))
         if request["action"] == "inspect":
             target = request["target"]
@@ -52,7 +54,12 @@ class ContractReader:
                 else [{"target": "source-item:c"}]
             )
             page = (
-                {"returned": 2, "total": 3, "complete": False, "next_cursor": "cursor:two"}
+                {
+                    "returned": 2,
+                    "total": 3,
+                    "complete": False,
+                    "next_cursor": "cursor:two",
+                }
                 if cursor is None
                 else {"returned": 1, "total": 3, "complete": True}
             )
@@ -115,16 +122,17 @@ def test_resolver_supports_all_frozen_plan_source_set_forms() -> None:
 @pytest.mark.parametrize(
     "mutation, message",
     [
-        (lambda response: response.update(result_ref="precheck-result:other"), "bound Result"),
+        (
+            lambda response: response.update(result_ref="precheck-result:other"),
+            "bound Result",
+        ),
         (
             lambda response: response["page"].update(total=4),
             "total changed",
         ),
         (
             lambda response: (
-                response["items"].append(
-                    {"target": response["items"][0]["target"]}
-                ),
+                response["items"].append({"target": response["items"][0]["target"]}),
                 response["page"].update(returned=2),
             ),
             "repeats Source Item",
@@ -144,15 +152,20 @@ def test_resolver_supports_all_frozen_plan_source_set_forms() -> None:
 )
 def test_resolver_fails_closed_on_untrustworthy_traversal(mutation, message) -> None:
     reader = ContractReader()
-    original = reader.__call__
+    original = reader.read
 
-    def dishonest(request: dict) -> dict:
-        response = original(request)
-        if request["action"] == "traverse" and request.get("page", {}).get("cursor"):
-            mutation(response)
-        return response
+    class DishonestReader:
+        name = "mediasense.precheck.read"
 
-    resolver = ResultSourceSetResolver(RESULT_REF, dishonest)
+        def read(self, request: dict) -> dict:
+            response = original(request)
+            if request["action"] == "traverse" and request.get("page", {}).get(
+                "cursor"
+            ):
+                mutation(response)
+            return response
+
+    resolver = ResultSourceSetResolver(RESULT_REF, DishonestReader())
     expression = {
         "kind": "precheck_relation",
         "origin": RESULT_REF,

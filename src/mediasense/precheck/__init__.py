@@ -121,7 +121,11 @@ from .result import (
     ResultStore,
     SealedResult,
 )
-from .read import PrecheckReadTool
+from .read import (
+    PrecheckReadBoundary,
+    PrecheckReadTool,
+    require_precheck_read_boundary,
+)
 from .run import PrecheckRunTool
 from .source_attachment import (
     AttachmentState,
@@ -237,7 +241,9 @@ __all__ = [
     "NudeNetDetector",
     "ORDINARY_RENDITION_PROFILE",
     "ImageRenditionProducer",
+    "PrecheckReadBoundary",
     "PrecheckReadTool",
+    "require_precheck_read_boundary",
     "PrecheckRunTool",
     "RecordedIssue",
     "RenditionOutcome",

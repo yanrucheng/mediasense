@@ -239,8 +239,8 @@ def test_bundle_members_are_covered_by_one_compressed_representative(
             "result_ref": sealed.result_ref,
         }
     )
-    raw_ref = next(
-        item["target"]
+    raw_account = next(
+        item
         for item in accounts["items"]
         if reader.read(
             {
@@ -251,6 +251,7 @@ def test_bundle_members_are_covered_by_one_compressed_representative(
         )["target"]["locator"]["value"]
         == "IMG_0001.ARW"
     )
+    raw_ref = raw_account["target"]
     reverse = reader.read(
         {
             "action": "traverse",
@@ -260,8 +261,22 @@ def test_bundle_members_are_covered_by_one_compressed_representative(
             "target": raw_ref,
         }
     )
-
+    result_view = reader.read(
+        {
+            "action": "inspect",
+            "result_ref": sealed.result_ref,
+        }
+    )["target"]
     assert len(reverse["items"]) == 1
+    assert reverse["items"][0]["qualifications"] == [
+        {
+            "code": "limited_similarity_evidence",
+            "effect": "limits_interpretation",
+            "message": "This compression claim has incomplete comparison evidence.",
+        }
+    ]
+    assert raw_account["condition"] == "usable"
+    assert result_view["readiness"] == "plan_ready"
 
 
 def test_large_embedding_group_uses_bounded_representative_selection() -> None:
