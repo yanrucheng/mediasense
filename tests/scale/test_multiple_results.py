@@ -55,7 +55,25 @@ def test_five_hundred_to_three_to_two_hundred_sealed_results(
                 "request_id": f"request:scale-{sequence}",
             }
         )
-        tool.advance(str(started["run_ref"]))
+        run_ref = str(started["run_ref"])
+        first_status = tool.advance(run_ref)
+        if first_status["state"] == "paused":
+            confirmation = first_status["confirmation"]
+            tool.run(
+                {
+                    "action": "resume",
+                    "run_ref": run_ref,
+                    "decision": {
+                        "kind": "source_scope",
+                        "inventory_fingerprint": confirmation[
+                            "inventory_fingerprint"
+                        ],
+                        "default_disposition": "include",
+                        "exceptions": [],
+                    },
+                }
+            )
+            tool.advance(run_ref)
         status = tool.run({"action": "status", "run_ref": started["run_ref"]})
         assert status["state"] == "completed"
         result_ref = str(status["published_result"]["result_ref"])
@@ -81,5 +99,7 @@ def test_five_hundred_to_three_to_two_hundred_sealed_results(
     assert entry_totals == [500, 3, 200]
     assert len(set(result_refs)) == 3
     assert len(rendition_ids[0]) == 500
-    assert rendition_ids[1:] == [rendition_ids[0], rendition_ids[0]]
+    assert len(rendition_ids[1]) == 128
+    assert rendition_ids[1] < rendition_ids[0]
+    assert rendition_ids[2] == rendition_ids[0]
     assert all(path.read_bytes() == source_bytes for path in source.glob("*.jpg"))

@@ -278,6 +278,167 @@
         },
         "allowed_actions": []
       }
+    },
+    {
+      "request": {
+        "action": "status",
+        "run_ref": "precheck-run:scope-review"
+      },
+      "response": {
+        "outcome": "ok",
+        "action": "status",
+        "run_ref": "precheck-run:scope-review",
+        "dataset_ref": "dataset:source-with-derived-files",
+        "state": "paused",
+        "progress": {
+          "discovered": 2,
+          "accounted": 2,
+          "usable": 0,
+          "exceptional": 1,
+          "unresolved": 1
+        },
+        "activity": {
+          "state": "waiting",
+          "phase": "scope_review",
+          "work": {
+            "completed": 0,
+            "reused": 0,
+            "failed": 0,
+            "remaining": 1,
+            "total": 1
+          },
+          "last_progress_at": "2026-09-02T01:00:00Z",
+          "errors": {
+            "total": 0,
+            "by_phase": [],
+            "truncated": false
+          }
+        },
+        "allowed_actions": ["resume", "cancel"],
+        "reason": {
+          "code": "scope_confirmation_required",
+          "message": "The discovered source tree requires a scope selection.",
+          "resume_when": "The caller supplies an include/exclude selection for this exact inventory."
+        },
+        "confirmation": {
+          "kind": "source_scope",
+          "summary": "Review the discovered source tree before expensive work.",
+          "inventory_fingerprint": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "scan_generation": 1,
+          "inventory": {
+            "inventory_fingerprint": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "scan_generation": 1,
+            "complete": true,
+            "view": {
+              "root": ".",
+              "max_depth": 2,
+              "max_nodes": 64,
+              "tree": {
+                "path": ".",
+                "name": ".",
+                "node_type": "directory",
+                "file_count": 2,
+                "byte_count": 1032,
+                "unknown_size_count": 0,
+                "kind_counts": [
+                  {"kind": "image", "count": 1},
+                  {"kind": "unknown", "count": 1}
+                ],
+                "size_buckets": [
+                  {"bucket": "under_1_mib", "count": 2}
+                ],
+                "representative_paths": [
+                  ".DS_Store",
+                  ".similarity_cache/frame.jpg"
+                ],
+                "children": [
+                  {
+                    "path": ".DS_Store",
+                    "name": ".DS_Store",
+                    "node_type": "file",
+                    "file_count": 1,
+                    "byte_count": 8,
+                    "unknown_size_count": 0,
+                    "kind_counts": [{"kind": "unknown", "count": 1}],
+                    "size_buckets": [
+                      {"bucket": "under_1_mib", "count": 1}
+                    ],
+                    "representative_paths": [".DS_Store"],
+                    "children": [],
+                    "omitted_children": 0
+                  },
+                  {
+                    "path": ".similarity_cache",
+                    "name": ".similarity_cache",
+                    "node_type": "directory",
+                    "file_count": 1,
+                    "byte_count": 1024,
+                    "unknown_size_count": 0,
+                    "kind_counts": [{"kind": "image", "count": 1}],
+                    "size_buckets": [
+                      {"bucket": "under_1_mib", "count": 1}
+                    ],
+                    "representative_paths": [
+                      ".similarity_cache/frame.jpg"
+                    ],
+                    "children": [
+                      {
+                        "path": ".similarity_cache/frame.jpg",
+                        "name": "frame.jpg",
+                        "node_type": "file",
+                        "file_count": 1,
+                        "byte_count": 1024,
+                        "unknown_size_count": 0,
+                        "kind_counts": [{"kind": "image", "count": 1}],
+                        "size_buckets": [
+                          {"bucket": "under_1_mib", "count": 1}
+                        ],
+                        "representative_paths": [
+                          ".similarity_cache/frame.jpg"
+                        ],
+                        "children": [],
+                        "omitted_children": 0
+                      }
+                    ],
+                    "omitted_children": 0
+                  }
+                ],
+                "omitted_children": 0
+              }
+            },
+            "issues": {
+              "count": 0,
+              "representative": [],
+              "truncated": false
+            }
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "action": "resume",
+        "run_ref": "precheck-run:scope-review",
+        "decision": {
+          "kind": "source_scope",
+          "inventory_fingerprint": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "default_disposition": "include",
+          "exceptions": [".similarity_cache"]
+        }
+      },
+      "response": {
+        "outcome": "accepted",
+        "action": "resume",
+        "run_ref": "precheck-run:scope-review",
+        "decision": {
+          "kind": "source_scope",
+          "inventory_fingerprint": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "default_disposition": "include",
+          "exceptions": [".similarity_cache"]
+        },
+        "observed_state": "paused",
+        "target_state": "running"
+      }
     }
   ]
 }

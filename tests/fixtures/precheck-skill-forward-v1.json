@@ -29,6 +29,39 @@
       "must_not": ["direct_media_io", "fixed_algorithm_or_profile", "infer_evidence_count_from_source_counters", "invent_cost", "claim_accepted_is_complete"]
     },
     {
+      "id": "source_scope_review",
+      "covers": ["scope_inventory", "scope_interpretation", "scope_confirmation", "stale_scope_refusal", "unattended_safety"],
+      "prompt": "PreCheck paused before expensive work. The factual tree shows .similarity_cache with 5,840 JPG files, .agents, many ordinary dotfiles, old-output, and a hidden album. Help me decide what belongs in this run.",
+      "expected_activation": true,
+      "expected_owner": "mediasense-precheck",
+      "tool_route": [
+        {
+          "tool": "mediasense.precheck.run",
+          "request": {
+            "action": "status",
+            "run_ref": "precheck-run:scope-review",
+            "scope_path": ".similarity_cache"
+          }
+        },
+        {
+          "tool": "mediasense.precheck.run",
+          "request": {
+            "action": "resume",
+            "run_ref": "precheck-run:scope-review",
+            "decision": {
+              "kind": "source_scope",
+              "inventory_fingerprint": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "default_disposition": "include",
+              "exceptions": [".similarity_cache", ".agents", "old-output"]
+            }
+          }
+        }
+      ],
+      "interaction_checkpoints": ["separate_tool_facts_agent_judgment_and_human_choice"],
+      "must": ["inspect_factual_tree", "expand_relevant_subtrees", "treat_hiddenness_as_non_authoritative", "submit_exact_authorized_selection", "respect_stale_inventory"],
+      "must_not": ["invent_tool_classification", "hardcode_hidden_exclusion", "treat_silence_as_consent", "admit_expensive_work_before_selection"]
+    },
+    {
       "id": "revision_outputs_500_3_200",
       "covers": ["recompression", "diagnosis_led_revision", "observed_counts", "reuse", "immutable_lineage"],
       "prompt": "The first Result contains 500 entry Evidence objects. I am not rejecting the number by itself, but many adjacent burst photos seem split into separate entries. Diagnose that problem and revise only the relevant supported configuration. The next Result happens to contain 3 entries and now distinct trips are collapsed together; diagnose again. A later revision happens to produce 200 entries.",

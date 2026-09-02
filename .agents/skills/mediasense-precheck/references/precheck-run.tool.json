@@ -30,8 +30,38 @@
         "type": "string",
         "pattern": "^request:[^\\s]+$"
       },
-      "confirmation_decision": {
+      "optional_work_decision": {
         "enum": ["proceed", "skip_optional_work"]
+      },
+      "source_scope_selection": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "inventory_fingerprint",
+          "default_disposition",
+          "exceptions"
+        ],
+        "properties": {
+          "kind": { "const": "source_scope" },
+          "inventory_fingerprint": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          },
+          "default_disposition": { "enum": ["include", "exclude"] },
+          "exceptions": {
+            "type": "array",
+            "maxItems": 256,
+            "uniqueItems": true,
+            "items": { "type": "string", "minLength": 1 }
+          }
+        }
+      },
+      "confirmation_decision": {
+        "oneOf": [
+          { "$ref": "#/$defs/optional_work_decision" },
+          { "$ref": "#/$defs/source_scope_selection" }
+        ]
       },
       "start_request": {
         "type": "object",
@@ -54,7 +84,12 @@
         "required": ["action", "run_ref"],
         "properties": {
           "action": { "const": "status" },
-          "run_ref": { "$ref": "#/$defs/run_ref" }
+          "run_ref": { "$ref": "#/$defs/run_ref" },
+          "scope_path": { "type": "string", "minLength": 1 },
+          "scope_after": { "type": "string", "minLength": 1 }
+        },
+        "dependentRequired": {
+          "scope_after": ["scope_path"]
         }
       },
       "pause_request": {
@@ -119,8 +154,65 @@
       "public_state": {
         "enum": ["running", "paused", "blocked", "completed", "cancelled", "failed"]
       },
-      "confirmation_decision": {
+      "optional_work_decision": {
         "enum": ["proceed", "skip_optional_work"]
+      },
+      "source_scope_selection": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "inventory_fingerprint",
+          "default_disposition",
+          "exceptions"
+        ],
+        "properties": {
+          "kind": { "const": "source_scope" },
+          "inventory_fingerprint": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          },
+          "default_disposition": { "enum": ["include", "exclude"] },
+          "exceptions": {
+            "type": "array",
+            "maxItems": 256,
+            "uniqueItems": true,
+            "items": { "type": "string", "minLength": 1 }
+          }
+        }
+      },
+      "confirmation_decision": {
+        "oneOf": [
+          { "$ref": "#/$defs/optional_work_decision" },
+          { "$ref": "#/$defs/source_scope_selection" }
+        ]
+      },
+      "accepted_scope_selection": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "inventory_fingerprint",
+          "default_disposition",
+          "exceptions",
+          "provenance"
+        ],
+        "properties": {
+          "kind": { "const": "source_scope" },
+          "inventory_fingerprint": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          },
+          "default_disposition": { "enum": ["include", "exclude"] },
+          "exceptions": {
+            "type": "array",
+            "maxItems": 256,
+            "uniqueItems": true,
+            "items": { "type": "string", "minLength": 1 }
+          },
+          "provenance": { "enum": ["accepted", "reused"] },
+          "reused_from_run_ref": { "$ref": "#/$defs/run_ref" }
+        }
       },
       "control_action": {
         "enum": ["pause", "resume", "cancel"]
@@ -161,6 +253,7 @@
         "enum": [
           "queued",
           "source_accounting",
+          "scope_review",
           "metadata",
           "renditions",
           "video",
@@ -260,16 +353,174 @@
           "resume_when": { "type": "string", "minLength": 1 }
         }
       },
-      "confirmation": {
+      "kind_count": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["summary", "quantity", "unit", "skip_allowed"],
+        "required": ["kind", "count"],
         "properties": {
+          "kind": { "type": "string", "minLength": 1 },
+          "count": { "type": "integer", "minimum": 1 }
+        }
+      },
+      "size_bucket": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["bucket", "count"],
+        "properties": {
+          "bucket": {
+            "enum": [
+              "unknown",
+              "zero",
+              "under_1_mib",
+              "1_to_10_mib",
+              "10_to_100_mib",
+              "100_mib_or_more"
+            ]
+          },
+          "count": { "type": "integer", "minimum": 1 }
+        }
+      },
+      "scope_tree_node": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "path",
+          "name",
+          "node_type",
+          "file_count",
+          "byte_count",
+          "unknown_size_count",
+          "kind_counts",
+          "size_buckets",
+          "representative_paths",
+          "children",
+          "omitted_children"
+        ],
+        "properties": {
+          "path": { "type": "string", "minLength": 1 },
+          "name": { "type": "string", "minLength": 1 },
+          "node_type": { "enum": ["directory", "file"] },
+          "file_count": { "type": "integer", "minimum": 0 },
+          "byte_count": { "type": "integer", "minimum": 0 },
+          "unknown_size_count": { "type": "integer", "minimum": 0 },
+          "kind_counts": {
+            "type": "array",
+            "items": { "$ref": "#/$defs/kind_count" }
+          },
+          "size_buckets": {
+            "type": "array",
+            "items": { "$ref": "#/$defs/size_bucket" }
+          },
+          "representative_paths": {
+            "type": "array",
+            "maxItems": 3,
+            "items": { "type": "string", "minLength": 1 }
+          },
+          "children": {
+            "type": "array",
+            "maxItems": 63,
+            "items": { "$ref": "#/$defs/scope_tree_node" }
+          },
+          "omitted_children": { "type": "integer", "minimum": 0 }
+        }
+      },
+      "scope_issue": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["relative_path", "code", "blocked", "basis"],
+        "properties": {
+          "relative_path": { "type": "string", "minLength": 1 },
+          "code": { "type": "string", "minLength": 1 },
+          "blocked": { "type": "boolean" },
+          "basis": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 }
+          }
+        }
+      },
+      "scope_inventory": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "inventory_fingerprint",
+          "scan_generation",
+          "complete",
+          "view",
+          "issues"
+        ],
+        "properties": {
+          "inventory_fingerprint": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          },
+          "scan_generation": { "type": "integer", "minimum": 1 },
+          "complete": { "type": "boolean" },
+          "view": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["root", "max_depth", "max_nodes", "tree"],
+            "properties": {
+              "root": { "type": "string", "minLength": 1 },
+              "max_depth": { "type": "integer", "minimum": 1 },
+              "max_nodes": { "type": "integer", "minimum": 2 },
+              "tree": { "$ref": "#/$defs/scope_tree_node" },
+              "next_after": { "type": "string", "minLength": 1 }
+            }
+          },
+          "issues": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["count", "representative", "truncated"],
+            "properties": {
+              "count": { "type": "integer", "minimum": 0 },
+              "representative": {
+                "type": "array",
+                "maxItems": 3,
+                "items": { "$ref": "#/$defs/scope_issue" }
+              },
+              "truncated": { "type": "boolean" }
+            }
+          }
+        }
+      },
+      "optional_work_confirmation": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "summary", "quantity", "unit", "skip_allowed"],
+        "properties": {
+          "kind": { "const": "optional_work" },
           "summary": { "type": "string", "minLength": 1 },
           "quantity": { "type": "integer", "minimum": 1 },
           "unit": { "type": "string", "minLength": 1 },
           "skip_allowed": { "type": "boolean" }
         }
+      },
+      "source_scope_confirmation": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "summary",
+          "inventory_fingerprint",
+          "scan_generation",
+          "inventory"
+        ],
+        "properties": {
+          "kind": { "const": "source_scope" },
+          "summary": { "type": "string", "minLength": 1 },
+          "inventory_fingerprint": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          },
+          "scan_generation": { "type": "integer", "minimum": 1 },
+          "inventory": { "$ref": "#/$defs/scope_inventory" }
+        }
+      },
+      "confirmation": {
+        "oneOf": [
+          { "$ref": "#/$defs/optional_work_confirmation" },
+          { "$ref": "#/$defs/source_scope_confirmation" }
+        ]
       },
       "published_result": {
         "type": "object",
@@ -327,6 +578,7 @@
           "state": { "$ref": "#/$defs/public_state" },
           "progress": { "$ref": "#/$defs/progress" },
           "activity": { "$ref": "#/$defs/activity" },
+          "scope_selection": { "$ref": "#/$defs/accepted_scope_selection" },
           "allowed_actions": {
             "type": "array",
             "uniqueItems": true,
@@ -393,7 +645,12 @@
               "properties": {
                 "reason": {
                   "properties": {
-                    "code": { "const": "confirmation_required" }
+                    "code": {
+                      "enum": [
+                        "confirmation_required",
+                        "scope_confirmation_required"
+                      ]
+                    }
                   },
                   "required": ["code"]
                 }

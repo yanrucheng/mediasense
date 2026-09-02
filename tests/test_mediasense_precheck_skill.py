@@ -113,11 +113,26 @@ def test_skill_distinguishes_source_accounting_from_execution_liveness() -> None
     assert "percentage, ETA, throughput, or success promise" in skill
 
 
+def test_skill_keeps_scope_facts_and_agent_judgment_separate() -> None:
+    skill = SKILL_PATH.read_text(encoding="utf-8")
+
+    assert "Treat the returned inventory as Tool\nfacts" in skill
+    assert "Agent judgment" in skill
+    assert "never claim\nthat a dot name" in skill
+    assert "`status.scope_path`" in skill
+    assert "Never replay a stale\nselection" in skill
+
+
 def test_forward_scenarios_cover_required_behavior_and_phase_boundaries() -> None:
     expected_coverage = {
         "positive_activation",
         "negative_activation",
         "initial_compression",
+        "scope_inventory",
+        "scope_interpretation",
+        "scope_confirmation",
+        "stale_scope_refusal",
+        "unattended_safety",
         "cost_reporting",
         "recompression",
         "diagnosis_led_revision",

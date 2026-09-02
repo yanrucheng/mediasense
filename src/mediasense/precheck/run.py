@@ -28,6 +28,13 @@ from ._orchestrator import (
 from .accounting import AccountingStore
 from .read import PrecheckReadTool
 from .result import ResultDraft, ResultSealError, ResultStore
+from .scope_review import (
+    ScopeSelectionError,
+    build_scope_inventory,
+    normalize_scope_path,
+    selection_digest,
+    validate_scope_selection,
+)
 
 
 _ACTIONS = {"start", "status", "pause", "resume", "cancel"}
@@ -50,6 +57,7 @@ _EXCEPTIONAL_CONDITIONS = {"unsupported", "invalid", "error"}
 _PHASE_NAMES = {
     "queued": "queued",
     "accounting": "source_accounting",
+    "scope_review": "scope_review",
     "metadata": "metadata",
     "renditions": "renditions",
     "video": "video",
@@ -145,7 +153,11 @@ class PrecheckRunTool:
                 return self._start(request)
             run_ref = str(request["run_ref"])
             if action == "status":
-                return self._status(run_ref)
+                return self._status(
+                    run_ref,
+                    scope_path=request.get("scope_path"),
+                    scope_after=request.get("scope_after"),
+                )
             return self._control(action, run_ref, request.get("decision"))
         except sqlite3.Error:
             return _error(
@@ -244,6 +256,7 @@ class PrecheckRunTool:
         if not pending_fingerprint.strip():
             raise ValueError("pending_fingerprint must be non-empty")
         confirmation = {
+            "kind": "optional_work",
             "summary": summary,
             "quantity": quantity,
             "unit": unit,
@@ -266,6 +279,45 @@ class PrecheckRunTool:
             return None
         decision = record["confirmation_decision"]
         return None if decision is None else str(decision)
+
+    def scope_selection_submitted(self, run_ref: str) -> bool:
+        review = self._store.latest_scope_review(run_ref)
+        return review is not None and review["state"] in {"accepted", "reused"}
+
+    def require_scope_selection(
+        self,
+        run_ref: str,
+        accounting_run_id: str,
+    ) -> dict[str, object]:
+        """Pause for or apply one exact factual source-scope selection."""
+
+        accounting = AccountingStore(self.database_path)
+        inventory = self._scope_inventory(accounting_run_id)
+        fingerprint = str(inventory["inventory_fingerprint"])
+        summary = accounting.get_run_summary(accounting_run_id)
+        record, selection = self._store.ensure_scope_review(
+            run_ref,
+            accounting_run_id=accounting_run_id,
+            scan_generation=summary.scan_generation,
+            inventory_fingerprint=fingerprint,
+            summary=inventory,
+        )
+        if selection is None:
+            return self._status_record(record)
+        normalized = validate_scope_selection(
+            selection,
+            inventory_fingerprint_value=fingerprint,
+            existing_paths=(
+                str(fact["relative_path"])
+                for fact in accounting.iter_scope_inventory_facts(accounting_run_id)
+            ),
+        )
+        accounting.apply_scope_selection(
+            accounting_run_id,
+            normalized,
+            selection_digest=selection_digest(normalized),
+        )
+        return self._status_record(self._store.get(run_ref))
 
     def current_state(self, run_ref: str) -> str:
         """Return the durable state used by cooperative workers."""
@@ -555,7 +607,13 @@ class PrecheckRunTool:
         self._prepare_execution(record, dataset_id=dataset_id)
         return _start_response(record)
 
-    def _status(self, run_ref: str) -> dict[str, object]:
+    def _status(
+        self,
+        run_ref: str,
+        *,
+        scope_path: object = None,
+        scope_after: object = None,
+    ) -> dict[str, object]:
         try:
             record = self._store.get(run_ref)
         except KeyError:
@@ -591,17 +649,79 @@ class PrecheckRunTool:
                     "Published Result projection no longer matches its sealed bytes",
                     run_ref,
                 )
-        return self._status_record(record)
+        response = self._status_record(record)
+        if scope_path is not None:
+            confirmation = response.get("confirmation")
+            if (
+                not isinstance(confirmation, dict)
+                or confirmation.get("kind") != "source_scope"
+            ):
+                return _error(
+                    "status",
+                    "invalid_request",
+                    "scope_path is available only while source scope is pending",
+                    run_ref,
+                )
+            accounting_run_id = record["accounting_run_id"]
+            if not isinstance(accounting_run_id, str):
+                return _error(
+                    "status",
+                    "operation_failed",
+                    "Run has no bound source accounting state",
+                    run_ref,
+                )
+            try:
+                inventory = self._scope_inventory(
+                    accounting_run_id,
+                    scope_path=normalize_scope_path(scope_path, allow_root=True),
+                    scope_after=(
+                        None
+                        if scope_after is None
+                        else normalize_scope_path(scope_after, allow_root=False)
+                    ),
+                )
+            except ScopeSelectionError as error:
+                return _error("status", "invalid_request", str(error), run_ref)
+            confirmation = dict(confirmation)
+            confirmation["inventory"] = inventory
+            response["confirmation"] = confirmation
+        return response
 
     def _control(
         self, action: str, run_ref: str, decision: object
     ) -> dict[str, object]:
-        normalized_decision = None if decision is None else str(decision)
+        normalized_decision: object = decision
         try:
             if action == "pause":
                 observed, _current = self._store.request_pause(run_ref)
                 target = "paused"
             elif action == "resume":
+                if isinstance(decision, dict):
+                    record = self._store.get(run_ref)
+                    confirmation = record["confirmation"]
+                    accounting_run_id = record["accounting_run_id"]
+                    if (
+                        not isinstance(confirmation, dict)
+                        or confirmation.get("kind") != "source_scope"
+                        or not isinstance(accounting_run_id, str)
+                    ):
+                        raise RunDecisionError(
+                            "source-scope decision requires a pending scope review"
+                        )
+                    normalized_decision = validate_scope_selection(
+                        decision,
+                        inventory_fingerprint_value=str(
+                            confirmation["inventory_fingerprint"]
+                        ),
+                        existing_paths=(
+                            str(fact["relative_path"])
+                            for fact in AccountingStore(
+                                self.database_path
+                            ).iter_scope_inventory_facts(accounting_run_id)
+                        ),
+                    )
+                elif decision is not None:
+                    normalized_decision = str(decision)
                 observed, _current = self._store.request_resume(
                     run_ref, decision=normalized_decision
                 )
@@ -611,7 +731,7 @@ class PrecheckRunTool:
                 target = "cancelled"
         except KeyError:
             return _error(action, "run_not_found", "Run does not exist", run_ref)
-        except RunDecisionError as error:
+        except (RunDecisionError, ScopeSelectionError) as error:
             return _error(action, "invalid_request", str(error), run_ref)
         except RunStateConflict as error:
             return _invalid_state(action, run_ref, error.record)
@@ -625,6 +745,32 @@ class PrecheckRunTool:
         if action == "resume" and normalized_decision is not None:
             response["decision"] = normalized_decision
         return response
+
+    def _scope_inventory(
+        self,
+        accounting_run_id: str,
+        *,
+        scope_path: str = ".",
+        scope_after: str | None = None,
+    ) -> dict[str, object]:
+        accounting = AccountingStore(self.database_path)
+        summary = accounting.get_run_summary(accounting_run_id)
+        issues = (
+            {
+                "relative_path": issue.relative_path.as_posix(),
+                "code": str(issue.code),
+                "blocked": issue.blocked,
+                "basis": issue.basis,
+            }
+            for issue in accounting.get_run_issues(accounting_run_id)
+        )
+        return build_scope_inventory(
+            accounting.iter_scope_inventory_facts(accounting_run_id),
+            issues,
+            scan_generation=summary.scan_generation,
+            scope_path=scope_path,
+            scope_after=scope_after,
+        )
 
     def _verified_result(
         self, result_ref: str
@@ -664,6 +810,17 @@ class PrecheckRunTool:
             response["reason"] = record["reason"]
         if record["state"] == "paused" and record["confirmation"] is not None:
             response["confirmation"] = record["confirmation"]
+        scope_review = self._store.latest_scope_review(str(record["run_ref"]))
+        if (
+            scope_review is not None
+            and scope_review["state"] in {"accepted", "reused"}
+            and isinstance(scope_review["selection"], dict)
+        ):
+            selection = dict(scope_review["selection"])
+            selection["provenance"] = scope_review["state"]
+            if scope_review["reused_from_run_ref"] is not None:
+                selection["reused_from_run_ref"] = scope_review["reused_from_run_ref"]
+            response["scope_selection"] = selection
         if record["state"] == "completed":
             response["published_result"] = record["published_result"]
         return response
@@ -718,10 +875,10 @@ class PrecheckRunTool:
             return "waiting"
         if state == "paused":
             reason = record.get("reason")
-            if (
-                isinstance(reason, dict)
-                and reason.get("code") == "confirmation_required"
-            ):
+            if isinstance(reason, dict) and reason.get("code") in {
+                "confirmation_required",
+                "scope_confirmation_required",
+            }:
                 return "waiting"
             return "paused"
         checkpoint = record["execution_checkpoint"]
@@ -875,7 +1032,7 @@ def _as_datetime(value: str) -> datetime:
 def _validate_request(action: str, request: dict[str, object]) -> None:
     allowed = {
         "start": {"action", "dataset_ref", "prior_result_ref", "request_id"},
-        "status": {"action", "run_ref"},
+        "status": {"action", "run_ref", "scope_path", "scope_after"},
         "pause": {"action", "run_ref"},
         "resume": {"action", "run_ref", "decision"},
         "cancel": {"action", "run_ref"},
@@ -896,9 +1053,21 @@ def _validate_request(action: str, request: dict[str, object]) -> None:
             _require_ref(request[field], "precheck-result:", field)
         return
     _require_ref(request.get("run_ref"), "precheck-run:", "run_ref")
+    if action == "status" and "scope_path" in request:
+        normalize_scope_path(request["scope_path"], allow_root=True)
+    if action == "status" and "scope_after" in request:
+        if "scope_path" not in request:
+            raise ValueError("scope_after requires scope_path")
+        normalize_scope_path(request["scope_after"], allow_root=False)
     if action == "resume" and "decision" in request:
-        if request["decision"] not in {"proceed", "skip_optional_work"}:
-            raise ValueError("decision must be proceed or skip_optional_work")
+        decision = request["decision"]
+        if not isinstance(decision, (dict, str)) or (
+            isinstance(decision, str)
+            and decision not in {"proceed", "skip_optional_work"}
+        ):
+            raise ValueError(
+                "decision must be proceed, skip_optional_work, or source_scope"
+            )
 
 
 def _require_ref(value: object, prefix: str, field: str) -> None:

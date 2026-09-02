@@ -95,6 +95,12 @@ class _RunControl(Protocol):
         self, run_ref: str, *, pending_fingerprint: str
     ) -> str | None: ...
 
+    def scope_selection_submitted(self, run_ref: str) -> bool: ...
+
+    def require_scope_selection(
+        self, run_ref: str, accounting_run_id: str
+    ) -> dict[str, object]: ...
+
     def mark_blocked(
         self,
         run_ref: str,
@@ -245,7 +251,9 @@ class PrecheckExecutionConfig:
             else:
                 detected_storage, detected_evidence = detect_source_storage(source_root)
         if detected_storage not in {"local", "remote", "unknown"}:
-            raise ValueError("detected source storage must be local, remote, or unknown")
+            raise ValueError(
+                "detected source storage must be local, remote, or unknown"
+            )
         storage = self.source_storage_hint
         evidence = detected_evidence or "storage_probe_unspecified"
         if storage == "auto":
@@ -391,11 +399,19 @@ class PrecheckOrchestrator:
         accounting.process_run(
             accounting_run_id,
             should_continue=lambda: self._running(run_ref),
+            force_rescan=self.run_control.scope_selection_submitted(run_ref),
         )
         status = self.run_control.sync_accounting(run_ref)
         if status["state"] != "running":
             return status
         if not self._finish_phase(run_ref, "accounting"):
+            return self.run_control.sync_accounting(run_ref)
+
+        self._checkpoint(run_ref, "scope_review", total=1)
+        status = self.run_control.require_scope_selection(run_ref, accounting_run_id)
+        if status["state"] != "running":
+            return status
+        if not self._finish_phase(run_ref, "scope_review"):
             return self.run_control.sync_accounting(run_ref)
 
         def media_items() -> Iterator[AccountedItem]:
@@ -416,7 +432,9 @@ class PrecheckOrchestrator:
         gpx_paths = tuple(
             item.relative_path
             for item in accounting.iter_run_items(accounting_run_id)
-            if item.kind == "gpx" and item.source_revision is not None
+            if item.scope == "auxiliary"
+            and item.kind == "gpx"
+            and item.source_revision is not None
         )
         executor = BoundedWorkExecutor(config.resource_budget)
 
@@ -730,8 +748,7 @@ class PrecheckOrchestrator:
             ),
         )
         probe_by_path = {
-            Path(key.removeprefix("video-probe:")): outcome
-            for key, outcome in probes
+            Path(key.removeprefix("video-probe:")): outcome for key, outcome in probes
         }
         frame_producer = VideoFrameProducer(self.database_path, **frame_kwargs)
         frame_calls = (
@@ -832,9 +849,7 @@ class PrecheckOrchestrator:
                 for path, outcome in eligible.items()
             ),
         )
-        return {
-            Path(key.removeprefix("gpx:")): value for key, value in outcomes
-        }
+        return {Path(key.removeprefix("gpx:")): value for key, value in outcomes}
 
     def _embeddings(
         self,
@@ -980,9 +995,7 @@ class PrecheckOrchestrator:
             ),
         )
         return tuple(
-            outcome
-            for _key, batch in batch_values
-            for outcome in batch.values()
+            outcome for _key, batch in batch_values for outcome in batch.values()
         )
 
     def _bundles(

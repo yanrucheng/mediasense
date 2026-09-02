@@ -155,6 +155,26 @@ def test_start_requires_safe_retry_identity() -> None:
         validator.validate(request)
 
 
+def test_scope_inventory_navigation_stays_inside_status() -> None:
+    validator, _ = _validators()
+    validator.validate(
+        {
+            "action": "status",
+            "run_ref": "precheck-run:test",
+            "scope_path": ".",
+            "scope_after": ".similarity_cache",
+        }
+    )
+    with pytest.raises(ValidationError):
+        validator.validate(
+            {
+                "action": "status",
+                "run_ref": "precheck-run:test",
+                "scope_after": ".similarity_cache",
+            }
+        )
+
+
 def test_request_id_replay_is_stable_and_conflicts_are_detected() -> None:
     exchange = deepcopy(_mock()["exchanges"][0])
     _assert_request_id_consistency([exchange, deepcopy(exchange)])
@@ -200,6 +220,18 @@ def test_confirmation_pause_reuses_resume_without_adding_an_action() -> None:
             "decision": "skip_optional_work",
         }
     )
+    input_validator.validate(
+        {
+            "action": "resume",
+            "run_ref": "precheck-run:test",
+            "decision": {
+                "kind": "source_scope",
+                "inventory_fingerprint": "sha256:" + "a" * 64,
+                "default_disposition": "include",
+                "exceptions": [".similarity_cache"],
+            },
+        }
+    )
     with pytest.raises(ValidationError):
         input_validator.validate(
             {
@@ -216,6 +248,7 @@ def test_confirmation_pause_reuses_resume_without_adding_an_action() -> None:
         "resume_when": "The caller chooses proceed or skip_optional_work.",
     }
     paused["confirmation"] = {
+        "kind": "optional_work",
         "summary": "Reverse-geocode the frozen representative set.",
         "quantity": 237,
         "unit": "logical_queries",
@@ -226,6 +259,20 @@ def test_confirmation_pause_reuses_resume_without_adding_an_action() -> None:
     paused.pop("confirmation")
     with pytest.raises(ValidationError):
         output_validator.validate(paused)
+
+
+def test_status_may_report_an_auditable_scope_selection() -> None:
+    _, output_validator = _validators()
+    completed = deepcopy(_mock()["exchanges"][5]["response"])
+    completed["scope_selection"] = {
+        "kind": "source_scope",
+        "inventory_fingerprint": "sha256:" + "a" * 64,
+        "default_disposition": "include",
+        "exceptions": [".similarity_cache"],
+        "provenance": "accepted",
+    }
+
+    output_validator.validate(completed)
 
 
 def test_status_state_rules_and_allowed_actions_are_exact() -> None:

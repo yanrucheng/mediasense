@@ -4,7 +4,7 @@ title: "MediaSense PreCheck Run Tool Contract"
 type: spec
 status: active
 created: 2026-08-27
-updated: 2026-09-01
+updated: 2026-09-02
 timezone: "Asia/Shanghai"
 parent: "index-spec"
 depends-on:
@@ -44,7 +44,7 @@ The Tool is authoritative for:
   control actions; and
 - whether automatic publication completed and which immutable `result_ref` was published.
 
-The Tool may create and mutate Working Run state and internal derived artifacts. It may not mutate source media or any published Result. External and unusually resource-intensive work remains disabled until its exact pending work is known and the user confirms it through a paused Run checkpoint. The permitted online exception is coordinate-only reverse geocoding over the normalized, deduplicated representative-coordinate batch frozen after compression; one matching Run decision covers that batch, not arbitrary later coordinates.
+The Tool may create and mutate Working Run state and internal derived artifacts. It may not mutate source media or any published Result. Before expensive local work, the Tool exposes factual source-tree statistics and enforces an exact caller-selected scope; it does not decide whether a named or hidden subtree is semantically wanted. External work remains disabled until its exact pending work is known and the user confirms it through a later paused Run checkpoint. The permitted online exception is coordinate-only reverse geocoding over the normalized, deduplicated representative-coordinate batch frozen after compression; one matching Run decision covers that batch, not arbitrary later coordinates.
 
 Mutable Work Records, cache keys, checkpoints, leases, SQLite rows, internal
 producer states, artifact paths, and orchestration mechanics are not public. The
@@ -62,6 +62,11 @@ schedules the existing private execution coordinator with that reference;
 `status`, `pause`, and `cancel` therefore remain available while long work is
 running. This scheduling boundary is not another public action or product
 entity.
+
+The first worker pass completes source discovery and ordinarily pauses for a
+scope selection before admitting expensive producer Work. A later Run may skip
+that pause only when it discovers an inventory exactly compatible with a prior
+accepted selection for the same Dataset.
 
 - A first Run supplies exactly one `dataset_ref`.
 - A successor Run supplies exactly one `prior_result_ref`; its Dataset is derived from that immutable Result and returned as `dataset_ref`.
@@ -81,7 +86,18 @@ entity.
   durable progress time, and a bounded cross-phase error summary;
 - the currently permitted state-changing actions;
 - a structured reason and observable recovery condition where required; and
+- while source scope is pending, one bounded factual inventory tree; and
+- after acceptance or exact reuse, the effective scope selection and its
+  provenance; and
 - for `completed`, the published `result_ref` and the Result's exact `coverage`, `readiness`, and `integrity` values.
+
+While source scope is pending, callers may supply a source-relative
+`scope_path` to `status` to replace the root view with a bounded view of that
+subtree, and `scope_after` to continue an oversized sibling list. This is a
+read-only projection, not a sixth action. Counts, byte totals, kind
+distributions, size buckets, representative paths, omitted-child counts, and
+discovery limitations are facts. Cache, backup, historical-output, or
+legitimacy judgments are deliberately absent.
 
 The copied status axes are a convenience projection from the immutable Result. [`mediasense.precheck.read`](../spec-260826-1546-precheck-read/) remains their authority.
 
@@ -116,7 +132,7 @@ percent completion, throughput, or an ETA.
 
 | Field | Stable meaning |
 | --- | --- |
-| `phase` | The current user-relevant capability boundary: queued, source accounting, metadata, renditions, video, GPX, embeddings, sensitivity, bundling, compression, optional external evidence, publication, complete, or explicitly unknown. It does not promise one fixed implementation order. |
+| `phase` | The current user-relevant capability boundary: queued, source accounting, scope review, metadata, renditions, video, GPX, embeddings, sensitivity, bundling, compression, optional external evidence, publication, complete, or explicitly unknown. It does not promise one fixed implementation order. |
 | `work.completed` | Phase operations successfully computed in this Working Run. |
 | `work.reused` | Phase operations satisfied by valid work committed before this Working Run. |
 | `work.failed` | Phase operations with a current failed, blocked, or exhausted outcome; these do not alone make the whole Run `failed`. |
@@ -161,14 +177,32 @@ Control operations are target-state idempotent and do not require `request_id`:
 - `resume` requests `running` and returns without waiting for resumed work; and
 - `cancel` requests `cancelled`.
 
-The runtime may also enter `paused` automatically when a frozen optional work set requires user confirmation. Status then includes one `confirmation` with a concise summary, exact logical quantity, unit, and whether the work may be skipped. It does not predict provider-specific calls or monetary cost when those are not yet knowable.
+The runtime may also enter `paused` automatically for either source-scope
+selection or a frozen optional work set. A source-scope confirmation contains
+the exact inventory fingerprint and bounded factual inventory. An optional-work
+confirmation contains a concise summary, exact logical quantity, unit, and
+whether the work may be skipped. It does not predict provider-specific calls or
+monetary cost when those are not yet knowable.
 
-For an ordinary pause, `resume` carries no decision. For a confirmation pause, `resume.decision` is required by runtime semantics:
+For an ordinary pause, `resume` carries no decision. For a confirmation pause,
+`resume.decision` is required by runtime semantics:
 
+- a source-scope decision supplies the matching inventory fingerprint, a
+  default `include` or `exclude` disposition, and non-overlapping subtree
+  exceptions with the opposite disposition;
 - `proceed` authorizes only the frozen pending work reported by the current status;
 - `skip_optional_work` records that optional work as not requested and continues without it, and is accepted only when `confirmation.skip_allowed` is true.
 
-If the pending work changes, the runtime pauses again. A prior decision never authorizes a larger or different work set. No separate authorization action or public resource entity is introduced.
+Before applying a source-scope decision, the worker performs another discovery
+generation. If the inventory changes, the old decision is not applied and the
+Run pauses on the refreshed inventory. The exact prior selection may be reused
+by a later Run over the same Dataset only when its inventory fingerprint still
+matches. Excluded items remain in Result accounting and create no source-tree
+effect.
+
+If optional pending work changes, the runtime pauses again. A prior decision
+never authorizes a larger or different work set. No separate authorization
+action or public resource entity is introduced.
 
 The Run may execute this fixed batch through a PreCheck-owned engine while reusing
 stage-neutral provider adapters. It is not required to translate the batch into

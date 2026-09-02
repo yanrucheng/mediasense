@@ -7,7 +7,7 @@ contracts.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable, Iterator
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from pathlib import Path
 from uuid import uuid4
 
@@ -138,6 +138,7 @@ class AccountingStore:
         batch_size: int = 256,
         max_batches: int | None = None,
         should_continue: Callable[[], bool] | None = None,
+        force_rescan: bool = False,
     ) -> WorkingRunSummary:
         """Process a run in durable batches and optionally pause after a limit.
 
@@ -153,10 +154,14 @@ class AccountingStore:
             raise ValueError("max_batches must be positive when provided")
 
         run = self._database.load_run(run_id)
-        if WorkingRunStatus(run["status"]) in {
-            WorkingRunStatus.COMPLETED,
-            WorkingRunStatus.COMPLETED_WITH_ISSUES,
-        }:
+        if (
+            WorkingRunStatus(run["status"])
+            in {
+                WorkingRunStatus.COMPLETED,
+                WorkingRunStatus.COMPLETED_WITH_ISSUES,
+            }
+            and not force_rescan
+        ):
             return self.get_run_summary(run_id)
 
         attachment = self._database.active_attachment(run_id)
@@ -267,6 +272,27 @@ class AccountingStore:
         page_size: int = 1_000,
     ) -> Iterator[AccountedItem]:
         return self._database.iter_run_items(run_id, page_size=page_size)
+
+    def iter_scope_inventory_facts(
+        self,
+        run_id: str,
+        *,
+        page_size: int = 1_000,
+    ) -> Iterator[dict[str, object]]:
+        return self._database.iter_scope_inventory_facts(run_id, page_size=page_size)
+
+    def apply_scope_selection(
+        self,
+        run_id: str,
+        selection: Mapping[str, object],
+        *,
+        selection_digest: str,
+    ) -> tuple[int, int]:
+        return self._database.apply_scope_selection(
+            run_id,
+            selection,
+            selection_digest=selection_digest,
+        )
 
     def associated_paths(self, run_id: str, relative_path: Path) -> tuple[Path, ...]:
         return self._database.associated_paths(run_id, relative_path)

@@ -174,6 +174,26 @@ def _prepare_source_bound_run(
     return database, source, accounting_run_id
 
 
+def _resume_with_default_scope(tool: PrecheckRunTool, run_ref: str) -> None:
+    paused = tool.advance(run_ref)
+    assert paused["state"] == "paused"
+    assert paused["reason"]["code"] == "scope_confirmation_required"
+    confirmation = paused["confirmation"]
+    decision = {
+        "kind": "source_scope",
+        "inventory_fingerprint": confirmation["inventory_fingerprint"],
+        "default_disposition": "include",
+        "exceptions": [],
+    }
+    accepted = tool.run({"action": "resume", "run_ref": run_ref, "decision": decision})
+    assert accepted["outcome"] == "accepted"
+
+
+def _advance_after_scope(tool: PrecheckRunTool, run_ref: str) -> dict[str, object]:
+    _resume_with_default_scope(tool, run_ref)
+    return tool.advance(run_ref)
+
+
 def test_start_then_internal_worker_drives_mixed_source_to_readable_result(
     tmp_path: Path,
 ) -> None:
@@ -229,7 +249,7 @@ def test_start_then_internal_worker_drives_mixed_source_to_readable_result(
     )
     assert started["state"] == "running"
     assert WorkStore(database).list_run_work(_accounting_run_id) == ()
-    tool.advance(str(started["run_ref"]))
+    _advance_after_scope(tool, str(started["run_ref"]))
     status = tool.run({"action": "status", "run_ref": started["run_ref"]})
 
     assert started["outcome"] == "ok"
@@ -312,7 +332,7 @@ def test_bundle_reduces_initial_visual_demand_without_reducing_accounting(
             "request_id": f"request:bounded-visual-{len(directed_paths)}",
         }
     )
-    tool.advance(str(started["run_ref"]))
+    _advance_after_scope(tool, str(started["run_ref"]))
 
     works = WorkStore(database).list_run_work(accounting_run_id)
     metadata = [work for work in works if work.spec.capability == "source-metadata"]
@@ -377,7 +397,7 @@ def test_later_run_can_direct_additional_visual_evidence(tmp_path: Path) -> None
             "request_id": "request:initial-evidence",
         }
     )
-    first_tool.advance(str(first["run_ref"]))
+    _advance_after_scope(first_tool, str(first["run_ref"]))
     assert (
         sum(
             work.spec.capability == "image-rendition"
@@ -441,7 +461,7 @@ def test_metadata_batches_respect_configured_provider_ceiling(tmp_path: Path) ->
             "request_id": "request:metadata-batches",
         }
     )
-    tool.advance(str(started["run_ref"]))
+    _advance_after_scope(tool, str(started["run_ref"]))
 
     assert (
         tool.run({"action": "status", "run_ref": started["run_ref"]})["state"]
@@ -485,7 +505,7 @@ def test_default_orchestration_makes_no_external_requests(tmp_path: Path) -> Non
             "request_id": "request:zero-network",
         }
     )
-    tool.advance(str(started["run_ref"]))
+    _advance_after_scope(tool, str(started["run_ref"]))
     status = tool.run({"action": "status", "run_ref": started["run_ref"]})
     assert status["state"] == "completed"
 
@@ -542,7 +562,7 @@ def test_geocode_pauses_for_exact_frozen_query_count_before_fake_provider(
             "request_id": "request:geocode-e2e",
         }
     )
-    tool.advance(str(started["run_ref"]))
+    _advance_after_scope(tool, str(started["run_ref"]))
     paused = tool.run({"action": "status", "run_ref": started["run_ref"]})
     assert paused["state"] == "paused"
     assert paused["reason"]["code"] == "confirmation_required"
@@ -599,7 +619,7 @@ def test_local_item_failure_isolated_while_other_source_completes(
             "request_id": "request:isolated-failure",
         }
     )
-    tool.advance(str(started["run_ref"]))
+    _advance_after_scope(tool, str(started["run_ref"]))
     status = tool.run({"action": "status", "run_ref": started["run_ref"]})
 
     assert status["state"] == "completed"
@@ -655,6 +675,7 @@ def test_local_item_failure_is_visible_before_result_publication(
             "request_id": "request:visible-isolated-failure",
         }
     )
+    _resume_with_default_scope(tool, str(started["run_ref"]))
     results: list[dict[str, object]] = []
     worker = Thread(
         target=lambda: results.append(tool.advance(str(started["run_ref"])))
@@ -712,6 +733,7 @@ def test_user_pause_resume_and_cancel_are_honored_between_phases(
         }
     )
     assert started["state"] == "running"
+    _resume_with_default_scope(tool, str(started["run_ref"]))
     worker_results: list[dict[str, object]] = []
     worker = Thread(
         target=lambda: worker_results.append(tool.advance(str(started["run_ref"])))
@@ -824,6 +846,7 @@ def test_process_interruption_resumes_without_repeating_completed_work(
     }
     started = first_tool.run(request)
     run_ref = str(started["run_ref"])
+    _resume_with_default_scope(first_tool, run_ref)
     with pytest.raises(KeyboardInterrupt, match="simulated process loss"):
         first_tool.advance(run_ref)
     interrupted = first_tool.run({"action": "status", "run_ref": run_ref})
@@ -882,6 +905,7 @@ def test_crash_immediately_before_seal_resumes_to_one_result(
         "request_id": "request:before-seal-crash",
     }
     started = tool.run(request)
+    _resume_with_default_scope(tool, str(started["run_ref"]))
     with pytest.raises(KeyboardInterrupt, match="simulated crash before seal"):
         tool.advance(str(started["run_ref"]))
     assert ResultStore(database).audit().available == ()
@@ -923,6 +947,7 @@ def test_crash_after_sealed_bytes_recovers_without_partial_result(
             "request_id": "request:after-bytes-crash",
         }
     )
+    _resume_with_default_scope(tool, str(started["run_ref"]))
     tool.advance(str(started["run_ref"]))
     interrupted = tool.run({"action": "status", "run_ref": started["run_ref"]})
     audit = ResultStore(database).audit()
@@ -973,6 +998,7 @@ def test_crash_after_result_registration_rebinds_run_completion(
         "request_id": "request:registered-crash",
     }
     started = tool.run(request)
+    _resume_with_default_scope(tool, str(started["run_ref"]))
     with pytest.raises(KeyboardInterrupt, match="after Result registration"):
         tool.advance(str(started["run_ref"]))
     record = tool._store.get(str(started["run_ref"]))
@@ -1012,7 +1038,7 @@ def test_low_level_work_and_artifact_are_reused_across_public_runs(
             "request_id": "request:reuse-first",
         }
     )
-    first_tool.advance(str(first["run_ref"]))
+    _advance_after_scope(first_tool, str(first["run_ref"]))
     first_status = first_tool.run({"action": "status", "run_ref": first["run_ref"]})
     assert first_status["state"] == "completed"
     first_renditions = {

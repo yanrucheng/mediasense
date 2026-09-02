@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable, Iterator
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from contextlib import contextmanager
 from datetime import datetime, timezone
 import json
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import sqlite3
 import unicodedata
 
@@ -333,7 +333,7 @@ class SQLiteAccounting:
                     identity_strength = ?, filesystem_capabilities_json = ?,
                     status = ?, blocked_reason = NULL,
                     scan_generation = scan_generation + 1,
-                    checkpoint = NULL, updated_at = ?
+                    checkpoint = NULL, finished_at = NULL, updated_at = ?
                 WHERE run_id = ?
                 """,
                 (
@@ -554,6 +554,111 @@ class SQLiteAccounting:
                 yield _accounted_item(row)
             after = str(rows[-1]["relative_path"])
 
+    def iter_scope_inventory_facts(
+        self,
+        run_id: str,
+        *,
+        page_size: int = 1_000,
+    ) -> Iterator[dict[str, object]]:
+        """Stream complete factual inputs for a bounded scope-review view."""
+
+        if page_size < 1:
+            raise ValueError("scope inventory page size must be positive")
+        after = ""
+        while True:
+            with self.connect() as connection:
+                rows = connection.execute(
+                    """
+                    SELECT relative_path, kind, scope, condition, basis_json,
+                           size_bytes, mtime_ns, device_id, inode, mode,
+                           fingerprint_algorithm, fingerprint,
+                           producer_identity, reuse_domain
+                    FROM run_items
+                    WHERE run_id = ? AND relative_path > ?
+                    ORDER BY relative_path
+                    LIMIT ?
+                    """,
+                    (run_id, after, page_size),
+                ).fetchall()
+            if not rows:
+                return
+            for row in rows:
+                yield {
+                    "relative_path": str(row["relative_path"]),
+                    "kind": str(row["kind"]),
+                    "scope": str(row["scope"]),
+                    "condition": str(row["condition"]),
+                    "basis": tuple(json.loads(str(row["basis_json"]))),
+                    "size_bytes": row["size_bytes"],
+                    "mtime_ns": row["mtime_ns"],
+                    "device_id": row["device_id"],
+                    "inode": row["inode"],
+                    "mode": row["mode"],
+                    "fingerprint_algorithm": row["fingerprint_algorithm"],
+                    "fingerprint": row["fingerprint"],
+                    "producer_identity": str(row["producer_identity"]),
+                    "reuse_domain": str(row["reuse_domain"]),
+                }
+            after = str(rows[-1]["relative_path"])
+
+    def apply_scope_selection(
+        self,
+        run_id: str,
+        selection: Mapping[str, object],
+        *,
+        selection_digest: str,
+    ) -> tuple[int, int]:
+        """Apply one validated selection to Run-local scope accounting."""
+
+        included = excluded = 0
+        default_excluded = selection["default_disposition"] == "exclude"
+        exceptions = frozenset(str(value) for value in selection["exceptions"])
+        with self.connect() as connection:
+            cursor = connection.execute(
+                """
+                SELECT relative_path, scope, basis_json
+                FROM run_items
+                WHERE run_id = ?
+                ORDER BY relative_path
+                """,
+                (run_id,),
+            )
+            while rows := cursor.fetchmany(1_000):
+                updates: list[tuple[str, str, str, str]] = []
+                for row in rows:
+                    relative_path = str(row["relative_path"])
+                    path = PurePosixPath(relative_path)
+                    exception_match = relative_path in exceptions or any(
+                        parent.as_posix() in exceptions
+                        for parent in path.parents
+                        if parent.as_posix() != "."
+                    )
+                    if default_excluded != exception_match:
+                        excluded += 1
+                        basis = list(json.loads(str(row["basis_json"])))
+                        marker = f"scope_selection_excluded:{selection_digest}"
+                        if marker not in basis:
+                            basis.append(marker)
+                        updates.append(
+                            (
+                                "excluded",
+                                json.dumps(basis, ensure_ascii=False),
+                                run_id,
+                                relative_path,
+                            )
+                        )
+                    else:
+                        included += 1
+                if updates:
+                    connection.executemany(
+                        """
+                        UPDATE run_items SET scope = ?, basis_json = ?
+                        WHERE run_id = ? AND relative_path = ?
+                        """,
+                        updates,
+                    )
+        return included, excluded
+
     def associated_paths(self, run_id: str, relative_path: Path) -> tuple[Path, ...]:
         key = association_key(relative_path).as_posix()
         with self.connect() as connection:
@@ -561,7 +666,7 @@ class SQLiteAccounting:
                 """
                 SELECT relative_path
                 FROM run_items
-                WHERE run_id = ? AND association_key = ?
+                WHERE run_id = ? AND association_key = ? AND scope <> 'excluded'
                 ORDER BY relative_path
                 """,
                 (run_id, key),

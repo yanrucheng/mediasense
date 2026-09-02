@@ -40,6 +40,35 @@ the current session reloaded a newly written project configuration.
 - Source media remains read-only. A Skill instruction, Agent statement, accepted
   request, checkpoint, or mutable Run is not a Result and grants no new effect.
 
+## Review source scope before expensive work
+
+The first local discovery pass may pause with
+`reason.code=scope_confirmation_required`. Treat the returned inventory as Tool
+facts, not a Tool judgment about what the user wants. It reports a bounded
+source-relative tree with counts, bytes, kinds, size buckets, representative
+paths, and discovery limitations. Use `status.scope_path` to expand a collapsed
+subtree and `status.scope_after` to continue its child list when the current
+confirmation permits it.
+
+Interpret the tree for the Human. Explain why a subtree may be a cache, derived
+output, backup, index, or legitimate hidden media as Agent judgment; never claim
+that a dot name or Tool statistic proves that meaning. Focus attention on
+media-bearing or materially large subtrees rather than enumerating every
+ordinary dotfile.
+
+When the intended boundary is clear, submit the exact current
+`inventory_fingerprint`, one `default_disposition` (`include` or `exclude`), and
+only the non-overlapping source-relative subtree exceptions the Human accepted
+or existing delegation permits. Inclusion authorizes only local PreCheck scope;
+it does not authorize remote or billable work. Exclusion changes no source byte
+and excluded discoveries remain accounted in the Result.
+
+If the Tool reports a refreshed inventory after a source change, present the
+changed facts and obtain any newly required direction. Never replay a stale
+selection, generalize it to future descendants, or turn silence into consent.
+An unattended caller without an exact reusable or delegated selection remains
+paused before expensive work.
+
 ## Begin without an arbitrary count target
 
 Learn enough about the Dataset and intended Plan use to select a suitable

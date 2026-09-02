@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
@@ -441,6 +441,147 @@ class SQLiteRunStore:
             raise KeyError(run_ref)
         return _record(row)
 
+    def ensure_scope_review(
+        self,
+        run_ref: str,
+        *,
+        accounting_run_id: str,
+        scan_generation: int,
+        inventory_fingerprint: str,
+        summary: Mapping[str, object],
+    ) -> tuple[dict[str, object], dict[str, object] | None]:
+        """Reuse, retain, or pause for one exact factual source inventory."""
+
+        with self._transaction() as connection:
+            row = self._require(connection, run_ref)
+            record = _record(row)
+            latest = connection.execute(
+                """
+                SELECT * FROM precheck_scope_reviews
+                WHERE run_ref = ? ORDER BY revision DESC LIMIT 1
+                """,
+                (run_ref,),
+            ).fetchone()
+            if (
+                latest is not None
+                and latest["inventory_fingerprint"] == inventory_fingerprint
+                and latest["state"] in {"accepted", "reused"}
+            ):
+                return record, json.loads(str(latest["selection_json"]))
+            if (
+                latest is not None
+                and latest["inventory_fingerprint"] == inventory_fingerprint
+                and latest["state"] == "pending"
+            ):
+                return record, None
+            if latest is not None and latest["state"] in {
+                "pending",
+                "accepted",
+                "reused",
+            }:
+                connection.execute(
+                    """
+                    UPDATE precheck_scope_reviews SET state = 'stale'
+                    WHERE run_ref = ? AND revision = ?
+                    """,
+                    (run_ref, latest["revision"]),
+                )
+
+            revision = 1 if latest is None else int(latest["revision"]) + 1
+            reusable = connection.execute(
+                """
+                SELECT review.run_ref, review.selection_json
+                FROM precheck_scope_reviews AS review
+                JOIN precheck_runs AS prior ON prior.run_ref = review.run_ref
+                WHERE prior.dataset_ref = ?
+                  AND prior.state = 'completed'
+                  AND review.inventory_fingerprint = ?
+                  AND review.state IN ('accepted', 'reused')
+                  AND review.selection_json IS NOT NULL
+                  AND review.run_ref <> ?
+                ORDER BY review.decided_at DESC, review.created_at DESC
+                LIMIT 1
+                """,
+                (record["dataset_ref"], inventory_fingerprint, run_ref),
+            ).fetchone()
+            observed_at = self.now()
+            if reusable is not None:
+                selection_json = str(reusable["selection_json"])
+                connection.execute(
+                    """
+                    INSERT INTO precheck_scope_reviews (
+                        run_ref, revision, accounting_run_id, scan_generation,
+                        inventory_fingerprint, summary_json, state,
+                        selection_json, reused_from_run_ref, created_at, decided_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, 'reused', ?, ?, ?, ?)
+                    """,
+                    (
+                        run_ref,
+                        revision,
+                        accounting_run_id,
+                        scan_generation,
+                        inventory_fingerprint,
+                        _json(summary),
+                        selection_json,
+                        str(reusable["run_ref"]),
+                        observed_at,
+                        observed_at,
+                    ),
+                )
+                return record, json.loads(selection_json)
+
+            confirmation = {
+                "kind": "source_scope",
+                "summary": "Review the discovered source tree before expensive work.",
+                "inventory_fingerprint": inventory_fingerprint,
+                "scan_generation": scan_generation,
+                "inventory": dict(summary),
+            }
+            connection.execute(
+                """
+                INSERT INTO precheck_scope_reviews (
+                    run_ref, revision, accounting_run_id, scan_generation,
+                    inventory_fingerprint, summary_json, state, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)
+                """,
+                (
+                    run_ref,
+                    revision,
+                    accounting_run_id,
+                    scan_generation,
+                    inventory_fingerprint,
+                    _json(summary),
+                    observed_at,
+                ),
+            )
+            current = self._update_state(
+                connection,
+                run_ref,
+                "paused",
+                reason={
+                    "code": "scope_confirmation_required",
+                    "message": "The discovered source tree requires a scope selection.",
+                    "resume_when": (
+                        "The caller supplies an include/exclude selection for "
+                        "this exact inventory."
+                    ),
+                },
+                confirmation=confirmation,
+                confirmation_fingerprint=inventory_fingerprint,
+            )
+        return current, None
+
+    def latest_scope_review(self, run_ref: str) -> dict[str, object] | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT * FROM precheck_scope_reviews
+                WHERE run_ref = ? ORDER BY revision DESC LIMIT 1
+                """,
+                (run_ref,),
+            ).fetchone()
+        return None if row is None else _scope_review_record(row)
+
     def request_pause(
         self, run_ref: str
     ) -> tuple[dict[str, object], dict[str, object]]:
@@ -467,7 +608,7 @@ class SQLiteRunStore:
         self,
         run_ref: str,
         *,
-        decision: str | None,
+        decision: object,
     ) -> tuple[dict[str, object], dict[str, object]]:
         with self._transaction() as connection:
             row = self._require(connection, run_ref)
@@ -475,6 +616,23 @@ class SQLiteRunStore:
             state = str(observed["state"])
             confirmation = observed["confirmation"]
             if state == "running":
+                if isinstance(decision, dict):
+                    latest = connection.execute(
+                        """
+                        SELECT selection_json FROM precheck_scope_reviews
+                        WHERE run_ref = ? AND state IN ('accepted', 'reused')
+                        ORDER BY revision DESC LIMIT 1
+                        """,
+                        (run_ref,),
+                    ).fetchone()
+                    if (
+                        latest is None
+                        or json.loads(str(latest["selection_json"])) != decision
+                    ):
+                        raise RunDecisionError(
+                            "this running Run has no matching scope decision"
+                        )
+                    return observed, observed
                 previous_decision = observed["confirmation_decision"]
                 if decision is not None and decision != previous_decision:
                     raise RunDecisionError(
@@ -488,27 +646,65 @@ class SQLiteRunStore:
                     raise RunDecisionError(
                         "resume requires a decision for the pending confirmation"
                     )
-                if decision not in {"proceed", "skip_optional_work"}:
-                    raise RunDecisionError("unknown confirmation decision")
-                if decision == "skip_optional_work" and not bool(
-                    confirmation["skip_allowed"]
-                ):
-                    raise RunDecisionError(
-                        "the pending optional work cannot be skipped"
+                if not isinstance(confirmation, dict):
+                    raise RunDecisionError("pending confirmation is invalid")
+                if confirmation.get("kind") == "source_scope":
+                    if not isinstance(decision, dict):
+                        raise RunDecisionError(
+                            "scope confirmation requires a source-scope decision"
+                        )
+                    fingerprint = str(observed["confirmation_fingerprint"])
+                    if decision.get("inventory_fingerprint") != fingerprint:
+                        raise RunDecisionError(
+                            "source-scope decision names a stale inventory"
+                        )
+                    pending = connection.execute(
+                        """
+                        SELECT revision FROM precheck_scope_reviews
+                        WHERE run_ref = ? AND inventory_fingerprint = ?
+                          AND state = 'pending'
+                        ORDER BY revision DESC LIMIT 1
+                        """,
+                        (run_ref, fingerprint),
+                    ).fetchone()
+                    if pending is None:
+                        raise RunDecisionError("scope review is no longer pending")
+                    connection.execute(
+                        """
+                        UPDATE precheck_scope_reviews
+                        SET state = 'accepted', selection_json = ?, decided_at = ?
+                        WHERE run_ref = ? AND revision = ?
+                        """,
+                        (_json(decision), self.now(), run_ref, pending["revision"]),
                     )
-                fingerprint = str(observed["confirmation_fingerprint"])
+                    generic_decision = None
+                else:
+                    if not isinstance(decision, str) or decision not in {
+                        "proceed",
+                        "skip_optional_work",
+                    }:
+                        raise RunDecisionError("unknown confirmation decision")
+                    if decision == "skip_optional_work" and not bool(
+                        confirmation["skip_allowed"]
+                    ):
+                        raise RunDecisionError(
+                            "the pending optional work cannot be skipped"
+                        )
+                    fingerprint = str(observed["confirmation_fingerprint"])
+                    generic_decision = str(decision)
             else:
                 if decision is not None:
                     raise RunDecisionError(
                         "resume decision is valid only for a confirmation pause"
                     )
                 fingerprint = None
+                generic_decision = None
             current = self._update_state(
                 connection,
                 run_ref,
                 "running",
                 confirmation_fingerprint=fingerprint,
-                confirmation_decision=decision,
+                confirmation_decision=generic_decision,
             )
         return observed, current
 
@@ -758,6 +954,22 @@ def _record(row: sqlite3.Row) -> dict[str, object]:
         ),
         "created_at": str(row["created_at"]),
         "updated_at": str(row["updated_at"]),
+    }
+
+
+def _scope_review_record(row: sqlite3.Row) -> dict[str, object]:
+    return {
+        "run_ref": str(row["run_ref"]),
+        "revision": int(row["revision"]),
+        "accounting_run_id": str(row["accounting_run_id"]),
+        "scan_generation": int(row["scan_generation"]),
+        "inventory_fingerprint": str(row["inventory_fingerprint"]),
+        "summary": json.loads(str(row["summary_json"])),
+        "state": str(row["state"]),
+        "selection": _optional_json(row["selection_json"]),
+        "reused_from_run_ref": row["reused_from_run_ref"],
+        "created_at": str(row["created_at"]),
+        "decided_at": row["decided_at"],
     }
 
 

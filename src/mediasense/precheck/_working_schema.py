@@ -1,13 +1,13 @@
 """Private SQLite schema for mutable PreCheck working state."""
 
-SCHEMA_VERSION = 16
+SCHEMA_VERSION = 17
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS internal_schema (
     singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
     version INTEGER NOT NULL
 );
-INSERT OR IGNORE INTO internal_schema (singleton, version) VALUES (1, 16);
+INSERT OR IGNORE INTO internal_schema (singleton, version) VALUES (1, 17);
 
 CREATE TABLE IF NOT EXISTS datasets (
     dataset_id TEXT PRIMARY KEY,
@@ -58,6 +58,23 @@ CREATE TABLE IF NOT EXISTS precheck_runs (
 );
 CREATE INDEX IF NOT EXISTS precheck_runs_dataset_state
     ON precheck_runs(dataset_ref, state);
+
+CREATE TABLE IF NOT EXISTS precheck_scope_reviews (
+    run_ref TEXT NOT NULL REFERENCES precheck_runs(run_ref),
+    revision INTEGER NOT NULL,
+    accounting_run_id TEXT NOT NULL REFERENCES working_runs(run_id),
+    scan_generation INTEGER NOT NULL,
+    inventory_fingerprint TEXT NOT NULL,
+    summary_json TEXT NOT NULL,
+    state TEXT NOT NULL,
+    selection_json TEXT,
+    reused_from_run_ref TEXT,
+    created_at TEXT NOT NULL,
+    decided_at TEXT,
+    PRIMARY KEY (run_ref, revision)
+);
+CREATE INDEX IF NOT EXISTS precheck_scope_reviews_reuse
+    ON precheck_scope_reviews(inventory_fingerprint, state, run_ref);
 
 CREATE TABLE IF NOT EXISTS run_source_rebindings (
     run_id TEXT NOT NULL REFERENCES working_runs(run_id),
