@@ -23,6 +23,8 @@ class AdaptiveCompressionProfile:
     spatial_scale_meters: float = 3_000.0
     content_distance_scale: float = 0.311
     representative_top_k: float = 0.5
+    exact_representative_limit: int = 256
+    representative_comparison_budget: int = 65_536
 
     def __post_init__(self) -> None:
         if self.target_entries < 1:
@@ -33,6 +35,10 @@ class AdaptiveCompressionProfile:
             raise ValueError("content distance scale must be positive")
         if not 0 < self.representative_top_k <= 1:
             raise ValueError("representative_top_k must be in (0, 1]")
+        if self.exact_representative_limit < 2:
+            raise ValueError("exact representative limit must be at least two")
+        if self.representative_comparison_budget < 1:
+            raise ValueError("representative comparison budget must be positive")
 
 
 @dataclass(frozen=True, slots=True)
@@ -154,12 +160,31 @@ def select_embedding_representative(
     embeddings: Sequence[Sequence[float]],
     *,
     top_k: int | float = 0.5,
+    max_comparisons: int = 65_536,
 ) -> int:
+    selected, _method, _comparisons = _bounded_embedding_representative(
+        embeddings,
+        top_k=top_k,
+        exact_limit=max(2, len(embeddings)),
+        comparison_budget=max_comparisons,
+    )
+    return selected
+
+
+def _bounded_embedding_representative(
+    embeddings: Sequence[Sequence[float]],
+    *,
+    top_k: int | float,
+    exact_limit: int,
+    comparison_budget: int,
+) -> tuple[int, str, int]:
     if not embeddings:
         raise ValueError("representative selection requires embeddings")
     dimensions = {len(vector) for vector in embeddings}
     if len(dimensions) != 1 or 0 in dimensions:
         raise ValueError("representative embeddings must share non-zero dimensions")
+    if comparison_budget < 1:
+        raise ValueError("representative comparison budget must be positive")
     if isinstance(top_k, float):
         if not 0 < top_k <= 1:
             raise ValueError("floating top_k must be in (0, 1]")
@@ -168,22 +193,48 @@ def select_embedding_representative(
         if top_k < 1:
             raise ValueError("integer top_k must be positive")
         count = top_k
-    best_index = 0
+    exact_comparisons = len(embeddings) * max(0, len(embeddings) - 1)
+    if len(embeddings) <= exact_limit and exact_comparisons <= comparison_budget:
+        candidates = tuple(range(len(embeddings)))
+        peers = candidates
+        method = "exact-all-pairs-v1"
+    else:
+        side = max(1, int(math.sqrt(comparison_budget)))
+        candidate_count = min(len(embeddings), exact_limit, side)
+        peer_count = min(
+            len(embeddings),
+            max(1, comparison_budget // max(1, candidate_count)),
+        )
+        candidates = _evenly_spaced_indices(len(embeddings), candidate_count)
+        peers = _evenly_spaced_indices(len(embeddings), peer_count)
+        method = "bounded-even-sample-v1"
+    best_index = candidates[0]
     best_average = 0.0
-    for index, vector in enumerate(embeddings):
+    comparisons = 0
+    for index in candidates:
+        vector = embeddings[index]
         similarities = sorted(
             (
-                cosine_similarity(vector, other)
-                for other_index, other in enumerate(embeddings)
+                cosine_similarity(vector, embeddings[other_index])
+                for other_index in peers
                 if index != other_index
             ),
             reverse=True,
         )[:count]
+        comparisons += len(peers) - int(index in peers)
         average = sum(similarities) / len(similarities) if similarities else 0.0
         if average > best_average:
             best_average = average
             best_index = index
-    return best_index
+    return best_index, method, comparisons
+
+
+def _evenly_spaced_indices(length: int, count: int) -> tuple[int, ...]:
+    if count >= length:
+        return tuple(range(length))
+    if count == 1:
+        return (0,)
+    return tuple((index * (length - 1)) // (count - 1) for index in range(count))
 
 
 def _compression_group(
@@ -195,12 +246,20 @@ def _compression_group(
 ) -> CompressionGroup:
     embedded = tuple(point for point in points if point.embedding is not None)
     if embedded:
-        selected = select_embedding_representative(
-            tuple(point.embedding for point in embedded if point.embedding is not None),
-            top_k=profile.representative_top_k,
+        selected, representative_method, comparison_count = (
+            _bounded_embedding_representative(
+                tuple(
+                    point.embedding for point in embedded if point.embedding is not None
+                ),
+                top_k=profile.representative_top_k,
+                exact_limit=profile.exact_representative_limit,
+                comparison_budget=profile.representative_comparison_budget,
+            )
         )
         representative = embedded[selected]
     else:
+        representative_method = "extension-priority-v1"
+        comparison_count = 0
         representative = min(
             points,
             key=lambda item: (
@@ -230,6 +289,8 @@ def _compression_group(
         for point in points
     ):
         qualifications.append("limited_similarity_evidence")
+    if representative_method == "bounded-even-sample-v1":
+        qualifications.append("bounded_representative_selection")
     conflicts = _conflict_paths(points, profile)
     if conflicts:
         qualifications.append("candidate_axes_disagree")
@@ -248,6 +309,11 @@ def _compression_group(
         basis={
             "left_boundary": left_boundary,
             "method": "ranked-adjacent-boundaries-v1",
+            "representative_comparison_budget": (
+                profile.representative_comparison_budget
+            ),
+            "representative_comparison_count": comparison_count,
+            "representative_method": representative_method,
             "requested_target_entries": profile.target_entries,
             "right_boundary": right_boundary,
         },

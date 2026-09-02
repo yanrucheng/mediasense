@@ -11,6 +11,7 @@ import pytest
 from mediasense.precheck import accounting
 from mediasense.precheck import discovery
 from mediasense.precheck import _fingerprint
+from mediasense.precheck._working_schema import SCHEMA_VERSION
 from mediasense.precheck.accounting import (
     AccountingStore,
     ChangeKind,
@@ -39,59 +40,61 @@ def test_dataset_registration_requires_an_internal_id(tmp_path: Path) -> None:
         store.register_dataset("dataset:dataset-a")
 
 
-@pytest.mark.parametrize("old_version", [11, 12, 13, 14])
-def test_supported_schema_is_upgraded_without_discarding_existing_state(
-    tmp_path: Path,
-    old_version: int,
-) -> None:
+def test_incompatible_schema_requires_a_fresh_workspace(tmp_path: Path) -> None:
     database = tmp_path / "working.sqlite3"
     store = AccountingStore(database)
     store.register_dataset("dataset-a")
     with sqlite3.connect(database) as connection:
-        connection.execute("DROP INDEX run_items_normalized_path")
-        connection.execute("ALTER TABLE run_items DROP COLUMN normalized_path")
-        connection.execute(
-            "ALTER TABLE precheck_runs DROP COLUMN execution_config_json"
-        )
-        connection.execute("ALTER TABLE precheck_runs DROP COLUMN execution_checkpoint")
-        connection.execute("DROP TABLE result_work_records")
-        if old_version == 11:
-            connection.execute("DROP TABLE precheck_runs")
         connection.execute(
             "UPDATE internal_schema SET version = ? WHERE singleton = 1",
-            (old_version,),
+            (SCHEMA_VERSION - 1,),
         )
 
-    AccountingStore(database).register_dataset("dataset-b")
+    with pytest.raises(RuntimeError, match="fresh MediaSense workspace"):
+        AccountingStore(database).register_dataset("dataset-b")
 
-    with sqlite3.connect(database) as connection:
-        version = connection.execute(
-            "SELECT version FROM internal_schema WHERE singleton = 1"
-        ).fetchone()[0]
-        datasets = {
-            row[0] for row in connection.execute("SELECT dataset_id FROM datasets")
-        }
-        run_table = connection.execute(
-            "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'precheck_runs'"
-        ).fetchone()
-        result_work_table = connection.execute(
-            "SELECT name FROM sqlite_master "
-            "WHERE type = 'table' AND name = 'result_work_records'"
-        ).fetchone()
-    assert version == 15
-    assert datasets == {"dataset-a", "dataset-b"}
-    assert run_table == ("precheck_runs",)
-    assert result_work_table == ("result_work_records",)
-    with sqlite3.connect(database) as connection:
-        run_item_columns = {
-            row[1] for row in connection.execute("PRAGMA table_info(run_items)")
-        }
-    assert "normalized_path" in run_item_columns
-    with sqlite3.connect(database) as connection:
-        precheck_run_columns = {
-            row[1] for row in connection.execute("PRAGMA table_info(precheck_runs)")
-        }
-    assert {"execution_config_json", "execution_checkpoint"} <= precheck_run_columns
+
+def test_run_items_are_paged_and_associated_by_indexed_stem(tmp_path: Path) -> None:
+    source = tmp_path / "source"
+    source.mkdir()
+    (source / "photo.jpg").write_bytes(b"image")
+    (source / "photo.xmp").write_bytes(b"sidecar")
+    (source / "other.jpg").write_bytes(b"other")
+    store = AccountingStore(tmp_path / "working.sqlite3")
+    summary = _complete_run(store, "dataset-a", source)
+
+    paged = tuple(store.iter_run_items(summary.run_id, page_size=1))
+    assert [item.relative_path for item in paged] == [
+        Path("other.jpg"),
+        Path("photo.jpg"),
+        Path("photo.xmp"),
+    ]
+    assert store.associated_paths(summary.run_id, Path("photo.jpg")) == (
+        Path("photo.jpg"),
+        Path("photo.xmp"),
+    )
+    assert (
+        store.count_run_items(
+            summary.run_id,
+            scope="source_media",
+            kinds=("image",),
+            require_source_revision=True,
+        )
+        == 2
+    )
+    with sqlite3.connect(store.database_path) as connection:
+        indexes = {row[1] for row in connection.execute("PRAGMA index_list(run_items)")}
+        query_plan = connection.execute(
+            """
+            EXPLAIN QUERY PLAN
+            SELECT relative_path FROM run_items
+            WHERE run_id = ? AND association_key = ?
+            ORDER BY relative_path
+            """,
+            (summary.run_id, "photo"),
+        ).fetchall()
+    assert "run_items_association_key" in indexes
+    assert any("run_items_association_key" in str(row[3]) for row in query_plan)
 
 
 def test_unicode_normalized_collisions_are_visible_without_merging_sources(

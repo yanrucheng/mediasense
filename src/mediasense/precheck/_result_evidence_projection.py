@@ -26,7 +26,7 @@ def _has_available_artifact(artifacts: ArtifactStore, work: sqlite3.Row) -> bool
 
 def _apply_compression_frontier(
     groups: tuple[dict[str, object], ...],
-    source_refs: dict[str, str],
+    run_id: str,
     primary_evidence_by_path: dict[str, str],
     evidence: list[ResultEvidence],
     entry_evidence: list[str],
@@ -89,7 +89,7 @@ def _apply_compression_frontier(
             group.get("basis") or {}, sort_keys=True
         )
         for path in members:
-            source_ref = source_refs[path]
+            source_ref = result_local_reference("source-item", run_id, path)
             key = (representative_ref, "represents", source_ref, "source_item")
             if key not in relationship_keys:
                 relationships.append(

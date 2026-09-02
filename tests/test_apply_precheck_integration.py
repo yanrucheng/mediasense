@@ -116,7 +116,7 @@ def test_prepare_resolves_and_verifies_one_real_sealed_precheck_result(
         for observation in source_view["observations"]
         if observation["name"] == "source_content_verification"
     )
-    assert verification["value"]["profile"] == "sha256-full-v1"
+    assert verification["value"]["profile"] == "candidate-sha256-full-or-3x4k-v1"
 
     apply = ApplyRunStore.initialize(tmp_path / "apply-state" / "apply.sqlite3")
     prepared = apply.prepare_forward(
@@ -135,7 +135,7 @@ def test_prepare_resolves_and_verifies_one_real_sealed_precheck_result(
     item = apply.iter_items(prepared.run_ref, limit=1)[0]
     assert item["source_item_ref"] == source_item_ref
     assert item["verification_profile"] == "sha256-full-v1"
-    assert item["verification_producer"] == "builtin-source-content-proof-v1"
+    assert item["verification_producer"] == "builtin-apply-source-verification-v1"
     assert item["expected_verification"] == item["observed_verification"]
     assert (source / "original.jpg").read_bytes() == source_before
     assert list(destination.iterdir()) == []

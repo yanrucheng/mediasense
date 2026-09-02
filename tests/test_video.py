@@ -92,7 +92,10 @@ def test_probe_frames_and_contact_sheet_have_independent_work_and_artifacts(
         database, command_runner=runner, ffprobe_version="ffprobe 8.1"
     ).produce(run_id, Path("clip.mp4"))
     frame_producer = VideoFrameProducer(
-        database, command_runner=runner, ffmpeg_version="ffmpeg 8.1"
+        database,
+        command_runner=runner,
+        ffmpeg_version="ffmpeg 8.1",
+        threads=2,
     )
     first = frame_producer.produce(run_id, Path("clip.mp4"), probe.work.work_id, 0.0)
     failed = frame_producer.produce(run_id, Path("clip.mp4"), probe.work.work_id, 10.0)
@@ -112,6 +115,10 @@ def test_probe_frames_and_contact_sheet_have_independent_work_and_artifacts(
     assert sheet.work.status is WorkStatus.SUCCEEDED
     assert sheet.artifact is not None
     assert sheet.artifact.integrity is ArtifactIntegrity.AVAILABLE
+    frame_commands = [command for command in runner.calls if "-ss" in command]
+    assert all(
+        command[command.index("-threads") + 1] == "2" for command in frame_commands
+    )
     with Image.open(sheet.artifact.path) as image:
         assert image.size == (240, 120)
     assert video.read_bytes() == source_before

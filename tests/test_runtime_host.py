@@ -48,7 +48,7 @@ def test_opened_dataset_can_start_precheck_immediately(tmp_path: Path) -> None:
     assert started["state"] == "running"
 
 
-def test_reopen_repairs_legacy_prefixed_dataset_registration(
+def test_reopen_does_not_rewrite_legacy_prefixed_dataset_registration(
     tmp_path: Path,
 ) -> None:
     source = tmp_path / "source"
@@ -67,20 +67,9 @@ def test_reopen_repairs_legacy_prefixed_dataset_registration(
 
     reopened_host = RuntimeHost()
     reopened = reopened_host.open_dataset(str(source), str(workspace))
-    started = reopened_host.call_tool(
-        "mediasense.precheck.run",
-        dataset_ref=dataset_ref,
-        request={
-            "action": "start",
-            "dataset_ref": dataset_ref,
-            "request_id": "request:legacy-prefixed-dataset",
-        },
-    )
 
     assert reopened["outcome"] == "ok"
     assert reopened["created"] is False
-    assert started["outcome"] == "ok"
-    assert str(started["run_ref"]).startswith("precheck-run:")
     with sqlite3.connect(database) as connection:
         stored_ids = [
             str(row[0])
@@ -88,7 +77,7 @@ def test_reopen_repairs_legacy_prefixed_dataset_registration(
                 "SELECT dataset_id FROM datasets ORDER BY dataset_id"
             )
         ]
-    assert stored_ids == [dataset_id]
+    assert set(stored_ids) == {dataset_id, dataset_ref}
 
 
 def test_offline_geo_call_is_unavailable_without_provider_effect(

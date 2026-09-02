@@ -14,13 +14,12 @@
       ]
     },
     {
-      "name": "prepare_blocker",
+      "name": "prepare_without_precheck_exact_proof",
       "disturbance": "missing_selected_verification",
-      "human_decision": "repair_then_resume_preparation",
+      "human_decision": "review_fresh_apply_proof_then_cancel",
       "expected_agent_checkpoints": [
-        "explain_blocker",
-        "resume_preparation",
-        "request_exact_confirmation"
+        "request_exact_confirmation",
+        "cancel_without_effect"
       ]
     },
     {

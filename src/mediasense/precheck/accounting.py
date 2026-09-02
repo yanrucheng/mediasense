@@ -7,7 +7,7 @@ contracts.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterable, Iterator
 from pathlib import Path
 from uuid import uuid4
 
@@ -244,6 +244,32 @@ class AccountingStore:
 
     def get_run_items(self, run_id: str) -> tuple[AccountedItem, ...]:
         return self._database.get_run_items(run_id)
+
+    def count_run_items(
+        self,
+        run_id: str,
+        *,
+        scope: str | None = None,
+        kinds: Iterable[str] = (),
+        require_source_revision: bool = False,
+    ) -> int:
+        return self._database.count_run_items(
+            run_id,
+            scope=scope,
+            kinds=kinds,
+            require_source_revision=require_source_revision,
+        )
+
+    def iter_run_items(
+        self,
+        run_id: str,
+        *,
+        page_size: int = 1_000,
+    ) -> Iterator[AccountedItem]:
+        return self._database.iter_run_items(run_id, page_size=page_size)
+
+    def associated_paths(self, run_id: str, relative_path: Path) -> tuple[Path, ...]:
+        return self._database.associated_paths(run_id, relative_path)
 
     def get_run_issues(self, run_id: str) -> tuple[RecordedIssue, ...]:
         return self._database.get_run_issues(run_id)

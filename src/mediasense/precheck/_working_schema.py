@@ -1,13 +1,13 @@
 """Private SQLite schema for mutable PreCheck working state."""
 
-SCHEMA_VERSION = 15
+SCHEMA_VERSION = 16
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS internal_schema (
     singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
     version INTEGER NOT NULL
 );
-INSERT OR IGNORE INTO internal_schema (singleton, version) VALUES (1, 15);
+INSERT OR IGNORE INTO internal_schema (singleton, version) VALUES (1, 16);
 
 CREATE TABLE IF NOT EXISTS datasets (
     dataset_id TEXT PRIMARY KEY,
@@ -103,6 +103,7 @@ CREATE TABLE IF NOT EXISTS run_items (
     run_id TEXT NOT NULL REFERENCES working_runs(run_id),
     relative_path TEXT NOT NULL,
     normalized_path TEXT NOT NULL,
+    association_key TEXT NOT NULL,
     source_revision INTEGER,
     kind TEXT NOT NULL,
     scope TEXT NOT NULL,
@@ -121,6 +122,10 @@ CREATE TABLE IF NOT EXISTS run_items (
     last_seen_generation INTEGER NOT NULL,
     PRIMARY KEY (run_id, relative_path)
 );
+CREATE INDEX IF NOT EXISTS run_items_normalized_path
+    ON run_items(run_id, normalized_path, last_seen_generation);
+CREATE INDEX IF NOT EXISTS run_items_association_key
+    ON run_items(run_id, association_key, relative_path);
 
 CREATE TABLE IF NOT EXISTS run_issues (
     run_id TEXT NOT NULL REFERENCES working_runs(run_id),

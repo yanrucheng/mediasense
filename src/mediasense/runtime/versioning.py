@@ -9,5 +9,5 @@ DATASET_STORE_VERSIONS = {
     "apply": 2,
     "geo": 1,
     "plan": 2,
-    "precheck": 15,
+    "precheck": 16,
 }

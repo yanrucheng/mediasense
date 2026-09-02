@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import subprocess
 
@@ -9,10 +10,12 @@ from PIL import Image
 from mediasense.precheck import (
     AccountingStore,
     BundleCandidateProducer,
+    BundleItem,
     BundleProfile,
     DependencyKind,
     MetadataProducer,
     WorkStatus,
+    build_bundle_candidates,
 )
 
 
@@ -44,6 +47,28 @@ class FakeExifTool:
         return subprocess.CompletedProcess(command, 0, json.dumps(records), "")
 
 
+def test_large_temporal_chain_is_split_at_the_member_limit() -> None:
+    started = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    items = tuple(
+        BundleItem(
+            Path(f"item-{index}.jpg"),
+            started + timedelta(seconds=index),
+            source_revision=1,
+        )
+        for index in range(5)
+    )
+
+    groups = build_bundle_candidates(
+        items,
+        BundleProfile(max_gap_seconds=60, max_members=2),
+    )
+
+    assert [len(group.members) for group in groups] == [2, 2, 1]
+    assert all(
+        "bundle_member_limit_applied" in group.qualifications for group in groups
+    )
+
+
 def test_bundle_candidate_work_has_exact_members_and_cross_run_reuse(
     tmp_path: Path,
 ) -> None:
@@ -66,10 +91,12 @@ def test_bundle_candidate_work_has_exact_members_and_cross_run_reuse(
         for name in ("a.jpg", "b.jpg", "c.jpg")
     )
 
-    first = BundleCandidateProducer(database).produce(
-        first_run,
-        [outcome.work.work_id for outcome in first_metadata],
-        profile=BundleProfile(max_gap_seconds=60),
+    first = tuple(
+        BundleCandidateProducer(database).produce(
+            first_run,
+            [outcome.work.work_id for outcome in first_metadata],
+            profile=BundleProfile(max_gap_seconds=60),
+        )
     )
 
     assert len(first) == 1
@@ -91,10 +118,12 @@ def test_bundle_candidate_work_has_exact_members_and_cross_run_reuse(
         metadata_producer.produce(second_run, Path(name))
         for name in ("a.jpg", "b.jpg", "c.jpg")
     )
-    second = BundleCandidateProducer(database).produce(
-        second_run,
-        [outcome.work.work_id for outcome in second_metadata],
-        profile=BundleProfile(max_gap_seconds=60),
+    second = tuple(
+        BundleCandidateProducer(database).produce(
+            second_run,
+            [outcome.work.work_id for outcome in second_metadata],
+            profile=BundleProfile(max_gap_seconds=60),
+        )
     )
 
     assert len(second) == 1
@@ -123,8 +152,10 @@ def test_far_source_addition_does_not_invalidate_unchanged_candidate(
         metadata.produce(first_run, Path(name)).work.work_id
         for name in ("a.jpg", "b.jpg")
     ]
-    initial = BundleCandidateProducer(database).produce(
-        first_run, initial_metadata, profile=BundleProfile(max_gap_seconds=60)
+    initial = tuple(
+        BundleCandidateProducer(database).produce(
+            first_run, initial_metadata, profile=BundleProfile(max_gap_seconds=60)
+        )
     )
 
     Image.new("RGB", (12, 12), "green").save(source / "far.jpg")
@@ -133,8 +164,10 @@ def test_far_source_addition_does_not_invalidate_unchanged_candidate(
         metadata.produce(second_run, Path(name)).work.work_id
         for name in ("a.jpg", "b.jpg", "far.jpg")
     ]
-    current = BundleCandidateProducer(database).produce(
-        second_run, next_metadata, profile=BundleProfile(max_gap_seconds=60)
+    current = tuple(
+        BundleCandidateProducer(database).produce(
+            second_run, next_metadata, profile=BundleProfile(max_gap_seconds=60)
+        )
     )
 
     original_group = next(

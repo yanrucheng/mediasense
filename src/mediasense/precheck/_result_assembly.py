@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 import sqlite3
+from collections.abc import Iterator, Set
 from typing import Iterable, Mapping
 
 from mediasense.dataset_reference import dataset_ref_from_id
@@ -39,6 +40,45 @@ from ._work_types import DependencyKind, WorkStatus
 from .artifact import ArtifactStore
 
 
+class _RunSourcePaths(Set[str]):
+    """Use the authoritative run_items index without copying every path."""
+
+    def __init__(self, connection: sqlite3.Connection, run_id: str) -> None:
+        self._connection = connection
+        self._run_id = run_id
+
+    def __contains__(self, value: object) -> bool:
+        if not isinstance(value, str):
+            return False
+        return (
+            self._connection.execute(
+                """
+                SELECT 1 FROM run_items
+                WHERE run_id = ? AND relative_path = ?
+                """,
+                (self._run_id, value),
+            ).fetchone()
+            is not None
+        )
+
+    def __iter__(self) -> Iterator[str]:
+        return (
+            str(row["relative_path"])
+            for row in self._connection.execute(
+                "SELECT relative_path FROM run_items WHERE run_id = ?",
+                (self._run_id,),
+            )
+        )
+
+    def __len__(self) -> int:
+        row = self._connection.execute(
+            "SELECT COUNT(*) AS count FROM run_items WHERE run_id = ?",
+            (self._run_id,),
+        ).fetchone()
+        assert row is not None
+        return int(row["count"])
+
+
 def build_minimal_result(
     database_path: Path,
     artifacts: ArtifactStore,
@@ -58,6 +98,14 @@ def build_minimal_result(
     dataset_context: Iterable[dict[str, object]] = (),
     external_policy_status: str | None = None,
 ) -> ResultDraft:
+    """Build the immutable Result authority.
+
+    The returned Source Item, Evidence, and relationship sequences are
+    intentionally O(N) in the facts the Result publishes. Upstream execution
+    coordination must stay bounded; this publication boundary is the explicit
+    exception because the canonical JSON payload itself contains those rows.
+    """
+
     selected_ids = tuple(dict.fromkeys(rendition_work_ids))
     selected_compression_ids = tuple(dict.fromkeys(compression_work_ids))
     selected_metadata_ids = tuple(dict.fromkeys(metadata_work_ids))
@@ -87,6 +135,7 @@ def build_minimal_result(
             """,
             (run_id,),
         ).fetchall()
+        source_paths = _RunSourcePaths(connection, run_id)
         verification_rows = {
             str(row["relative_path"]): row
             for row in connection.execute(
@@ -170,9 +219,7 @@ def build_minimal_result(
                 """,
                 (work_id, DependencyKind.PARAMETER),
             ).fetchone()
-            if subject is None or str(subject["dependency_value"]) not in {
-                str(row["relative_path"]) for row in rows
-            }:
+            if subject is None or str(subject["dependency_value"]) not in source_paths:
                 raise ResultSealError(
                     f"metadata Work has an invalid subject: {work_id}"
                 )
@@ -185,7 +232,7 @@ def build_minimal_result(
         gpx_rows = _load_source_observation_work(
             connection,
             run_id,
-            rows,
+            source_paths,
             selected_gpx_ids,
             capability="gpx-location-candidate",
             label="GPX",
@@ -193,7 +240,7 @@ def build_minimal_result(
         sensitivity_rows = _load_source_observation_works(
             connection,
             run_id,
-            rows,
+            source_paths,
             selected_sensitivity_ids,
             capability="content-sensitivity",
             label="sensitivity",
@@ -201,7 +248,7 @@ def build_minimal_result(
         video_probe_rows = _load_source_observation_work(
             connection,
             run_id,
-            rows,
+            source_paths,
             selected_probe_ids,
             capability="video-probe",
             label="video probe",
@@ -209,7 +256,7 @@ def build_minimal_result(
         geocode_rows = _load_mapped_observation_work(
             connection,
             run_id,
-            rows,
+            source_paths,
             selected_geocode_map,
             capability="reverse-geocode-observation",
             label="reverse geocode",
@@ -217,7 +264,7 @@ def build_minimal_result(
         video_frame_rows = _load_source_artifact_work(
             connection,
             run_id,
-            rows,
+            source_paths,
             selected_frame_ids,
             capability="video-frame",
             label="video frame",
@@ -225,7 +272,7 @@ def build_minimal_result(
         video_key_frame_rows = _load_source_observation_work(
             connection,
             run_id,
-            rows,
+            source_paths,
             selected_key_frame_ids,
             capability="video-key-frame-candidate",
             label="video key frame",
@@ -233,7 +280,7 @@ def build_minimal_result(
         contact_sheet_rows = _load_source_artifact_work(
             connection,
             run_id,
-            rows,
+            source_paths,
             selected_sheet_ids,
             capability="video-contact-sheet",
             label="contact sheet",
@@ -241,18 +288,12 @@ def build_minimal_result(
         compression_groups = _load_compression_groups(
             connection,
             run_id,
-            rows,
+            source_paths,
             selected_compression_ids,
         )
 
     dataset_id = str(run["dataset_id"])
     source_root_ref = source_root_reference(dataset_id, str(run["reuse_domain"]))
-    source_refs = {
-        str(row["relative_path"]): result_local_reference(
-            "source-item", run_id, str(row["relative_path"])
-        )
-        for row in rows
-    }
     sources: list[ResultSourceItem] = []
     evidence: list[ResultEvidence] = []
     relationships: list[ResultRelationship] = []
@@ -283,7 +324,7 @@ def build_minimal_result(
             if WorkStatus(metadata_work["status"]) is WorkStatus.SUCCEEDED:
                 metadata_output = json.loads(metadata_work["output_json"])
                 observations.extend(
-                    _metadata_result_observations(metadata_output, source_refs)
+                    _metadata_result_observations(metadata_output, run_id)
                 )
             elif WorkStatus(metadata_work["status"]) is WorkStatus.TERMINAL_FAILURE:
                 observations.append(
@@ -304,7 +345,7 @@ def build_minimal_result(
             if WorkStatus(gpx_work["status"]) is WorkStatus.SUCCEEDED:
                 gpx_output = json.loads(gpx_work["output_json"])
                 observations.extend(
-                    _metadata_result_observations(gpx_output, source_refs)
+                    _metadata_result_observations(gpx_output, run_id)
                 )
             elif WorkStatus(gpx_work["status"]) is WorkStatus.TERMINAL_FAILURE:
                 observations.append(
@@ -325,7 +366,7 @@ def build_minimal_result(
             observations.extend(
                 _mapped_result_observations(
                     geocode_work,
-                    source_refs[relative_path],
+                    result_local_reference("source-item", run_id, relative_path),
                     label="reverse geocode",
                 )
             )
@@ -333,7 +374,7 @@ def build_minimal_result(
             if WorkStatus(sensitivity_work["status"]) is WorkStatus.SUCCEEDED:
                 sensitivity_output = json.loads(sensitivity_work["output_json"])
                 observations.extend(
-                    _metadata_result_observations(sensitivity_output, source_refs)
+                    _metadata_result_observations(sensitivity_output, run_id)
                 )
             elif WorkStatus(sensitivity_work["status"]) is WorkStatus.TERMINAL_FAILURE:
                 observations.append(
@@ -430,7 +471,7 @@ def build_minimal_result(
                 )
         if any(_has_available_artifact(artifacts, work) for work in sheet_works):
             condition = "usable"
-        source_ref = source_refs[relative_path]
+        source_ref = result_local_reference("source-item", run_id, relative_path)
         sources.append(
             ResultSourceItem(
                 ref=source_ref,
@@ -563,7 +604,7 @@ def build_minimal_result(
     if compression_groups:
         evidence = _apply_compression_frontier(
             compression_groups,
-            source_refs,
+            run_id,
             primary_evidence_by_path,
             evidence,
             entry_evidence,
@@ -679,17 +720,43 @@ def build_minimal_result(
 
 
 def _source_verification_observation(row: sqlite3.Row) -> dict[str, object]:
+    profile = str(row["algorithm"])
+    exact = profile == "sha256-full-v1"
     return {
         "name": "source_content_verification",
         "status": "available",
         "value": {
-            "profile": str(row["algorithm"]),
+            "profile": profile,
             "value": f"sha256:{row['digest']}",
             "size_bytes": int(row["size_bytes"]),
             "observed_at": str(row["observed_at"]),
-            "producer": "builtin-source-content-proof-v1",
+            "producer": (
+                "builtin-source-content-proof-v1"
+                if exact
+                else "builtin-source-revision-observation-v1"
+            ),
         },
-        "basis": "complete source-byte read with stable pre/post file observations",
+        "basis": (
+            "complete source-byte read with stable pre/post file observations"
+            if exact
+            else "accounted Source revision, bounded fingerprint, and stable current file identity"
+        ),
+        **(
+            {}
+            if exact
+            else {
+                "qualifications": [
+                    {
+                        "code": "ordinary_change_detection_only",
+                        "effect": "limits_interpretation",
+                        "message": (
+                            "The observation detects ordinary source changes but is "
+                            "not an exact full-byte proof."
+                        ),
+                    }
+                ]
+            }
+        ),
     }
 
 

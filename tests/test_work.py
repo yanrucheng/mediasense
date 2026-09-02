@@ -85,6 +85,30 @@ def test_equivalent_semantic_work_is_shared_across_runs(tmp_path: Path) -> None:
     assert first.semantic_key == second.semantic_key
     assert work.list_run_work(first_run)[0].work_id == first.work_id
     assert work.list_run_work(second_run)[0].work_id == first.work_id
+    assert tuple(work.iter_run_work(first_run, page_size=1)) == (first,)
+    assert tuple(work.iter_run_work_ids(first_run, page_size=1)) == (first.work_id,)
+    assert tuple(
+        work.iter_run_work(
+            first_run,
+            capability="source-validation",
+            status=WorkStatus.READY,
+            page_size=1,
+        )
+    ) == (first,)
+    assert tuple(
+        work.iter_run_work_ids(
+            first_run,
+            capability="source-validation",
+            status=WorkStatus.READY,
+            page_size=1,
+        )
+    ) == (first.work_id,)
+    assert work.get_run_work_by_parameter(
+        first_run,
+        capability="source-validation",
+        key="validation_profile",
+        value="basic-v1",
+    ) == (first,)
     with pytest.raises(InvalidWorkSpec, match="different retry policy"):
         work.ensure_work(second_run, _source_spec(), max_attempts=4)
 

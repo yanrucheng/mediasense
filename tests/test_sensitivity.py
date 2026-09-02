@@ -57,6 +57,18 @@ class FakeDetector:
         )
 
 
+class BatchDetector(FakeDetector):
+    def __init__(self) -> None:
+        super().__init__()
+        self.batch_calls: list[tuple[Path, ...]] = []
+
+    def detect_many(
+        self, image_paths: tuple[Path, ...]
+    ) -> tuple[tuple[Detection, ...], ...]:
+        self.batch_calls.append(image_paths)
+        return tuple(self.detect(path) for path in image_paths)
+
+
 PROFILE = SensitivityProfile(
     name="test-sensitivity-v1",
     thresholds=(
@@ -111,6 +123,42 @@ def test_sensitivity_uses_rendition_provenance_and_reuses_across_runs(
     assert reused.work.work_id == first.work.work_id
     assert reused.reused is True
     assert len(detector.calls) == 1
+
+
+def test_sensitivity_many_uses_one_backend_batch_with_per_item_work(
+    tmp_path: Path,
+) -> None:
+    database = tmp_path / "workspace" / "working.sqlite3"
+    source = tmp_path / "source"
+    source.mkdir()
+    for name, color in (("a.jpg", "red"), ("b.jpg", "blue")):
+        Image.new("RGB", (80, 40), color).save(source / name)
+    run_id = _closed_run(database, source)
+    renditions = tuple(
+        ImageRenditionProducer(database).produce(
+            run_id,
+            Path(name),
+            profile=HIGH_RESOLUTION_RENDITION_PROFILE,
+        )
+        for name in ("a.jpg", "b.jpg")
+    )
+    detector = BatchDetector()
+
+    outcomes = SensitivityProducer(database, detector).produce_many(
+        run_id,
+        tuple(
+            (Path(name), rendition.work.work_id)
+            for name, rendition in zip(("a.jpg", "b.jpg"), renditions, strict=True)
+        ),
+        profile=PROFILE,
+    )
+
+    assert len(detector.batch_calls) == 1
+    assert len(detector.batch_calls[0]) == 2
+    assert len(outcomes) == 2
+    assert all(
+        outcome.work.status is WorkStatus.SUCCEEDED for outcome in outcomes.values()
+    )
 
 
 def test_detector_or_threshold_change_has_narrow_semantic_invalidation(

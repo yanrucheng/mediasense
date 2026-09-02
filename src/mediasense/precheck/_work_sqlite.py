@@ -546,6 +546,23 @@ class SQLiteWorkStore:
         with self._connect() as connection:
             return self._get_work(connection, work_id)
 
+    def get_run_work(self, run_id: str, work_id: str) -> WorkRecord:
+        """Return one Work Record only when it is attached to the Run."""
+
+        with self._connect() as connection:
+            if (
+                connection.execute(
+                    """
+                SELECT 1 FROM run_work_records
+                WHERE run_id = ? AND work_id = ?
+                """,
+                    (run_id, work_id),
+                ).fetchone()
+                is None
+            ):
+                raise KeyError(f"Work Record is not attached to this run: {work_id}")
+            return self._get_work(connection, work_id)
+
     def get_attempts(self, work_id: str) -> tuple[WorkAttempt, ...]:
         with self._connect() as connection:
             self._get_work(connection, work_id)
@@ -570,6 +587,129 @@ class SQLiteWorkStore:
                 ORDER BY work_records.created_at, work_records.work_id
                 """,
                 (run_id,),
+            ).fetchall()
+            return tuple(
+                self._get_work(connection, str(row["work_id"])) for row in rows
+            )
+
+    def iter_run_work(
+        self,
+        run_id: str,
+        *,
+        capability: str | None = None,
+        status: WorkStatus | None = None,
+        page_size: int = 1_000,
+    ) -> Iterator[WorkRecord]:
+        """Page attached Work without retaining the whole Run in memory."""
+
+        if page_size < 1:
+            raise ValueError("Work page size must be positive")
+        after = ""
+        first_page = True
+        while True:
+            clauses = ["run_work_records.run_id = ?", "work_records.work_id > ?"]
+            parameters: list[object] = [run_id, after]
+            if capability is not None:
+                clauses.append("work_records.capability = ?")
+                parameters.append(capability)
+            if status is not None:
+                clauses.append("work_records.status = ?")
+                parameters.append(WorkStatus(status).value)
+            parameters.append(page_size)
+            with self._connect() as connection:
+                if first_page:
+                    self._require_run(connection, run_id)
+                    first_page = False
+                rows = connection.execute(
+                    """
+                    SELECT work_records.work_id
+                    FROM run_work_records
+                    JOIN work_records USING (work_id)
+                    WHERE """
+                    + " AND ".join(clauses)
+                    + " ORDER BY work_records.work_id LIMIT ?",
+                    parameters,
+                ).fetchall()
+                records = tuple(
+                    self._get_work(connection, str(row["work_id"])) for row in rows
+                )
+            if not records:
+                return
+            yield from records
+            after = records[-1].work_id
+
+    def iter_run_work_ids(
+        self,
+        run_id: str,
+        *,
+        capability: str | None = None,
+        status: WorkStatus | None = None,
+        page_size: int = 1_000,
+    ) -> Iterator[str]:
+        """Page attached Work identities without decoding full Work records."""
+
+        if page_size < 1:
+            raise ValueError("Work page size must be positive")
+        after = ""
+        first_page = True
+        while True:
+            clauses = ["run_work_records.run_id = ?", "work_records.work_id > ?"]
+            parameters: list[object] = [run_id, after]
+            if capability is not None:
+                clauses.append("work_records.capability = ?")
+                parameters.append(capability)
+            if status is not None:
+                clauses.append("work_records.status = ?")
+                parameters.append(WorkStatus(status).value)
+            parameters.append(page_size)
+            with self._connect() as connection:
+                if first_page:
+                    self._require_run(connection, run_id)
+                    first_page = False
+                rows = connection.execute(
+                    """
+                    SELECT work_records.work_id
+                    FROM run_work_records
+                    JOIN work_records USING (work_id)
+                    WHERE """
+                    + " AND ".join(clauses)
+                    + " ORDER BY work_records.work_id LIMIT ?",
+                    parameters,
+                ).fetchall()
+            if not rows:
+                return
+            work_ids = tuple(str(row["work_id"]) for row in rows)
+            yield from work_ids
+            after = work_ids[-1]
+
+    def get_run_work_by_parameter(
+        self,
+        run_id: str,
+        *,
+        capability: str,
+        key: str,
+        value: str,
+    ) -> tuple[WorkRecord, ...]:
+        """Resolve a bounded subject-like selection through the dependency index."""
+
+        if not capability.strip() or not key.strip() or not value.strip():
+            raise ValueError("Work parameter lookup values must be non-empty")
+        with self._connect() as connection:
+            self._require_run(connection, run_id)
+            rows = connection.execute(
+                """
+                SELECT work_records.work_id
+                FROM work_dependencies
+                JOIN work_records USING (work_id)
+                JOIN run_work_records USING (work_id)
+                WHERE run_work_records.run_id = ?
+                  AND work_records.capability = ?
+                  AND work_dependencies.dependency_kind = ?
+                  AND work_dependencies.dependency_key = ?
+                  AND work_dependencies.dependency_value = ?
+                ORDER BY work_records.created_at, work_records.work_id
+                """,
+                (run_id, capability, DependencyKind.PARAMETER, key, value),
             ).fetchall()
             return tuple(
                 self._get_work(connection, str(row["work_id"])) for row in rows

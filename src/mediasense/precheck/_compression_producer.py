@@ -133,6 +133,16 @@ class AdaptiveCompressionProducer:
                     "representative_top_k",
                     format(profile.representative_top_k, ".17g"),
                 ),
+                WorkDependency(
+                    DependencyKind.PARAMETER,
+                    "exact_representative_limit",
+                    str(profile.exact_representative_limit),
+                ),
+                WorkDependency(
+                    DependencyKind.PARAMETER,
+                    "representative_comparison_budget",
+                    str(profile.representative_comparison_budget),
+                ),
             ]
             if {path for item in group_inputs for path in item.member_paths} != set(
                 group.members
@@ -375,6 +385,8 @@ def _group_value(group: CompressionGroup) -> dict[str, object]:
 def _profile_value(profile: AdaptiveCompressionProfile) -> dict[str, object]:
     return {
         "content_distance_scale": profile.content_distance_scale,
+        "exact_representative_limit": profile.exact_representative_limit,
+        "representative_comparison_budget": (profile.representative_comparison_budget),
         "representative_top_k": profile.representative_top_k,
         "spatial_scale_meters": profile.spatial_scale_meters,
         "target_entries": profile.target_entries,

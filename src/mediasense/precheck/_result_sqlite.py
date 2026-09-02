@@ -456,8 +456,6 @@ class SQLiteResultStore:
             value = observations[0].get("value")
             if not isinstance(value, Mapping):
                 raise ResultSealError("source verification value is invalid")
-            if value.get("profile") != "sha256-full-v1":
-                raise ResultSealError("source verification profile is unsupported")
             try:
                 current = self.source_validity.prove(draft.run_id, source.relative_path)
             except (KeyError, OSError, ValueError, SourceChangedDuringRead) as error:
@@ -465,7 +463,8 @@ class SQLiteResultStore:
                     f"source verification failed at seal: {source.relative_path}"
                 ) from error
             if (
-                value.get("value") != f"sha256:{current.digest}"
+                value.get("profile") != current.algorithm
+                or value.get("value") != f"sha256:{current.digest}"
                 or value.get("size_bytes") != current.size_bytes
             ):
                 raise ResultSealError(

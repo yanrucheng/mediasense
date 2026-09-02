@@ -122,6 +122,11 @@ A contradiction discovered during implementation requires a separate contract is
 
 MediaSense has no released PreCheck internal store or runtime. The initial internal data model therefore has no backward-compatibility obligation to a previous MediaSense implementation. AI Album caches are not imported or read as live state.
 
+For the scale correction, this remains a strict fresh-start policy: an older
+private PreCheck schema or execution-configuration version is rejected with a
+fresh-workspace instruction. There is no upgrader, dual-read/write path,
+compatibility flag, or repair of legacy-prefixed Dataset rows.
+
 Once MediaSense seals a Result, that Result becomes immutable history. Later internal migrations must either continue to serve it through the stable read contract or preserve a versioned, self-contained reader for it. Internal schema freedom does not permit an existing Result to drift.
 
 ## Architectural shape
@@ -239,7 +244,7 @@ Recognition uses an escalating strategy:
 
 - cheap path, volume, size, time, and platform file-identity observations identify likely candidates;
 - a fast content fingerprint may reject changed candidates cheaply;
-- stronger content verification is required when a false reuse would affect semantics or integrity; and
+- producers check the same revision, bounded fingerprint, and file identity before and after reading; and
 - ambiguous matches remain distinct or unresolved rather than being silently unified.
 
 The chosen algorithms and thresholds are versioned internal producer inputs. They remain replaceable.
@@ -249,8 +254,10 @@ shape: read 4 KiB from the beginning, middle, and end. MediaSense intentionally
 does not preserve MD5 cache filenames or the path-only in-process memoization.
 It domain-separates the sampled offsets and file size, checks file observations
 before and after the read, and treats the result only as a change candidate.
-Artifact-producing Work still requires the stronger proof appropriate to the
-producer because no fixed sample can prove equality of all source bytes.
+This intentionally accepts that adversarial same-stat replacement can evade
+PreCheck invalidation. Apply does not inherit that limitation: it establishes a
+fresh full SHA-256 proof for each selected source during preparation and checks
+that exact proof again immediately before the authorized filesystem effect.
 
 ### Concurrent source change
 
@@ -344,6 +351,14 @@ This is static internal wiring in the first implementation. There is no runtime 
 
 Locality does not decide stage ownership. A future local model may create a source-derived, inspectable, provenance-bearing candidate observation in PreCheck. A deterministic rule that makes a final organization choice still belongs to Plan. Slice 1 producers perform no network or billable work; later external Evidence producers remain optional, user-confirmed, bounded, and observable.
 
+The implemented default demand order is accounting, `index-v1` metadata,
+bundle candidates, then visual/video/model work for only the bundle
+representatives, distinct temporal boundaries, unmatched exceptions, and
+explicitly directed evidence paths. Every Source Item remains in Result
+accounting even when it has no initial rendition. A later Run can direct an
+existing producer to fill one of those gaps without changing Source Item or
+Result authority.
+
 ## Resource-aware scheduling
 
 Every ready Work Record submits a resource claim rather than directly creating unbounded tasks. The scheduler admits work against run-level budgets for:
@@ -359,11 +374,43 @@ Every ready Work Record submits a resource claim rather than directly creating u
 
 Queues are bounded. Producers receive backpressure before materializing large input lists or decoded frames. Work is grouped by locality where beneficial, but batches remain interruptible and record item-level outcomes.
 
+Metadata batches keep one lease per Source Item and renew all still-active leases
+through long provider calls and recursive failure isolation. If that renewal
+heartbeat fails, the producer stops the heartbeat, immediately records every
+still-owned active item as retryable failure, preserves committed siblings, and
+surfaces the renewal error; recovery does not wait for natural lease expiry.
+
 Operator-facing configuration should expose intent and resource ceilings: total memory, temporary-space budget, CPU/GPU allowance, source-volume I/O pressure, enabled local producers, and optional advanced overrides. Producer batch sizes, semaphore counts, and worker counts default to measured adaptive choices and remain internal unless operators need them to resolve a real resource problem.
 
 AI Album's concrete values—ExifTool batch 200, frame embedding batch 8, per-stage parallelism 4/1/1/4, cluster naming 20, and a fixed 12 GB startup gate—are benchmark inputs, not defaults to inherit. In particular, one coarse memory gate is not runtime memory control, and creating all ExifTool batches or output operations at once is not acceptable backpressure.
 
 The Slice 2 executor keeps only a bounded window of calls materialized and admits each call against one shared in-process resource budget. CPU/process, source/workspace I/O, memory, temporary space, accelerator memory/model residency, ExifTool, decoder, encoder, and network lanes are independently bounded. One over-budget or failed call becomes its own outcome and does not discard successful siblings. These claims control execution only: they are not Work semantic dependencies, a persistent scheduler service, or a public registry.
+
+The current resolver observes logical CPU count and available memory and freezes
+the effective numeric budget in the existing Run configuration. Darwin memory
+uses `vm_stat` free, inactive, and speculative pages; it does not depend on the
+unavailable `SC_AVPHYS_PAGES` key. Source/workspace same-filesystem status is a
+file-safety fact only and never proves storage speed. More than one source-heavy
+lane requires a Darwin `diskutil` observation identifying a physical solid-state
+source; unsupported, failed, virtual, non-solid-state, and remote probes remain
+conservative. An operator budget is a ceiling only, and an unverified `local`
+hint cannot widen detected capacity. ExifTool remains one long-lived lane with
+bounded batches; FFmpeg process count and threads per process share the CPU
+budget; compatible local model adapters receive bounded input batches while
+model residency remains one slot. Resuming a Run reuses these persisted values
+rather than probing a different configuration silently.
+
+The generated scale gate populates one million `run_items`, one million attached
+index-metadata Work records, and their subject dependencies in the production
+working schema. It then runs the production metadata-to-bundle planner and
+bounded initial-evidence selector in a fresh process while measuring peak RSS;
+a separate one-million-call test proves pending-window cancellation. This is
+not a claim of million-file end-to-end readiness or physical media throughput.
+The immutable Result intentionally contains one Source Item projection per
+accounted source and therefore remains necessary `O(N)` authority; page, batch,
+evidence-limit, and pending-window bounds apply to non-authoritative execution
+coordination around that payload. Real storage, codec, and model throughput
+remain separate release gates.
 
 Manual rebuild uses an intersection of exact Work IDs, capabilities, and Dataset-relative source paths. It invalidates the matched Work and real transitive dependents while retaining history and immutable Artifact bytes; subsequent producer demand creates replacement Work. An actively leased Work is refused rather than being silently stolen, no empty selector can invalidate a whole run, and already sealed Results remain unchanged and readable.
 

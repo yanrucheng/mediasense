@@ -29,6 +29,7 @@ from .discovery import (
     DiscoveryIssue,
     DiscoveryIssueCode,
     SourceCondition,
+    association_key,
 )
 from .source_attachment import (
     FilesystemCapabilities,
@@ -53,105 +54,42 @@ class SQLiteAccounting:
             version = connection.execute(
                 "SELECT version FROM internal_schema WHERE singleton = 1"
             ).fetchone()[0]
-            if version not in {11, 12, 13, 14, SCHEMA_VERSION}:
-                raise RuntimeError(f"unsupported internal schema version: {version}")
+            if version != SCHEMA_VERSION:
+                raise RuntimeError(
+                    "incompatible internal schema version: "
+                    f"{version}; create a fresh MediaSense workspace"
+                )
             columns = {
                 str(row["name"])
                 for row in connection.execute("PRAGMA table_info(run_items)")
             }
-            if "normalized_path" not in columns:
-                if version == SCHEMA_VERSION:
-                    raise RuntimeError(
-                        "current internal schema is missing normalized_path"
-                    )
-                connection.execute(
-                    "ALTER TABLE run_items "
-                    "ADD COLUMN normalized_path TEXT NOT NULL DEFAULT ''"
+            required_item_columns = {"normalized_path", "association_key"}
+            missing_item_columns = required_item_columns - columns
+            if missing_item_columns:
+                raise RuntimeError(
+                    "current internal schema is missing columns: "
+                    + ", ".join(sorted(missing_item_columns))
                 )
-                rows = connection.execute(
-                    "SELECT rowid, relative_path FROM run_items"
-                ).fetchall()
-                connection.executemany(
-                    "UPDATE run_items SET normalized_path = ? WHERE rowid = ?",
-                    (
-                        (_normalized_path(str(row["relative_path"])), int(row["rowid"]))
-                        for row in rows
-                    ),
-                )
-            connection.execute(
-                "CREATE INDEX IF NOT EXISTS run_items_normalized_path "
-                "ON run_items(run_id, normalized_path, last_seen_generation)"
-            )
             run_columns = {
                 str(row["name"])
                 for row in connection.execute("PRAGMA table_info(precheck_runs)")
             }
             for column in ("execution_config_json", "execution_checkpoint"):
                 if column not in run_columns:
-                    if version == SCHEMA_VERSION:
-                        raise RuntimeError(
-                            f"current internal schema is missing {column}"
-                        )
-                    connection.execute(
-                        f"ALTER TABLE precheck_runs ADD COLUMN {column} TEXT"
-                    )
-            if version in {11, 12, 13, 14}:
-                connection.execute(
-                    "UPDATE internal_schema SET version = ? WHERE singleton = 1",
-                    (SCHEMA_VERSION,),
-                )
-                version = SCHEMA_VERSION
+                    raise RuntimeError(f"current internal schema is missing {column}")
 
     def register_dataset(self, dataset_id: str) -> None:
+        dataset_ref_from_id(dataset_id)
         now = _now()
-        # The first DatasetRuntime release accidentally stored the public
-        # reference here. Affected rows have no normal downstream records because
-        # PreCheck rejected start before creating them. Preserve any unexpected
-        # referenced row, but remove the known orphan after registering its
-        # canonical internal identity.
-        legacy_dataset_id = dataset_ref_from_id(dataset_id)
         with self.connect() as connection:
-            existing = connection.execute(
-                "SELECT dataset_id, created_at, updated_at "
-                "FROM datasets WHERE dataset_id = ?",
-                (dataset_id,),
-            ).fetchone()
-            legacy = connection.execute(
-                "SELECT created_at, updated_at FROM datasets WHERE dataset_id = ?",
-                (legacy_dataset_id,),
-            ).fetchone()
-            if existing is None:
-                connection.execute(
-                    """
-                    INSERT INTO datasets (dataset_id, created_at, updated_at)
-                    VALUES (?, ?, ?)
-                    """,
-                    (
-                        dataset_id,
-                        now if legacy is None else str(legacy["created_at"]),
-                        now if legacy is None else str(legacy["updated_at"]),
-                    ),
-                )
-            if legacy is not None:
-                connection.execute(
-                    """
-                    DELETE FROM datasets
-                    WHERE dataset_id = ?
-                      AND NOT EXISTS (
-                          SELECT 1 FROM working_runs WHERE dataset_id = ?
-                      )
-                      AND NOT EXISTS (
-                          SELECT 1 FROM source_state WHERE dataset_id = ?
-                      )
-                      AND NOT EXISTS (
-                          SELECT 1 FROM source_content_proofs WHERE dataset_id = ?
-                      )
-                      AND NOT EXISTS (
-                          SELECT 1 FROM sealed_results WHERE dataset_id = ?
-                      )
-                    """,
-                    (legacy_dataset_id,) * 5,
-                )
+            connection.execute(
+                """
+                INSERT INTO datasets (dataset_id, created_at, updated_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT(dataset_id) DO UPDATE SET updated_at = excluded.updated_at
+                """,
+                (dataset_id, now, now),
+            )
 
     def dataset(self, dataset_id: str) -> sqlite3.Row:
         with self.connect() as connection:
@@ -550,29 +488,85 @@ class SQLiteAccounting:
         )
 
     def get_run_items(self, run_id: str) -> tuple[AccountedItem, ...]:
+        return tuple(self.iter_run_items(run_id))
+
+    def count_run_items(
+        self,
+        run_id: str,
+        *,
+        scope: str | None = None,
+        kinds: Iterable[str] = (),
+        require_source_revision: bool = False,
+    ) -> int:
+        selected_kinds = tuple(dict.fromkeys(str(kind) for kind in kinds))
+        clauses = ["run_id = ?"]
+        parameters: list[object] = [run_id]
+        if scope is not None:
+            clauses.append("scope = ?")
+            parameters.append(scope)
+        if selected_kinds:
+            clauses.append(
+                "kind IN (" + ", ".join("?" for _kind in selected_kinds) + ")"
+            )
+            parameters.extend(selected_kinds)
+        if require_source_revision:
+            clauses.append("source_revision IS NOT NULL")
+        with self.connect() as connection:
+            if (
+                connection.execute(
+                    "SELECT 1 FROM working_runs WHERE run_id = ?", (run_id,)
+                ).fetchone()
+                is None
+            ):
+                raise KeyError(f"unknown Working Run: {run_id}")
+            row = connection.execute(
+                "SELECT COUNT(*) FROM run_items WHERE " + " AND ".join(clauses),
+                parameters,
+            ).fetchone()
+        assert row is not None
+        return int(row[0])
+
+    def iter_run_items(
+        self,
+        run_id: str,
+        *,
+        page_size: int = 1_000,
+    ) -> Iterator[AccountedItem]:
+        if page_size < 1:
+            raise ValueError("run item page size must be positive")
+        after = ""
+        while True:
+            with self.connect() as connection:
+                rows = connection.execute(
+                    """
+                    SELECT relative_path, kind, scope, condition, basis_json,
+                           change_kind, source_revision
+                    FROM run_items
+                    WHERE run_id = ? AND relative_path > ?
+                    ORDER BY relative_path
+                    LIMIT ?
+                    """,
+                    (run_id, after, page_size),
+                ).fetchall()
+            if not rows:
+                return
+            for row in rows:
+                yield _accounted_item(row)
+            after = str(rows[-1]["relative_path"])
+
+    def associated_paths(self, run_id: str, relative_path: Path) -> tuple[Path, ...]:
+        key = association_key(relative_path).as_posix()
         with self.connect() as connection:
             rows = connection.execute(
                 """
-                SELECT relative_path, kind, scope, condition, basis_json,
-                       change_kind, source_revision
+                SELECT relative_path
                 FROM run_items
-                WHERE run_id = ?
+                WHERE run_id = ? AND association_key = ?
                 ORDER BY relative_path
                 """,
-                (run_id,),
+                (run_id, key),
             ).fetchall()
-        return tuple(
-            AccountedItem(
-                relative_path=Path(row["relative_path"]),
-                kind=str(row["kind"]),
-                scope=str(row["scope"]),
-                condition=str(row["condition"]),
-                basis=tuple(json.loads(row["basis_json"])),
-                change_kind=ChangeKind(row["change_kind"]),
-                source_revision=row["source_revision"],
-            )
-            for row in rows
-        )
+        return tuple(Path(str(row["relative_path"])) for row in rows)
 
     def get_run_issues(self, run_id: str) -> tuple[RecordedIssue, ...]:
         with self.connect() as connection:
@@ -974,14 +968,16 @@ class SQLiteAccounting:
         connection.execute(
             """
             INSERT INTO run_items (
-                run_id, relative_path, normalized_path, source_revision,
+                run_id, relative_path, normalized_path, association_key,
+                source_revision,
                 kind, scope, condition,
                 basis_json, size_bytes, mtime_ns, device_id, inode, mode,
                 fingerprint_algorithm, fingerprint, producer_identity,
                 reuse_domain, change_kind, last_seen_generation
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(run_id, relative_path) DO UPDATE SET
                 normalized_path = excluded.normalized_path,
+                association_key = excluded.association_key,
                 source_revision = excluded.source_revision, kind = excluded.kind,
                 scope = excluded.scope, condition = excluded.condition,
                 basis_json = excluded.basis_json, size_bytes = excluded.size_bytes,
@@ -998,6 +994,7 @@ class SQLiteAccounting:
                 run_id,
                 item.relative_path.as_posix(),
                 _normalized_path(item.relative_path.as_posix()),
+                association_key(item.relative_path).as_posix(),
                 revision,
                 item.kind,
                 item.scope,
@@ -1131,14 +1128,16 @@ class SQLiteAccounting:
             connection.execute(
                 """
                 INSERT INTO run_items (
-                    run_id, relative_path, normalized_path, source_revision,
+                    run_id, relative_path, normalized_path, association_key,
+                    source_revision,
                     kind, scope, condition,
                     basis_json, size_bytes, mtime_ns, device_id, inode, mode,
                     fingerprint_algorithm, fingerprint, producer_identity,
                     reuse_domain, change_kind, last_seen_generation
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(run_id, relative_path) DO UPDATE SET
                     normalized_path = excluded.normalized_path,
+                    association_key = excluded.association_key,
                     condition = excluded.condition, basis_json = excluded.basis_json,
                     change_kind = excluded.change_kind,
                     last_seen_generation = excluded.last_seen_generation
@@ -1147,6 +1146,7 @@ class SQLiteAccounting:
                     run_id,
                     row["relative_path"],
                     _normalized_path(str(row["relative_path"])),
+                    association_key(Path(str(row["relative_path"]))).as_posix(),
                     row["revision"],
                     row["kind"],
                     row["scope"],
@@ -1171,6 +1171,18 @@ class SQLiteAccounting:
                 scan_generation,
                 _normalized_path(str(row["relative_path"])),
             )
+
+
+def _accounted_item(row: sqlite3.Row) -> AccountedItem:
+    return AccountedItem(
+        relative_path=Path(str(row["relative_path"])),
+        kind=str(row["kind"]),
+        scope=str(row["scope"]),
+        condition=str(row["condition"]),
+        basis=tuple(json.loads(row["basis_json"])),
+        change_kind=ChangeKind(row["change_kind"]),
+        source_revision=row["source_revision"],
+    )
 
 
 def _can_reuse_current_observation(

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 import hashlib
 import json
 import os
@@ -109,7 +109,7 @@ class SourceItemEvidence:
     source_item_ref: str
     source_root_ref: str
     relative_path: str
-    verification: VerificationBasis
+    verification: VerificationBasis | None
 
     @classmethod
     def from_precheck_view(
@@ -144,11 +144,11 @@ class SourceItemEvidence:
                 f"{source_item_ref} has an invalid source_root_ref",
             )
 
-        observations = view.get("observations")
+        observations = view.get("observations", [])
         if not isinstance(observations, list):
             raise SourceEvidenceError(
-                "source_verification_missing",
-                f"{source_item_ref} has no Apply-grade verification observation",
+                "source_verification_invalid",
+                f"{source_item_ref} has malformed observations",
             )
         matches = [
             item
@@ -156,53 +156,51 @@ class SourceItemEvidence:
             if isinstance(item, Mapping)
             and item.get("name") == _VERIFICATION_OBSERVATION
         ]
-        if len(matches) != 1:
-            code = (
-                "source_verification_missing"
-                if not matches
-                else "source_verification_ambiguous"
-            )
+        if len(matches) > 1:
             raise SourceEvidenceError(
-                code,
-                f"{source_item_ref} must have exactly one Apply-grade verification observation",
+                "source_verification_ambiguous",
+                f"{source_item_ref} has multiple verification observations",
             )
-        observation = matches[0]
-        if observation.get("status") != "available":
-            raise SourceEvidenceError(
-                "source_verification_unavailable",
-                f"{source_item_ref} Apply-grade verification is not available",
-            )
-        value = _mapping(observation.get("value"), "verification value")
-        limitations = observation.get("qualifications", [])
-        if not isinstance(limitations, list) or not all(
-            isinstance(item, Mapping) for item in limitations
-        ):
-            raise SourceEvidenceError(
-                "source_verification_invalid",
-                "verification qualifications must be structured objects",
-            )
-        try:
-            verification = VerificationBasis(
-                profile=_nonempty_string(value.get("profile"), "verification profile"),
-                value=_nonempty_string(value.get("value"), "verification value"),
-                size_bytes=_nonnegative_int(
-                    value.get("size_bytes"), "verification size"
-                ),
-                observed_at=_nonempty_string(
-                    value.get("observed_at"), "verification observation time"
-                ),
-                producer=_nonempty_string(
-                    value.get("producer"), "verification producer"
-                ),
-                basis=observation.get("basis"),
-                limitations=tuple(limitations),
-            )
-        except ApplyPreparationError as error:
-            if isinstance(error, SourceEvidenceError):
-                raise
-            raise SourceEvidenceError(
-                "source_verification_invalid", str(error)
-            ) from error
+        verification = None
+        if matches and matches[0].get("status") == "available":
+            observation = matches[0]
+            value = _mapping(observation.get("value"), "verification value")
+            if value.get("profile") == _SUPPORTED_VERIFICATION_PROFILE:
+                limitations = observation.get("qualifications", [])
+                if not isinstance(limitations, list) or not all(
+                    isinstance(item, Mapping) for item in limitations
+                ):
+                    raise SourceEvidenceError(
+                        "source_verification_invalid",
+                        "verification qualifications must be structured objects",
+                    )
+                try:
+                    verification = VerificationBasis(
+                        profile=_nonempty_string(
+                            value.get("profile"), "verification profile"
+                        ),
+                        value=_nonempty_string(
+                            value.get("value"), "verification value"
+                        ),
+                        size_bytes=_nonnegative_int(
+                            value.get("size_bytes"), "verification size"
+                        ),
+                        observed_at=_nonempty_string(
+                            value.get("observed_at"),
+                            "verification observation time",
+                        ),
+                        producer=_nonempty_string(
+                            value.get("producer"), "verification producer"
+                        ),
+                        basis=observation.get("basis"),
+                        limitations=tuple(limitations),
+                    )
+                except ApplyPreparationError as error:
+                    if isinstance(error, SourceEvidenceError):
+                        raise
+                    raise SourceEvidenceError(
+                        "source_verification_invalid", str(error)
+                    ) from error
         return cls(
             result_ref=_nonempty_string(result_ref, "PreCheck Result ref"),
             source_item_ref=source_item_ref,
@@ -1727,6 +1725,15 @@ class ApplyRunStore:
             )
             return
 
+        prepared_verification = VerificationBasis(
+            profile=_SUPPORTED_VERIFICATION_PROFILE,
+            value=str(observed["digest"]),
+            size_bytes=int(observed["size"]),
+            observed_at=datetime.now(timezone.utc).isoformat(),
+            producer="builtin-apply-source-verification-v1",
+            basis="Fresh exact source-byte proof established during Apply preparation.",
+        )
+
         with self._connect() as connection:
             row = connection.execute(
                 """
@@ -1784,12 +1791,14 @@ class ApplyRunStore:
                         str(source_path),
                         intended_target,
                         target_key,
-                        item.verification.profile,
-                        item.verification.value,
-                        item.verification.observed_at,
-                        item.verification.producer,
-                        _canonical_json(item.verification.basis).decode("utf-8"),
-                        _canonical_json(item.verification.limitations).decode("utf-8"),
+                        prepared_verification.profile,
+                        prepared_verification.value,
+                        prepared_verification.observed_at,
+                        prepared_verification.producer,
+                        _canonical_json(prepared_verification.basis).decode("utf-8"),
+                        _canonical_json(prepared_verification.limitations).decode(
+                            "utf-8"
+                        ),
                         observed["digest"],
                         observed["device"],
                         observed["inode"],
@@ -2181,7 +2190,7 @@ def _observe_source_roots(
 def _verify_source(
     source_path: Path,
     root: Path,
-    basis: VerificationBasis,
+    basis: VerificationBasis | None,
 ) -> dict[str, int | str]:
     _require_exact_path_spelling(root, source_path)
     _reject_symlink_components(root, source_path)
@@ -2216,7 +2225,9 @@ def _verify_source(
     observed = "sha256:" + digest.hexdigest()
     if not stable:
         raise ApplyPreparationError("source changed while it was verified")
-    if before.st_size != basis.size_bytes or observed != basis.value:
+    if basis is not None and (
+        before.st_size != basis.size_bytes or observed != basis.value
+    ):
         raise ApplyPreparationError("source does not match immutable PreCheck evidence")
     return {
         "digest": observed,
@@ -2326,8 +2337,7 @@ def _prepared_identity(connection: sqlite3.Connection, run_ref: str, route: str)
         SELECT ordinal, source_item_ref, planned_outcome, relative_directory,
                override_name, source_root_ref, relative_source_path,
                source_path, intended_target, verification_profile,
-               expected_verification, verification_observed_at,
-               verification_producer, verification_basis_json,
+               expected_verification, verification_producer, verification_basis_json,
                verification_limitations_json, observed_verification,
                observed_device, observed_inode, observed_size,
                observed_mtime_ns, preparation_status, issue_code

@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable, Mapping, Sequence
-from dataclasses import asdict, dataclass, field
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
+from dataclasses import asdict, dataclass, field, replace
+import hashlib
+import heapq
+from itertools import islice
 import json
 from pathlib import Path
 import subprocess
@@ -18,7 +21,7 @@ from ._compression_producer import (
     CompressionInput,
 )
 from ._compression_strategy import AdaptiveCompressionProfile
-from ._work_types import WorkRecord, WorkStatus
+from ._work_types import DependencyKind, WorkRecord, WorkStatus
 from .accounting import AccountingStore
 from .bundling import BundleCandidateOutcome, BundleCandidateProducer
 from .embedding import EmbeddingProfile, EmbeddingProducer, ImageEmbeddingEncoder
@@ -41,6 +44,8 @@ from .resources import (
     ResourceBudget,
     ResourceClaim,
     ScheduledCall,
+    detect_source_storage,
+    resolve_resource_budget,
 )
 from .result import ResultStore
 from .sensitivity import (
@@ -60,6 +65,7 @@ from .video import (
     VideoProbeProducer,
     sample_video_times,
 )
+from .work import WorkStore
 
 
 _T = TypeVar("_T")
@@ -121,30 +127,18 @@ class PrecheckExecutionConfig:
     bundles: bool = True
     compression_target: int | None = 200
     video_frame_limit: int = 3
+    metadata_batch_size: int | None = None
+    ffmpeg_threads: int | None = None
+    model_batch_size: int | None = None
+    directed_evidence_paths: tuple[Path, ...] = ()
     embedding_profile: EmbeddingProfile | None = None
     sensitivity_profile: SensitivityProfile | None = None
     reverse_geocode_profile: ReverseGeocodeProfile = field(
         default_factory=ReverseGeocodeProfile
     )
-    resource_budget: ResourceBudget = field(
-        default_factory=lambda: ResourceBudget(
-            capacity=ResourceClaim(
-                source_io_slots=2,
-                workspace_io_slots=2,
-                cpu_slots=2,
-                process_slots=1,
-                memory_bytes=512 * 1024 * 1024,
-                temporary_bytes=1024 * 1024 * 1024,
-                model_slots=1,
-                exiftool_slots=1,
-                decoder_slots=1,
-                encoder_slots=1,
-                network_slots=0,
-            ),
-            max_workers=2,
-            max_pending=8,
-        )
-    )
+    source_storage_hint: str = "auto"
+    source_storage_evidence: str = "unresolved"
+    resource_budget: ResourceBudget | None = None
     dataset_name: str | None = None
 
     def __post_init__(self) -> None:
@@ -152,23 +146,58 @@ class PrecheckExecutionConfig:
             raise ValueError("GPX matching requires metadata")
         if self.video_frame_limit < 1:
             raise ValueError("video_frame_limit must be positive")
+        if self.metadata_batch_size is not None and self.metadata_batch_size < 1:
+            raise ValueError("metadata_batch_size must be positive")
+        if self.ffmpeg_threads is not None and self.ffmpeg_threads < 1:
+            raise ValueError("ffmpeg_threads must be positive")
+        if self.model_batch_size is not None and self.model_batch_size < 1:
+            raise ValueError("model_batch_size must be positive")
+        if self.source_storage_hint not in {"auto", "local", "remote", "unknown"}:
+            raise ValueError(
+                "source_storage_hint must be auto, local, remote, or unknown"
+            )
+        normalized_paths = tuple(Path(path) for path in self.directed_evidence_paths)
+        if any(
+            path.is_absolute() or path == Path(".") or ".." in path.parts
+            for path in normalized_paths
+        ):
+            raise ValueError("directed evidence paths must stay source-root-relative")
+        if len(set(normalized_paths)) != len(normalized_paths):
+            raise ValueError("directed evidence paths must be unique")
+        object.__setattr__(self, "directed_evidence_paths", normalized_paths)
         if self.compression_target is not None and self.compression_target < 1:
             raise ValueError("compression_target must be positive")
         if (
-            self.reverse_geocode_profile.enabled
+            self.resource_budget is not None
+            and self.reverse_geocode_profile.enabled
             and self.resource_budget.capacity.network_slots < 1
         ):
             raise ValueError("enabled reverse geocoding requires one network slot")
 
     def value(self) -> dict[str, object]:
+        if (
+            self.resource_budget is None
+            or self.metadata_batch_size is None
+            or self.ffmpeg_threads is None
+            or self.model_batch_size is None
+            or self.source_storage_hint == "auto"
+        ):
+            return self.resolve_resources().value()
+        assert self.resource_budget is not None
         return {
             "bundles": self.bundles,
             "compression_target": self.compression_target,
             "dataset_name": self.dataset_name,
+            "directed_evidence_paths": [
+                path.as_posix() for path in self.directed_evidence_paths
+            ],
             "embedding_profile": _embedding_profile_value(self.embedding_profile),
+            "ffmpeg_threads": self.ffmpeg_threads,
             "gpx": self.gpx,
             "image_renditions": self.image_renditions,
             "metadata": self.metadata,
+            "metadata_batch_size": self.metadata_batch_size,
+            "model_batch_size": self.model_batch_size,
             "resource_budget": {
                 "capacity": asdict(self.resource_budget.capacity),
                 "max_pending": self.resource_budget.max_pending,
@@ -183,20 +212,96 @@ class PrecheckExecutionConfig:
                 "routing_policy": self.reverse_geocode_profile.routing_policy,
             },
             "sensitivity_profile": _sensitivity_profile_value(self.sensitivity_profile),
-            "version": 1,
+            "source_storage": self.source_storage_hint,
+            "source_storage_evidence": self.source_storage_evidence,
+            "version": 4,
             "video": self.video,
             "video_frame_limit": self.video_frame_limit,
         }
 
+    def resolve_resources(
+        self,
+        *,
+        source_root: Path | None = None,
+        source_storage: str | None = None,
+        source_storage_evidence: str | None = None,
+        logical_cpu_count: int | None = None,
+        available_memory_bytes: int | None = None,
+    ) -> PrecheckExecutionConfig:
+        if (
+            self.resource_budget is not None
+            and self.metadata_batch_size is not None
+            and self.ffmpeg_threads is not None
+            and self.model_batch_size is not None
+            and self.source_storage_hint != "auto"
+        ):
+            return self
+        detected_storage = source_storage
+        detected_evidence = source_storage_evidence
+        if detected_storage is None:
+            if source_root is None:
+                detected_storage = "unknown"
+                detected_evidence = "source_root_unavailable"
+            else:
+                detected_storage, detected_evidence = detect_source_storage(source_root)
+        if detected_storage not in {"local", "remote", "unknown"}:
+            raise ValueError("detected source storage must be local, remote, or unknown")
+        storage = self.source_storage_hint
+        evidence = detected_evidence or "storage_probe_unspecified"
+        if storage == "auto":
+            storage = detected_storage
+        elif storage == "local" and detected_storage != "local":
+            storage = detected_storage
+            evidence = f"operator_local_not_verified:{evidence}"
+        elif storage != detected_storage:
+            evidence = f"operator_conservative_override:{storage}:{evidence}"
+        budget = resolve_resource_budget(
+            source_storage=storage,
+            network_enabled=self.reverse_geocode_profile.enabled,
+            ceiling=self.resource_budget,
+            logical_cpu_count=logical_cpu_count,
+            available_memory_bytes=available_memory_bytes,
+        )
+        metadata_batch_size = self.metadata_batch_size or min(
+            200,
+            max(16, (budget.capacity.memory_bytes - 16 * 1024 * 1024) // (512 * 1024)),
+        )
+        ffmpeg_threads = self.ffmpeg_threads or max(
+            1,
+            min(
+                2,
+                budget.capacity.cpu_slots // max(1, budget.capacity.process_slots),
+            ),
+        )
+        model_batch_size = self.model_batch_size or max(
+            1,
+            min(16, budget.capacity.memory_bytes // (256 * 1024 * 1024)),
+        )
+        return replace(
+            self,
+            metadata_batch_size=metadata_batch_size,
+            ffmpeg_threads=ffmpeg_threads,
+            model_batch_size=model_batch_size,
+            source_storage_hint=storage,
+            source_storage_evidence=evidence,
+            resource_budget=budget,
+        )
+
     @classmethod
     def from_value(cls, value: Mapping[str, object]) -> PrecheckExecutionConfig:
-        if value.get("version") != 1:
+        if value.get("version") != 4:
             raise ValueError("unsupported PreCheck execution configuration")
         budget_value = cast(Mapping[str, object], value["resource_budget"])
         capacity_value = cast(Mapping[str, object], budget_value["capacity"])
         geocode_value = cast(Mapping[str, object], value["reverse_geocode_profile"])
         return cls(
             metadata=bool(value["metadata"]),
+            metadata_batch_size=int(value["metadata_batch_size"]),
+            ffmpeg_threads=int(value["ffmpeg_threads"]),
+            model_batch_size=int(value["model_batch_size"]),
+            directed_evidence_paths=tuple(
+                Path(str(path)) for path in value["directed_evidence_paths"]
+            ),
             gpx=bool(value["gpx"]),
             image_renditions=bool(value["image_renditions"]),
             video=bool(value["video"]),
@@ -221,6 +326,8 @@ class PrecheckExecutionConfig:
                 max_attempts=int(geocode_value["max_attempts"]),
                 retry_delay_seconds=float(geocode_value["retry_delay_seconds"]),
             ),
+            source_storage_hint=str(value["source_storage"]),
+            source_storage_evidence=str(value["source_storage_evidence"]),
             resource_budget=ResourceBudget(
                 capacity=ResourceClaim(
                     **{key: int(item) for key, item in capacity_value.items()}
@@ -274,6 +381,12 @@ class PrecheckOrchestrator:
         if not self._running(run_ref):
             return self.run_control.sync_accounting(run_ref)
         accounting = AccountingStore(self.database_path)
+        attachment = accounting.get_source_attachment(accounting_run_id)
+        config = config.resolve_resources(source_root=attachment.source_root)
+        assert config.resource_budget is not None
+        assert config.metadata_batch_size is not None
+        assert config.ffmpeg_threads is not None
+        assert config.model_batch_size is not None
         self._checkpoint(run_ref, "accounting", total="unknown")
         accounting.process_run(
             accounting_run_id,
@@ -284,17 +397,25 @@ class PrecheckOrchestrator:
             return status
         if not self._finish_phase(run_ref, "accounting"):
             return self.run_control.sync_accounting(run_ref)
-        items = accounting.get_run_items(accounting_run_id)
-        media = tuple(
-            item
-            for item in items
-            if item.scope == "source_media"
-            and item.kind in _MEDIA_KINDS
-            and item.source_revision is not None
+
+        def media_items() -> Iterator[AccountedItem]:
+            return (
+                item
+                for item in accounting.iter_run_items(accounting_run_id)
+                if item.scope == "source_media"
+                and item.kind in _MEDIA_KINDS
+                and item.source_revision is not None
+            )
+
+        media_count = accounting.count_run_items(
+            accounting_run_id,
+            scope="source_media",
+            kinds=_MEDIA_KINDS,
+            require_source_revision=True,
         )
         gpx_paths = tuple(
             item.relative_path
-            for item in items
+            for item in accounting.iter_run_items(accounting_run_id)
             if item.kind == "gpx" and item.source_revision is not None
         )
         executor = BoundedWorkExecutor(config.resource_budget)
@@ -302,11 +423,27 @@ class PrecheckOrchestrator:
         self._checkpoint(
             run_ref,
             "metadata",
-            total=len(media) if config.metadata else 0,
+            total=media_count if config.metadata else 0,
         )
-        metadata = self._metadata(run_ref, accounting_run_id, media, config, executor)
+        self._metadata(run_ref, accounting_run_id, media_items(), config, executor)
         if not self._finish_phase(run_ref, "metadata"):
             return self.run_control.sync_accounting(run_ref)
+        self._checkpoint(
+            run_ref,
+            "bundles",
+            total="unknown" if config.bundles else 0,
+        )
+        bundle_outcomes = self._bundles(accounting_run_id, config)
+        evidence_media, bundle_work_ids = _initial_evidence_media(
+            media_items(), bundle_outcomes, config
+        )
+        if not self._finish_phase(run_ref, "bundles"):
+            return self.run_control.sync_accounting(run_ref)
+        evidence_paths = {item.relative_path for item in evidence_media}
+        metadata = _selected_metadata(
+            self.database_path, accounting_run_id, evidence_paths
+        )
+        demanded_metadata = metadata
         rendition_profiles = (
             2
             if config.embedding_profile is not None
@@ -317,13 +454,14 @@ class PrecheckOrchestrator:
             run_ref,
             "renditions",
             total=(
-                sum(item.kind in _STILL_KINDS for item in media) * rendition_profiles
+                sum(item.kind in _STILL_KINDS for item in evidence_media)
+                * rendition_profiles
                 if config.image_renditions
                 else 0
             ),
         )
         renditions = self._renditions(
-            run_ref, accounting_run_id, media, config, executor
+            run_ref, accounting_run_id, evidence_media, config, executor
         )
         if not self._finish_phase(run_ref, "renditions"):
             return self.run_control.sync_accounting(run_ref)
@@ -332,12 +470,12 @@ class PrecheckOrchestrator:
             "video",
             total=(
                 "unknown"
-                if config.video and any(item.kind == "video" for item in media)
+                if config.video and any(item.kind == "video" for item in evidence_media)
                 else 0
             ),
         )
         probes, frames, sheets = self._video(
-            run_ref, accounting_run_id, media, config, executor
+            run_ref, accounting_run_id, evidence_media, config, executor
         )
         if not self._finish_phase(run_ref, "video"):
             return self.run_control.sync_accounting(run_ref)
@@ -356,7 +494,7 @@ class PrecheckOrchestrator:
         gpx = self._gpx(
             run_ref,
             accounting_run_id,
-            metadata,
+            demanded_metadata,
             gpx_paths,
             config,
             executor,
@@ -395,14 +533,6 @@ class PrecheckOrchestrator:
             return self.run_control.sync_accounting(run_ref)
         self._checkpoint(
             run_ref,
-            "bundles",
-            total="unknown" if config.bundles else 0,
-        )
-        bundles = self._bundles(accounting_run_id, metadata, config)
-        if not self._finish_phase(run_ref, "bundles"):
-            return self.run_control.sync_accounting(run_ref)
-        self._checkpoint(
-            run_ref,
             "compression",
             total="unknown" if config.compression_target is not None else 0,
         )
@@ -415,7 +545,7 @@ class PrecheckOrchestrator:
             metadata,
             gpx,
             embeddings,
-            bundles,
+            bundle_work_ids,
             config,
         )
         if not self._finish_phase(run_ref, "compression"):
@@ -445,7 +575,12 @@ class PrecheckOrchestrator:
             ],
             contact_sheet_work_ids=[outcome.work.work_id for outcome in sheets],
             gpx_work_ids=[outcome.work.work_id for outcome in gpx.values()],
-            metadata_work_ids=[outcome.work.work_id for outcome in metadata.values()],
+            metadata_work_ids=(
+                work_id
+                for work_id in WorkStore(self.database_path).iter_run_work_ids(
+                    accounting_run_id, capability="source-metadata"
+                )
+            ),
             reverse_geocode_work_by_source=geocode.work_by_source(),
             sensitivity_work_ids=[outcome.work.work_id for outcome in sensitivity],
             video_probe_work_ids=[outcome.work.work_id for outcome in probes.values()],
@@ -463,39 +598,48 @@ class PrecheckOrchestrator:
         self,
         run_ref: str,
         run_id: str,
-        media: tuple[AccountedItem, ...],
+        media: Iterable[AccountedItem],
         config: PrecheckExecutionConfig,
         executor: BoundedWorkExecutor,
-    ) -> dict[Path, MetadataOutcome]:
+    ) -> None:
         if not config.metadata:
-            return {}
+            return
         kwargs: dict[str, object] = {}
+        kwargs["should_continue"] = lambda: self._running(run_ref)
         if self.dependencies.metadata_runner is not None:
             kwargs["command_runner"] = self.dependencies.metadata_runner
         if self.dependencies.exiftool_version is not None:
             kwargs["exiftool_version"] = self.dependencies.exiftool_version
         producer = MetadataProducer(self.database_path, **kwargs)
-        outcomes = self._execute(
-            run_ref,
-            executor,
-            (
-                ScheduledCall(
-                    f"metadata:{item.relative_path.as_posix()}",
-                    ResourceClaim(
-                        source_io_slots=1,
-                        cpu_slots=1,
-                        process_slots=1,
-                        memory_bytes=16 * 1024 * 1024,
-                        exiftool_slots=1,
-                    ),
-                    lambda item=item: producer.produce(run_id, item.relative_path),
-                )
-                for item in media
-            ),
-        )
-        return {
-            Path(key.removeprefix("metadata:")): item for key, item in outcomes.items()
-        }
+        batches = _batched(media, config.metadata_batch_size)
+        try:
+            for _key, _batch_outcomes in self._execute(
+                run_ref,
+                executor,
+                (
+                    ScheduledCall(
+                        f"metadata-batch:{index}",
+                        ResourceClaim(
+                            source_io_slots=1,
+                            cpu_slots=1,
+                            process_slots=1,
+                            memory_bytes=min(
+                                128 * 1024 * 1024,
+                                16 * 1024 * 1024 + len(batch) * 512 * 1024,
+                            ),
+                            exiftool_slots=1,
+                        ),
+                        lambda batch=batch: producer.produce_many(
+                            run_id,
+                            (item.relative_path for item in batch),
+                        ),
+                    )
+                    for index, batch in enumerate(batches)
+                ),
+            ):
+                pass
+        finally:
+            producer.close()
 
     def _renditions(
         self,
@@ -536,7 +680,7 @@ class PrecheckOrchestrator:
                 else (ORDINARY_RENDITION_PROFILE,)
             )
         )
-        return tuple(self._execute(run_ref, executor, calls).values())
+        return tuple(value for _key, value in self._execute(run_ref, executor, calls))
 
     def _video(
         self,
@@ -562,6 +706,8 @@ class PrecheckOrchestrator:
             probe_kwargs["ffprobe_version"] = self.dependencies.ffprobe_version
         if self.dependencies.ffmpeg_version is not None:
             frame_kwargs["ffmpeg_version"] = self.dependencies.ffmpeg_version
+        assert config.ffmpeg_threads is not None
+        frame_kwargs["threads"] = config.ffmpeg_threads
         probe_producer = VideoProbeProducer(self.database_path, **probe_kwargs)
         probes = self._execute(
             run_ref,
@@ -585,41 +731,41 @@ class PrecheckOrchestrator:
         )
         probe_by_path = {
             Path(key.removeprefix("video-probe:")): outcome
-            for key, outcome in probes.items()
+            for key, outcome in probes
         }
         frame_producer = VideoFrameProducer(self.database_path, **frame_kwargs)
-        frame_calls = []
-        for path, outcome in probe_by_path.items():
-            if outcome.work.status is not WorkStatus.SUCCEEDED or outcome.probe is None:
-                continue
+        frame_calls = (
+            ScheduledCall(
+                f"video-frame:{path.as_posix()}:{sample_time:.6f}",
+                ResourceClaim(
+                    source_io_slots=1,
+                    workspace_io_slots=1,
+                    cpu_slots=config.ffmpeg_threads,
+                    process_slots=1,
+                    memory_bytes=128 * 1024 * 1024,
+                    temporary_bytes=32 * 1024 * 1024,
+                    decoder_slots=1,
+                    encoder_slots=1,
+                ),
+                lambda path=path, outcome=outcome, sample_time=sample_time: (
+                    frame_producer.produce(
+                        run_id,
+                        path,
+                        outcome.work.work_id,
+                        sample_time,
+                    )
+                ),
+            )
+            for path, outcome in probe_by_path.items()
+            if outcome.work.status is WorkStatus.SUCCEEDED and outcome.probe is not None
             for sample_time in sample_video_times(
                 outcome.probe.duration_seconds,
                 max_frames=config.video_frame_limit,
-            ):
-                frame_calls.append(
-                    ScheduledCall(
-                        f"video-frame:{path.as_posix()}:{sample_time:.6f}",
-                        ResourceClaim(
-                            source_io_slots=1,
-                            workspace_io_slots=1,
-                            cpu_slots=1,
-                            process_slots=1,
-                            memory_bytes=128 * 1024 * 1024,
-                            temporary_bytes=32 * 1024 * 1024,
-                            decoder_slots=1,
-                            encoder_slots=1,
-                        ),
-                        lambda path=path, outcome=outcome, sample_time=sample_time: (
-                            frame_producer.produce(
-                                run_id,
-                                path,
-                                outcome.work.work_id,
-                                sample_time,
-                            )
-                        ),
-                    )
-                )
-        frame_values = tuple(self._execute(run_ref, executor, frame_calls).values())
+            )
+        )
+        frame_values = tuple(
+            value for _key, value in self._execute(run_ref, executor, frame_calls)
+        )
         frames_by_path: dict[Path, list[VideoFrameOutcome]] = {}
         for frame in frame_values:
             path = _work_subject(frame.work)
@@ -650,7 +796,9 @@ class PrecheckOrchestrator:
             for path, frames in frames_by_path.items()
             if any(frame.work.status is WorkStatus.SUCCEEDED for frame in frames)
         )
-        sheets = tuple(self._execute(run_ref, executor, sheet_calls).values())
+        sheets = tuple(
+            value for _key, value in self._execute(run_ref, executor, sheet_calls)
+        )
         return probe_by_path, frame_values, sheets
 
     def _gpx(
@@ -685,7 +833,7 @@ class PrecheckOrchestrator:
             ),
         )
         return {
-            Path(key.removeprefix("gpx:")): value for key, value in outcomes.items()
+            Path(key.removeprefix("gpx:")): value for key, value in outcomes
         }
 
     def _embeddings(
@@ -707,7 +855,7 @@ class PrecheckOrchestrator:
                 "The configured local embedding backend is unavailable.",
                 "Configure the pinned local embedding backend and resume.",
             )
-        visual = [
+        visual = tuple(
             outcome
             for outcome in (*renditions, *frames)
             if outcome.work.status is WorkStatus.SUCCEEDED
@@ -715,34 +863,47 @@ class PrecheckOrchestrator:
                 outcome.work.spec.capability == "video-frame"
                 or _rendition_profile(outcome.work) == "high_resolution"
             )
-        ]
+        )
         producer = EmbeddingProducer(self.database_path, encoder)
-        values = self._execute(
+        assert config.model_batch_size is not None
+        batch_values = self._execute(
             run_ref,
             executor,
             (
                 ScheduledCall(
-                    f"embedding:{outcome.work.work_id}",
+                    f"embedding-batch:{index}",
                     ResourceClaim(
                         source_io_slots=1,
                         workspace_io_slots=1,
                         cpu_slots=1,
-                        memory_bytes=256 * 1024 * 1024,
+                        memory_bytes=min(
+                            config.resource_budget.capacity.memory_bytes,
+                            256 * 1024 * 1024 + len(batch) * 32 * 1024 * 1024,
+                        ),
+                        gpu_memory_bytes=(
+                            config.resource_budget.capacity.gpu_memory_bytes
+                        ),
                         temporary_bytes=32 * 1024 * 1024,
                         model_slots=1,
                     ),
-                    lambda outcome=outcome: producer.produce(
-                        run_id, outcome.work.work_id, profile=profile
+                    lambda batch=batch: producer.produce_many(
+                        run_id,
+                        tuple(outcome.work.work_id for outcome in batch),
+                        profile=profile,
                     ),
                 )
-                for outcome in visual
+                for index, batch in enumerate(_batched(visual, config.model_batch_size))
             ),
         )
-        embeddings = {
-            key.removeprefix("embedding:"): value.work
-            for key, value in values.items()
-            if value.work.status is WorkStatus.SUCCEEDED
-        }
+        embeddings: dict[str, WorkRecord] = {}
+        for _key, batch in batch_values:
+            embeddings.update(
+                {
+                    input_work_id: outcome.work
+                    for input_work_id, outcome in batch.items()
+                    if outcome.work.status is WorkStatus.SUCCEEDED
+                }
+            )
         frame_pairs: dict[Path, list[tuple[str, str]]] = {}
         for frame in frames:
             embedding = embeddings.get(frame.work.work_id)
@@ -777,7 +938,7 @@ class PrecheckOrchestrator:
                 "The configured local sensitivity backend is unavailable.",
                 "Configure the pinned local sensitivity backend and resume.",
             )
-        visual = [
+        visual = tuple(
             outcome
             for outcome in (*renditions, *frames)
             if outcome.work.status is WorkStatus.SUCCEEDED
@@ -785,43 +946,55 @@ class PrecheckOrchestrator:
                 outcome.work.spec.capability == "video-frame"
                 or _rendition_profile(outcome.work) == "high_resolution"
             )
-        ]
-        producer = SensitivityProducer(self.database_path, detector)
-        calls = (
-            ScheduledCall(
-                f"sensitivity:{outcome.work.work_id}",
-                ResourceClaim(
-                    source_io_slots=1,
-                    cpu_slots=1,
-                    memory_bytes=256 * 1024 * 1024,
-                    model_slots=1,
-                ),
-                lambda outcome=outcome: producer.produce(
-                    run_id,
-                    _work_subject(outcome.work),
-                    outcome.work.work_id,
-                    profile=profile,
-                ),
-            )
-            for outcome in visual
         )
-        return tuple(self._execute(run_ref, executor, calls).values())
+        producer = SensitivityProducer(self.database_path, detector)
+        assert config.model_batch_size is not None
+        batch_values = self._execute(
+            run_ref,
+            executor,
+            (
+                ScheduledCall(
+                    f"sensitivity-batch:{index}",
+                    ResourceClaim(
+                        source_io_slots=1,
+                        cpu_slots=1,
+                        memory_bytes=min(
+                            config.resource_budget.capacity.memory_bytes,
+                            256 * 1024 * 1024 + len(batch) * 32 * 1024 * 1024,
+                        ),
+                        gpu_memory_bytes=(
+                            config.resource_budget.capacity.gpu_memory_bytes
+                        ),
+                        model_slots=1,
+                    ),
+                    lambda batch=batch: producer.produce_many(
+                        run_id,
+                        tuple(
+                            (_work_subject(outcome.work), outcome.work.work_id)
+                            for outcome in batch
+                        ),
+                        profile=profile,
+                    ),
+                )
+                for index, batch in enumerate(_batched(visual, config.model_batch_size))
+            ),
+        )
+        return tuple(
+            outcome
+            for _key, batch in batch_values
+            for outcome in batch.values()
+        )
 
     def _bundles(
         self,
         run_id: str,
-        metadata: Mapping[Path, MetadataOutcome],
         config: PrecheckExecutionConfig,
-    ) -> tuple[BundleCandidateOutcome, ...]:
+    ) -> Iterator[BundleCandidateOutcome]:
         if not config.bundles:
-            return ()
-        return BundleCandidateProducer(self.database_path).produce(
+            return iter(())
+        return BundleCandidateProducer(self.database_path).iter_produce(
             run_id,
-            [
-                outcome.work.work_id
-                for outcome in metadata.values()
-                if outcome.work.status is WorkStatus.SUCCEEDED
-            ],
+            None,
         )
 
     def _compression(
@@ -834,7 +1007,7 @@ class PrecheckOrchestrator:
         metadata: Mapping[Path, MetadataOutcome],
         gpx: Mapping[Path, GPXOutcome],
         embeddings: Mapping[str, WorkRecord],
-        bundles: tuple[BundleCandidateOutcome, ...],
+        bundle_work_ids: tuple[str, ...],
         config: PrecheckExecutionConfig,
     ) -> tuple[tuple[CompressionGroupOutcome, ...], tuple[Path, ...]]:
         visual_by_path: dict[Path, WorkRecord] = {}
@@ -863,25 +1036,26 @@ class PrecheckOrchestrator:
 
         inputs: list[CompressionInput] = []
         covered: set[Path] = set()
-        for outcome in bundles:
-            candidate = outcome.candidate
-            if outcome.work.status is not WorkStatus.SUCCEEDED or candidate is None:
-                continue
-            visual = visual_by_path.get(candidate.representative_path)
+        work_store = WorkStore(self.database_path)
+        for bundle_work_id in bundle_work_ids:
+            bundle_work = work_store.get_work(bundle_work_id)
+            representative_path = _bundle_representative(bundle_work)
+            member_paths = _bundle_member_paths(bundle_work)
+            visual = visual_by_path.get(representative_path)
             if visual is None:
                 continue
             inputs.append(
                 self._compression_input(
-                    candidate.representative_path,
+                    representative_path,
                     visual,
                     metadata,
                     gpx,
                     embeddings,
-                    member_paths=candidate.members,
-                    bundle_work_id=outcome.work.work_id,
+                    member_paths=member_paths,
+                    bundle_work_id=bundle_work_id,
                 )
             )
-            covered.update(candidate.members)
+            covered.update(path for path in member_paths if path in visual_by_path)
         for path, visual in visual_by_path.items():
             if path in covered:
                 continue
@@ -960,7 +1134,7 @@ class PrecheckOrchestrator:
             self.run_control,
             self.dependencies.geocoder,
         )
-        outcome = self._execute(
+        outcomes = self._execute(
             run_ref,
             executor,
             (
@@ -981,14 +1155,15 @@ class PrecheckOrchestrator:
                 ),
             ),
         )
-        return outcome["reverse-geocode"]
+        _key, outcome = next(outcomes)
+        return outcome
 
     def _execute(
         self,
         run_ref: str,
         executor: BoundedWorkExecutor,
         calls: Iterable[ScheduledCall[_T]],
-    ) -> dict[str, _T]:
+    ) -> Iterator[tuple[str, _T]]:
         def guarded(call: ScheduledCall[_T]) -> ScheduledCall[_T]:
             def invoke() -> _T:
                 if not self._running(run_ref):
@@ -999,14 +1174,17 @@ class PrecheckOrchestrator:
 
             return ScheduledCall(call.key, call.claim, invoke)
 
-        outcomes = executor.run(guarded(call) for call in calls)
-        values: dict[str, _T] = {}
-        for outcome in outcomes:
+        def guarded_calls() -> Iterator[ScheduledCall[_T]]:
+            for call in calls:
+                if not self._running(run_ref):
+                    return
+                yield guarded(call)
+
+        for outcome in executor.iter_run(guarded_calls()):
             if outcome.error is None:
-                values[outcome.key] = cast(_T, outcome.value)
+                yield outcome.key, cast(_T, outcome.value)
             elif not isinstance(outcome.error, ResourceAdmissionCancelled):
                 raise outcome.error
-        return values
 
     def _running(self, run_ref: str) -> bool:
         return self.run_control.current_state(run_ref) == "running"
@@ -1023,6 +1201,144 @@ class PrecheckOrchestrator:
 
     def _after_phase(self, run_ref: str, phase: str) -> None:
         """Fault-injection seam after a durable orchestration boundary."""
+
+
+def _initial_evidence_media(
+    media: Iterable[AccountedItem],
+    bundles: Iterable[BundleCandidateOutcome],
+    config: PrecheckExecutionConfig,
+) -> tuple[tuple[AccountedItem, ...], tuple[str, ...]]:
+    """Select the bounded initial visual frontier without reducing accounting."""
+
+    requested = set(config.directed_evidence_paths)
+    demanded = set(requested)
+    evidence_limit = min(
+        2_000,
+        max(128, (config.compression_target or 200) * 4),
+    )
+    selected_heap: list[tuple[int, str, str, Path, tuple[Path, ...]]] = []
+    saw_bundle = False
+    for outcome in bundles:
+        saw_bundle = True
+        candidate = outcome.candidate
+        if outcome.work.status is not WorkStatus.SUCCEEDED or candidate is None:
+            raise _BlockedExecution(
+                "bundle_frontier_incomplete",
+                "Bundle candidate Work did not complete successfully.",
+                "Resume the Run after retrying or resolving failed bundle Work.",
+            )
+        score = int(candidate.candidate_id.rsplit(":", 1)[-1], 16)
+        entry = (
+            -score,
+            candidate.candidate_id,
+            outcome.work.work_id,
+            candidate.representative_path,
+            candidate.boundary_paths,
+        )
+        if len(selected_heap) < evidence_limit:
+            heapq.heappush(selected_heap, entry)
+        elif score < -selected_heap[0][0]:
+            heapq.heapreplace(selected_heap, entry)
+    selected_entries = tuple(sorted(selected_heap, key=lambda entry: entry[1]))
+    for _score, _candidate_id, _work_id, representative, boundaries in selected_entries:
+        demanded.add(representative)
+        demanded.update(boundaries)
+    selected = []
+    fallback_heap: list[tuple[int, str, AccountedItem]] = []
+    seen_requested: set[Path] = set()
+    for item in media:
+        if item.relative_path in requested:
+            seen_requested.add(item.relative_path)
+        if saw_bundle and item.relative_path in demanded:
+            selected.append(item)
+        elif not saw_bundle and item.relative_path not in requested:
+            path_value = item.relative_path.as_posix()
+            score = int(hashlib.sha256(path_value.encode("utf-8")).hexdigest(), 16)
+            entry = (-score, path_value, item)
+            if len(fallback_heap) < evidence_limit:
+                heapq.heappush(fallback_heap, entry)
+            elif score < -fallback_heap[0][0]:
+                heapq.heapreplace(fallback_heap, entry)
+        elif item.relative_path in requested:
+            selected.append(item)
+    if not saw_bundle:
+        selected.extend(entry[2] for entry in fallback_heap)
+        selected.sort(key=lambda item: item.relative_path.as_posix())
+    missing = requested - seen_requested
+    if missing:
+        paths = ", ".join(path.as_posix() for path in sorted(missing))
+        raise _BlockedExecution(
+            "directed_evidence_source_missing",
+            f"Directed evidence paths are not eligible Source Items: {paths}",
+            "Start a fresh Run with paths from the current Dataset accounting.",
+        )
+    return tuple(selected), tuple(entry[2] for entry in selected_entries)
+
+
+def _bundle_representative(record: WorkRecord) -> Path:
+    if not isinstance(record.output, Mapping):
+        raise ValueError("bundle Work has no output")
+    candidate = record.output.get("candidate")
+    if not isinstance(candidate, Mapping):
+        raise ValueError("bundle Work has no candidate output")
+    value = candidate.get("representative_path")
+    if not isinstance(value, str):
+        raise ValueError("bundle Work has no representative path")
+    return Path(value)
+
+
+def _bundle_member_paths(record: WorkRecord) -> tuple[Path, ...]:
+    members = []
+    for dependency in record.spec.dependencies:
+        if dependency.kind is not DependencyKind.SOURCE_REVISION:
+            continue
+        try:
+            _dataset_id, relative_path = json.loads(dependency.key)
+        except (TypeError, ValueError) as error:
+            raise ValueError("bundle Work has an invalid source dependency") from error
+        members.append(Path(str(relative_path)))
+    return tuple(sorted(members))
+
+
+def _selected_metadata(
+    database_path: Path,
+    run_id: str,
+    selected_paths: Iterable[Path],
+) -> dict[Path, MetadataOutcome]:
+    requested = set(selected_paths)
+    selected: dict[Path, MetadataOutcome] = {}
+    if not requested:
+        return selected
+    work = WorkStore(database_path)
+    for subject in sorted(requested):
+        records = work.get_run_work_by_parameter(
+            run_id,
+            capability="source-metadata",
+            key="subject_relative_path",
+            value=subject.as_posix(),
+        )
+        if not records:
+            continue
+        if len(records) != 1:
+            raise ValueError("multiple metadata Work Records for one source")
+        record = records[0]
+        observations: tuple[dict[str, object], ...] = ()
+        if isinstance(record.output, Mapping):
+            values = record.output.get("observations")
+            if isinstance(values, list):
+                observations = tuple(
+                    cast(dict[str, object], value)
+                    for value in values
+                    if isinstance(value, dict)
+                )
+        selected[subject] = MetadataOutcome(record, observations, True)
+    return selected
+
+
+def _batched(items: Iterable[_T], size: int) -> Iterator[tuple[_T, ...]]:
+    iterator = iter(items)
+    while batch := tuple(islice(iterator, size)):
+        yield batch
 
 
 class _BlockedExecution(RuntimeError):

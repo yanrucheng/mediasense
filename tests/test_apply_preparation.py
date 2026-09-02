@@ -402,10 +402,10 @@ def test_prepare_blocks_source_changed_from_precheck_evidence(tmp_path: Path) ->
 @pytest.mark.parametrize(
     ("case", "expected_code"),
     [
-        ("missing", "source_verification_missing"),
-        ("not_checked", "source_verification_unavailable"),
-        ("failed", "source_verification_unavailable"),
-        ("unknown_profile", "source_verification_profile_unsupported"),
+        ("missing", None),
+        ("not_checked", None),
+        ("failed", None),
+        ("unknown_profile", None),
         ("missing_basis", "source_verification_invalid"),
         ("missing_producer", "source_verification_invalid"),
         ("digest_mismatch", "source_unverifiable"),
@@ -416,10 +416,10 @@ def test_prepare_blocks_source_changed_from_precheck_evidence(tmp_path: Path) ->
         ("missing_source_item", "precheck_read_failed"),
     ],
 )
-def test_selected_move_fails_closed_on_unusable_precheck_evidence(
+def test_selected_move_establishes_exact_proof_or_blocks_invalid_evidence(
     tmp_path: Path,
     case: str,
-    expected_code: str,
+    expected_code: str | None,
 ) -> None:
     source, destination, state, _files, reader = _fixture(tmp_path)
     selected = reader.views["source-item:a"]
@@ -460,9 +460,16 @@ def test_selected_move_fails_closed_on_unusable_precheck_evidence(
         precheck_read=reader,
     )
 
-    assert run.state == "blocked"
     status = store.status(run.run_ref)
-    assert any(reason["code"] == expected_code for reason in status["reasons"])
+    if expected_code is None:
+        assert run.state == "ready_for_authorization"
+        assert status["summary"]["blockers"] == 0
+        item = store.iter_items(run.run_ref, limit=1)[0]
+        assert item["verification_profile"] == "sha256-full-v1"
+        assert item["expected_verification"] == item["observed_verification"]
+    else:
+        assert run.state == "blocked"
+        assert any(reason["code"] == expected_code for reason in status["reasons"])
     assert _tree_facts(source) == before_source
     assert _tree_facts(destination) == before_destination
 

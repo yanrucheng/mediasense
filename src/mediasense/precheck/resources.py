@@ -6,11 +6,23 @@ from collections.abc import Callable, Iterable, Iterator
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from contextlib import contextmanager
 from dataclasses import dataclass, fields
+import os
+from pathlib import Path
+import platform
+import plistlib
+import re
+import subprocess
 from threading import Condition, Event
-from typing import Generic, TypeVar
+from typing import Generic, Protocol, Sequence, TypeVar
 
 
 T = TypeVar("T")
+
+
+class ProbeRunner(Protocol):
+    def __call__(
+        self, command: Sequence[str]
+    ) -> subprocess.CompletedProcess[bytes]: ...
 
 
 class ResourceLimitExceeded(ValueError):
@@ -52,6 +64,211 @@ class ResourceBudget:
             raise ValueError("resource budget requires at least one worker")
         if self.max_pending < self.max_workers:
             raise ValueError("max_pending must be at least max_workers")
+
+
+def resolve_resource_budget(
+    *,
+    source_storage: str,
+    network_enabled: bool = False,
+    ceiling: ResourceBudget | None = None,
+    logical_cpu_count: int | None = None,
+    available_memory_bytes: int | None = None,
+) -> ResourceBudget:
+    """Resolve one conservative host-aware budget for a Run.
+
+    ``source_storage`` is deliberately coarse. ``local`` means a positively
+    identified local solid-state source, not merely a source on the same
+    filesystem as the workspace. Remote and unknown sources share the
+    conservative path.
+    """
+
+    if source_storage not in {"local", "remote", "unknown"}:
+        raise ValueError("source_storage must be local, remote, or unknown")
+    cpu_count = max(1, logical_cpu_count or os.cpu_count() or 1)
+    available_memory = (
+        _available_memory_bytes()
+        if available_memory_bytes is None
+        else available_memory_bytes
+    )
+    if available_memory is not None and available_memory < 1:
+        raise ValueError("available memory must be positive when known")
+
+    cpu_slots = min(8, max(1, cpu_count - 1 if cpu_count > 2 else cpu_count))
+    memory_bytes = (
+        512 * 1024 * 1024
+        if available_memory is None
+        else max(
+            128 * 1024 * 1024,
+            min(4 * 1024 * 1024 * 1024, available_memory // 2),
+        )
+    )
+    memory_workers = max(1, memory_bytes // (128 * 1024 * 1024))
+    local = source_storage == "local"
+    source_lanes = min(4, max(1, cpu_count // 2)) if local else 1
+    process_lanes = min(source_lanes, max(1, cpu_slots // 2))
+    worker_count = min(8, cpu_slots, memory_workers)
+    resolved = ResourceBudget(
+        capacity=ResourceClaim(
+            source_io_slots=source_lanes,
+            workspace_io_slots=min(4, max(1, cpu_count // 2)),
+            cpu_slots=cpu_slots,
+            process_slots=process_lanes,
+            memory_bytes=memory_bytes,
+            temporary_bytes=1024 * 1024 * 1024,
+            gpu_memory_bytes=(
+                0 if ceiling is None else ceiling.capacity.gpu_memory_bytes
+            ),
+            model_slots=1,
+            exiftool_slots=1,
+            decoder_slots=process_lanes,
+            encoder_slots=process_lanes,
+            network_slots=1 if network_enabled else 0,
+        ),
+        max_workers=worker_count,
+        max_pending=max(worker_count * 2, worker_count),
+    )
+    return resolved if ceiling is None else _bounded_budget(resolved, ceiling)
+
+
+def _available_memory_bytes(
+    *,
+    system: str | None = None,
+    command_runner: ProbeRunner | None = None,
+) -> int | None:
+    if (system or platform.system()) == "Darwin":
+        return _darwin_available_memory_bytes(command_runner=command_runner)
+    try:
+        pages = os.sysconf("SC_AVPHYS_PAGES")
+        page_size = os.sysconf("SC_PAGE_SIZE")
+    except (AttributeError, OSError, ValueError):
+        return None
+    if not isinstance(pages, int) or not isinstance(page_size, int):
+        return None
+    return pages * page_size if pages > 0 and page_size > 0 else None
+
+
+def _darwin_available_memory_bytes(
+    *, command_runner: ProbeRunner | None = None
+) -> int | None:
+    runner = command_runner or _run_probe
+    try:
+        completed = runner(("/usr/bin/vm_stat",))
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if completed.returncode != 0:
+        return None
+    try:
+        output = completed.stdout.decode("utf-8", errors="replace")
+    except AttributeError:
+        return None
+    return _parse_darwin_vm_stat(output)
+
+
+def _parse_darwin_vm_stat(output: str) -> int | None:
+    page_match = re.search(r"page size of\s+(\d+) bytes", output)
+    if page_match is None:
+        return None
+    page_size = int(page_match.group(1))
+    page_counts: dict[str, int] = {}
+    for name, count in re.findall(
+        r"^Pages (free|inactive|speculative):\s+(\d+)\.\s*$",
+        output,
+        flags=re.MULTILINE,
+    ):
+        page_counts[name] = int(count)
+    if "free" not in page_counts:
+        return None
+    # Inactive and speculative pages are reclaimable. Purgeable pages are not
+    # added because Darwin may also count them as inactive.
+    available_pages = sum(
+        page_counts.get(name, 0) for name in ("free", "inactive", "speculative")
+    )
+    return available_pages * page_size if available_pages > 0 else None
+
+
+def detect_source_storage(
+    source_root: Path,
+    *,
+    system: str | None = None,
+    command_runner: ProbeRunner | None = None,
+) -> tuple[str, str]:
+    """Return a conservative storage class and the evidence used for it."""
+
+    if (system or platform.system()) != "Darwin":
+        return "unknown", "unsupported_platform_storage_probe"
+    runner = command_runner or _run_probe
+    probe_target = str(Path(source_root))
+    try:
+        completed = runner(
+            ("/usr/sbin/diskutil", "info", "-plist", probe_target)
+        )
+    except (OSError, subprocess.SubprocessError):
+        return "unknown", "darwin_diskutil_unavailable"
+    if completed.returncode != 0:
+        try:
+            filesystem = runner(("/bin/df", "-P", probe_target))
+        except (OSError, subprocess.SubprocessError):
+            return "unknown", "darwin_diskutil_failed"
+        if filesystem.returncode != 0:
+            return "unknown", "darwin_diskutil_failed"
+        lines = filesystem.stdout.decode("utf-8", errors="replace").splitlines()
+        if len(lines) < 2 or len(lines[-1].split(maxsplit=5)) < 6:
+            return "unknown", "darwin_mount_point_unavailable"
+        mount_point = lines[-1].split(maxsplit=5)[-1]
+        try:
+            completed = runner(
+                ("/usr/sbin/diskutil", "info", "-plist", mount_point)
+            )
+        except (OSError, subprocess.SubprocessError):
+            return "unknown", "darwin_diskutil_unavailable"
+        if completed.returncode != 0:
+            return "unknown", "darwin_diskutil_failed"
+    try:
+        details = plistlib.loads(completed.stdout)
+    except (plistlib.InvalidFileException, TypeError, ValueError):
+        return "unknown", "darwin_diskutil_invalid"
+    volume_kind = str(details.get("FilesystemType") or details.get("VolumeKind") or "")
+    if volume_kind.casefold() in {"afpfs", "nfs", "smbfs", "webdav"}:
+        return "remote", f"darwin_diskutil_filesystem:{volume_kind.casefold()}"
+    physical = (
+        details.get("VirtualOrPhysical") == "Physical"
+        or details.get("Internal") is True
+    )
+    if details.get("SolidState") is True and physical:
+        return "local", "darwin_diskutil_physical_solid_state"
+    if details.get("SolidState") is False:
+        return "unknown", "darwin_diskutil_non_solid_state"
+    return "unknown", "darwin_diskutil_no_solid_state_evidence"
+
+
+def _run_probe(command: Sequence[str]) -> subprocess.CompletedProcess[bytes]:
+    return subprocess.run(
+        command,
+        check=False,
+        capture_output=True,
+        timeout=2,
+    )
+
+
+def _bounded_budget(
+    detected: ResourceBudget,
+    ceiling: ResourceBudget,
+) -> ResourceBudget:
+    capacity = ResourceClaim(
+        **{
+            item.name: min(
+                getattr(detected.capacity, item.name),
+                getattr(ceiling.capacity, item.name),
+            )
+            for item in fields(ResourceClaim)
+        }
+    )
+    max_workers = min(detected.max_workers, ceiling.max_workers)
+    return ResourceBudget(
+        capacity=capacity,
+        max_workers=max_workers,
+        max_pending=max(max_workers, min(detected.max_pending, ceiling.max_pending)),
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -224,4 +441,5 @@ __all__ = [
     "ResourceLimitExceeded",
     "ScheduledCall",
     "ScheduledOutcome",
+    "resolve_resource_budget",
 ]

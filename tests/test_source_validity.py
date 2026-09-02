@@ -4,6 +4,8 @@ from datetime import timedelta
 import os
 from pathlib import Path
 
+import pytest
+
 from mediasense.precheck import (
     AccountingStore,
     ChangeKind,
@@ -113,7 +115,7 @@ def test_removal_and_unavailable_root_invalidate_affected_source_work(
     assert work.get_work(remaining.work_id).status is WorkStatus.INVALIDATED
 
 
-def test_exact_source_proof_prevents_sampled_fingerprint_false_reuse(
+def test_bounded_fingerprint_accepts_same_stat_unsampled_change(
     tmp_path: Path,
 ) -> None:
     database = tmp_path / "working.sqlite3"
@@ -152,8 +154,8 @@ def test_exact_source_proof_prevents_sampled_fingerprint_false_reuse(
     assert second_item.source_revision == accounted.source_revision
 
     second_proof = proof_store.prove(second_run, Path("large.jpg"))
-    assert second_proof.digest != first_proof.digest
-    assert work.get_work(first.work_id).status is WorkStatus.INVALIDATED
+    assert second_proof.dependency() == first_proof.dependency()
+    assert work.get_work(first.work_id).status is WorkStatus.SUCCEEDED
     replacement = work.ensure_work(
         second_run,
         WorkSpec(
@@ -167,7 +169,31 @@ def test_exact_source_proof_prevents_sampled_fingerprint_false_reuse(
             ),
         ),
     )
-    assert replacement.work_id != first.work_id
+    assert replacement.work_id == first.work_id
+
+
+def test_source_validity_observation_does_not_reread_full_source(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    database = tmp_path / "working.sqlite3"
+    source = tmp_path / "source"
+    source.mkdir()
+    media = source / "large.jpg"
+    media.write_bytes(b"a" * 200_000)
+    run_id = _completed_run(database, source)
+    real_open = Path.open
+
+    def reject_source_read(path: Path, *args, **kwargs):
+        if path == media:
+            raise AssertionError("PreCheck validity must reuse the bounded fingerprint")
+        return real_open(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", reject_source_read)
+
+    proof = SourceValidityStore(database).prove(run_id, Path("large.jpg"))
+
+    assert proof.algorithm == "candidate-sha256-full-or-3x4k-v1"
 
 
 def test_exact_source_proof_and_work_are_reused_across_unchanged_runs(

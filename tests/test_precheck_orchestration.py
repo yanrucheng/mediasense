@@ -34,8 +34,9 @@ from mediasense.precheck.work import WorkStore
 
 
 class FakeExifTool:
-    def __init__(self) -> None:
+    def __init__(self, capture_times: dict[str, str] | None = None) -> None:
         self.calls: list[tuple[str, ...]] = []
+        self.capture_times = capture_times or {}
 
     def __call__(self, command) -> subprocess.CompletedProcess[str]:
         command = tuple(command)
@@ -60,6 +61,8 @@ class FakeExifTool:
                         ),
                     }
                 )
+                if path.name in self.capture_times:
+                    record["XMP:DateTimeOriginal"] = self.capture_times[path.name]
             records.append(record)
         return subprocess.CompletedProcess(command, 0, json.dumps(records), "")
 
@@ -103,17 +106,35 @@ class FakeVideoTools:
 class FakeEncoder:
     identity = "fake-local-embedding@sha256:one"
 
+    def __init__(self) -> None:
+        self.batch_calls: list[tuple[Path, ...]] = []
+
     def encode_image(self, image_path: Path) -> tuple[float, ...]:
         with Image.open(image_path) as image:
             width, height = image.size
         return float(width), float(height), 1.0, 2.0
 
+    def encode_images(
+        self, image_paths: tuple[Path, ...]
+    ) -> tuple[tuple[float, ...], ...]:
+        self.batch_calls.append(image_paths)
+        return tuple(self.encode_image(path) for path in image_paths)
+
 
 class FakeSensitivityDetector:
     identity = "fake-local-sensitivity@sha256:one"
 
+    def __init__(self) -> None:
+        self.batch_calls: list[tuple[Path, ...]] = []
+
     def detect(self, _image_path: Path) -> tuple[Detection, ...]:
         return (Detection("ordinary", 0.1),)
+
+    def detect_many(
+        self, image_paths: tuple[Path, ...]
+    ) -> tuple[tuple[Detection, ...], ...]:
+        self.batch_calls.append(image_paths)
+        return tuple(self.detect(path) for path in image_paths)
 
 
 @dataclass
@@ -172,10 +193,13 @@ def test_start_then_internal_worker_drives_mixed_source_to_readable_result(
     }
     metadata = FakeExifTool()
     video = FakeVideoTools()
+    encoder = FakeEncoder()
+    detector = FakeSensitivityDetector()
     tool = PrecheckRunTool(
         database,
         execution_config=PrecheckExecutionConfig(
             compression_target=3,
+            model_batch_size=2,
             embedding_profile=EmbeddingProfile(name="test-vector-v1", dimensions=4),
             sensitivity_profile=SensitivityProfile(
                 name="test-sensitivity-v1",
@@ -191,8 +215,8 @@ def test_start_then_internal_worker_drives_mixed_source_to_readable_result(
             video_runner=video,
             ffprobe_version="ffprobe 8.1",
             ffmpeg_version="ffmpeg 8.1",
-            embedding_encoder=FakeEncoder(),
-            sensitivity_detector=FakeSensitivityDetector(),
+            embedding_encoder=encoder,
+            sensitivity_detector=detector,
         ),
     )
 
@@ -239,6 +263,195 @@ def test_start_then_internal_worker_drives_mixed_source_to_readable_result(
     assert {
         path.name: path.read_bytes() for path in source.iterdir() if path.is_file()
     } == source_before
+    assert encoder.batch_calls
+    assert detector.batch_calls
+    assert all(len(batch) <= 2 for batch in encoder.batch_calls)
+    assert all(len(batch) <= 2 for batch in detector.batch_calls)
+
+
+@pytest.mark.parametrize(
+    ("directed_paths", "expected_renditions"),
+    [
+        ((), {"a.jpg", "c.jpg"}),
+        ((Path("b.jpg"),), {"a.jpg", "b.jpg", "c.jpg"}),
+    ],
+)
+def test_bundle_reduces_initial_visual_demand_without_reducing_accounting(
+    tmp_path: Path,
+    directed_paths: tuple[Path, ...],
+    expected_renditions: set[str],
+) -> None:
+    database, source, accounting_run_id = _prepare_source_bound_run(tmp_path)
+    for name, color in (("a.jpg", "red"), ("b.jpg", "blue"), ("c.jpg", "green")):
+        Image.new("RGB", (48, 32), color).save(source / name)
+    metadata_runner = FakeExifTool(
+        {
+            "a.jpg": "2026:05:04 20:27:00+08:00",
+            "b.jpg": "2026:05:04 20:27:20+08:00",
+            "c.jpg": "2026:05:04 20:27:40+08:00",
+        }
+    )
+    tool = PrecheckRunTool(
+        database,
+        execution_config=PrecheckExecutionConfig(
+            directed_evidence_paths=directed_paths,
+            gpx=False,
+            video=False,
+            compression_target=1,
+        ),
+        execution_dependencies=PrecheckExecutionDependencies(
+            metadata_runner=metadata_runner,
+            exiftool_version="13.30",
+        ),
+    )
+
+    started = tool.run(
+        {
+            "action": "start",
+            "dataset_ref": "dataset:dataset-a",
+            "request_id": f"request:bounded-visual-{len(directed_paths)}",
+        }
+    )
+    tool.advance(str(started["run_ref"]))
+
+    works = WorkStore(database).list_run_work(accounting_run_id)
+    metadata = [work for work in works if work.spec.capability == "source-metadata"]
+    bundles = [work for work in works if work.spec.capability == "bundle-candidate"]
+    renditions = [work for work in works if work.spec.capability == "image-rendition"]
+    rendition_subjects = {
+        json.loads(
+            next(
+                dependency.key
+                for dependency in work.spec.dependencies
+                if dependency.kind.value == "source_revision"
+            )
+        )[1]
+        for work in renditions
+    }
+    status = tool.run({"action": "status", "run_ref": started["run_ref"]})
+    accounts = PrecheckReadTool(database).read(
+        {
+            "action": "traverse",
+            "result_ref": status["published_result"]["result_ref"],
+            "relation": "accounts_for",
+            "direction": "outbound",
+        }
+    )
+
+    assert status["state"] == "completed"
+    assert len(metadata) == 3
+    assert len(bundles) == 1
+    assert rendition_subjects == expected_renditions
+    assert sum(item["scope"] == "source_media" for item in accounts["items"]) == 3
+
+
+def test_later_run_can_direct_additional_visual_evidence(tmp_path: Path) -> None:
+    database, source, first_accounting = _prepare_source_bound_run(tmp_path)
+    for name, color in (("a.jpg", "red"), ("b.jpg", "blue"), ("c.jpg", "green")):
+        Image.new("RGB", (48, 32), color).save(source / name)
+    metadata_runner = FakeExifTool(
+        {
+            "a.jpg": "2026:05:04 20:27:00+08:00",
+            "b.jpg": "2026:05:04 20:27:20+08:00",
+            "c.jpg": "2026:05:04 20:27:40+08:00",
+        }
+    )
+    base = dict(
+        gpx=False,
+        video=False,
+        compression_target=1,
+    )
+    dependencies = PrecheckExecutionDependencies(
+        metadata_runner=metadata_runner,
+        exiftool_version="13.30",
+    )
+    first_tool = PrecheckRunTool(
+        database,
+        execution_config=PrecheckExecutionConfig(**base),
+        execution_dependencies=dependencies,
+    )
+    first = first_tool.run(
+        {
+            "action": "start",
+            "dataset_ref": "dataset:dataset-a",
+            "request_id": "request:initial-evidence",
+        }
+    )
+    first_tool.advance(str(first["run_ref"]))
+    assert (
+        sum(
+            work.spec.capability == "image-rendition"
+            for work in WorkStore(database).list_run_work(first_accounting)
+        )
+        == 2
+    )
+
+    second_accounting = AccountingStore(database).start_or_resume_run(
+        "dataset-a", source
+    )
+    second_tool = PrecheckRunTool(
+        database,
+        execution_config=PrecheckExecutionConfig(
+            **base,
+            directed_evidence_paths=(Path("b.jpg"),),
+        ),
+        execution_dependencies=dependencies,
+    )
+    second = second_tool.run(
+        {
+            "action": "start",
+            "dataset_ref": "dataset:dataset-a",
+            "request_id": "request:additional-evidence",
+        }
+    )
+    second_tool.advance(str(second["run_ref"]))
+
+    attached = WorkStore(database).list_run_work(second_accounting)
+    renditions = [
+        work for work in attached if work.spec.capability == "image-rendition"
+    ]
+    assert len(renditions) == 3
+
+
+def test_metadata_batches_respect_configured_provider_ceiling(tmp_path: Path) -> None:
+    database, source, _accounting_run_id = _prepare_source_bound_run(tmp_path)
+    for index in range(5):
+        (source / f"image-{index}.jpg").write_bytes(f"image-{index}".encode())
+    metadata_runner = FakeExifTool()
+    tool = PrecheckRunTool(
+        database,
+        execution_config=PrecheckExecutionConfig(
+            metadata_batch_size=2,
+            gpx=False,
+            image_renditions=False,
+            video=False,
+            bundles=False,
+            compression_target=None,
+        ),
+        execution_dependencies=PrecheckExecutionDependencies(
+            metadata_runner=metadata_runner,
+            exiftool_version="13.30",
+        ),
+    )
+
+    started = tool.run(
+        {
+            "action": "start",
+            "dataset_ref": "dataset:dataset-a",
+            "request_id": "request:metadata-batches",
+        }
+    )
+    tool.advance(str(started["run_ref"]))
+
+    assert (
+        tool.run({"action": "status", "run_ref": started["run_ref"]})["state"]
+        == "completed"
+    )
+    assert len(metadata_runner.calls) == 3
+    assert all(
+        len(command[command.index("--") + 1 :]) <= 2
+        for command in metadata_runner.calls
+    )
 
 
 def test_default_orchestration_makes_no_external_requests(tmp_path: Path) -> None:
@@ -291,7 +504,14 @@ def test_geocode_pauses_for_exact_frozen_query_count_before_fake_provider(
         initial_language="zh",
     )
     base = PrecheckExecutionConfig()
-    capacity = replace(base.resource_budget.capacity, network_slots=1)
+    auto_budget = base.resolve_resources(
+        source_storage="local",
+        source_storage_evidence="test_verified_local_ssd",
+        logical_cpu_count=4,
+        available_memory_bytes=1024 * 1024 * 1024,
+    ).resource_budget
+    assert auto_budget is not None
+    capacity = replace(auto_budget.capacity, network_slots=1)
     config = replace(
         base,
         gpx=False,
@@ -303,7 +523,7 @@ def test_geocode_pauses_for_exact_frozen_query_count_before_fake_provider(
             enabled=True,
             provider_profile="fake-maps-v1",
         ),
-        resource_budget=replace(base.resource_budget, capacity=capacity),
+        resource_budget=replace(auto_budget, capacity=capacity),
     )
     tool = PrecheckRunTool(
         database,

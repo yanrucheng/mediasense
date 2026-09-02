@@ -21,6 +21,7 @@ from ._work_types import (
     DependencyKind,
     LeaseLost,
     WorkDependency,
+    WorkLease,
     WorkRecord,
     WorkSpec,
     WorkStatus,
@@ -69,6 +70,15 @@ class EmbeddingOutcome:
     reused: bool
 
 
+@dataclass(frozen=True, slots=True)
+class _PreparedEmbedding:
+    input_work_id: str
+    input_work: WorkRecord
+    input_artifact: ArtifactRecord
+    record: WorkRecord
+    lease: WorkLease
+
+
 class ImageEmbeddingEncoder(Protocol):
     """Small adapter boundary for one locally available image model."""
 
@@ -105,19 +115,29 @@ class ChineseCLIPEncoder:
         )
 
     def encode_image(self, image_path: Path) -> Sequence[float]:
+        return self.encode_images((image_path,))[0]
+
+    def encode_images(self, image_paths: Sequence[Path]) -> Sequence[Sequence[float]]:
         model, processor, torch = self._load()
-        with Image.open(image_path) as opened:
-            image = opened.convert("RGB")
-        inputs = processor(images=image, return_tensors="pt")
-        inputs = {
-            key: value.to(self.device) if hasattr(value, "to") else value
-            for key, value in inputs.items()
-        }
-        with torch.no_grad():
-            features = model.get_image_features(**inputs)
-        return tuple(
-            float(value) for value in features.detach().cpu().flatten().tolist()
-        )
+        images = []
+        try:
+            for image_path in image_paths:
+                with Image.open(image_path) as opened:
+                    images.append(opened.convert("RGB"))
+            inputs = processor(images=images, return_tensors="pt")
+            inputs = {
+                key: value.to(self.device) if hasattr(value, "to") else value
+                for key, value in inputs.items()
+            }
+            with torch.no_grad():
+                features = model.get_image_features(**inputs)
+            rows = features.detach().cpu().tolist()
+            if rows and isinstance(rows[0], (int, float)):
+                rows = [rows]
+            return tuple(tuple(float(value) for value in row) for row in rows)
+        finally:
+            for image in images:
+                image.close()
 
     def _load(self) -> tuple[Any, Any, Any]:
         if self._model is not None and self._processor is not None:
@@ -167,6 +187,44 @@ class EmbeddingProducer:
         profile: EmbeddingProfile,
         owner: str = "builtin-image-embedding",
     ) -> EmbeddingOutcome:
+        return self.produce_many(
+            run_id,
+            (input_work_id,),
+            profile=profile,
+            owner=owner,
+        )[input_work_id]
+
+    def produce_many(
+        self,
+        run_id: str,
+        input_work_ids: Sequence[str],
+        *,
+        profile: EmbeddingProfile,
+        owner: str = "builtin-image-embedding",
+    ) -> dict[str, EmbeddingOutcome]:
+        work_ids = tuple(input_work_ids)
+        if len(set(work_ids)) != len(work_ids):
+            raise ValueError("embedding batch inputs must be unique")
+        outcomes: dict[str, EmbeddingOutcome] = {}
+        ready: list[_PreparedEmbedding] = []
+        for work_id in work_ids:
+            prepared = self._prepare(run_id, work_id, profile=profile, owner=owner)
+            if isinstance(prepared, EmbeddingOutcome):
+                outcomes[work_id] = prepared
+            else:
+                ready.append(prepared)
+        if ready:
+            outcomes.update(self._produce_prepared(tuple(ready), profile))
+        return outcomes
+
+    def _prepare(
+        self,
+        run_id: str,
+        input_work_id: str,
+        *,
+        profile: EmbeddingProfile,
+        owner: str,
+    ) -> _PreparedEmbedding | EmbeddingOutcome:
         input_work, input_artifact = _attached_visual_artifact(
             self.work, self.artifacts, run_id, input_work_id
         )
@@ -212,16 +270,64 @@ class EmbeddingProducer:
         )
         if not leases:
             return EmbeddingOutcome(self.work.get_work(record.work_id), None, False)
-        lease = leases[0]
-        draft = self.artifacts.create_draft(lease, suffix=".f32")
+        return _PreparedEmbedding(
+            input_work_id,
+            input_work,
+            input_artifact,
+            record,
+            leases[0],
+        )
+
+    def _produce_prepared(
+        self,
+        prepared: tuple[_PreparedEmbedding, ...],
+        profile: EmbeddingProfile,
+    ) -> dict[str, EmbeddingOutcome]:
         try:
-            vector = _validated_vector(
-                self.encoder.encode_image(input_artifact.path), profile
+            encode_many = getattr(self.encoder, "encode_images", None)
+            if callable(encode_many):
+                raw_vectors = tuple(
+                    encode_many(tuple(item.input_artifact.path for item in prepared))
+                )
+            else:
+                raw_vectors = tuple(
+                    self.encoder.encode_image(item.input_artifact.path)
+                    for item in prepared
+                )
+            if len(raw_vectors) != len(prepared):
+                raise InvalidEmbedding(
+                    "embedding batch output count does not match input"
+                )
+        except Exception as error:
+            if len(prepared) > 1:
+                midpoint = len(prepared) // 2
+                return {
+                    **self._produce_prepared(prepared[:midpoint], profile),
+                    **self._produce_prepared(prepared[midpoint:], profile),
+                }
+            item = prepared[0]
+            return {item.input_work_id: self._fail_prepared(item, error)}
+
+        outcomes: dict[str, EmbeddingOutcome] = {}
+        for item, raw_vector in zip(prepared, raw_vectors, strict=True):
+            outcomes[item.input_work_id] = self._publish_prepared(
+                item, raw_vector, profile
             )
+        return outcomes
+
+    def _publish_prepared(
+        self,
+        prepared: _PreparedEmbedding,
+        raw_vector: Sequence[float],
+        profile: EmbeddingProfile,
+    ) -> EmbeddingOutcome:
+        draft = self.artifacts.create_draft(prepared.lease, suffix=".f32")
+        try:
+            vector = _validated_vector(raw_vector, profile)
             draft.path.write_bytes(struct.pack(f"<{len(vector)}f", *vector))
-            self.artifacts.require_available(input_artifact.artifact_id)
+            self.artifacts.require_available(prepared.input_artifact.artifact_id)
             completed, artifact = self.artifacts.publish(
-                lease,
+                prepared.lease,
                 draft,
                 suffix=".f32",
                 media_type="application/vnd.mediasense.embedding-f32le",
@@ -230,7 +336,7 @@ class EmbeddingProducer:
                     "dimensions": profile.dimensions,
                     "dtype": profile.dtype,
                     "encoder_identity": self.encoder.identity,
-                    "input_work_id": input_work.work_id,
+                    "input_work_id": prepared.input_work.work_id,
                     "normalization": profile.normalization,
                     "profile": profile.name,
                 },
@@ -238,16 +344,23 @@ class EmbeddingProducer:
             return EmbeddingOutcome(completed, artifact, False)
         except Exception as error:
             draft.path.unlink(missing_ok=True)
-            try:
-                failed = self.work.fail_work(
-                    lease,
-                    error_code="embedding_failed",
-                    message=str(error) or type(error).__name__,
-                    retryable=False,
-                )
-            except LeaseLost:
-                failed = self.work.get_work(record.work_id)
-            return EmbeddingOutcome(failed, None, False)
+            return self._fail_prepared(prepared, error)
+
+    def _fail_prepared(
+        self,
+        prepared: _PreparedEmbedding,
+        error: BaseException,
+    ) -> EmbeddingOutcome:
+        try:
+            failed = self.work.fail_work(
+                prepared.lease,
+                error_code="embedding_failed",
+                message=str(error) or type(error).__name__,
+                retryable=False,
+            )
+        except LeaseLost:
+            failed = self.work.get_work(prepared.record.work_id)
+        return EmbeddingOutcome(failed, None, False)
 
 
 def read_embedding(
@@ -298,10 +411,11 @@ def _attached_visual_artifact(
     run_id: str,
     work_id: str,
 ) -> tuple[WorkRecord, ArtifactRecord]:
-    record = next(
-        (item for item in work.list_run_work(run_id) if item.work_id == work_id), None
-    )
-    if record is None or record.spec.capability not in {
+    try:
+        record = work.get_run_work(run_id, work_id)
+    except KeyError as error:
+        raise ValueError("visual input Work is not attached to this run") from error
+    if record.spec.capability not in {
         "image-rendition",
         "video-frame",
     }:

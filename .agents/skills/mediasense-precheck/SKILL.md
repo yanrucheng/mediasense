@@ -194,15 +194,15 @@ honest next step that can change it:
   Result-local Evidence through `mediasense.precheck.read`; once Plan is active,
   ordinary Result-local expansion remains Plan-owned;
 - diagnose and propose a supported profile or parameter revision;
-- request directed upstream rebuild through the supported Tool boundary when
-  available, otherwise expose that limitation; or
+- state that the current public Run contract has no directed-evidence selector;
+  do not translate the internal orchestration seam into an invented Tool field; or
 - retain an explicit partial or blocked Result when more work is unavailable or
   not worth its cost.
 
 A valid partial Result may proceed when readiness is `plan_ready`; explain the
 material qualifications first. A Result whose readiness is `blocked` is not
 Plan-ready: present the blocking evidence and ask the Human whether to continue
-preparation, request directed rebuild or other evidence, or stop.
+with a supported successor/profile revision, accept the limitation, or stop.
 
 Stopping a completed blocked Result means retaining it and taking no further
 action. `cancel` applies only to a mutable Run when the Tool says it is allowed;

@@ -1,12 +1,10 @@
-"""Exact source-byte validity proofs for Artifact-producing Work."""
+"""Revision-bound ordinary-change observations for source-derived Work."""
 
 from __future__ import annotations
 
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
-import hashlib
-import os
 from pathlib import Path
 import sqlite3
 import stat
@@ -18,9 +16,6 @@ from ._invalidation import invalidate_source_dependencies
 from ._working_schema import SCHEMA_VERSION
 from ._work_types import WorkDependency, source_content_dependency
 from .discovery import SourceCondition
-
-
-_EXACT_SOURCE_ALGORITHM = "sha256-full-v1"
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,7 +42,7 @@ class SourceContentProof:
 
 
 class SourceValidityStore:
-    """Compute and persist exact proofs without treating them as public identity."""
+    """Persist reusable source observations without creating source identity."""
 
     def __init__(self, database_path: Path) -> None:
         self.database_path = Path(database_path)
@@ -62,7 +57,8 @@ class SourceValidityStore:
                        working_runs.reuse_domain, working_runs.status,
                        run_items.source_revision, run_items.condition,
                        run_items.size_bytes, run_items.mtime_ns,
-                       run_items.device_id, run_items.inode, run_items.mode
+                       run_items.device_id, run_items.inode, run_items.mode,
+                       run_items.fingerprint_algorithm, run_items.fingerprint
                 FROM working_runs
                 JOIN run_items ON run_items.run_id = working_runs.run_id
                 WHERE working_runs.run_id = ? AND run_items.relative_path = ?
@@ -75,7 +71,7 @@ class SourceValidityStore:
             WorkingRunStatus.COMPLETED,
             WorkingRunStatus.COMPLETED_WITH_ISSUES,
         }:
-            raise ValueError("source accounting must be complete before exact proof")
+            raise ValueError("source accounting must be complete before observation")
         if row["source_revision"] is None:
             raise ValueError(f"source has no reusable revision: {relative}")
         if SourceCondition(row["condition"]) not in {
@@ -93,14 +89,27 @@ class SourceValidityStore:
             int(row["inode"]),
             int(row["mode"]),
         )
-        digest, observed = _hash_exact_regular_file(source_path, expected_identity)
+        observed = source_path.stat(follow_symlinks=False)
+        if (
+            not stat.S_ISREG(observed.st_mode)
+            or stat_identity(observed) != expected_identity
+        ):
+            raise SourceChangedDuringRead(
+                f"source changed after accounting: {source_path}"
+            )
+        algorithm = row["fingerprint_algorithm"]
+        digest = row["fingerprint"]
+        if not isinstance(algorithm, str) or not algorithm:
+            raise ValueError(f"source has no candidate fingerprint profile: {relative}")
+        if not isinstance(digest, str) or not digest:
+            raise ValueError(f"source has no candidate fingerprint value: {relative}")
         observed_at = datetime.now(timezone.utc)
         proof = SourceContentProof(
             dataset_id=str(row["dataset_id"]),
             relative_path=relative,
             source_revision=int(row["source_revision"]),
             reuse_domain=str(row["reuse_domain"]),
-            algorithm=_EXACT_SOURCE_ALGORITHM,
+            algorithm=algorithm,
             digest=digest,
             size_bytes=observed.st_size,
             observed_at=observed_at,
@@ -108,6 +117,14 @@ class SourceValidityStore:
         )
         self._record(run_id, proof)
         return proof
+
+    def verify(self, run_id: str, expected: SourceContentProof) -> SourceContentProof:
+        observed = self.prove(run_id, expected.relative_path)
+        if observed.dependency().value != expected.dependency().value:
+            raise SourceChangedDuringRead(
+                f"source changed during read: {expected.relative_path}"
+            )
+        return observed
 
     def _record(self, run_id: str, proof: SourceContentProof) -> None:
         dependency = proof.dependency()
@@ -215,31 +232,6 @@ class SourceValidityStore:
                 raise
             else:
                 connection.commit()
-
-
-def _hash_exact_regular_file(
-    path: Path,
-    expected_identity: tuple[int, int, int, int, int],
-) -> tuple[str, os.stat_result]:
-    flags = os.O_RDONLY
-    if hasattr(os, "O_NOFOLLOW"):
-        flags |= os.O_NOFOLLOW
-    descriptor = os.open(path, flags)
-    try:
-        before = os.fstat(descriptor)
-        if stat_identity(before) != expected_identity or not stat.S_ISREG(
-            before.st_mode
-        ):
-            raise SourceChangedDuringRead(f"source changed after accounting: {path}")
-        digest = hashlib.sha256()
-        while chunk := os.read(descriptor, 1024 * 1024):
-            digest.update(chunk)
-        after = os.fstat(descriptor)
-    finally:
-        os.close(descriptor)
-    if stat_identity(before) != stat_identity(after):
-        raise SourceChangedDuringRead(f"source changed while hashing: {path}")
-    return digest.hexdigest(), after
 
 
 def _validated_relative_path(value: Path) -> Path:

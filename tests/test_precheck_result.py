@@ -196,7 +196,7 @@ def test_end_to_end_result_is_sealed_and_read_only_through_exact_reference(
         if item["name"] == "source_content_verification"
     )
     assert verification["status"] == "available"
-    assert verification["value"]["profile"] == "sha256-full-v1"
+    assert verification["value"]["profile"] == "candidate-sha256-full-or-3x4k-v1"
     assert verification["value"]["value"].startswith("sha256:")
     assert verification["value"]["size_bytes"] == (source / "first.jpg").stat().st_size
     assert database.read_bytes() == database_before_reads

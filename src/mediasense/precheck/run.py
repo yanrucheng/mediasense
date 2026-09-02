@@ -25,6 +25,7 @@ from ._orchestrator import (
     PrecheckOrchestrator,
     _BlockedExecution,
 )
+from .accounting import AccountingStore
 from .read import PrecheckReadTool
 from .result import ResultDraft, ResultSealError, ResultStore
 
@@ -308,7 +309,9 @@ class PrecheckRunTool:
             self._store.bind_accounting_run(run_ref, accounting_run_id)
         configuration = record["execution_config"]
         if configuration is None:
-            configuration = self._execution_config.value()
+            configuration = self._resolved_execution_config(
+                str(accounting_run_id)
+            ).value()
             self._store.configure_execution(run_ref, configuration)
         worker_token = uuid4().hex
         if not self._store.claim_execution_worker(
@@ -404,7 +407,20 @@ class PrecheckRunTool:
             return
         run_ref = str(record["run_ref"])
         self._store.bind_accounting_run(run_ref, accounting_run_id)
-        self._store.configure_execution(run_ref, self._execution_config.value())
+        self._store.configure_execution(
+            run_ref,
+            self._resolved_execution_config(accounting_run_id).value(),
+        )
+
+    def _resolved_execution_config(
+        self, accounting_run_id: str
+    ) -> PrecheckExecutionConfig:
+        attachment = AccountingStore(self.database_path).get_source_attachment(
+            accounting_run_id
+        )
+        return self._execution_config.resolve_resources(
+            source_root=attachment.source_root
+        )
 
     def mark_failed(
         self, run_ref: str, *, code: str, message: str

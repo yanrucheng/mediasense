@@ -186,7 +186,10 @@ class VideoFrameProducer:
         executable: str = "ffmpeg",
         command_runner: CommandRunner | None = None,
         ffmpeg_version: str | None = None,
+        threads: int = 1,
     ) -> None:
+        if threads < 1:
+            raise ValueError("FFmpeg thread count must be positive")
         self.database_path = Path(database_path)
         self.validity = SourceValidityStore(self.database_path)
         self.work = WorkStore(self.database_path)
@@ -194,6 +197,7 @@ class VideoFrameProducer:
         self.executable = executable
         self._run = command_runner or _run_command
         self.ffmpeg_version = ffmpeg_version or _tool_version(executable, self._run)
+        self.threads = threads
 
     def produce(
         self,
@@ -244,6 +248,11 @@ class VideoFrameProducer:
                     "ffmpeg_version",
                     self.ffmpeg_version,
                 ),
+                WorkDependency(
+                    DependencyKind.PARAMETER,
+                    "ffmpeg_threads",
+                    str(self.threads),
+                ),
             ),
         )
         record = self.work.ensure_work(run_id, spec)
@@ -286,6 +295,8 @@ class VideoFrameProducer:
                     str(_jpeg_qscale(profile.jpeg_quality)),
                     "-vcodec",
                     "mjpeg",
+                    "-threads",
+                    str(self.threads),
                     "-f",
                     "image2",
                     str(draft.path),
@@ -296,6 +307,7 @@ class VideoFrameProducer:
                     completed.stderr.strip() or "ffmpeg exited unsuccessfully"
                 )
             width, height = _verify_jpeg(draft.path)
+            self.validity.verify(run_id, proof)
             finished, artifact = self.artifacts.publish(
                 lease,
                 draft,
@@ -440,10 +452,11 @@ class ContactSheetProducer:
 def _attached_work(
     work: WorkStore, run_id: str, work_id: str, capability: str
 ) -> WorkRecord:
-    record = next(
-        (item for item in work.list_run_work(run_id) if item.work_id == work_id), None
-    )
-    if record is None or record.spec.capability != capability:
+    try:
+        record = work.get_run_work(run_id, work_id)
+    except KeyError as error:
+        raise ValueError(f"{capability} Work is not attached to this run") from error
+    if record.spec.capability != capability:
         raise ValueError(f"{capability} Work is not attached to this run")
     if record.status is not WorkStatus.SUCCEEDED:
         raise ValueError(f"{capability} Work must succeed first")

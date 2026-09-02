@@ -521,6 +521,7 @@ def test_internal_storage_and_phase_names_are_not_schema_fields() -> None:
         "sqlite",
         "cache_key",
         "checkpoint",
+        "directed_evidence_paths",
         '"discovering"',
         '"preparing"',
         '"assembling"',

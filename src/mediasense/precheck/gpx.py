@@ -180,15 +180,13 @@ class GPXMatchProducer:
             return GPXOutcome(failed, (), False)
 
     def _metadata_work(self, run_id: str, work_id: str) -> WorkRecord:
-        record = next(
-            (
-                item
-                for item in self.work.list_run_work(run_id)
-                if item.work_id == work_id
-            ),
-            None,
-        )
-        if record is None or record.spec.capability != "source-metadata":
+        try:
+            record = self.work.get_run_work(run_id, work_id)
+        except KeyError as error:
+            raise ValueError(
+                "GPX matching requires metadata Work attached to this run"
+            ) from error
+        if record.spec.capability != "source-metadata":
             raise ValueError("GPX matching requires metadata Work attached to this run")
         if record.status is not WorkStatus.SUCCEEDED:
             raise ValueError("GPX matching requires successful metadata Work")

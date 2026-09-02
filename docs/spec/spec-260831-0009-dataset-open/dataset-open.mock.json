@@ -12,7 +12,7 @@
     "created": true,
     "manifest_version": 1,
     "store_versions": {
-      "precheck": 15,
+      "precheck": 16,
       "plan": 2,
       "geo": 1,
       "apply": 2

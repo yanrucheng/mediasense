@@ -10,12 +10,14 @@ from mediasense.precheck import (
     AdaptiveCompressionProfile,
     BundleCandidateProducer,
     CompressionInput,
+    CompressionPoint,
     EmbeddingProducer,
     EmbeddingProfile,
     ImageRenditionProducer,
     PrecheckReadTool,
     ResultStore,
     WorkStatus,
+    build_adaptive_groups,
 )
 
 
@@ -199,7 +201,7 @@ def test_bundle_members_are_covered_by_one_compressed_representative(
     Image.new("RGB", (24, 24), "red").save(source / "IMG_0001.JPG")
     (source / "IMG_0001.ARW").write_bytes(b"raw source bytes")
     run_id = _closed_run(database, source)
-    bundle = BundleCandidateProducer(database).produce(run_id)[0]
+    bundle = next(BundleCandidateProducer(database).produce(run_id))
     assert bundle.candidate is not None
     rendition = ImageRenditionProducer(database).produce(run_id, Path("IMG_0001.JPG"))
     embedding = EmbeddingProducer(database, ColorEncoder()).produce(
@@ -260,3 +262,24 @@ def test_bundle_members_are_covered_by_one_compressed_representative(
     )
 
     assert len(reverse["items"]) == 1
+
+
+def test_large_embedding_group_uses_bounded_representative_selection() -> None:
+    points = tuple(
+        CompressionPoint(
+            Path(f"item-{index:04d}.jpg"),
+            embedding=(1.0, index / 1000),
+        )
+        for index in range(1_000)
+    )
+    profile = AdaptiveCompressionProfile(
+        target_entries=1,
+        exact_representative_limit=16,
+        representative_comparison_budget=256,
+    )
+
+    group = build_adaptive_groups(points, profile)[0]
+
+    assert group.basis["representative_method"] == "bounded-even-sample-v1"
+    assert group.basis["representative_comparison_count"] <= 256
+    assert "bounded_representative_selection" in group.qualifications

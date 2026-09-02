@@ -17,11 +17,7 @@ from test_apply_preparation import _fixture, _plan
 ROOT = Path(__file__).parents[1]
 APPLY_SPEC = ROOT / "docs" / "spec" / "spec-260829-0050-apply"
 FROZEN_PLAN_SCHEMA = (
-    ROOT
-    / "docs"
-    / "spec"
-    / "spec-260827-1138-frozen-plan"
-    / "frozen-plan.schema.json"
+    ROOT / "docs" / "spec" / "spec-260827-1138-frozen-plan" / "frozen-plan.schema.json"
 )
 WORKFLOWS = json.loads(
     (ROOT / "tests" / "fixtures" / "apply-skill-workflows-v1.json").read_text(
@@ -34,9 +30,9 @@ def test_skill_uses_direct_frozen_plan_handoff_and_no_geo() -> None:
     assert "exact `frozen_plan` object returned by Plan seal" in (
         ROOT / ".agents" / "skills" / "mediasense-apply" / "SKILL.md"
     ).read_text(encoding="utf-8")
-    skill = (
-        ROOT / ".agents" / "skills" / "mediasense-apply" / "SKILL.md"
-    ).read_text(encoding="utf-8")
+    skill = (ROOT / ".agents" / "skills" / "mediasense-apply" / "SKILL.md").read_text(
+        encoding="utf-8"
+    )
     assert "Do not request, refresh, or interpret geographic evidence" in skill
 
 
@@ -174,31 +170,23 @@ def test_skill_forward_workflow_reaches_receipt_and_freshly_authorized_rewind(
     assert checkpoints == expected["expected_agent_checkpoints"]
 
 
-def test_skill_stops_at_prepare_blocker(tmp_path: Path) -> None:
-    expected = _scenario("prepare_blocker")
+def test_skill_accepts_fresh_apply_proof_without_precheck_exact_proof(
+    tmp_path: Path,
+) -> None:
+    expected = _scenario("prepare_without_precheck_exact_proof")
     tool, frozen_plan, source, destination, _files, precheck = _new_tool(tmp_path)
-    observations = precheck.views["source-item:a"].pop("observations")
+    precheck.views["source-item:a"].pop("observations")
     checkpoints = []
 
     status = _prepare(tool, frozen_plan, source, destination)
-    assert status["state"] == "blocked"
-    assert any(
-        reason["code"] == "source_verification_missing" for reason in status["reasons"]
-    )
+    assert status["state"] == "ready_for_authorization"
     assert not (destination / "Media").exists()
     assert (source / "a.jpg").exists()
-    checkpoints.append("explain_blocker")
-
-    precheck.views["source-item:a"]["observations"] = observations
-    resumed = tool.handle({"action": "resume", "run_ref": status["run_ref"]})
-    assert resumed["target_state"] == "preparing"
-    checkpoints.append("resume_preparation")
-    ready = tool.handle({"action": "status", "run_ref": status["run_ref"]})
-    assert ready["state"] == "ready_for_authorization"
     checkpoints.append("request_exact_confirmation")
     cancelled = tool.handle({"action": "cancel", "run_ref": status["run_ref"]})
     assert cancelled["target_state"] == "cancelled"
     assert not (destination / "Media").exists()
+    checkpoints.append("cancel_without_effect")
     assert checkpoints == expected["expected_agent_checkpoints"]
 
 

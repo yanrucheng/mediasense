@@ -2,27 +2,30 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
-from datetime import datetime, timedelta
+from collections.abc import Callable, Iterable, Mapping, Sequence
+from dataclasses import dataclass, replace
+from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
 import re
 import subprocess
+from threading import Event, Lock, Thread
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from ._exiftool import ExifToolCancelled, StayOpenExifTool
 from ._fingerprint import SourceChangedDuringRead
 from ._work_types import (
     DependencyKind,
+    LeaseLost,
     WorkDependency,
+    WorkLease,
     WorkRecord,
     WorkSpec,
     WorkStatus,
     source_revision_dependency,
 )
 from .accounting import AccountingStore
-from .discovery import association_key
 from .source_validity import SourceContentProof, SourceValidityStore
 from .work import WorkStore
 
@@ -37,6 +40,7 @@ _EXIF_DATETIME = re.compile(
 class MetadataProfile:
     """Effective metadata fields and interpretation policy."""
 
+    profile_id: str = "index-v1"
     timezone: str = "Asia/Shanghai"
     time_tags: tuple[str, ...] = (
         "XMP:DateTimeOriginal",
@@ -58,6 +62,8 @@ class MetadataProfile:
     )
 
     def __post_init__(self) -> None:
+        if not self.profile_id.strip():
+            raise ValueError("metadata profile_id must be non-empty")
         try:
             ZoneInfo(self.timezone)
         except ZoneInfoNotFoundError as error:
@@ -75,6 +81,7 @@ class MetadataProfile:
             {
                 "latitude_tags": self.latitude_tags,
                 "longitude_tags": self.longitude_tags,
+                "profile_id": self.profile_id,
                 "sidecar_precedence": _SIDECAR_SUFFIXES,
                 "time_tags": self.time_tags,
                 "timezone": self.timezone,
@@ -92,11 +99,179 @@ class MetadataOutcome:
     reused: bool
 
 
+@dataclass(frozen=True, slots=True)
+class _PreparedMetadata:
+    subject: Path
+    proofs: tuple[SourceContentProof, ...]
+    spec: WorkSpec
+    record: WorkRecord
+    lease: WorkLease | None = None
+
+
 class MetadataExtractionError(RuntimeError):
     """ExifTool could not return a trustworthy local metadata response."""
 
 
+class MetadataLeaseRenewalError(RuntimeError):
+    """The batch heartbeat could not retain its still-active Work leases."""
+
+
 CommandRunner = Callable[[Sequence[str]], subprocess.CompletedProcess[str]]
+Clock = Callable[[], datetime]
+
+
+class _MetadataLeaseHeartbeat:
+    """Keep a batch's still-active item leases alive through recursive isolation."""
+
+    def __init__(
+        self,
+        work: WorkStore,
+        prepared: tuple[_PreparedMetadata, ...],
+        *,
+        lease_duration: timedelta,
+        renew_interval: float,
+        clock: Clock,
+    ) -> None:
+        self._work = work
+        self._lease_duration = lease_duration
+        self._renew_interval = renew_interval
+        self._clock = clock
+        self._lock = Lock()
+        self._stop = Event()
+        self._error: BaseException | None = None
+        self._leases = {
+            item.lease.work_id: item.lease
+            for item in prepared
+            if item.lease is not None
+        }
+        self._thread = Thread(
+            target=self._run,
+            name="mediasense-metadata-lease-heartbeat",
+            daemon=True,
+        )
+
+    def __enter__(self) -> _MetadataLeaseHeartbeat:
+        self.renew_now()
+        self._thread.start()
+        return self
+
+    def __exit__(self, *_args: object) -> None:
+        self.stop()
+
+    def stop(self) -> None:
+        self._stop.set()
+        if self._thread.is_alive():
+            self._thread.join()
+
+    def renew_now(self) -> None:
+        with self._lock:
+            self._raise_if_failed()
+            try:
+                observed_at = self._clock()
+                for work_id, lease in tuple(self._leases.items()):
+                    self._leases[work_id] = self._work.renew_lease(
+                        lease,
+                        lease_duration=self._lease_duration,
+                        now=observed_at,
+                    )
+            except BaseException as error:
+                self._record_renewal_failure(error)
+
+    def succeed(self, item: _PreparedMetadata, output: object) -> WorkRecord:
+        with self._lock:
+            lease = self._active_lease(item)
+            observed_at = self._clock()
+            try:
+                lease = self._work.renew_lease(
+                    lease,
+                    lease_duration=self._lease_duration,
+                    now=observed_at,
+                )
+            except BaseException as error:
+                self._record_renewal_failure(error)
+            completed = self._work.succeed_work(lease, output, now=observed_at)
+            self._leases.pop(lease.work_id, None)
+            return completed
+
+    def fail(
+        self,
+        item: _PreparedMetadata,
+        *,
+        error_code: str,
+        message: str,
+        retryable: bool,
+    ) -> WorkRecord:
+        with self._lock:
+            lease = self._active_lease(item)
+            failed = self._work.fail_work(
+                lease,
+                error_code=error_code,
+                message=message,
+                retryable=retryable,
+                now=self._clock(),
+            )
+            self._leases.pop(lease.work_id, None)
+            return failed
+
+    def invalidate(self, item: _PreparedMetadata, reason: str) -> WorkRecord:
+        with self._lock:
+            lease = self._active_lease(item)
+            self._work.invalidate_work(lease.work_id, reason, now=self._clock())
+            self._leases.pop(lease.work_id, None)
+            return self._work.get_work(lease.work_id)
+
+    def fail_active(self, *, error_code: str, message: str) -> None:
+        self.stop()
+        cleanup_errors: list[BaseException] = []
+        with self._lock:
+            for work_id, lease in tuple(self._leases.items()):
+                try:
+                    self._work.fail_work(
+                        lease,
+                        error_code=error_code,
+                        message=message,
+                        retryable=True,
+                        now=self._clock(),
+                    )
+                except LeaseLost as error:
+                    record = self._work.get_work(work_id)
+                    if record.status is WorkStatus.RUNNING:
+                        cleanup_errors.append(error)
+                        continue
+                except BaseException as error:
+                    cleanup_errors.append(error)
+                    continue
+                self._leases.pop(work_id, None)
+        if cleanup_errors:
+            raise RuntimeError(
+                "metadata active leases did not converge to retryable state"
+            ) from cleanup_errors[0]
+
+    def _run(self) -> None:
+        while not self._stop.wait(self._renew_interval):
+            try:
+                self.renew_now()
+            except MetadataLeaseRenewalError:
+                return
+
+    def _active_lease(self, item: _PreparedMetadata) -> WorkLease:
+        self._raise_if_failed()
+        if item.lease is None or item.lease.work_id not in self._leases:
+            raise RuntimeError("metadata Work lease is no longer active")
+        return self._leases[item.lease.work_id]
+
+    def _raise_if_failed(self) -> None:
+        if self._error is not None:
+            raise MetadataLeaseRenewalError(
+                "metadata lease renewal failed"
+            ) from self._error
+
+    def _record_renewal_failure(self, error: BaseException) -> None:
+        self._error = error
+        self._stop.set()
+        raise MetadataLeaseRenewalError(
+            "metadata lease renewal failed"
+        ) from error
 
 
 class MetadataProducer:
@@ -109,16 +284,51 @@ class MetadataProducer:
         executable: str = "exiftool",
         command_runner: CommandRunner | None = None,
         exiftool_version: str | None = None,
+        should_continue: Callable[[], bool] | None = None,
+        lease_duration: timedelta = timedelta(minutes=5),
+        lease_renew_interval: float = 60.0,
+        clock: Clock | None = None,
     ) -> None:
+        if lease_duration <= timedelta(0):
+            raise ValueError("metadata lease_duration must be positive")
+        if lease_renew_interval <= 0:
+            raise ValueError("metadata lease_renew_interval must be positive")
+        if lease_renew_interval >= lease_duration.total_seconds():
+            raise ValueError("metadata lease renewal must precede lease expiry")
         self.database_path = Path(database_path)
         self.validity = SourceValidityStore(self.database_path)
         self.work = WorkStore(self.database_path)
         self.accounting = AccountingStore(self.database_path)
         self.executable = executable
-        self._run = command_runner or _run_command
+        self.lease_duration = lease_duration
+        self.lease_renew_interval = lease_renew_interval
+        self._clock = clock or (lambda: datetime.now(timezone.utc))
+        self._owned_runner = (
+            None
+            if command_runner is not None
+            else StayOpenExifTool(
+                executable,
+                should_continue=should_continue,
+            )
+        )
+        self._run = command_runner or self._owned_runner
+        assert self._run is not None
         self.exiftool_version = exiftool_version or _read_exiftool_version(
             executable, self._run
         )
+
+    def close(self) -> None:
+        if self._owned_runner is not None:
+            self._owned_runner.close()
+
+    def __enter__(self) -> MetadataProducer:
+        return self
+
+    def __exit__(self, *_args: object) -> None:
+        self.close()
+
+    def __del__(self) -> None:
+        self.close()
 
     def produce(
         self,
@@ -129,6 +339,58 @@ class MetadataProducer:
         owner: str = "builtin-source-metadata",
     ) -> MetadataOutcome:
         subject = _validated_relative_path(relative_path)
+        return self.produce_many(
+            run_id,
+            (subject,),
+            profile=profile,
+            owner=owner,
+        )[subject]
+
+    def produce_many(
+        self,
+        run_id: str,
+        relative_paths: Iterable[Path],
+        *,
+        profile: MetadataProfile = MetadataProfile(),
+        owner: str = "builtin-source-metadata",
+    ) -> dict[Path, MetadataOutcome]:
+        subjects = tuple(_validated_relative_path(path) for path in relative_paths)
+        if len(set(subjects)) != len(subjects):
+            raise ValueError("metadata batch subjects must be unique")
+        outcomes: dict[Path, MetadataOutcome] = {}
+        pending: list[_PreparedMetadata] = []
+        for subject in subjects:
+            prepared = self._prepare(run_id, subject, profile=profile)
+            if isinstance(prepared, MetadataOutcome):
+                outcomes[subject] = prepared
+            else:
+                pending.append(prepared)
+        ready: list[_PreparedMetadata] = []
+        for item in pending:
+            leases = self.work.claim_ready_work(
+                run_id,
+                owner,
+                lease_duration=self.lease_duration,
+                work_id=item.record.work_id,
+                now=self._clock(),
+            )
+            if leases:
+                ready.append(replace(item, lease=leases[0]))
+            else:
+                outcomes[item.subject] = MetadataOutcome(
+                    self.work.get_work(item.record.work_id), (), False
+                )
+        if ready:
+            outcomes.update(self._produce_prepared(run_id, tuple(ready), profile))
+        return outcomes
+
+    def _prepare(
+        self,
+        run_id: str,
+        subject: Path,
+        *,
+        profile: MetadataProfile,
+    ) -> _PreparedMetadata | MetadataOutcome:
         inputs = self._input_paths(run_id, subject)
         proofs = tuple(self.validity.prove(run_id, path) for path in inputs)
         dependencies: list[WorkDependency] = []
@@ -171,64 +433,134 @@ class MetadataProducer:
         if record.status not in {WorkStatus.READY, WorkStatus.RETRYABLE_FAILURE}:
             return MetadataOutcome(record, (), False)
 
-        leases = self.work.claim_ready_work(
-            run_id,
-            owner,
-            lease_duration=timedelta(minutes=5),
-            work_id=record.work_id,
+        return _PreparedMetadata(subject, proofs, spec, record)
+
+    def _produce_prepared(
+        self,
+        run_id: str,
+        prepared: tuple[_PreparedMetadata, ...],
+        profile: MetadataProfile,
+    ) -> dict[Path, MetadataOutcome]:
+        heartbeat = _MetadataLeaseHeartbeat(
+            self.work,
+            prepared,
+            lease_duration=self.lease_duration,
+            renew_interval=self.lease_renew_interval,
+            clock=self._clock,
         )
-        if not leases:
-            return MetadataOutcome(self.work.get_work(record.work_id), (), False)
-        lease = leases[0]
         try:
+            with heartbeat:
+                return self._produce_active(run_id, prepared, profile, heartbeat)
+        except ExifToolCancelled:
+            heartbeat.fail_active(
+                error_code="metadata_cancelled",
+                message="metadata extraction was cancelled",
+            )
+            raise
+        except MetadataLeaseRenewalError as error:
+            heartbeat.fail_active(
+                error_code="metadata_lease_renewal_failed",
+                message=str(error.__cause__ or error),
+            )
+            raise
+
+    def _produce_active(
+        self,
+        run_id: str,
+        prepared: tuple[_PreparedMetadata, ...],
+        profile: MetadataProfile,
+        heartbeat: _MetadataLeaseHeartbeat,
+    ) -> dict[Path, MetadataOutcome]:
+        heartbeat.renew_now()
+        try:
+            proofs = tuple(
+                dict.fromkeys(proof for item in prepared for proof in item.proofs)
+            )
             records = self._extract(proofs, profile)
-            observations = select_metadata_observations(
-                records,
-                subject=subject,
-                source_precedence=_source_precedence(proofs, subject),
-                profile=profile,
-            )
-            _verify_proofs(self.validity, run_id, proofs)
-            completed = self.work.succeed_work(
-                lease,
-                {
-                    "observations": observations,
-                    "producer": {
-                        "identity": spec.producer_identity,
-                        "exiftool_version": self.exiftool_version,
-                    },
-                    "subject": {"relative_path": subject.as_posix()},
-                },
-            )
-            return MetadataOutcome(completed, tuple(observations), False)
-        except SourceChangedDuringRead:
-            self.work.invalidate_work(
-                record.work_id, "source changed during metadata extraction"
-            )
-            return MetadataOutcome(self.work.get_work(record.work_id), (), False)
+        except ExifToolCancelled:
+            raise
         except (
             MetadataExtractionError,
             OSError,
             subprocess.SubprocessError,
             ValueError,
         ) as error:
-            failed = self.work.fail_work(
-                lease,
-                error_code="metadata_extraction_failed",
-                message=str(error) or type(error).__name__,
-                retryable=False,
-            )
-            return MetadataOutcome(failed, (), False)
+            if len(prepared) > 1 and not isinstance(error, OSError):
+                midpoint = len(prepared) // 2
+                return {
+                    **self._produce_active(
+                        run_id, prepared[:midpoint], profile, heartbeat
+                    ),
+                    **self._produce_active(
+                        run_id, prepared[midpoint:], profile, heartbeat
+                    ),
+                }
+            return {
+                item.subject: self._fail_prepared(item, error, heartbeat)
+                for item in prepared
+            }
+
+        heartbeat.renew_now()
+        outcomes: dict[Path, MetadataOutcome] = {}
+        for item in prepared:
+            try:
+                observations = select_metadata_observations(
+                    records,
+                    subject=item.subject,
+                    source_precedence=_source_precedence(item.proofs, item.subject),
+                    profile=profile,
+                )
+                _verify_proofs(self.validity, run_id, item.proofs)
+                completed = heartbeat.succeed(
+                    item,
+                    {
+                        "observations": observations,
+                        "producer": {
+                            "identity": item.spec.producer_identity,
+                            "exiftool_version": self.exiftool_version,
+                        },
+                        "subject": {"relative_path": item.subject.as_posix()},
+                    },
+                )
+                outcomes[item.subject] = MetadataOutcome(
+                    completed, tuple(observations), False
+                )
+            except SourceChangedDuringRead:
+                invalidated = heartbeat.invalidate(
+                    item, "source changed during metadata extraction"
+                )
+                outcomes[item.subject] = MetadataOutcome(
+                    invalidated, (), False
+                )
+            except (
+                MetadataExtractionError,
+                OSError,
+                subprocess.SubprocessError,
+                ValueError,
+            ) as error:
+                outcomes[item.subject] = self._fail_prepared(item, error, heartbeat)
+        return outcomes
+
+    def _fail_prepared(
+        self,
+        item: _PreparedMetadata,
+        error: BaseException,
+        heartbeat: _MetadataLeaseHeartbeat,
+    ) -> MetadataOutcome:
+        failed = heartbeat.fail(
+            item,
+            error_code="metadata_extraction_failed",
+            message=str(error) or type(error).__name__,
+            retryable=False,
+        )
+        return MetadataOutcome(failed, (), False)
 
     def _input_paths(self, run_id: str, subject: Path) -> tuple[Path, ...]:
-        family = association_key(subject)
         sidecars = sorted(
             (
-                item.relative_path
-                for item in self.accounting.get_run_items(run_id)
-                if item.relative_path != subject
-                and item.relative_path.suffix.casefold() in _SIDECAR_SUFFIXES
-                and association_key(item.relative_path) == family
+                path
+                for path in self.accounting.associated_paths(run_id, subject)
+                if path != subject and path.suffix.casefold() in _SIDECAR_SUFFIXES
             ),
             key=lambda path: (
                 _SIDECAR_SUFFIXES.index(path.suffix.casefold()),
@@ -487,11 +819,7 @@ def _verify_proofs(
     proofs: Sequence[SourceContentProof],
 ) -> None:
     for expected in proofs:
-        observed = validity.prove(run_id, expected.relative_path)
-        if observed.dependency().value != expected.dependency().value:
-            raise SourceChangedDuringRead(
-                f"source changed during metadata extraction: {expected.relative_path}"
-            )
+        validity.verify(run_id, expected)
 
 
 def _provenance(relative_path: str, tag: str) -> dict[str, Any]:

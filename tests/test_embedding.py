@@ -40,6 +40,18 @@ class FakeEncoder:
         return (float(width), float(height), 1.0, 2.0)
 
 
+class BatchEncoder(FakeEncoder):
+    def __init__(self) -> None:
+        super().__init__()
+        self.batch_calls: list[tuple[Path, ...]] = []
+
+    def encode_images(
+        self, image_paths: tuple[Path, ...]
+    ) -> tuple[tuple[float, ...], ...]:
+        self.batch_calls.append(image_paths)
+        return tuple(self.encode_image(path) for path in image_paths)
+
+
 class FakeTensor:
     def to(self, _device: str) -> FakeTensor:
         return self
@@ -101,6 +113,39 @@ def test_embedding_is_an_immutable_artifact_reused_across_runs(tmp_path: Path) -
     assert reused.artifact == first.artifact
     assert reused.reused is True
     assert len(encoder.calls) == 1
+
+
+def test_embedding_many_uses_one_backend_batch_with_per_item_work(
+    tmp_path: Path,
+) -> None:
+    database = tmp_path / "workspace" / "working.sqlite3"
+    source = tmp_path / "source"
+    source.mkdir()
+    for name, color in (("a.jpg", "red"), ("b.jpg", "blue")):
+        Image.new("RGB", (80, 40), color).save(source / name)
+    run_id = _closed_run(database, source)
+    renditions = tuple(
+        ImageRenditionProducer(database).produce(
+            run_id,
+            Path(name),
+            profile=HIGH_RESOLUTION_RENDITION_PROFILE,
+        )
+        for name in ("a.jpg", "b.jpg")
+    )
+    encoder = BatchEncoder()
+
+    outcomes = EmbeddingProducer(database, encoder).produce_many(
+        run_id,
+        tuple(outcome.work.work_id for outcome in renditions),
+        profile=EmbeddingProfile(name="test-vector", dimensions=4),
+    )
+
+    assert len(encoder.batch_calls) == 1
+    assert len(encoder.batch_calls[0]) == 2
+    assert len(outcomes) == 2
+    assert all(
+        outcome.work.status is WorkStatus.SUCCEEDED for outcome in outcomes.values()
+    )
 
 
 def test_embedding_model_identity_and_integrity_control_reuse(tmp_path: Path) -> None:

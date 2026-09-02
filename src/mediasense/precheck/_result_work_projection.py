@@ -2,21 +2,21 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Set
 from contextlib import contextmanager
 import json
 from pathlib import Path
 import sqlite3
 from typing import Iterator
 
-from ._result_types import ResultSealError
+from ._result_types import ResultSealError, result_local_reference
 from ._work_types import DependencyKind, WorkStatus
 
 
 def _load_mapped_observation_work(
     connection: sqlite3.Connection,
     run_id: str,
-    source_rows: list[sqlite3.Row],
+    known_sources: Set[str],
     work_by_source: Mapping[Path | str, str],
     *,
     capability: str,
@@ -24,7 +24,6 @@ def _load_mapped_observation_work(
 ) -> dict[str, sqlite3.Row]:
     """Load one reusable observation Work explicitly mapped to each source."""
 
-    known_sources = {str(row["relative_path"]) for row in source_rows}
     selected: dict[str, sqlite3.Row] = {}
     loaded: dict[str, sqlite3.Row] = {}
     for source_path, work_id in work_by_source.items():
@@ -99,7 +98,7 @@ def _mapped_result_observations(
 
 def _metadata_result_observations(
     output: object,
-    source_refs: dict[str, str],
+    run_id: str,
 ) -> list[dict[str, object]]:
     if not isinstance(output, dict) or not isinstance(output.get("observations"), list):
         raise ResultSealError("metadata Work has an invalid inline result")
@@ -128,10 +127,14 @@ def _metadata_result_observations(
                     and isinstance(source.get("relative_path"), str)
                 )
             for relative_path in dict.fromkeys(relative_paths):
-                if relative_path in source_refs:
-                    refs.append(
-                        {"kind": "source_item", "ref": source_refs[relative_path]}
-                    )
+                refs.append(
+                    {
+                        "kind": "source_item",
+                        "ref": result_local_reference(
+                            "source-item", run_id, relative_path
+                        ),
+                    }
+                )
             details = ", ".join(
                 f"{key}={value}"
                 for key, value in provenance.items()
@@ -150,13 +153,12 @@ def _metadata_result_observations(
 def _load_source_observation_work(
     connection: sqlite3.Connection,
     run_id: str,
-    source_rows: list[sqlite3.Row],
+    known_sources: Set[str],
     work_ids: tuple[str, ...],
     *,
     capability: str,
     label: str,
 ) -> dict[str, sqlite3.Row]:
-    known_sources = {str(row["relative_path"]) for row in source_rows}
     selected: dict[str, sqlite3.Row] = {}
     for work_id in work_ids:
         work = connection.execute(
@@ -195,13 +197,12 @@ def _load_source_observation_work(
 def _load_source_artifact_work(
     connection: sqlite3.Connection,
     run_id: str,
-    source_rows: list[sqlite3.Row],
+    known_sources: Set[str],
     work_ids: tuple[str, ...],
     *,
     capability: str,
     label: str,
 ) -> dict[str, list[sqlite3.Row]]:
-    known_sources = {str(row["relative_path"]) for row in source_rows}
     selected: dict[str, list[sqlite3.Row]] = {}
     for work_id in work_ids:
         work = connection.execute(
@@ -235,10 +236,9 @@ def _load_source_artifact_work(
 def _load_compression_groups(
     connection: sqlite3.Connection,
     run_id: str,
-    source_rows: list[sqlite3.Row],
+    known_sources: Set[str],
     work_ids: tuple[str, ...],
 ) -> tuple[dict[str, object], ...]:
-    known_sources = {str(row["relative_path"]) for row in source_rows}
     groups = []
     for work_id in work_ids:
         work = connection.execute(
@@ -308,13 +308,12 @@ def _load_compression_groups(
 def _load_source_observation_works(
     connection: sqlite3.Connection,
     run_id: str,
-    source_rows: list[sqlite3.Row],
+    known_sources: Set[str],
     work_ids: tuple[str, ...],
     *,
     capability: str,
     label: str,
 ) -> dict[str, list[sqlite3.Row]]:
-    known_sources = {str(row["relative_path"]) for row in source_rows}
     selected: dict[str, list[sqlite3.Row]] = {}
     for work_id in work_ids:
         work = connection.execute(

@@ -18,6 +18,7 @@ from ._work_types import (
     DependencyKind,
     LeaseLost,
     WorkDependency,
+    WorkLease,
     WorkRecord,
     WorkSpec,
     WorkStatus,
@@ -96,6 +97,16 @@ class SensitivityOutcome:
     reused: bool
 
 
+@dataclass(frozen=True, slots=True)
+class _PreparedSensitivity:
+    input_work_id: str
+    relative_path: Path
+    input_work: WorkRecord
+    input_artifact: ArtifactRecord
+    record: WorkRecord
+    lease: WorkLease
+
+
 class SensitivityDetector(Protocol):
     @property
     def identity(self) -> str: ...
@@ -165,21 +176,43 @@ class TransformersNSFWDetector:
         )
 
     def detect(self, image_path: Path) -> Sequence[Detection]:
+        return self.detect_many((image_path,))[0]
+
+    def detect_many(self, image_paths: Sequence[Path]) -> Sequence[Sequence[Detection]]:
         classifier = self._load()
-        with Image.open(image_path) as opened:
-            image = opened.convert("RGB")
-        raw = classifier(image)
-        if not isinstance(raw, list):
-            raise SensitivityError("image classifier returned a non-list result")
-        if any(
-            not isinstance(item, Mapping) or "label" not in item or "score" not in item
-            for item in raw
-        ):
-            raise SensitivityError("image classifier returned a malformed detection")
-        return tuple(
-            Detection(label=str(item["label"]), score=float(item["score"]))
-            for item in raw
-        )
+        images = []
+        try:
+            for image_path in image_paths:
+                with Image.open(image_path) as opened:
+                    images.append(opened.convert("RGB"))
+            raw = classifier(images)
+            if raw and isinstance(raw, list) and isinstance(raw[0], Mapping):
+                raw = [raw]
+            if not isinstance(raw, list) or len(raw) != len(images):
+                raise SensitivityError(
+                    "image classifier batch output count does not match input"
+                )
+            results = []
+            for detections in raw:
+                if not isinstance(detections, list) or any(
+                    not isinstance(item, Mapping)
+                    or "label" not in item
+                    or "score" not in item
+                    for item in detections
+                ):
+                    raise SensitivityError(
+                        "image classifier returned a malformed detection"
+                    )
+                results.append(
+                    tuple(
+                        Detection(label=str(item["label"]), score=float(item["score"]))
+                        for item in detections
+                    )
+                )
+            return tuple(results)
+        finally:
+            for image in images:
+                image.close()
 
     def _load(self) -> Any:
         if self._classifier is not None:
@@ -260,6 +293,54 @@ class SensitivityProducer:
         profile: SensitivityProfile,
         owner: str = "builtin-content-sensitivity",
     ) -> SensitivityOutcome:
+        return self.produce_many(
+            run_id,
+            ((relative_path, input_work_id),),
+            profile=profile,
+            owner=owner,
+        )[input_work_id]
+
+    def produce_many(
+        self,
+        run_id: str,
+        inputs: Sequence[tuple[Path, str]],
+        *,
+        profile: SensitivityProfile,
+        owner: str = "builtin-content-sensitivity",
+    ) -> dict[str, SensitivityOutcome]:
+        normalized = tuple(
+            (_validated_relative_path(path), work_id) for path, work_id in inputs
+        )
+        work_ids = tuple(work_id for _path, work_id in normalized)
+        if len(set(work_ids)) != len(work_ids):
+            raise ValueError("sensitivity batch inputs must be unique")
+        outcomes: dict[str, SensitivityOutcome] = {}
+        ready: list[_PreparedSensitivity] = []
+        for relative_path, input_work_id in normalized:
+            prepared = self._prepare(
+                run_id,
+                relative_path,
+                input_work_id,
+                profile=profile,
+                owner=owner,
+            )
+            if isinstance(prepared, SensitivityOutcome):
+                outcomes[input_work_id] = prepared
+            else:
+                ready.append(prepared)
+        if ready:
+            outcomes.update(self._produce_prepared(tuple(ready), profile))
+        return outcomes
+
+    def _prepare(
+        self,
+        run_id: str,
+        relative_path: Path,
+        input_work_id: str,
+        *,
+        profile: SensitivityProfile,
+        owner: str,
+    ) -> _PreparedSensitivity | SensitivityOutcome:
         relative_path = _validated_relative_path(relative_path)
         input_work, input_artifact = _attached_visual_artifact(
             self.work,
@@ -321,12 +402,60 @@ class SensitivityProducer:
         if not leases:
             current = self.work.get_work(record.work_id)
             return SensitivityOutcome(current, _observations(current.output), False)
-        lease = leases[0]
+        return _PreparedSensitivity(
+            input_work_id,
+            relative_path,
+            input_work,
+            input_artifact,
+            record,
+            leases[0],
+        )
+
+    def _produce_prepared(
+        self,
+        prepared: tuple[_PreparedSensitivity, ...],
+        profile: SensitivityProfile,
+    ) -> dict[str, SensitivityOutcome]:
         try:
-            scores = classify_detections(
-                self.detector.detect(input_artifact.path), profile
+            detect_many = getattr(self.detector, "detect_many", None)
+            if callable(detect_many):
+                raw_detections = tuple(
+                    detect_many(tuple(item.input_artifact.path for item in prepared))
+                )
+            else:
+                raw_detections = tuple(
+                    self.detector.detect(item.input_artifact.path) for item in prepared
+                )
+            if len(raw_detections) != len(prepared):
+                raise SensitivityError(
+                    "sensitivity batch output count does not match input"
+                )
+        except Exception as error:
+            if len(prepared) > 1:
+                midpoint = len(prepared) // 2
+                return {
+                    **self._produce_prepared(prepared[:midpoint], profile),
+                    **self._produce_prepared(prepared[midpoint:], profile),
+                }
+            item = prepared[0]
+            return {item.input_work_id: self._fail_prepared(item, error)}
+
+        outcomes: dict[str, SensitivityOutcome] = {}
+        for item, detections in zip(prepared, raw_detections, strict=True):
+            outcomes[item.input_work_id] = self._complete_prepared(
+                item, detections, profile
             )
-            self.artifacts.require_available(input_artifact.artifact_id)
+        return outcomes
+
+    def _complete_prepared(
+        self,
+        prepared: _PreparedSensitivity,
+        detections: Sequence[Detection],
+        profile: SensitivityProfile,
+    ) -> SensitivityOutcome:
+        try:
+            scores = classify_detections(detections, profile)
+            self.artifacts.require_available(prepared.input_artifact.artifact_id)
             observations = (
                 {
                     "name": "content_sensitivity",
@@ -338,31 +467,38 @@ class SensitivityProducer:
                     },
                     "provenance": {
                         "detector_identity": self.detector.identity,
-                        "input_work_id": input_work.work_id,
+                        "input_work_id": prepared.input_work.work_id,
                         "profile": profile.name,
-                        "relative_path": relative_path.as_posix(),
+                        "relative_path": prepared.relative_path.as_posix(),
                     },
                 },
             )
             completed = self.work.succeed_work(
-                lease,
+                prepared.lease,
                 {
                     "observations": list(observations),
-                    "subject": {"relative_path": relative_path.as_posix()},
+                    "subject": {"relative_path": prepared.relative_path.as_posix()},
                 },
             )
             return SensitivityOutcome(completed, observations, False)
         except Exception as error:
-            try:
-                failed = self.work.fail_work(
-                    lease,
-                    error_code="sensitivity_detection_failed",
-                    message=str(error) or type(error).__name__,
-                    retryable=False,
-                )
-            except LeaseLost:
-                failed = self.work.get_work(record.work_id)
-            return SensitivityOutcome(failed, (), False)
+            return self._fail_prepared(prepared, error)
+
+    def _fail_prepared(
+        self,
+        prepared: _PreparedSensitivity,
+        error: BaseException,
+    ) -> SensitivityOutcome:
+        try:
+            failed = self.work.fail_work(
+                prepared.lease,
+                error_code="sensitivity_detection_failed",
+                message=str(error) or type(error).__name__,
+                retryable=False,
+            )
+        except LeaseLost:
+            failed = self.work.get_work(prepared.record.work_id)
+        return SensitivityOutcome(failed, (), False)
 
 
 def classify_detections(
@@ -422,10 +558,11 @@ def _attached_visual_artifact(
     work_id: str,
     relative_path: Path,
 ) -> tuple[WorkRecord, ArtifactRecord]:
-    record = next(
-        (item for item in work.list_run_work(run_id) if item.work_id == work_id), None
-    )
-    if record is None or record.spec.capability not in {
+    try:
+        record = work.get_run_work(run_id, work_id)
+    except KeyError as error:
+        raise ValueError("visual input Work is not attached to this run") from error
+    if record.spec.capability not in {
         "image-rendition",
         "video-frame",
     }:

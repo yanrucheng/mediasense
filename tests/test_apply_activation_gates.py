@@ -4,10 +4,9 @@ from copy import deepcopy
 import json
 from pathlib import Path
 
-import pytest
 from jsonschema import Draft202012Validator
 
-from mediasense.apply import SourceEvidenceError, SourceItemEvidence
+from mediasense.apply import SourceItemEvidence
 
 
 ROOT = Path(__file__).parents[1]
@@ -74,33 +73,30 @@ def test_apply_consumer_conforms_to_accepted_precheck_verification_shape() -> No
     assert evidence.verification.producer == "contract-gate-probe-v1"
 
 
-def test_precheck_schema_allows_unverified_items_but_apply_selection_rejects_them() -> (
-    None
-):
+def test_apply_can_establish_exact_proof_when_precheck_has_no_verification() -> None:
     item = _verified_source_item()
     item.pop("observations")
 
     # PreCheck intentionally accounts for excluded, unsupported, invalid, error,
     # unresolved, and otherwise non-selected Source Items without requiring proof.
     _source_item_validator().validate(item)
-    with pytest.raises(SourceEvidenceError) as raised:
-        SourceItemEvidence.from_precheck_view(
-            result_ref="precheck-result:gate-probe",
-            view=item,
-        )
-    assert raised.value.code == "source_verification_missing"
+    evidence = SourceItemEvidence.from_precheck_view(
+        result_ref="precheck-result:gate-probe",
+        view=item,
+    )
+    assert evidence.verification is None
 
 
-def test_replaceable_profile_remains_open_but_apply_support_is_fail_closed() -> None:
+def test_unknown_precheck_profile_does_not_block_fresh_apply_proof() -> None:
     item = deepcopy(_verified_source_item())
     item["observations"][0]["value"]["profile"] = "future-proof-v2"
 
-    # The public contract leaves algorithms replaceable. Apply must explicitly
-    # implement a profile before a selected move can use it.
+    # The public contract leaves algorithms replaceable. An unsupported
+    # PreCheck profile is not treated as exact evidence; Apply establishes its
+    # own supported exact proof before authorization.
     _source_item_validator().validate(item)
-    with pytest.raises(SourceEvidenceError) as raised:
-        SourceItemEvidence.from_precheck_view(
-            result_ref="precheck-result:gate-probe",
-            view=item,
-        )
-    assert raised.value.code == "source_verification_profile_unsupported"
+    evidence = SourceItemEvidence.from_precheck_view(
+        result_ref="precheck-result:gate-probe",
+        view=item,
+    )
+    assert evidence.verification is None

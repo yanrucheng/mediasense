@@ -133,6 +133,7 @@ class ImageRenditionProducer:
         draft = self.artifacts.create_draft(lease, suffix=".jpg")
         try:
             width, height = _render_jpeg(proof.source_path, draft.path, profile)
+            self.validity.verify(run_id, proof)
         except (
             UnidentifiedImageError,
             Image.DecompressionBombError,
