@@ -136,7 +136,9 @@ runtime. The machine may have one globally available `mediasense` CLI; the same
 package supplies the session-scoped `mediasense mcp` stdio entry point. A
 Human-selected Honeycomb owns its `.agents/skills/` copies and client connection
 configuration. The independent Dataset workspace owns Dataset state and derived
-artifacts. No one path is inferred from another.
+artifacts. No one path is inferred from another. In particular, the MediaSense
+source checkout is not an implicit Honeycomb: packaged Skill sources are release
+assets and do not activate the product for Agents working on the implementation.
 
 MCP transports structured discovery and calls but does not own business semantics
 or state. The CLI supplies diagnostics and entry points. The `mediasense` Skill

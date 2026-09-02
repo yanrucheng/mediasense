@@ -13,7 +13,7 @@ from .runtime.doctor import diagnose
 from .runtime.host import RuntimeHost
 from .runtime.mcp_host import run_stdio
 from .runtime.resources import skill_roots
-from .runtime.skills import SkillInstallError, install_skills
+from .runtime.skills import SkillInstallError, install_skills, upgrade_skills
 from .runtime.versioning import application_version
 
 
@@ -87,6 +87,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     install_parser.add_argument("--target", required=True)
     install_parser.add_argument("--json", action="store_true")
+    upgrade_parser = skill_commands.add_parser(
+        "upgrade",
+        help="Transactionally replace only the packaged MediaSense Skills.",
+    )
+    upgrade_parser.add_argument("--target", required=True)
+    upgrade_parser.add_argument("--json", action="store_true")
 
     subcommands.add_parser(
         "mcp", help="Run the session-scoped local MCP server over stdio."
@@ -158,9 +164,12 @@ def run(argv: Sequence[str] | None = None) -> int:
         value = {"skills": paths}
         _emit(value, json_output=args.json, human="\n".join(paths))
         return 0
-    if args.command == "skills" and args.skills_command == "install":
+    if args.command == "skills" and args.skills_command in {"install", "upgrade"}:
         try:
-            value = install_skills(Path(args.target))
+            operation = (
+                install_skills if args.skills_command == "install" else upgrade_skills
+            )
+            value = operation(Path(args.target))
         except (OSError, SkillInstallError) as error:
             value = {
                 "outcome": "error",

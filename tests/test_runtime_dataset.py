@@ -185,6 +185,34 @@ def test_newer_component_store_is_refused_before_reopen_mutation(
     assert version == (999,)
 
 
+def test_older_precheck_store_is_refused_without_migration(tmp_path: Path) -> None:
+    resolver, _volume, source = _external_resolver(tmp_path)
+    opened = resolver.open(source)
+    manifest_path = opened.workspace / "dataset.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["stores"]["precheck"] = 16
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    database = opened.workspace / "precheck" / "work.sqlite3"
+    with sqlite3.connect(database) as connection:
+        connection.execute(
+            "CREATE TABLE internal_schema (singleton INTEGER PRIMARY KEY, version INTEGER)"
+        )
+        connection.execute("INSERT INTO internal_schema VALUES (1, 16)")
+    manifest_before = manifest_path.read_bytes()
+
+    with pytest.raises(DatasetOpenError) as captured:
+        resolver.open(source)
+
+    assert captured.value.code == "store_unsupported"
+    assert "version 16 has no supported migration" in str(captured.value)
+    assert manifest_path.read_bytes() == manifest_before
+    with sqlite3.connect(database) as connection:
+        version = connection.execute(
+            "SELECT version FROM internal_schema WHERE singleton = 1"
+        ).fetchone()
+    assert version == (16,)
+
+
 def test_workspace_inspection_is_read_only(tmp_path: Path) -> None:
     resolver, _volume, source = _external_resolver(tmp_path)
     opened = resolver.open(source)

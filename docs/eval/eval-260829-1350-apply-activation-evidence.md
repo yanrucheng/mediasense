@@ -44,7 +44,7 @@ content identity. Repository tests use controlled temporary roots only.
 
 ## Agent workflow Skill evidence
 
-`.agents/skills/mediasense-apply/` packages only the reusable interaction
+`src/mediasense/_resources/skills/mediasense-apply/` packages only the reusable interaction
 procedure: prepare one exact Frozen Plan, explain status, obtain exact Human
 confirmation, operate allowed controls, read the immutable Receipt, and prepare
 a newly authorized whole-Run rewind. It does not persist state, manufacture

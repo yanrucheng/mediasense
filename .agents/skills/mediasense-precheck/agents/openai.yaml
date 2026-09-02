@@ -1,4 +1,0 @@
-interface:
-  display_name: "MediaSense PreCheck"
-  short_description: "Prepare media evidence safely for MediaSense Plan"
-  default_prompt: "Use $mediasense-precheck to prepare this media Dataset for later planning."

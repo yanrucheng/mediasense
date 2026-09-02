@@ -475,8 +475,8 @@ has no `tool.py`. A family with one adapter does not need a `providers/` directo
 ### Contract and Skill topology
 
 After activation, public family contracts follow the repository's existing formal
-specification topology. A family Skill, when justified, has one separately loadable
-home:
+specification topology. A family Skill, when justified, has one authoritative
+packaged source and a separately loadable copy in each selected Honeycomb:
 
 ```text
 docs/spec/<active-family-contract>/
@@ -484,14 +484,20 @@ docs/spec/<active-family-contract>/
 ├── <family>.tool.json
 └── human-reviewable examples
 
-.agents/skills/<family>/
+src/mediasense/_resources/skills/<family>/
+└── SKILL.md
+
+<honeycomb>/.agents/skills/<family>/
 └── SKILL.md
 ```
 
 Current contracts are indexed in `docs/spec/`; proposals and transition work may
-live in OpenSpec but never become a competing current authority. Source tree shape,
-Tool transport, and filenames remain implementation choices unless a public
-discovery promise makes them consequential.
+live in OpenSpec but never become a competing current authority. The packaged
+source is release input; the Honeycomb copy is an installation owned by that
+WorkTree and is not a second authoring source. The MediaSense source checkout is
+not implicitly one of those Honeycombs. Source tree shape, Tool transport, and
+filenames remain implementation choices unless a public discovery promise makes
+them consequential.
 
 ## Integration with MediaSense stages
 

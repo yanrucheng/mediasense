@@ -8,7 +8,14 @@ from jsonschema import Draft202012Validator
 
 
 ROOT = Path(__file__).parents[1]
-SKILL_DIR = ROOT / ".agents" / "skills" / "mediasense-precheck"
+SKILL_DIR = (
+    ROOT
+    / "src"
+    / "mediasense"
+    / "_resources"
+    / "skills"
+    / "mediasense-precheck"
+)
 SKILL_PATH = SKILL_DIR / "SKILL.md"
 OPENAI_PATH = SKILL_DIR / "agents" / "openai.yaml"
 RUN_TOOL_PATH = (

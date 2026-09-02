@@ -12,7 +12,7 @@ Apply semantics in their independently loadable Skills.
 
 ## Establish readiness
 
-This Skill set targets the MediaSense `0.3.x` CLI and its bundled Tool contracts.
+This Skill set targets the MediaSense `0.4.x` CLI and its bundled Tool contracts.
 If the compatible CLI and complete release-matched Skill set are present and all
 seven exact Tool names below are already discoverable in the current session, do
 not repeat setup. A `mediasense` command in `PATH`, installed Skill files, or a
@@ -23,9 +23,12 @@ the Tool Host.
    Human or Agent client supplied explicitly. The current working directory may
    be proposed as a candidate, but before any write show its resolved absolute
    path and ask the Human to confirm it. Never derive it from a source-media or
-   Dataset-workspace path.
+   Dataset-workspace path. A MediaSense source checkout is not an implicit
+   Honeycomb: packaged Skill sources inside it are release assets, not an
+   installed copy. Do not install back into that checkout unless the Human
+   explicitly selects it for operational MediaSense work.
 2. Inspect the CLI without changing state: run `command -v mediasense`, then
-   `mediasense --version` when present. If it is absent or not `0.3.x`, identify
+   `mediasense --version` when present. If it is absent or not `0.4.x`, identify
    the exact trusted wheel or source checkout and executable destination,
    explain whether `uv tool install <trusted-source-or-wheel>` may use the
    network, and obtain Human authorization before installing or replacing the
@@ -35,9 +38,12 @@ the Tool Host.
    `mediasense-plan`, and `mediasense-apply`. If it is incomplete, show the exact
    absolute target and ask before running
    `mediasense skills install --target <absolute-target>`. The command is
-   idempotent for identical content and refuses a different existing Skill;
-   report a conflict and leave it unchanged. Never default to a user-wide Skill
-   directory.
+   idempotent for identical content and refuses a different existing Skill. If
+   a complete older MediaSense release is present and the Human authorizes
+   replacement, use
+   `mediasense skills upgrade --target <absolute-target>`; it transactionally
+   replaces only the four MediaSense Skills and preserves unrelated Skills.
+   Never default to a user-wide Skill directory.
 4. Inspect and parse `<honeycomb>/.codex/config.toml`. Explain that this is a
    project-local Codex connection only, and that Codex loads it only for a
    trusted project. Show the exact absolute file before requesting authorization

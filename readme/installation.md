@@ -1,6 +1,6 @@
 # Installation and first use
 
-MediaSense 0.3 is a pre-release local product for Python 3.11 or newer. macOS is
+MediaSense 0.4 is a pre-release local product for Python 3.11 or newer. macOS is
 the first product-certified platform. Linux can run the Python package, but its
 removable-volume and Apply filesystem behavior is not yet certified. Windows is
 not currently supported.
@@ -14,6 +14,10 @@ entry Skill can then inspect the machine and explain the exact CLI install,
 complete release-matched Skill installation, and project MCP configuration before
 requesting permission to change them. A Skill cannot load itself, so this initial
 entry-Skill acquisition is the one prerequisite outside the MediaSense workflow.
+
+The MediaSense source checkout is not an implicit installation target. Skill
+files stored under `src/mediasense/_resources/skills/` are packaged release
+assets; install them only into the explicitly selected operational Honeycomb.
 
 To install the CLI directly, use a trusted checkout or release artifact. This is
 a machine-level executable installation, independent of any Honeycomb and any
@@ -35,7 +39,7 @@ replace an existing MediaSense tool environment.
 For a built release artifact, install the exact wheel instead:
 
 ```bash
-uv tool install ./dist/mediasense-0.3.0-py3-none-any.whl
+uv tool install ./dist/mediasense-0.4.0-py3-none-any.whl
 ```
 
 `uv` may download declared Python dependencies. MediaSense does not install
@@ -140,13 +144,13 @@ trusted channel used to install it. MediaSense checks manifest and component-sto
 versions before ordinary use and refuses newer or unsupported state without
 rewriting it.
 
-The Honeycomb-local integration is a breaking `0.3.0` change. Replace an installed
-`0.2.x` tool environment with the exact trusted `0.3.0` artifact; do not keep both
-under the same `mediasense` command or infer compatibility from seven-Tool
-discovery alone:
+The PreCheck source-scope review is a breaking `0.4.0` change. Replace an
+installed `0.3.x` tool environment with the exact trusted `0.4.0` artifact; do
+not keep both under the same `mediasense` command or infer compatibility from
+seven-Tool discovery alone:
 
 ```bash
-uv tool install --force ./dist/mediasense-0.3.0-py3-none-any.whl
+uv tool install --force ./dist/mediasense-0.4.0-py3-none-any.whl
 ```
 
 Application versions follow SemVer during `0.y.z`: minor releases may contain
@@ -154,17 +158,33 @@ documented breaking CLI, Host, manifest, or store changes; patch releases are
 compatible fixes. A changed application version alone never invalidates all
 PreCheck work.
 
-The initial supported combination is:
+The supported `0.4.x` combination is:
 
 | Surface | Supported value |
 | --- | --- |
-| Application | `0.3.x` |
+| Application | `0.4.x` |
 | Dataset manifest | `1` |
-| PreCheck store | `15` |
+| PreCheck store | `17` |
 | Plan store | `2` |
 | Geo journal | `1` |
 | Apply store | `2` |
 | Packaged Skills | From the same MediaSense release |
+
+PreCheck store 16 has no supported migration to 17. Preserve an existing
+`0.3.x` Dataset workspace for rollback and create a distinct workspace for
+`0.4.x`; do not copy only its PreCheck database or edit its version marker.
+
+After replacing the CLI, upgrade the four release-matched Skills in each
+explicit Honeycomb:
+
+```bash
+mediasense skills upgrade --target <absolute-honeycomb>/.agents/skills
+```
+
+This operation changes only the four MediaSense Skill directories, preserves
+unrelated Skills, and rolls back its own replacements if the set cannot be
+completed. Start a new Agent session afterwards so it loads the `0.4.x` Skills
+and MCP Host.
 
 Public Tool contracts are identified by their stable contract ID and exact schema
 digest. Inspect the installed set with `mediasense tools list --json`.

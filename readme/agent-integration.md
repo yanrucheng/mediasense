@@ -54,11 +54,11 @@ The first step uses the Agent client's standard mechanism to place the
 <honeycomb>/.agents/skills/
 ```
 
-For this repository, that exact local target is:
-
-```text
-/Users/chengyanru/repos/personal/mediasense/.agents/skills/
-```
+The MediaSense source checkout is not an implicit Honeycomb. Its packaged Skill
+sources under `src/mediasense/_resources/skills/` are release assets, not an
+activated local installation. Install into the separate WorkTree where the Agent
+will actually operate MediaSense, unless the Human explicitly chooses the source
+checkout itself for that operational role.
 
 Start the Agent from the Honeycomb. Once `mediasense` is loaded, it owns the
 remaining setup guidance and installs the complete release-matched Skill set:
@@ -67,7 +67,7 @@ remaining setup guidance and installs the complete release-matched Skill set:
    Human has not explicitly selected a root; no write occurs until its absolute
    path is shown and confirmed. Dataset paths are never used to infer it.
 2. Check `command -v mediasense` and `mediasense --version`. The current Skill set
-   requires `0.3.x`; an installed `0.2.x` host is incompatible and must not be
+   requires `0.4.x`; an installed `0.3.x` host is incompatible and must not be
    accepted merely because it exposes the expected Tool names.
 3. If the CLI is absent or incompatible, explain the exact trusted source,
    executable destination, and possible network access. Install only after Human
@@ -81,6 +81,14 @@ remaining setup guidance and installs the complete release-matched Skill set:
 
    Identical content is idempotent. Different existing content is a conflict and
    is not overwritten.
+   To replace a known older release as one matched set, run:
+
+   ```bash
+   mediasense skills upgrade --target <absolute-honeycomb>/.agents/skills
+   ```
+
+   Upgrade changes only the four MediaSense Skill directories and preserves
+   unrelated Skills.
 5. Inspect and parse `<absolute-honeycomb>/.codex/config.toml`. Show that complete
    target path and request authorization before creating the file or minimally
    merging:

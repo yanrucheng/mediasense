@@ -8,9 +8,15 @@ from referencing import Registry, Resource
 
 
 ROOT = Path(__file__).parents[1]
-SKILL = (ROOT / ".agents" / "skills" / "mediasense-plan" / "SKILL.md").read_text(
-    encoding="utf-8"
-)
+SKILL = (
+    ROOT
+    / "src"
+    / "mediasense"
+    / "_resources"
+    / "skills"
+    / "mediasense-plan"
+    / "SKILL.md"
+).read_text(encoding="utf-8")
 SCENARIOS = json.loads(
     (ROOT / "tests" / "fixtures" / "plan-skill-geo-v1.json").read_text(
         encoding="utf-8"

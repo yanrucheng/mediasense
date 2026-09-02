@@ -9,7 +9,7 @@ from jsonschema import Draft202012Validator
 from mediasense.cli import run
 from mediasense.runtime.composition import tool_descriptors
 from mediasense.runtime.resources import CONTRACT_FILES, contract_path, skill_roots
-from mediasense.runtime.skills import install_skills
+from mediasense.runtime.skills import install_skills, upgrade_skills
 from mediasense.runtime.versioning import application_version
 
 
@@ -152,7 +152,7 @@ def test_tool_call_reports_dataset_binding_and_business_result(
     assert value["result"]["error"]["code"] == "run_not_found"
 
 
-def test_packaged_resources_match_repository_authorities() -> None:
+def test_packaged_resources_are_complete_and_contracts_match_authorities() -> None:
     root = Path(__file__).resolve().parents[1]
     authorities = {
         "mediasense.dataset.open": root
@@ -175,25 +175,14 @@ def test_packaged_resources_match_repository_authorities() -> None:
         contract = json.loads(contract_path(name).read_text(encoding="utf-8"))
         Draft202012Validator.check_schema(contract["inputSchema"])
         Draft202012Validator.check_schema(contract["outputSchema"])
-    for packaged in skill_roots():
-        source = root / ".agents" / "skills" / packaged.name / "SKILL.md"
-        assert (packaged / "SKILL.md").read_bytes() == source.read_bytes()
-        source_root = source.parent
-        packaged_files = {
-            path.relative_to(packaged): path
-            for path in packaged.rglob("*")
-            if path.is_file()
-        }
-        source_files = {
-            path.relative_to(source_root): path
-            for path in source_root.rglob("*")
-            if path.is_file()
-        }
-        assert set(packaged_files) == set(source_files)
-        assert all(
-            packaged_files[relative].read_bytes() == source_files[relative].read_bytes()
-            for relative in source_files
-        )
+    packaged_skills = {path.name: path for path in skill_roots()}
+    assert set(packaged_skills) == {
+        "mediasense",
+        "mediasense-precheck",
+        "mediasense-plan",
+        "mediasense-apply",
+    }
+    assert all((path / "SKILL.md").is_file() for path in packaged_skills.values())
 
 
 def test_skill_install_is_idempotent_and_refuses_overwrite(tmp_path: Path) -> None:
@@ -215,3 +204,104 @@ def test_skill_install_is_idempotent_and_refuses_overwrite(tmp_path: Path) -> No
     changed.write_text("locally changed\n", encoding="utf-8")
     result = run(["skills", "install", "--target", str(target), "--json"])
     assert result == 2
+
+
+def test_skill_upgrade_replaces_only_mediasense_set(tmp_path: Path) -> None:
+    target = tmp_path / "skills"
+    install_skills(target)
+    unrelated = target / "unrelated-skill"
+    unrelated.mkdir()
+    (unrelated / "SKILL.md").write_text("unrelated\n", encoding="utf-8")
+    (target / "mediasense-plan" / "SKILL.md").write_text(
+        "old release\n", encoding="utf-8"
+    )
+    (target / "mediasense-apply").rename(target / "removed-apply")
+
+    result = upgrade_skills(target)
+
+    assert result["installed"] == ["mediasense-apply"]
+    assert result["upgraded"] == ["mediasense-plan"]
+    assert result["unchanged"] == ["mediasense", "mediasense-precheck"]
+    assert (unrelated / "SKILL.md").read_text(encoding="utf-8") == "unrelated\n"
+    assert (target / "removed-apply" / "SKILL.md").is_file()
+    for source in skill_roots():
+        destination = target / source.name
+        assert {
+            path.relative_to(destination): path.read_bytes()
+            for path in destination.rglob("*")
+            if path.is_file()
+        } == {
+            path.relative_to(source): path.read_bytes()
+            for path in source.rglob("*")
+            if path.is_file()
+        }
+
+
+def test_skill_upgrade_is_idempotent_and_requires_existing_directory(
+    tmp_path: Path,
+) -> None:
+    target = tmp_path / "skills"
+    target.mkdir()
+    first = upgrade_skills(target)
+    second = upgrade_skills(target)
+
+    assert first["installed"] == [
+        "mediasense",
+        "mediasense-precheck",
+        "mediasense-plan",
+        "mediasense-apply",
+    ]
+    assert second["installed"] == []
+    assert second["upgraded"] == []
+    assert second["unchanged"] == first["installed"]
+
+    assert (
+        run(
+            [
+                "skills",
+                "upgrade",
+                "--target",
+                str(tmp_path / "missing"),
+                "--json",
+            ]
+        )
+        == 2
+    )
+
+
+def test_skill_upgrade_rolls_back_a_partial_replacement(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from mediasense.runtime import skills as skills_module
+
+    target = tmp_path / "skills"
+    install_skills(target)
+    for name in ("mediasense", "mediasense-precheck"):
+        (target / name / "SKILL.md").write_text(f"old {name}\n", encoding="utf-8")
+    before = {
+        path.relative_to(target): path.read_bytes()
+        for path in target.rglob("*")
+        if path.is_file()
+    }
+    original_replace = skills_module._replace
+    calls = 0
+
+    def fail_during_second_install(source: Path, destination: Path) -> None:
+        nonlocal calls
+        calls += 1
+        if calls == 4:
+            raise OSError("injected replacement failure")
+        original_replace(source, destination)
+
+    monkeypatch.setattr(skills_module, "_replace", fail_during_second_install)
+
+    with pytest.raises(OSError, match="injected replacement failure"):
+        upgrade_skills(target)
+
+    after = {
+        path.relative_to(target): path.read_bytes()
+        for path in target.rglob("*")
+        if path.is_file()
+    }
+    assert after == before
+    assert not tuple(target.glob(".mediasense-skills-upgrade-*"))

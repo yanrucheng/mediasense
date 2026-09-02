@@ -16,6 +16,15 @@ from test_apply_preparation import _fixture, _plan
 
 ROOT = Path(__file__).parents[1]
 APPLY_SPEC = ROOT / "docs" / "spec" / "spec-260829-0050-apply"
+APPLY_SKILL = (
+    ROOT
+    / "src"
+    / "mediasense"
+    / "_resources"
+    / "skills"
+    / "mediasense-apply"
+    / "SKILL.md"
+)
 FROZEN_PLAN_SCHEMA = (
     ROOT / "docs" / "spec" / "spec-260827-1138-frozen-plan" / "frozen-plan.schema.json"
 )
@@ -27,12 +36,8 @@ WORKFLOWS = json.loads(
 
 
 def test_skill_uses_direct_frozen_plan_handoff_and_no_geo() -> None:
-    assert "exact `frozen_plan` object returned by Plan seal" in (
-        ROOT / ".agents" / "skills" / "mediasense-apply" / "SKILL.md"
-    ).read_text(encoding="utf-8")
-    skill = (ROOT / ".agents" / "skills" / "mediasense-apply" / "SKILL.md").read_text(
-        encoding="utf-8"
-    )
+    skill = APPLY_SKILL.read_text(encoding="utf-8")
+    assert "exact `frozen_plan` object returned by Plan seal" in skill
     assert "Do not request, refresh, or interpret geographic evidence" in skill
 
 

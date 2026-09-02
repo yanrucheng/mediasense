@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 import re
-import tomllib
 
 import pytest
 
@@ -10,6 +9,7 @@ from mediasense.cli import build_parser, run
 
 
 ROOT = Path(__file__).parents[1]
+PACKAGED_SKILL_ROOT = ROOT / "src" / "mediasense" / "_resources" / "skills"
 TOOL_NAMES = {
     "mediasense.dataset.open",
     "mediasense.precheck.run",
@@ -21,12 +21,15 @@ TOOL_NAMES = {
 }
 
 
-def test_project_codex_config_registers_only_cli_bundled_mcp() -> None:
-    config = tomllib.loads((ROOT / ".codex" / "config.toml").read_text())
-
-    assert config == {
-        "mcp_servers": {"mediasense": {"command": "mediasense", "args": ["mcp"]}}
-    }
+def test_source_checkout_is_not_an_implicit_honeycomb() -> None:
+    assert not (ROOT / ".codex" / "config.toml").exists()
+    for name in (
+        "mediasense",
+        "mediasense-precheck",
+        "mediasense-plan",
+        "mediasense-apply",
+    ):
+        assert not (ROOT / ".agents" / "skills" / name).exists()
 
 
 def test_skills_install_requires_and_uses_only_explicit_target(
@@ -59,7 +62,7 @@ def test_skills_install_requires_and_uses_only_explicit_target(
 
 
 def test_entry_skill_owns_bootstrap_and_stage_local_prerequisites() -> None:
-    skill_root = ROOT / ".agents" / "skills"
+    skill_root = PACKAGED_SKILL_ROOT
     entry = (skill_root / "mediasense" / "SKILL.md").read_text()
     precheck = (skill_root / "mediasense-precheck" / "SKILL.md").read_text()
     plan = (skill_root / "mediasense-plan" / "SKILL.md").read_text()
@@ -68,7 +71,7 @@ def test_entry_skill_owns_bootstrap_and_stage_local_prerequisites() -> None:
     assert "Establish readiness" in entry
     assert "<honeycomb>/.codex/config.toml" in entry
     assert "trusted project" in entry
-    assert "MediaSense `0.3.x` CLI" in entry
+    assert "MediaSense `0.4.x` CLI" in entry
     assert "MediaSense `0.2.x` CLI" not in entry
     assert "current Agent session" in entry
     assert "cannot load it dynamically" in entry
@@ -92,11 +95,7 @@ def test_active_guidance_has_no_obsolete_default_commands() -> None:
         ROOT / "README.md",
         ROOT / "CHANGELOG.md",
         ROOT / "readme",
-        ROOT / ".agents" / "skills" / "mediasense",
-        ROOT / ".agents" / "skills" / "mediasense-precheck",
-        ROOT / ".agents" / "skills" / "mediasense-plan",
-        ROOT / ".agents" / "skills" / "mediasense-apply",
-        ROOT / "src" / "mediasense" / "_resources" / "skills",
+        PACKAGED_SKILL_ROOT,
         ROOT / "docs" / "design",
         ROOT / "docs" / "spec",
         ROOT / "docs" / "eval",
