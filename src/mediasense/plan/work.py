@@ -275,13 +275,17 @@ class PlanWorkTool:
             return replay
 
         response = self.precheck_read.read(
-            {"result_ref": result_ref, "action": "inspect"}
+            {
+                "result_ref": result_ref,
+                "operation": "review",
+                "page": {"limit": 1},
+            }
         )
         if not isinstance(response, Mapping) or response.get("outcome") != "ok":
             raise PlanFailure(
                 "result_not_found", "The exact PreCheck Result is unavailable."
             )
-        target = response.get("target")
+        target = response.get("result")
         if (
             not isinstance(target, Mapping)
             or target.get("kind") != "result"

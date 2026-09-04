@@ -555,36 +555,32 @@ def test_metadata_failure_is_local_and_result_exposes_field_provenance(
     accounted = reader.read(
         {
             "result_ref": sealed.result_ref,
-            "action": "traverse",
-            "relation": "accounts_for",
-            "direction": "outbound",
+            "operation": "resolve",
+            "source_set": {
+                "kind": "precheck_relation",
+                "origin": sealed.result_ref,
+                "relation": "accounts_for",
+                "direction": "outbound",
+            },
         }
     )
-    source_refs = {}
-    for item in accounted["items"]:
-        source_ref = item["target"]
-        source_view = reader.read(
-            {
-                "result_ref": sealed.result_ref,
-                "action": "inspect",
-                "target": {"kind": "source_item", "ref": source_ref},
-            }
-        )["target"]
-        source_refs[source_view["locator"]["value"]] = source_ref
-    good_view = reader.read(
+    source_refs = {
+        item["locator"]["value"]: item["source_item_ref"]
+        for item in accounted["members"]
+    }
+    expanded = reader.read(
         {
             "result_ref": sealed.result_ref,
-            "action": "inspect",
-            "target": {"kind": "source_item", "ref": source_refs["good.jpg"]},
+            "operation": "expand",
+            "source_item_refs": [source_refs["good.jpg"], source_refs["bad.jpg"]],
+            "include": ["source_item", "observations"],
         }
-    )["target"]
-    bad_view = reader.read(
-        {
-            "result_ref": sealed.result_ref,
-            "action": "inspect",
-            "target": {"kind": "source_item", "ref": source_refs["bad.jpg"]},
-        }
-    )["target"]
+    )
+    views = {
+        item["source_item_ref"]: item["included"] for item in expanded["items"]
+    }
+    good_view = views[source_refs["good.jpg"]]
+    bad_view = views[source_refs["bad.jpg"]]
 
     gps = next(
         item for item in good_view["observations"] if item["name"] == "gps_coordinates"

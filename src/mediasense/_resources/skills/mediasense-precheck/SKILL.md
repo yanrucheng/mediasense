@@ -13,7 +13,7 @@ goal.
 ## Tool Host prerequisite
 
 Proceed only when the current Honeycomb session exposes a compatible MediaSense
-`0.4.x` Tool Host and `mediasense.dataset.open`, `mediasense.precheck.run`, and
+`0.6.x` Tool Host and `mediasense.dataset.open`, `mediasense.precheck.run`, and
 `mediasense.precheck.read` are discoverable. A CLI found in `PATH` or an MCP table
 present on disk is not sufficient. If the Host is absent or incompatible, stop
 PreCheck work and use the `mediasense` product entry Skill's local Honeycomb
@@ -120,6 +120,11 @@ progress, reason, recovery condition, and allowed controls in terms the user can
 act on. An accepted start, pause, resume, skip, or cancel request says only that
 the transition was accepted; continue observing until the Tool reports a
 truthful attention or terminal state.
+
+Treat `status` as observational: polling never starts, resumes, or reclaims a
+worker. There is no public queued state. If activity is `suspected_stalled`,
+report its required reason and use explicit `resume` only when the user already
+authorized continuation; do not wait or poll as a substitute for recovery.
 
 Keep the two status views distinct. `progress` is Source Item accounting;
 `activity` is current execution evidence. Report `activity.phase`, its exact or

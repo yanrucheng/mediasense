@@ -11,6 +11,7 @@ from jsonschema import Draft202012Validator
 from PIL import Image
 import pytest
 
+import mediasense.precheck.read as precheck_read_module
 from mediasense.precheck import (
     AccountingStore,
     HIGH_RESOLUTION_RENDITION_PROFILE,
@@ -58,42 +59,34 @@ def test_ordinary_rendition_is_frontier_and_high_resolution_expands_from_it(
     entry = reader.read(
         {
             "result_ref": sealed.result_ref,
-            "action": "traverse",
-            "relation": "entry_evidence",
-            "direction": "outbound",
+            "operation": "review",
         }
     )
-    assert len(entry["items"]) == 1
-    ordinary_ref = entry["items"][0]["target"]
-    ordinary_view = reader.read(
-        {
-            "result_ref": sealed.result_ref,
-            "action": "inspect",
-            "target": {"kind": "evidence", "ref": ordinary_ref},
-        }
-    )["target"]
-    assert ordinary_view["observations"][0]["value"]["profile"]["name"] == "ordinary"
+    assert len(entry["coverage_cards"]) == 1
+    ordinary_ref = entry["coverage_cards"][0]["anchor_evidence_ref"]
     expanded = reader.read(
         {
             "result_ref": sealed.result_ref,
-            "action": "traverse",
-            "target": ordinary_ref,
-            "relation": "expands_to",
-            "direction": "outbound",
+            "operation": "expand",
+            "evidence_refs": [ordinary_ref],
+            "include": ["anchor_evidence", "prepared_targets"],
         }
     )
+    ordinary_view = expanded["items"][0]["included"]["anchor_evidence"]
+    assert ordinary_view["observations"][0]["value"]["profile"]["name"] == "ordinary"
     high_ref = next(
         item["target"]["ref"]
-        for item in expanded["items"]
+        for item in expanded["items"][0]["included"]["prepared_targets"]
         if isinstance(item["target"], dict) and item["target"]["kind"] == "evidence"
     )
     high_view = reader.read(
         {
             "result_ref": sealed.result_ref,
-            "action": "inspect",
-            "target": {"kind": "evidence", "ref": high_ref},
+            "operation": "expand",
+            "evidence_refs": [high_ref],
+            "include": ["anchor_evidence"],
         }
-    )["target"]
+    )["items"][0]["included"]["anchor_evidence"]
     assert high_view["observations"][0]["value"]["profile"]["name"] == "high_resolution"
     _assert_response_conforms(entry)
     _assert_response_conforms(expanded)
@@ -138,58 +131,63 @@ def test_end_to_end_result_is_sealed_and_read_only_through_exact_reference(
     reader = PrecheckReadTool(database)
     database_before_reads = database.read_bytes()
 
-    inspected = reader.read({"result_ref": sealed.result_ref, "action": "inspect"})
+    inspected = reader.read({"result_ref": sealed.result_ref, "operation": "review"})
     first_page = reader.read(
         {
             "result_ref": sealed.result_ref,
-            "action": "traverse",
-            "relation": "accounts_for",
-            "direction": "outbound",
+            "operation": "resolve",
+            "source_set": {
+                "kind": "precheck_relation",
+                "origin": sealed.result_ref,
+                "relation": "accounts_for",
+                "direction": "outbound",
+            },
             "page": {"limit": 2},
         }
     )
     second_page = reader.read(
         {
             "result_ref": sealed.result_ref,
-            "action": "traverse",
-            "relation": "accounts_for",
-            "direction": "outbound",
-            "page": {"cursor": first_page["page"]["next_cursor"]},
-        }
-    )
-    entry = reader.read(
-        {
-            "result_ref": sealed.result_ref,
-            "action": "traverse",
-            "relation": "entry_evidence",
-            "direction": "outbound",
+            "operation": "resolve",
+            "source_set": {
+                "kind": "precheck_relation",
+                "origin": sealed.result_ref,
+                "relation": "accounts_for",
+                "direction": "outbound",
+            },
+            "page": {"limit": 2, "cursor": first_page["page"]["next_cursor"]},
         }
     )
 
-    for response in (inspected, first_page, second_page, entry):
+    for response in (inspected, first_page, second_page):
         _assert_response_conforms(response)
-    assert inspected["target"]["coverage"] == "complete"
-    assert inspected["target"]["readiness"] == "plan_ready"
-    assert "source_root_ref" not in inspected["target"]
+    assert inspected["result"]["coverage"] == "complete"
+    assert inspected["result"]["readiness"] == "plan_ready"
+    assert "source_root_ref" not in inspected["result"]
     assert first_page["page"]["complete"] is False
     assert second_page["page"]["complete"] is True
     assert first_page["page"]["total"] == 3
-    assert len(entry["items"]) == 2
+    assert inspected["reconciliation"]["frontier"]["entry_evidence_count"] == 2
+    member_refs = [
+        item["source_item_ref"]
+        for item in (*first_page["members"], *second_page["members"])
+    ]
     source_views = [
         reader.read(
             {
                 "result_ref": sealed.result_ref,
-                "action": "inspect",
-                "target": {"kind": "source_item", "ref": item["target"]},
+                "operation": "expand",
+                "source_item_refs": [ref],
+                "include": ["source_item", "observations"],
             }
-        )["target"]
-        for item in (*first_page["items"], *second_page["items"])
+        )["items"][0]["included"]
+        for ref in member_refs
     ]
     first_source = next(
-        item for item in source_views if item["locator"]["value"] == "first.jpg"
+        item for item in source_views if item["source_item"]["locator"]["value"] == "first.jpg"
     )
-    assert first_source["locator"]["kind"] == "source_root_relative_path"
-    assert first_source["locator"]["source_root_ref"].startswith("source-root:")
+    assert first_source["source_item"]["locator"]["kind"] == "source_root_relative_path"
+    assert first_source["source_item"]["locator"]["source_root_ref"].startswith("source-root:")
     verification = next(
         item
         for item in first_source["observations"]
@@ -202,7 +200,7 @@ def test_end_to_end_result_is_sealed_and_read_only_through_exact_reference(
     assert database.read_bytes() == database_before_reads
     assert {path.name: path.read_bytes() for path in source.iterdir()} == source_before
     assert (
-        reader.read({"result_ref": "precheck-result:not-latest", "action": "inspect"})[
+        reader.read({"result_ref": "precheck-result:not-latest", "operation": "review"})[
             "error"
         ]["code"]
         == "result_not_found"
@@ -248,7 +246,7 @@ def test_seal_rejects_source_locator_bound_to_the_wrong_root(
     assert store.audit().available == ()
 
 
-def test_read_traverses_all_five_relationships_and_attention_view(
+def test_review_expand_and_resolve_cover_public_result_questions(
     tmp_path: Path,
 ) -> None:
     database, _source, _source_before, run_id, first, second = _prepared(tmp_path)
@@ -260,72 +258,192 @@ def test_read_traverses_all_five_relationships_and_attention_view(
     entry = reader.read(
         {
             "result_ref": result_ref,
-            "action": "traverse",
-            "relation": "entry_evidence",
-            "direction": "outbound",
+            "operation": "review",
         }
     )
-    evidence_ref = entry["items"][0]["target"]
+    evidence_ref = entry["coverage_cards"][0]["anchor_evidence_ref"]
     represents = reader.read(
         {
             "result_ref": result_ref,
-            "action": "traverse",
-            "target": evidence_ref,
-            "relation": "represents",
-            "direction": "outbound",
+            "operation": "resolve",
+            "source_set": {
+                "kind": "precheck_relation",
+                "origin": evidence_ref,
+                "relation": "represents",
+                "direction": "outbound",
+            },
         }
     )
-    source_ref = represents["items"][0]["target"]
+    source_ref = represents["members"][0]["source_item_ref"]
     reverse = reader.read(
         {
             "result_ref": result_ref,
-            "action": "traverse",
-            "target": source_ref,
-            "relation": "represents",
-            "direction": "inbound",
+            "operation": "expand",
+            "source_item_refs": [source_ref],
+            "include": ["covering_evidence"],
         }
     )
     derived = reader.read(
         {
             "result_ref": result_ref,
-            "action": "traverse",
-            "target": evidence_ref,
-            "relation": "derived_from",
-            "direction": "outbound",
+            "operation": "expand",
+            "evidence_refs": [evidence_ref],
+            "include": ["provenance"],
         }
     )
     expanded = reader.read(
         {
             "result_ref": result_ref,
-            "action": "traverse",
-            "target": evidence_ref,
-            "relation": "expands_to",
-            "direction": "outbound",
+            "operation": "expand",
+            "evidence_refs": [evidence_ref],
+            "include": ["prepared_targets"],
         }
     )
     attention = reader.read(
         {
             "result_ref": result_ref,
-            "action": "traverse",
-            "relation": "accounts_for",
-            "direction": "outbound",
-            "filter": {"attention_only": True},
+            "operation": "resolve",
+            "source_set": {
+                "kind": "precheck_relation",
+                "origin": result_ref,
+                "relation": "accounts_for",
+                "direction": "outbound",
+            },
         }
     )
 
     for response in (represents, reverse, derived, expanded, attention):
         _assert_response_conforms(response)
-    assert reverse["items"][0]["target"] == evidence_ref
-    assert derived["items"][0]["target"] == {
+    assert reverse["items"][0]["included"]["covering_evidence"][0]["evidence_ref"] == evidence_ref
+    assert derived["items"][0]["included"]["provenance"][0]["target"] == {
         "kind": "source_item",
         "ref": source_ref,
     }
-    assert expanded["items"][0]["target"] == {
+    assert expanded["items"][0]["included"]["prepared_targets"][0]["target"] == {
         "kind": "source_item",
         "ref": source_ref,
     }
-    assert attention["derived_view"] == "attention_items"
-    assert [item["condition"] for item in attention["items"]] == ["unsupported"]
+    assert [item["condition"] for item in attention["members"]].count("unsupported") == 1
+
+
+def test_expand_and_resolve_validation_is_atomic_and_result_bound(
+    tmp_path: Path,
+) -> None:
+    database, _source, _source_before, run_id, first, second = _prepared(tmp_path)
+    store = ResultStore(database)
+    sealed = store.seal(
+        store.build_minimal(run_id, [first.work.work_id, second.work.work_id])
+    )
+    reader = PrecheckReadTool(database)
+    review = reader.read({"result_ref": sealed.result_ref, "operation": "review"})
+    evidence_ref = review["coverage_cards"][0]["anchor_evidence_ref"]
+
+    missing_evidence = reader.read(
+        {
+            "result_ref": sealed.result_ref,
+            "operation": "expand",
+            "evidence_refs": [evidence_ref, "evidence:not-in-result"],
+            "include": ["anchor_evidence"],
+        }
+    )
+    unknown_include = reader.read(
+        {
+            "result_ref": sealed.result_ref,
+            "operation": "expand",
+            "evidence_refs": [evidence_ref],
+            "include": ["semantic_recommendation"],
+        }
+    )
+    missing_member = reader.read(
+        {
+            "result_ref": sealed.result_ref,
+            "operation": "resolve",
+            "source_set": {
+                "kind": "explicit",
+                "source_item_refs": ["source-item:not-in-result"],
+            },
+        }
+    )
+    malformed_set = reader.read(
+        {
+            "result_ref": sealed.result_ref,
+            "operation": "resolve",
+            "source_set": {
+                "kind": "explicit",
+                "source_item_refs": ["source-item:a", "source-item:a"],
+            },
+        }
+    )
+
+    assert missing_evidence["error"]["code"] == "reference_not_in_result"
+    assert "items" not in missing_evidence
+    assert unknown_include["error"]["code"] == "unsupported_include"
+    assert "items" not in unknown_include
+    assert missing_member["error"]["code"] == "reference_not_in_result"
+    assert malformed_set["error"]["code"] == "invalid_source_set"
+    for response in (
+        missing_evidence,
+        unknown_include,
+        missing_member,
+        malformed_set,
+    ):
+        _assert_response_conforms(response)
+
+
+def test_review_cursor_is_repeatable_query_bound_and_byte_bounded(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    database, _source, _source_before, run_id, first, second = _prepared(tmp_path)
+    store = ResultStore(database)
+    sealed = store.seal(
+        store.build_minimal(run_id, [first.work.work_id, second.work.work_id])
+    )
+    reader = PrecheckReadTool(database)
+    request = {
+        "result_ref": sealed.result_ref,
+        "operation": "review",
+        "page": {"limit": 1},
+    }
+
+    first_page = reader.read(request)
+    assert reader.read(request) == first_page
+    cursor = first_page["page"]["next_cursor"]
+    second_page = reader.read(
+        {
+            **request,
+            "page": {"limit": 1, "cursor": cursor},
+        }
+    )
+    wrong_limit = reader.read(
+        {
+            **request,
+            "page": {"limit": 2, "cursor": cursor},
+        }
+    )
+    assert second_page["page"]["complete"] is True
+    assert wrong_limit["error"]["code"] == "invalid_cursor"
+
+    complete = reader.read(
+        {"result_ref": sealed.result_ref, "operation": "review", "page": {"limit": 2}}
+    )
+    complete_size = len(
+        json.dumps(complete, ensure_ascii=False, separators=(",", ":")).encode()
+    )
+    monkeypatch.setattr(precheck_read_module, "_MAX_RESPONSE_BYTES", complete_size - 1)
+    bounded = reader.read(
+        {"result_ref": sealed.result_ref, "operation": "review", "page": {"limit": 2}}
+    )
+    assert bounded["page"]["returned"] == 1
+    assert bounded["page"]["stop_reason"] == "byte_limit"
+    assert len(
+        json.dumps(bounded, ensure_ascii=False, separators=(",", ":")).encode()
+    ) <= (complete_size - 1)
+
+    monkeypatch.setattr(precheck_read_module, "_MAX_RESPONSE_BYTES", 1)
+    oversized = reader.read(
+        {"result_ref": sealed.result_ref, "operation": "review", "page": {"limit": 1}}
+    )
+    assert oversized["error"]["code"] == "response_item_too_large"
 
 
 def test_frontier_model_supports_many_to_one_and_one_to_many(tmp_path: Path) -> None:
@@ -373,24 +491,26 @@ def test_frontier_model_supports_many_to_one_and_one_to_many(tmp_path: Path) -> 
     many = reader.read(
         {
             "result_ref": sealed.result_ref,
-            "action": "traverse",
-            "target": first_evidence.ref,
-            "relation": "represents",
-            "direction": "outbound",
+            "operation": "resolve",
+            "source_set": {
+                "kind": "precheck_relation",
+                "origin": first_evidence.ref,
+                "relation": "represents",
+                "direction": "outbound",
+            },
         }
     )
     one_to_many = reader.read(
         {
             "result_ref": sealed.result_ref,
-            "action": "traverse",
-            "target": first_source.ref,
-            "relation": "represents",
-            "direction": "inbound",
+            "operation": "expand",
+            "source_item_refs": [first_source.ref],
+            "include": ["covering_evidence"],
         }
     )
 
-    assert len(many["items"]) == 2
-    assert len(one_to_many["items"]) == 2
+    assert len(many["members"]) == 2
+    assert len(one_to_many["items"][0]["included"]["covering_evidence"]) == 2
 
 
 def test_seal_rejects_navigation_gap_and_does_not_publish_partial_result(
@@ -501,13 +621,13 @@ def test_sealed_result_bytes_never_change_and_corruption_is_refused(
     original = sealed.path.read_bytes()
     reader = PrecheckReadTool(database)
     assert (
-        reader.read({"result_ref": sealed.result_ref, "action": "inspect"})["outcome"]
+        reader.read({"result_ref": sealed.result_ref, "operation": "review"})["outcome"]
         == "ok"
     )
 
     sealed.path.chmod(0o644)
     sealed.path.write_bytes(b"corrupt")
-    response = reader.read({"result_ref": sealed.result_ref, "action": "inspect"})
+    response = reader.read({"result_ref": sealed.result_ref, "operation": "review"})
 
     assert response["error"]["code"] == "result_untrusted"
     assert original != sealed.path.read_bytes()
@@ -660,11 +780,40 @@ def test_read_integrity_check_does_not_mutate_working_state(tmp_path: Path) -> N
     before = database.read_bytes()
 
     response = PrecheckReadTool(database).read(
-        {"result_ref": sealed.result_ref, "action": "inspect"}
+        {"result_ref": sealed.result_ref, "operation": "review"}
     )
 
     assert response["error"]["code"] == "result_untrusted"
     assert database.read_bytes() == before
+
+
+def test_unavailable_result_is_retryable_without_changing_the_request(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    database, _source, _source_before, run_id, first, second = _prepared(tmp_path)
+    store = ResultStore(database)
+    sealed = store.seal(
+        store.build_minimal(run_id, [first.work.work_id, second.work.work_id])
+    )
+    reader = PrecheckReadTool(database)
+    request = {"result_ref": sealed.result_ref, "operation": "review"}
+    read_bytes = Path.read_bytes
+
+    def unavailable(path: Path) -> bytes:
+        if path == sealed.path:
+            raise OSError("temporary read failure")
+        return read_bytes(path)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(Path, "read_bytes", unavailable)
+        failed = reader.read(request)
+
+    assert failed["error"]["code"] == "result_unavailable"
+    assert failed["error"]["retryable"] is True
+    _assert_response_conforms(failed)
+    recovered = reader.read(request)
+    assert recovered["outcome"] == "ok"
+    _assert_response_conforms(recovered)
 
 
 def test_byte_trusted_invalid_result_remains_inspectable(tmp_path: Path) -> None:
@@ -685,8 +834,8 @@ def test_byte_trusted_invalid_result_remains_inspectable(tmp_path: Path) -> None
 
     sealed = store.seal(invalid)
     response = PrecheckReadTool(database).read(
-        {"result_ref": sealed.result_ref, "action": "inspect"}
+        {"result_ref": sealed.result_ref, "operation": "review"}
     )
 
     _assert_response_conforms(response)
-    assert response["target"]["integrity"] == "invalid"
+    assert response["result"]["integrity"] == "invalid"

@@ -116,59 +116,50 @@ def test_adaptive_compression_reuses_inputs_across_different_result_targets(
     reader = PrecheckReadTool(database)
     two_entries = reader.read(
         {
-            "action": "traverse",
-            "direction": "outbound",
-            "relation": "entry_evidence",
+            "operation": "review",
             "result_ref": two_result.result_ref,
         }
     )
     three_entries = reader.read(
         {
-            "action": "traverse",
-            "direction": "outbound",
-            "relation": "entry_evidence",
+            "operation": "review",
             "result_ref": three_result.result_ref,
         }
     )
     represented = set()
-    for entry in two_entries["items"]:
+    for entry in two_entries["coverage_cards"]:
         coverage = reader.read(
             {
-                "action": "traverse",
-                "direction": "outbound",
-                "relation": "represents",
+                "operation": "resolve",
                 "result_ref": two_result.result_ref,
-                "target": entry["target"],
+                "source_set": entry["resolvable_source_set"],
             }
         )
-        represented.update(item["target"] for item in coverage["items"])
-    first_entry_ref = two_entries["items"][0]["target"]
-    first_entry = reader.read(
-        {
-            "action": "inspect",
-            "result_ref": two_result.result_ref,
-            "target": {"kind": "evidence", "ref": first_entry_ref},
-        }
-    )["target"]
+        represented.update(item["source_item_ref"] for item in coverage["members"])
+    first_entry_ref = two_entries["coverage_cards"][0]["anchor_evidence_ref"]
     expanded = reader.read(
         {
-            "action": "traverse",
-            "direction": "outbound",
-            "relation": "expands_to",
+            "operation": "expand",
             "result_ref": two_result.result_ref,
-            "target": first_entry_ref,
+            "evidence_refs": [first_entry_ref],
+            "include": ["anchor_evidence", "prepared_targets"],
         }
     )
+    included = expanded["items"][0]["included"]
+    first_entry = included["anchor_evidence"]
 
-    assert len(two_entries["items"]) == 2
-    assert len(three_entries["items"]) == 3
+    assert len(two_entries["coverage_cards"]) == 2
+    assert len(three_entries["coverage_cards"]) == 3
     assert len(represented) == 6
     assert any(
         observation["name"] == "evidence_role"
         and observation["value"]["role"] == "representative"
         for observation in first_entry["observations"]
     )
-    assert any(item["target"]["kind"] == "evidence" for item in expanded["items"])
+    assert any(
+        item["target"]["kind"] == "evidence"
+        for item in included["prepared_targets"]
+    )
     assert two_result.result_ref != three_result.result_ref
     assert two_result.path.read_bytes() == two_result_bytes
     comparison = results.compare(two_result.result_ref, three_result.result_ref)
@@ -233,42 +224,39 @@ def test_bundle_members_are_covered_by_one_compressed_representative(
     reader = PrecheckReadTool(database)
     accounts = reader.read(
         {
-            "action": "traverse",
-            "direction": "outbound",
-            "relation": "accounts_for",
+            "operation": "resolve",
             "result_ref": sealed.result_ref,
+            "source_set": {
+                "kind": "precheck_relation",
+                "origin": sealed.result_ref,
+                "relation": "accounts_for",
+                "direction": "outbound",
+            },
         }
     )
     raw_account = next(
         item
-        for item in accounts["items"]
-        if reader.read(
-            {
-                "action": "inspect",
-                "result_ref": sealed.result_ref,
-                "target": {"kind": "source_item", "ref": item["target"]},
-            }
-        )["target"]["locator"]["value"]
-        == "IMG_0001.ARW"
+        for item in accounts["members"]
+        if item["locator"]["value"] == "IMG_0001.ARW"
     )
-    raw_ref = raw_account["target"]
+    raw_ref = raw_account["source_item_ref"]
     reverse = reader.read(
         {
-            "action": "traverse",
-            "direction": "inbound",
-            "relation": "represents",
+            "operation": "expand",
             "result_ref": sealed.result_ref,
-            "target": raw_ref,
+            "source_item_refs": [raw_ref],
+            "include": ["covering_evidence"],
         }
     )
     result_view = reader.read(
         {
-            "action": "inspect",
+            "operation": "review",
             "result_ref": sealed.result_ref,
         }
-    )["target"]
-    assert len(reverse["items"]) == 1
-    assert reverse["items"][0]["qualifications"] == [
+    )["result"]
+    covering = reverse["items"][0]["included"]["covering_evidence"]
+    assert len(covering) == 1
+    assert covering[0]["qualifications"] == [
         {
             "code": "limited_similarity_evidence",
             "effect": "limits_interpretation",

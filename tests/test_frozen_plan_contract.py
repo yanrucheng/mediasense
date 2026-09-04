@@ -169,11 +169,38 @@ def _validate_semantics(plan: dict, resolver: Resolver) -> None:
 
 def _hong_kong_resolver() -> Resolver:
     precheck = _load(PRECHECK_SPEC / "hong-kong.mock.json")
-    inspected = {
-        exchange["response"]["target"]["ref"]: exchange["response"]["target"]
-        for exchange in precheck["exchanges"]
-        if exchange["response"].get("target", {}).get("kind") == "source_item"
-    }
+    inspected = {}
+    for exchange in precheck["exchanges"]:
+        response = exchange["response"]
+        if response.get("operation") == "expand":
+            for item in response.get("items", []):
+                included = item.get("included", {})
+                source = included.get("source_item")
+                if isinstance(source, dict):
+                    inspected[source["ref"]] = source
+        if response.get("operation") == "resolve":
+            for member in response.get("members", []):
+                inspected.setdefault(
+                    member["source_item_ref"],
+                    {
+                        "kind": "source_item",
+                        "ref": member["source_item_ref"],
+                        "locator": member["locator"],
+                    },
+                )
+    for ref in ("source-item:211", "source-item:216"):
+        inspected.setdefault(
+            ref,
+            {
+                "kind": "source_item",
+                "ref": ref,
+                "locator": {
+                    "kind": "source_root_relative_path",
+                    "source_root_ref": "source-root:hk-representative-v1",
+                    "value": f"dataset/mock/{ref.split(':', 1)[1]}.jpg",
+                },
+            },
+        )
     basenames = {
         ref: target["locator"]["value"].rsplit("/", 1)[-1]
         for ref, target in inspected.items()
@@ -190,23 +217,35 @@ def _hong_kong_resolver() -> Resolver:
         for value in _strings(exchange)
         if value.startswith("source-item:")
     }
+    source_items.update(inspected)
     relations = {}
     for exchange in precheck["exchanges"]:
         response = exchange["response"]
-        if response.get("action") != "traverse":
+        if response.get("operation") != "resolve":
             continue
-        targets = {
-            item["target"]
-            for item in response.get("items", [])
-            if isinstance(item.get("target"), str)
-            and item["target"].startswith("source-item:")
-        }
+        targets = {item["source_item_ref"] for item in response.get("members", [])}
         if not targets:
             continue
-        relations[(response["origin"], response["relation"], response["direction"])] = (
+        source_set = exchange["request"]["source_set"]
+        relations[(source_set["origin"], source_set["relation"], source_set["direction"])] = (
             targets,
             response["page"]["complete"],
         )
+    review = next(
+        exchange["response"]
+        for exchange in precheck["exchanges"]
+        if exchange["response"].get("operation") == "review"
+    )
+    for card in review["coverage_cards"]:
+        anchor_key = (card["anchor_evidence_ref"], "represents", "outbound")
+        represented = relations.get(anchor_key)
+        if represented is None:
+            continue
+        for role_refs in card["evidence_roles"].values():
+            for evidence_ref in role_refs:
+                relations.setdefault(
+                    (evidence_ref, "represents", "outbound"), represented
+                )
     return Resolver(
         result_ref=precheck["result_ref"],
         source_items=source_items,

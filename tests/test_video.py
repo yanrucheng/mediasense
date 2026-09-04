@@ -196,20 +196,20 @@ def test_video_key_frame_candidate_can_be_the_frontier_without_contact_sheet(
     reader = PrecheckReadTool(database)
     entry = reader.read(
         {
-            "action": "traverse",
-            "direction": "outbound",
-            "relation": "entry_evidence",
+            "operation": "review",
             "result_ref": sealed.result_ref,
         }
     )
-    assert len(entry["items"]) == 1
+    assert len(entry["coverage_cards"]) == 1
+    evidence_ref = entry["coverage_cards"][0]["anchor_evidence_ref"]
     view = reader.read(
         {
-            "action": "inspect",
+            "operation": "expand",
             "result_ref": sealed.result_ref,
-            "target": {"kind": "evidence", "ref": entry["items"][0]["target"]},
+            "evidence_refs": [evidence_ref],
+            "include": ["anchor_evidence"],
         }
-    )["target"]
+    )["items"][0]["included"]["anchor_evidence"]
     assert any(
         item["name"] == "evidence_role" and item["value"]["role"] == "representative"
         for item in view["observations"]
@@ -274,46 +274,46 @@ def test_contact_sheet_is_default_evidence_and_expands_to_frames(
     entry = reader.read(
         {
             "result_ref": sealed.result_ref,
-            "action": "traverse",
-            "relation": "entry_evidence",
-            "direction": "outbound",
+            "operation": "review",
         }
     )
-    assert len(entry["items"]) == 1
-    sheet_ref = entry["items"][0]["target"]
+    assert len(entry["coverage_cards"]) == 1
+    sheet_ref = entry["coverage_cards"][0]["anchor_evidence_ref"]
     sheet_view = reader.read(
         {
             "result_ref": sealed.result_ref,
-            "action": "inspect",
-            "target": {"kind": "evidence", "ref": sheet_ref},
+            "operation": "expand",
+            "evidence_refs": [sheet_ref],
+            "include": ["anchor_evidence"],
         }
-    )["target"]
+    )["items"][0]["included"]["anchor_evidence"]
     assert sheet_view["observations"][0]["name"] == "video_contact_sheet"
     expanded = reader.read(
         {
             "result_ref": sealed.result_ref,
-            "action": "traverse",
-            "target": sheet_ref,
-            "relation": "expands_to",
-            "direction": "outbound",
+            "operation": "expand",
+            "evidence_refs": [sheet_ref],
+            "include": ["prepared_targets"],
         }
     )
     frame_refs = [
         item["target"]["ref"]
-        for item in expanded["items"]
+        for item in expanded["items"][0]["included"]["prepared_targets"]
         if isinstance(item["target"], dict) and item["target"]["kind"] == "evidence"
     ]
     assert len(frame_refs) == 2
+    frame_views = reader.read(
+        {
+            "result_ref": sealed.result_ref,
+            "operation": "expand",
+            "evidence_refs": frame_refs,
+            "include": ["anchor_evidence"],
+        }
+    )
     assert all(
-        reader.read(
-            {
-                "result_ref": sealed.result_ref,
-                "action": "inspect",
-                "target": {"kind": "evidence", "ref": ref},
-            }
-        )["target"]["observations"][0]["name"]
+        item["included"]["anchor_evidence"]["observations"][0]["name"]
         == "video_frame"
-        for ref in frame_refs
+        for item in frame_views["items"]
     )
 
 

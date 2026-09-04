@@ -257,12 +257,12 @@ def test_start_then_internal_worker_drives_mixed_source_to_readable_result(
     assert status["published_result"]["integrity"] == "valid"
     result_ref = status["published_result"]["result_ref"]
     inspected = PrecheckReadTool(database).read(
-        {"action": "inspect", "result_ref": result_ref}
+        {"operation": "review", "result_ref": result_ref}
     )
     assert inspected["outcome"] == "ok"
-    assert inspected["target"]["ref"] == result_ref
-    assert inspected["target"]["coverage"] == "complete"
-    assert inspected["target"]["readiness"] == "plan_ready"
+    assert inspected["result"]["ref"] == result_ref
+    assert inspected["result"]["coverage"] == "complete"
+    assert inspected["result"]["readiness"] == "plan_ready"
     capabilities = {
         work.spec.capability
         for work in WorkStore(database).list_run_work(_accounting_run_id)
@@ -351,10 +351,14 @@ def test_bundle_reduces_initial_visual_demand_without_reducing_accounting(
     status = tool.run({"action": "status", "run_ref": started["run_ref"]})
     accounts = PrecheckReadTool(database).read(
         {
-            "action": "traverse",
+            "operation": "resolve",
             "result_ref": status["published_result"]["result_ref"],
-            "relation": "accounts_for",
-            "direction": "outbound",
+            "source_set": {
+                "kind": "precheck_relation",
+                "origin": status["published_result"]["result_ref"],
+                "relation": "accounts_for",
+                "direction": "outbound",
+            },
         }
     )
 
@@ -362,7 +366,7 @@ def test_bundle_reduces_initial_visual_demand_without_reducing_accounting(
     assert len(metadata) == 3
     assert len(bundles) == 1
     assert rendition_subjects == expected_renditions
-    assert sum(item["scope"] == "source_media" for item in accounts["items"]) == 3
+    assert sum(item["scope"] == "source_media" for item in accounts["members"]) == 3
 
 
 def test_later_run_can_direct_additional_visual_evidence(tmp_path: Path) -> None:
@@ -590,9 +594,9 @@ def test_geocode_pauses_for_exact_frozen_query_count_before_fake_provider(
     assert len(provider.calls) == 1
     result_ref = completed["published_result"]["result_ref"]
     inspected = PrecheckReadTool(database).read(
-        {"action": "inspect", "result_ref": result_ref}
+        {"operation": "review", "result_ref": result_ref}
     )
-    boundary = inspected["target"]["execution_boundary"]
+    boundary = inspected["result"]["execution_boundary"]
     assert boundary["logical_external_queries"] == 1
     assert boundary["provider_requests"] == 2
 

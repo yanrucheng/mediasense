@@ -57,18 +57,22 @@ def test_narrow_real_chain_is_local_reusable_and_failure_isolated(
     accounts = reader.read(
         {
             "result_ref": first_result.result_ref,
-            "action": "traverse",
-            "relation": "accounts_for",
-            "direction": "outbound",
+            "operation": "resolve",
+            "source_set": {
+                "kind": "precheck_relation",
+                "origin": first_result.result_ref,
+                "relation": "accounts_for",
+                "direction": "outbound",
+            },
         }
     )
-    assert {item["condition"] for item in accounts["items"]} == {
+    assert {item["condition"] for item in accounts["members"]} == {
         "invalid",
         "usable",
     }
     assert (
-        reader.read({"result_ref": first_result.result_ref, "action": "inspect"})[
-            "target"
+        reader.read({"result_ref": first_result.result_ref, "operation": "review"})[
+            "result"
         ]["readiness"]
         == "plan_ready"
     )

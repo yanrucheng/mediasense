@@ -83,7 +83,7 @@ def test_manual_rebuild_selects_exact_work_and_invalidates_dependents_only(
     )
     assert (
         PrecheckReadTool(database).read(
-            {"action": "inspect", "result_ref": sealed.result_ref}
+            {"operation": "review", "result_ref": sealed.result_ref}
         )["outcome"]
         == "ok"
     )

@@ -4,7 +4,7 @@ title: "MediaSense PreCheck Implementation Design"
 type: design
 status: active
 created: 2026-08-27
-updated: 2026-09-02
+updated: 2026-09-04
 timezone: "Asia/Shanghai"
 parent: ""
 depends-on:
@@ -112,14 +112,19 @@ normal-frontier representation remains `unresolved` and blocks `plan_ready`.
 
 ## Compatibility posture
 
-### Stable compatibility surface
+### Public read boundary
 
-`mediasense.precheck.read` is already active. This design must conform to its current request and response schema and semantic rules. In particular:
+`mediasense.precheck.read` uses the zero-BC consumer-oriented contract. There is
+no compatibility surface for the former graph-reading operations. In particular:
 
 - every read binds an exact immutable `result_ref`;
-- `inspect` and `traverse` retain their current meanings;
-- the four public concepts and five relationship meanings do not change;
-- traversal is asymmetric: all five relationships support outbound reads and only `represents` additionally guarantees inbound lookup;
+- `review` returns Result reconciliation and deterministic coverage cards in
+  frontier order;
+- `expand` returns selected Evidence or Source Item detail through an explicit
+  include menu;
+- `resolve` materializes an exact Source Set with complete membership identity;
+- Result entities and relationships remain the internal derivation authority,
+  but arbitrary graph traversal is not public;
 - Qualification effects are limited to `limits_interpretation` and `blocks_use`; direct facts may inherit basis and references repeat `kind` only where type would otherwise be ambiguous;
 - Result status remains the independent `coverage`, `readiness`, and `integrity` axes;
 - references and cursors remain scoped to the exact Result, except for Dataset identity; and
@@ -522,6 +527,13 @@ created -> discovering -> preparing -> assembling -> validating -> sealing -> se
 
 Cancellation or terminal failure ends a Working Run without publishing a Result. An explicitly requested partial Result may still be sealed if its boundary, omissions, navigation paths, readiness, and qualifications satisfy the contract. A merely interrupted run is never presented as a partial Result.
 
+The public `running` state begins only after the execution coordinator has
+acquired the Run's durable worker lease and the Host has launched that worker.
+Preparation, lease acquisition, or launch failure is recorded immediately as a
+failed Run and returned by the initiating call. There is no public queue between
+Run creation and worker ownership, and `status` never starts or repairs work as a
+side effect.
+
 When a bounded optional resource action requires user confirmation, the runtime first freezes the exact pending work set and automatically enters `paused`. Status reports the capability and logical request count. Resuming with `proceed` authorizes only that frozen work; resuming with `skip_optional_work` records the omission and continues without it. If the pending set changes, the runtime pauses again rather than widening the earlier confirmation. This is a general Working Run checkpoint, not a geography-specific stage or entity.
 
 ### Work execution states
@@ -542,6 +554,7 @@ A Work Record distinguishes at least pending, leased/running, succeeded, retryab
 | One corrupt or unsupported medium | Localize condition and affected downstream work; continue unrelated work. |
 | Source volume disconnect | Pause dependent work as unavailable; do not infer deletion; require compatible remount before reuse. |
 | Process exit or host restart | Expire leases, discard unpublished temporary outputs, validate committed outputs, and continue ready work. |
+| Execution preparation or worker launch failure | Fail the Run immediately with a bounded public reason; do not leave an ownerless `running` Run. |
 | Workspace disk full | Stop admission before further writes where possible, retain committed work, expose required space, and resume after capacity returns. |
 | Artifact corruption | Quarantine or ignore the bad artifact, invalidate dependent work for new runs, and preserve the historical Result identity. |
 | Producer or effective parameter change | Create new Work identities only for affected computations and descendants. |
@@ -586,14 +599,14 @@ Sealing is a validation and publication boundary, not a directory rename.
 
 1. Every discovered in-boundary Source Item has exactly one `accounts_for` scope and condition; a known unenumerated region makes coverage `partial` and remains visible through a qualification.
 2. Every accounted Source Item satisfies normal navigation closure or an explicit exception route.
-3. Every referenced target exists within the same Result and every contract-required traversal direction can be answered from the sealed relationships.
+3. Every referenced target exists within the same Result and every public projection or Source Set resolution can be regenerated from the sealed relationships.
 4. Every `represents` claim has an inspectable basis and any material compression loss is visible.
 5. `derived_from` matches actual production inputs and is not substituted for representation.
 6. Every retained Artifact passes integrity verification and remains pinned for the Result lifetime.
 7. Dataset context and Source Item locators are frozen as observed for this Result.
 8. Policy, confirmation, enforcement, and observed facts establish the declared source-read-only and external-effect boundary. The default path seals a local-only Result with zero external calls. The sole current exception is post-compression coordinate reverse geocoding: the Run freezes and deduplicates the exact pending set, pauses for user confirmation, and records authorization plus actual provider effects in the Result.
 9. Status axes are evaluated independently and qualifications explain any partial or blocked state.
-10. The read projection passes contract conformance and traversal closure checks.
+10. The read projection passes contract conformance, reconciliation, and resolution closure checks.
 
 The seal transaction allocates a new opaque `result_ref`, freezes the result-scoped references and relationship pages, records integrity evidence, and only then publishes the Result as readable. There is no mutable `latest` alias in the read path.
 
@@ -611,11 +624,15 @@ Readiness does not certify that a cluster, caption, location, or representative 
 
 The read adapter accepts only the active contract and queries the sealed projection:
 
-- `inspect` reads one Result, Dataset view, Source Item, or Evidence;
-- `traverse` reads one of the contract-declared directions: outbound for all five relationships and additionally inbound for `represents`;
-- `attention_only` is derived from `accounts_for` condition and material qualifications;
+- `review` returns the Result view, accounting reconciliation, and paged
+  coverage cards without assigning semantic meaning;
+- `expand` reads explicitly selected Evidence or Source Items using only the
+  include names advertised by the relevant public view;
+- `resolve` returns the exact, ordered members of an explicit or
+  relationship-derived Source Set;
 - cursors bind the exact Result, query shape, ordering, and continuation position;
-- inbound `represents` traversal is an index over the same relationship, not a new relationship; and
+- reverse coverage and provenance are derived from the same sealed
+  relationships, not new relationships or authorities; and
 - Evidence access returns only local, read-only artifacts, direct Source Item access, or inline structured content allowed by the contract.
 
 Mutable Work Records, attempt history, dependency keys, internal source-recognition evidence, database row IDs, cache locations, and garbage-collection state are never returned. Query indexes may be rebuilt without changing responses.
@@ -672,20 +689,27 @@ long metadata, rendition, video, embedding, or compression phase remains
 observable even when no Source Item changes condition.
 
 The existing Working Run row is the durable home for the current coarse phase
-and worker heartbeat. Existing Work Records remain authoritative for item
+and worker lease/heartbeat. Existing Work Records remain authoritative for item
 outcomes, reuse, and timestamps; `status` aggregates them on read. There is no
 second progress ledger, event stream, scheduler service, or per-item status
 write. Phase transitions write one checkpoint, and a live worker writes one
 bounded-cadence heartbeat. Normal Work commits already carry the item-level
 facts used by the projection.
 
+Worker admission belongs to `start` and explicit `resume`. The Host acquires the
+durable lease synchronously before reporting success and refuses a one-shot
+invocation that cannot retain the worker. `status` is observational only. A
+retained Run with no owner or an expired owner is reported as
+`suspected_stalled` with a reason and explicit `resume`; it is never described
+as queued and never reclaimed by polling.
+
 Worker liveness and durable progress are different facts. A fresh heartbeat
 with an old progress timestamp is reported as `no_recent_progress`, because a
 single operation may legitimately be slow. An expired heartbeat after work has
-begun is `suspected_stalled`, not proof of failure. An in-process worker exit
+begun is `suspected_stalled`, not proof of producer failure. An in-process worker exit
 that can still execute cleanup moves the Run to resumable `paused`; after a hard
-host loss, a later host may reclaim the expired worker lease and continue the
-same `run_ref`. These labels expose uncertainty without inventing percentage,
+host loss, an explicit `resume` on a live persistent Host may reclaim the
+expired worker lease and continue the same `run_ref`. These labels expose uncertainty without inventing percentage,
 ETA, throughput, or success guarantees.
 
 Public error summaries aggregate current failed Work by at most five public
@@ -1019,7 +1043,9 @@ does not erase the verified local integration contract.
 ### Contract conformance
 
 - Validate every request and response shape against the active Tool schema.
-- Exercise `inspect`, outbound traversal for all five relationships, inbound traversal for `represents`, pagination, derived attention filtering, rejection of unsupported reverse traversal, invalid references, and cursor/result isolation.
+- Exercise `review`, both `expand` selector families and their include menus,
+  exact `resolve` membership, pagination, atomic invalid-reference and include
+  rejection, response byte bounds, and cursor/Result/query isolation.
 - Compare generated responses with the Hong Kong development Mock semantically, without treating its values as runtime truth.
 
 ### Accounting and navigation properties

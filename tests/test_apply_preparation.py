@@ -123,26 +123,128 @@ class _FakePrecheckRead:
     def read(self, request: dict[str, object]) -> dict[str, object]:
         self.requests.append(request)
         result_ref = str(request["result_ref"])
-        target = request["target"]
+        if request["operation"] == "resolve":
+            try:
+                refs = sorted(self._resolve(request["source_set"]))
+            except (KeyError, TypeError, ValueError):
+                return {
+                    "outcome": "error",
+                    "result_ref": result_ref,
+                    "operation": "resolve",
+                    "error": {
+                        "code": "invalid_source_set",
+                        "message": "invalid source set",
+                        "retryable": False,
+                    },
+                }
+            source_set_json = json.dumps(
+                request["source_set"],
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+            source_set_identity = "sha256:" + hashlib.sha256(
+                source_set_json.encode("utf-8")
+            ).hexdigest()
+            membership_payload = json.dumps(
+                    {
+                        "result_ref": result_ref,
+                        "source_set": json.loads(source_set_json),
+                        "members": refs,
+                    },
+                    ensure_ascii=False,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                ).encode("utf-8")
+            membership_identity = "sha256:" + hashlib.sha256(
+                membership_payload
+            ).hexdigest()
+            members = [
+                {
+                    "source_item_ref": ref,
+                    "locator": deepcopy(self.views[ref]["locator"]),
+                    "scope": "source_media",
+                    "condition": "usable",
+                    "source_content_verification": {"status": "not_checked"},
+                }
+                for ref in refs
+            ]
+            return {
+                "outcome": "ok",
+                "result_ref": result_ref,
+                "operation": "resolve",
+                "resolution": {
+                    "source_set_identity": source_set_identity,
+                    "membership_identity": membership_identity,
+                    "ordering": "source_item_ref_ascending",
+                    "total": len(members),
+                },
+                "members": members,
+                "page": {
+                    "returned": len(members),
+                    "total": len(members),
+                    "complete": True,
+                    "stop_reason": "complete",
+                },
+            }
         assert request == {
             "result_ref": result_ref,
-            "action": "inspect",
-            "target": target,
+            "operation": "expand",
+            "source_item_refs": request["source_item_refs"],
+            "include": ["source_item", "observations"],
         }
-        source_item_ref = target["ref"]
+        source_item_ref = request["source_item_refs"][0]
         view = self.views.get(source_item_ref)
         if view is None:
             return {
                 "outcome": "error",
                 "result_ref": result_ref,
-                "error": {"code": "target_not_found", "message": "missing"},
+                "operation": "expand",
+                "error": {
+                    "code": "reference_not_in_result",
+                    "message": "missing",
+                    "retryable": False,
+                },
             }
         return {
             "outcome": "ok",
             "result_ref": result_ref,
-            "action": "inspect",
-            "target": view,
+            "operation": "expand",
+            "items": [
+                {
+                    "source_item_ref": source_item_ref,
+                    "included": {
+                        "source_item": {
+                            key: deepcopy(value)
+                            for key, value in view.items()
+                            if key != "observations"
+                        },
+                        "observations": deepcopy(view.get("observations", [])),
+                    },
+                }
+            ],
+            "page": {
+                "returned": 1,
+                "total": 1,
+                "complete": True,
+                "stop_reason": "complete",
+            },
         }
+
+    def _resolve(self, source_set: dict) -> set[str]:
+        kind = source_set["kind"]
+        if kind == "explicit":
+            refs = source_set["source_item_refs"]
+            if len(refs) != len(set(refs)) or not set(refs) <= self.views.keys():
+                raise ValueError("invalid explicit set")
+            return set(refs)
+        if kind == "union":
+            return set().union(*(self._resolve(child) for child in source_set["sets"]))
+        if kind == "difference":
+            return self._resolve(source_set["base"]) - self._resolve(
+                source_set["subtract"]
+            )
+        raise ValueError(kind)
 
 
 def _fixture(tmp_path: Path):
@@ -222,7 +324,7 @@ def test_prepare_is_durable_deterministic_and_has_zero_media_effects(
     assert run.prepared_content_identity
     assert _tree_facts(source) == before_source
     assert _tree_facts(destination) == before_destination
-    assert [request["target"]["ref"] for request in reader.requests] == [
+    assert [request["source_item_refs"][0] for request in reader.requests] == [
         "source-item:a",
         "source-item:b",
     ]

@@ -251,7 +251,6 @@
       },
       "execution_phase": {
         "enum": [
-          "queued",
           "source_accounting",
           "scope_review",
           "metadata",
@@ -270,7 +269,6 @@
       },
       "activity_state": {
         "enum": [
-          "queued",
           "working",
           "no_recent_progress",
           "suspected_stalled",
@@ -590,29 +588,43 @@
         "allOf": [
           { "$ref": "#/$defs/status_base" },
           {
-            "type": "object",
-            "required": ["state", "allowed_actions"],
-            "properties": {
-              "state": { "const": "running" },
-              "activity": {
-                "allOf": [
-                  { "$ref": "#/$defs/activity" },
-                  {
-                    "properties": {
-                      "state": {
-                        "enum": [
-                          "queued",
-                          "working",
-                          "no_recent_progress",
-                          "suspected_stalled"
-                        ]
+            "oneOf": [
+              {
+                "type": "object",
+                "required": ["state", "allowed_actions"],
+                "properties": {
+                  "state": { "const": "running" },
+                  "activity": {
+                    "allOf": [
+                      { "$ref": "#/$defs/activity" },
+                      {
+                        "properties": {
+                          "state": {
+                            "enum": ["working", "no_recent_progress"]
+                          }
+                        }
                       }
-                    }
-                  }
-                ]
+                    ]
+                  },
+                  "allowed_actions": { "$ref": "#/$defs/running_actions" }
+                }
               },
-              "allowed_actions": { "$ref": "#/$defs/running_actions" }
-            }
+              {
+                "type": "object",
+                "required": ["state", "allowed_actions", "reason"],
+                "properties": {
+                  "state": { "const": "running" },
+                  "activity": {
+                    "allOf": [
+                      { "$ref": "#/$defs/activity" },
+                      { "properties": { "state": { "const": "suspected_stalled" } } }
+                    ]
+                  },
+                  "allowed_actions": { "$ref": "#/$defs/resumable_actions" },
+                  "reason": { "$ref": "#/$defs/reason" }
+                }
+              }
+            ]
           }
         ],
         "unevaluatedProperties": false

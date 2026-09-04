@@ -43,12 +43,12 @@ class UnderreportingPrecheckRead(RecordingPrecheckRead):
     def read(self, request: dict[str, object]) -> dict[str, object]:
         response = super().read(request)
         if (
-            request.get("action") != "traverse"
-            or request.get("relation") != "accounts_for"
+            request.get("operation") != "resolve"
+            or request.get("source_set", {}).get("relation") != "accounts_for"
         ):
             return response
         tampered = deepcopy(response)
-        tampered["items"] = []
+        tampered["members"] = []
         tampered["page"]["returned"] = 0
         return tampered
 
@@ -78,19 +78,24 @@ def test_public_precheck_plan_apply_prepare_handoff_has_no_hidden_protocol(
     accounts = read_boundary.read(
         {
             "result_ref": result.result_ref,
-            "action": "traverse",
-            "relation": "accounts_for",
-            "direction": "outbound",
+            "operation": "resolve",
+            "source_set": {
+                "kind": "precheck_relation",
+                "origin": result.result_ref,
+                "relation": "accounts_for",
+                "direction": "outbound",
+            },
         }
     )
-    source_item_ref = str(accounts["items"][0]["target"])
+    source_item_ref = str(accounts["members"][0]["source_item_ref"])
     source_view = read_boundary.read(
         {
             "result_ref": result.result_ref,
-            "action": "inspect",
-            "target": {"kind": "source_item", "ref": source_item_ref},
+            "operation": "expand",
+            "source_item_refs": [source_item_ref],
+            "include": ["source_item"],
         }
-    )["target"]
+    )["items"][0]["included"]["source_item"]
     source_root_ref = str(source_view["locator"]["source_root_ref"])
 
     plan_tool = PlanWorkTool(tmp_path / "plan-state", read_boundary)
@@ -188,7 +193,8 @@ def test_public_precheck_plan_apply_prepare_handoff_has_no_hidden_protocol(
     assert "frozen_plan_path" not in str(prepare_request)
     assert all(call["result_ref"] == result.result_ref for call in read_boundary.calls)
     assert all(
-        call["action"] in {"inspect", "traverse"} for call in read_boundary.calls
+        call["operation"] in {"review", "expand", "resolve"}
+        for call in read_boundary.calls
     )
     assert (source / "original.jpg").read_bytes() == source_before
     assert list(destination.iterdir()) == []

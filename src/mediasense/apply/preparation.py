@@ -2099,8 +2099,9 @@ def _read_source_item(
 ) -> SourceItemEvidence:
     request = {
         "result_ref": result_ref,
-        "action": "inspect",
-        "target": {"kind": "source_item", "ref": source_item_ref},
+        "operation": "expand",
+        "source_item_refs": [source_item_ref],
+        "include": ["source_item", "observations"],
     }
     try:
         response = precheck_read.read(request)
@@ -2127,19 +2128,33 @@ def _read_source_item(
         )
     if (
         response.get("outcome") != "ok"
-        or response.get("action") != "inspect"
+        or response.get("operation") != "expand"
         or response.get("result_ref") != result_ref
     ):
         raise SourceEvidenceError(
             "precheck_read_mismatch",
             f"PreCheck read response is not bound to {result_ref}",
         )
-    target = response.get("target")
-    if not isinstance(target, Mapping) or target.get("ref") != source_item_ref:
+    items = response.get("items")
+    item = items[0] if isinstance(items, list) and len(items) == 1 else None
+    included = item.get("included") if isinstance(item, Mapping) else None
+    source_item = (
+        included.get("source_item") if isinstance(included, Mapping) else None
+    )
+    observations = (
+        included.get("observations") if isinstance(included, Mapping) else None
+    )
+    if (
+        not isinstance(item, Mapping)
+        or item.get("source_item_ref") != source_item_ref
+        or not isinstance(source_item, Mapping)
+        or not isinstance(observations, list)
+    ):
         raise SourceEvidenceError(
             "precheck_read_mismatch",
             f"PreCheck read returned the wrong Source Item for {source_item_ref}",
         )
+    target = {**dict(source_item), "observations": observations}
     try:
         return SourceItemEvidence.from_precheck_view(
             result_ref=result_ref,

@@ -67,7 +67,7 @@ remaining setup guidance and installs the complete release-matched Skill set:
    Human has not explicitly selected a root; no write occurs until its absolute
    path is shown and confirmed. Dataset paths are never used to infer it.
 2. Check `command -v mediasense` and `mediasense --version`. The current Skill set
-   requires `0.4.x`; an installed `0.3.x` host is incompatible and must not be
+   requires `0.6.x`; an installed `0.3.x`, `0.4.x`, or `0.5.x` host is incompatible and must not be
    accepted merely because it exposes the expected Tool names.
 3. If the CLI is absent or incompatible, explain the exact trusted source,
    executable destination, and possible network access. Install only after Human

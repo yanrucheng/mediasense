@@ -64,7 +64,11 @@ def build_parser() -> argparse.ArgumentParser:
     show_parser.add_argument("name")
     show_parser.add_argument("--json", action="store_true")
     call_parser = tool_commands.add_parser(
-        "call", help="Invoke one Tool through the same local composition as MCP."
+        "call",
+        help=(
+            "Invoke one Tool through a one-shot local composition; long-running "
+            "starts require the persistent MCP Host."
+        ),
     )
     call_parser.add_argument("name")
     call_parser.add_argument("--source", required=True)
@@ -195,6 +199,22 @@ def _call_tool(args: argparse.Namespace) -> int:
     try:
         request = _json_argument(args.request)
         authority = None if args.authority is None else _json_argument(args.authority)
+        if args.name == "mediasense.precheck.run" and request.get("action") in {
+            "start",
+            "resume",
+        }:
+            value = {
+                "outcome": "error",
+                "error": {
+                    "code": "persistent_host_required",
+                    "message": (
+                        "PreCheck start and resume require a persistent Tool Host; "
+                        "a one-shot CLI process cannot own their execution worker."
+                    ),
+                },
+            }
+            _emit(value, json_output=args.json, human=json.dumps(value, indent=2))
+            return 2
         host = RuntimeHost()
         opened = host.open_dataset(args.source, args.workspace)
         if opened.get("outcome") != "ok":

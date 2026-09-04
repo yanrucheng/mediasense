@@ -17,6 +17,10 @@ Before architecture, contract, Skill, Tool, or migration work:
 - Original media is the factual source. Indexes, thumbnails, embeddings, clusters, plans, and output trees are derived artifacts with distinct lifecycles.
 - Do not create a final stage schema or Skill merely from an implementation convenience. First establish a human-reviewed handoff example and runtime/failure semantics.
 
+## Execution-state honesty
+
+- Follow [Execution-state honesty](docs/design/design-260823-1918-mediasense-foundation.md#execution-state-honesty) before designing or interpreting long-running lifecycle states. A state must be backed by a real mechanism: never use `queued`, `running`, `blocked`, or `paused` as a catch-all for a missing execution owner, unknown exception, or violated invariant. Preserve expected waits explicitly and let unexpected implementation failures surface immediately.
+
 ## Non-negotiable stage invariants
 
 - `mediasense.precheck`: source media remains read-only; remote calls and billable model access are disabled by default; long work is observable, resumable, incrementally reusable, and honest about partial completion.

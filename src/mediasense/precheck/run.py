@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from datetime import datetime, timedelta, timezone
 import hashlib
+import logging
 from pathlib import Path
 import sqlite3
 from threading import Event, Thread
@@ -26,7 +27,7 @@ from ._orchestrator import (
     _BlockedExecution,
 )
 from .accounting import AccountingStore
-from .read import PrecheckReadTool
+from .read import PrecheckReadTool, _ReadFailure
 from .result import ResultDraft, ResultSealError, ResultStore
 from .scope_review import (
     ScopeSelectionError,
@@ -55,7 +56,6 @@ _PROGRESS_KEYS = {
 }
 _EXCEPTIONAL_CONDITIONS = {"unsupported", "invalid", "error"}
 _PHASE_NAMES = {
-    "queued": "queued",
     "accounting": "source_accounting",
     "scope_review": "scope_review",
     "metadata": "metadata",
@@ -92,6 +92,7 @@ _WORK_FAILURE_STATES = {
     "blocked",
 }
 _ERROR_PHASE_LIMIT = 5
+_LOGGER = logging.getLogger(__name__)
 
 
 class PrecheckRunTool:
@@ -191,7 +192,7 @@ class PrecheckRunTool:
     ) -> None:
         """Persist one coarse execution boundary, never one write per source item."""
 
-        if phase not in _PHASE_NAMES or phase == "queued":
+        if phase not in _PHASE_NAMES:
             raise ValueError(f"unknown execution phase: {phase}")
         self._store.set_execution_checkpoint(
             run_ref,
@@ -345,33 +346,91 @@ class PrecheckRunTool:
     def advance(self, run_ref: str) -> dict[str, object]:
         """Continue one source-bound Run through its durable producer graph."""
 
+        worker_token, status = self.claim_execution(run_ref)
+        if worker_token is None:
+            return status
+        return self.advance_claimed(run_ref, worker_token)
+
+    def claim_execution(self, run_ref: str) -> tuple[str | None, dict[str, object]]:
+        """Claim execution before a Host reports that this Run is running."""
+
         try:
             record = self._store.get(run_ref)
         except KeyError:
-            return _error("status", "run_not_found", "Run does not exist", run_ref)
+            return None, _error(
+                "status", "run_not_found", "Run does not exist", run_ref
+            )
         if record["state"] != "running":
-            return self._status_record(record)
+            return None, self._status_record(record)
         accounting_run_id = record["accounting_run_id"]
         if accounting_run_id is None:
             accounting_run_id = self._store.unfinished_accounting_run(
                 dataset_id_from_ref(record["dataset_ref"])
             )
             if accounting_run_id is None:
-                return self._status_record(record)
+                failed = self.mark_failed(
+                    run_ref,
+                    code="execution_not_prepared",
+                    message=(
+                        "The Run has no source-accounting work to execute. "
+                        "Execution was not started."
+                    ),
+                )
+                return None, failed
             self._store.bind_accounting_run(run_ref, accounting_run_id)
         configuration = record["execution_config"]
         if configuration is None:
-            configuration = self._resolved_execution_config(
-                str(accounting_run_id)
-            ).value()
-            self._store.configure_execution(run_ref, configuration)
+            try:
+                configuration = self._resolved_execution_config(
+                    str(accounting_run_id)
+                ).value()
+                self._store.configure_execution(run_ref, configuration)
+            except (RunExecutionConflict, ValueError, OSError):
+                _LOGGER.exception(
+                    "PreCheck execution initialization failed for %s", run_ref
+                )
+                failed = self.mark_failed(
+                    run_ref,
+                    code="execution_initialization_failed",
+                    message=(
+                        "The execution configuration could not be initialized. "
+                        "Execution was not started."
+                    ),
+                )
+                return None, failed
         worker_token = uuid4().hex
         if not self._store.claim_execution_worker(
             run_ref,
             worker_token,
             stale_after=self._worker_stale_after,
         ):
-            return self._status_record(self._store.get(run_ref))
+            return None, self._status_record(self._store.get(run_ref))
+        return worker_token, self._status_record(self._store.get(run_ref))
+
+    def advance_claimed(self, run_ref: str, worker_token: str) -> dict[str, object]:
+        """Advance a Run whose worker lease was acquired before dispatch."""
+
+        record = self._store.get(run_ref)
+        if record["state"] != "running":
+            return self._status_record(record)
+        checkpoint = record["execution_checkpoint"]
+        assert isinstance(checkpoint, dict)
+        worker = checkpoint.get("worker")
+        if not isinstance(worker, dict) or worker.get("token") != worker_token:
+            return self._status_record(record)
+        accounting_run_id = record["accounting_run_id"]
+        configuration = record["execution_config"]
+        if not isinstance(accounting_run_id, str) or not isinstance(
+            configuration, dict
+        ):
+            return self.mark_failed(
+                run_ref,
+                code="execution_not_prepared",
+                message=(
+                    "The claimed worker has no complete execution preparation. "
+                    "Execution was stopped."
+                ),
+            )
         heartbeat_stop = Event()
         heartbeat = Thread(
             target=self._heartbeat_worker,
@@ -394,22 +453,24 @@ class PrecheckRunTool:
                     resume_when=error.resume_when,
                 )
             except (RunExecutionConflict, ValueError, OSError):
-                result = self.mark_blocked(
+                _LOGGER.exception("PreCheck execution failed for %s", run_ref)
+                result = self.mark_failed(
                     run_ref,
-                    code="execution_prerequisite_unavailable",
-                    message="A required local execution prerequisite is unavailable.",
-                    resume_when=(
-                        "Correct the execution prerequisite and resume this Run."
-                    ),
+                    code="execution_failed",
+                    message="PreCheck execution failed before reaching a safe boundary.",
                 )
             except Exception:
+                _LOGGER.exception("PreCheck execution failed for %s", run_ref)
                 current = self._store.get(run_ref)
                 if current["state"] != "running":
                     result = self._status_record(current)
                 else:
                     result = self.mark_interrupted(
                         run_ref,
-                        message="The execution worker stopped unexpectedly.",
+                        message=(
+                            "The execution worker stopped unexpectedly after "
+                            "acquiring the Run."
+                        ),
                     )
             except BaseException:
                 current = self._store.get(run_ref)
@@ -449,20 +510,21 @@ class PrecheckRunTool:
             except sqlite3.Error:
                 continue
 
-    def _prepare_execution(
-        self, record: Mapping[str, object], *, dataset_id: str
-    ) -> None:
-        """Bind and configure a new Run without starting long-running work."""
+    def prepare_execution(self, run_ref: str, *, dataset_id: str) -> None:
+        """Bind and configure one Run without starting long-running work."""
 
         accounting_run_id = self._store.unfinished_accounting_run(dataset_id)
         if accounting_run_id is None:
             return
-        run_ref = str(record["run_ref"])
         self._store.bind_accounting_run(run_ref, accounting_run_id)
         self._store.configure_execution(
             run_ref,
             self._resolved_execution_config(accounting_run_id).value(),
         )
+        checkpoint = self._store.get(run_ref)["execution_checkpoint"]
+        assert isinstance(checkpoint, dict)
+        if checkpoint["phase"] not in _PHASE_NAMES:
+            self.record_phase(run_ref, "accounting")
 
     def _resolved_execution_config(
         self, accounting_run_id: str
@@ -604,7 +666,7 @@ class PrecheckRunTool:
                 "idempotency_conflict",
                 "request_id was already used with different start inputs",
             )
-        self._prepare_execution(record, dataset_id=dataset_id)
+        self.prepare_execution(str(record["run_ref"]), dataset_id=dataset_id)
         return _start_response(record)
 
     def _status(
@@ -775,14 +837,12 @@ class PrecheckRunTool:
     def _verified_result(
         self, result_ref: str
     ) -> tuple[dict[str, object], dict[str, object]] | str:
-        loaded = self._reader._load(result_ref)
-        if isinstance(loaded, dict):
-            error = loaded.get("error")
-            if isinstance(error, dict) and error.get("code") == "result_not_found":
+        try:
+            package, _digest = self._reader._load(result_ref)
+        except _ReadFailure as error:
+            if error.code == "result_not_found":
                 return "Result does not exist"
-            message = error.get("message") if isinstance(error, dict) else None
-            return str(message or "sealed Result cannot be trusted")
-        package, _digest = loaded
+            return str(error) or "sealed Result cannot be trusted"
         if not isinstance(package, dict) or not isinstance(package.get("result"), dict):
             return "sealed Result has an invalid package shape"
         result_view = package["result"]
@@ -794,21 +854,42 @@ class PrecheckRunTool:
         return result_view, package
 
     def _status_record(self, record: dict[str, object]) -> dict[str, object]:
+        activity = self._activity_record(record)
+        state = str(record["state"])
+        allowed_actions = list(_ALLOWED_ACTIONS[state])
         response: dict[str, object] = {
             "outcome": "ok",
             "action": "status",
             "run_ref": record["run_ref"],
             "dataset_ref": record["dataset_ref"],
-            "state": record["state"],
+            "state": state,
             "progress": record["progress"],
-            "activity": self._activity_record(record),
-            "allowed_actions": list(_ALLOWED_ACTIONS[str(record["state"])]),
+            "activity": activity,
+            "allowed_actions": allowed_actions,
         }
         if record["prior_result_ref"] is not None:
             response["prior_result_ref"] = record["prior_result_ref"]
-        if record["state"] in {"paused", "blocked", "failed"}:
+        if state in {"paused", "blocked", "failed"}:
             response["reason"] = record["reason"]
-        if record["state"] == "paused" and record["confirmation"] is not None:
+        elif state == "running" and activity["state"] == "suspected_stalled":
+            checkpoint = record["execution_checkpoint"]
+            assert isinstance(checkpoint, dict)
+            worker = checkpoint["worker"]
+            response["allowed_actions"] = list(_ALLOWED_ACTIONS["paused"])
+            response["reason"] = _reason(
+                (
+                    "execution_owner_missing"
+                    if worker is None
+                    else "execution_owner_stale"
+                ),
+                (
+                    "No execution worker has claimed this Run."
+                    if worker is None
+                    else "The execution worker is no longer responsive."
+                ),
+                resume_when="A live Tool Host explicitly resumes this Run.",
+            )
+        if state == "paused" and record["confirmation"] is not None:
             response["confirmation"] = record["confirmation"]
         scope_review = self._store.latest_scope_review(str(record["run_ref"]))
         if (
@@ -821,7 +902,7 @@ class PrecheckRunTool:
             if scope_review["reused_from_run_ref"] is not None:
                 selection["reused_from_run_ref"] = scope_review["reused_from_run_ref"]
             response["scope_selection"] = selection
-        if record["state"] == "completed":
+        if state == "completed":
             response["published_result"] = record["published_result"]
         return response
 
@@ -887,7 +968,7 @@ class PrecheckRunTool:
         if not isinstance(worker, dict) or not isinstance(
             worker.get("heartbeat_at"), str
         ):
-            return "queued"
+            return "suspected_stalled"
         now = _as_datetime(self._store.now())
         if now - _as_datetime(str(worker["heartbeat_at"])) > self._worker_stale_after:
             return "suspected_stalled"
@@ -907,8 +988,6 @@ def _phase_work_progress(
     facts: Mapping[str, object],
     run_state: str,
 ) -> tuple[dict[str, object], str | None]:
-    if phase == "queued":
-        return _work_counts(0, 0, 0, "unknown", "unknown"), None
     if phase == "accounting":
         accounting = facts.get("accounting")
         if not isinstance(accounting, dict):

@@ -137,8 +137,8 @@
         "state": "completed",
         "progress": {
           "discovered": "unknown",
-          "accounted": 224,
-          "usable": 223,
+          "accounted": 5,
+          "usable": 4,
           "exceptional": 1,
           "unresolved": 0
         },

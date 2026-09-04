@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import threading
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -36,6 +37,9 @@ from mediasense.precheck.source_attachment import (
 from .config import RuntimeConfig
 from .dataset import DatasetOpenResult
 from .resources import contract_digest, load_contract, schema_path
+
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class HostRequestError(RuntimeError):
@@ -158,12 +162,34 @@ class DatasetRuntime:
         self, request: dict[str, Any], authority: Mapping[str, Any]
     ) -> dict[str, object]:
         action = request.get("action")
-        if action == "start" and "prior_result_ref" not in request:
+        if action == "start":
             requested_dataset = request.get("dataset_ref")
-            if requested_dataset != self.opened.manifest.dataset_ref:
+            if (
+                requested_dataset is not None
+                and requested_dataset != self.opened.manifest.dataset_ref
+            ):
                 raise HostRequestError(
                     "PreCheck request dataset_ref does not match the opened Dataset."
                 )
+            prior_result_ref = request.get("prior_result_ref")
+            if isinstance(prior_result_ref, str) and prior_result_ref:
+                inspected = self.precheck_read.read(
+                    {
+                        "operation": "review",
+                        "result_ref": prior_result_ref,
+                        "page": {"limit": 1},
+                    }
+                )
+                if inspected.get("outcome") != "ok":
+                    return self.precheck_run.run(request)
+                target = inspected.get("result")
+                if (
+                    not isinstance(target, Mapping)
+                    or target.get("dataset_ref") != self.opened.manifest.dataset_ref
+                ):
+                    raise HostRequestError(
+                        "Prior Result does not belong to the opened Dataset."
+                    )
             rebind_reason = authority.get("rebind_reason")
             if rebind_reason is not None and not isinstance(rebind_reason, str):
                 raise HostRequestError("rebind_reason must be a string")
@@ -188,33 +214,102 @@ class DatasetRuntime:
                 }
         response = self.precheck_run.run(request)
         run_ref = response.get("run_ref")
-        if isinstance(run_ref, str) and response.get("state") == "running":
-            self._schedule(run_ref)
-        if (
-            isinstance(run_ref, str)
-            and response.get("outcome") == "accepted"
-            and response.get("target_state") == "running"
-        ):
-            self._schedule(run_ref)
+        should_schedule = isinstance(run_ref, str) and (
+            (
+                action == "start"
+                and response.get("outcome") == "ok"
+                and response.get("state") == "running"
+            )
+            or (
+                action == "resume"
+                and response.get("outcome") == "accepted"
+                and response.get("target_state") == "running"
+            )
+        )
+        if should_schedule:
+            assert isinstance(run_ref, str)
+            if response.get("dataset_ref", self.opened.manifest.dataset_ref) != (
+                self.opened.manifest.dataset_ref
+            ):
+                failed = self.precheck_run.mark_failed(
+                    run_ref,
+                    code="dataset_binding_mismatch",
+                    message=(
+                        "The Run belongs to a different Dataset than the opened "
+                        "Tool Host. Execution was not started."
+                    ),
+                )
+                return _execution_start_error(str(action), failed)
+            if action == "resume":
+                try:
+                    AccountingStore(
+                        self.precheck_run.database_path
+                    ).start_or_resume_run(
+                        self.dataset_id,
+                        self.opened.source_root,
+                        rebind_reason=authority.get("rebind_reason"),
+                    )
+                    self.precheck_run.prepare_execution(
+                        run_ref,
+                        dataset_id=self.dataset_id,
+                    )
+                except (SourceAttachmentError, ValueError, OSError):
+                    _LOGGER.exception(
+                        "PreCheck resume preparation failed for %s", run_ref
+                    )
+                    failed = self.precheck_run.mark_failed(
+                        run_ref,
+                        code="execution_initialization_failed",
+                        message=("The Run could not prepare a source-bound execution."),
+                    )
+                    return _execution_start_error(str(action), failed)
+            failed = self._schedule(run_ref)
+            if failed is not None:
+                return _execution_start_error(str(action), failed)
         return response
 
-    def _schedule(self, run_ref: str) -> None:
+    def _schedule(self, run_ref: str) -> dict[str, object] | None:
         with self._worker_lock:
             current = self._workers.get(run_ref)
             if current is not None and current.is_alive():
-                return
+                return None
+            worker_token, status = self.precheck_run.claim_execution(run_ref)
+            if worker_token is None:
+                return status if status.get("state") == "failed" else None
             worker = threading.Thread(
                 target=self._advance,
-                args=(run_ref,),
+                args=(run_ref, worker_token),
                 name=f"mediasense-{run_ref}",
                 daemon=True,
             )
             self._workers[run_ref] = worker
-            worker.start()
+            try:
+                worker.start()
+            except Exception:
+                self._workers.pop(run_ref, None)
+                _LOGGER.exception("PreCheck worker launch failed for %s", run_ref)
+                return self.precheck_run.mark_failed(
+                    run_ref,
+                    code="execution_worker_start_failed",
+                    message="The execution worker could not be started.",
+                )
+        return None
 
-    def _advance(self, run_ref: str) -> None:
+    def _advance(self, run_ref: str, worker_token: str) -> None:
         try:
-            self.precheck_run.advance(run_ref)
+            self.precheck_run.advance_claimed(run_ref, worker_token)
+        except Exception:
+            _LOGGER.exception("PreCheck worker crashed for %s", run_ref)
+            try:
+                self.precheck_run.mark_failed(
+                    run_ref,
+                    code="execution_worker_crashed",
+                    message="The execution worker crashed unexpectedly.",
+                )
+            except Exception:
+                _LOGGER.exception(
+                    "PreCheck worker failure could not be recorded for %s", run_ref
+                )
         finally:
             with self._worker_lock:
                 self._workers.pop(run_ref, None)
@@ -240,6 +335,28 @@ class DatasetRuntime:
         finally:
             with self._worker_lock:
                 self._workers.pop(worker_ref, None)
+
+
+def _execution_start_error(
+    action: str, failed: Mapping[str, object]
+) -> dict[str, object]:
+    reason = failed.get("reason")
+    message = (
+        str(reason.get("message"))
+        if isinstance(reason, Mapping)
+        else "The execution worker could not be started."
+    )
+    return {
+        "outcome": "error",
+        "action": action,
+        "run_ref": failed["run_ref"],
+        "error": {
+            "code": "operation_failed",
+            "message": message,
+            "current_state": "failed",
+            "allowed_actions": [],
+        },
+    }
 
 
 def tool_descriptors() -> tuple[ToolDescriptor, ...]:

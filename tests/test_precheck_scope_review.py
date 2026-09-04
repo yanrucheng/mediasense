@@ -152,12 +152,16 @@ def test_scope_selection_excludes_cache_frames_but_keeps_accounting(
     )
     result_items = PrecheckReadTool(tool.database_path).read(
         {
-            "action": "traverse",
+            "operation": "resolve",
             "result_ref": finished["published_result"]["result_ref"],
-            "relation": "accounts_for",
-            "direction": "outbound",
+            "source_set": {
+                "kind": "precheck_relation",
+                "origin": finished["published_result"]["result_ref"],
+                "relation": "accounts_for",
+                "direction": "outbound",
+            },
         }
-    )["items"]
+    )["members"]
     assert sum(item["scope"] == "excluded" for item in result_items) == 1
 
 

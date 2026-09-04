@@ -57,9 +57,9 @@ def _validators() -> tuple[Draft202012Validator, Draft202012Validator]:
 def _result_view(result_ref: str) -> dict:
     precheck = _load(READ_SPEC / "hong-kong.mock.json")
     for exchange in precheck["exchanges"]:
-        target = exchange["response"].get("target", {})
-        if target.get("kind") == "result" and target.get("ref") == result_ref:
-            return target
+        result = exchange["response"].get("result", {})
+        if result.get("kind") == "result" and result.get("ref") == result_ref:
+            return result
     raise AssertionError(f"missing Result view: {result_ref}")
 
 

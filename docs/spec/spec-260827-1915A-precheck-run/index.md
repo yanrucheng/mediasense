@@ -4,7 +4,7 @@ title: "MediaSense PreCheck Run Tool Contract"
 type: spec
 status: active
 created: 2026-08-27
-updated: 2026-09-02
+updated: 2026-09-03
 timezone: "Asia/Shanghai"
 parent: "index-spec"
 depends-on:
@@ -56,12 +56,13 @@ storage, worker topology, or implementation.
 
 ### `start`
 
-`start` durably creates and prepares a new Run, then returns its `run_ref` in
-`running` state without waiting for discovery or producer execution. The host
-schedules the existing private execution coordinator with that reference;
-`status`, `pause`, and `cancel` therefore remain available while long work is
-running. This scheduling boundary is not another public action or product
-entity.
+`start` durably creates and prepares a new Run, acquires an execution-worker
+lease, and launches the existing private execution coordinator before returning
+its `run_ref` in `running` state. It does not wait for discovery or producer
+completion. If source-bound preparation, worker acquisition, or worker launch
+fails, `start` fails immediately and the retained Run records the failure; it
+must not return an ownerless `running` Run. This execution boundary is not
+another public action or product entity.
 
 The first worker pass completes source discovery and ordinarily pauses for a
 scope selection before admitting expensive producer Work. A later Run may skip
@@ -94,7 +95,8 @@ accepted selection for the same Dataset.
 While source scope is pending, callers may supply a source-relative
 `scope_path` to `status` to replace the root view with a bounded view of that
 subtree, and `scope_after` to continue an oversized sibling list. This is a
-read-only projection, not a sixth action. Counts, byte totals, kind
+read-only projection, not a sixth action. `status` never starts, resumes,
+reclaims, or schedules execution. Counts, byte totals, kind
 distributions, size buckets, representative paths, omitted-child counts, and
 discovery limitations are facts. Cache, backup, historical-output, or
 legitimacy judgments are deliberately absent.
@@ -132,7 +134,7 @@ percent completion, throughput, or an ETA.
 
 | Field | Stable meaning |
 | --- | --- |
-| `phase` | The current user-relevant capability boundary: queued, source accounting, scope review, metadata, renditions, video, GPX, embeddings, sensitivity, bundling, compression, optional external evidence, publication, complete, or explicitly unknown. It does not promise one fixed implementation order. |
+| `phase` | The current user-relevant capability boundary: source accounting, scope review, metadata, renditions, video, GPX, embeddings, sensitivity, bundling, compression, optional external evidence, publication, complete, or explicitly unknown. It does not promise one fixed implementation order. |
 | `work.completed` | Phase operations successfully computed in this Working Run. |
 | `work.reused` | Phase operations satisfied by valid work committed before this Working Run. |
 | `work.failed` | Phase operations with a current failed, blocked, or exhausted outcome; these do not alone make the whole Run `failed`. |
@@ -156,10 +158,9 @@ Source Item conditions and immutable Result qualifications.
 
 | Activity state | Meaning |
 | --- | --- |
-| `queued` | The durable Run is waiting for a worker to begin or resume. |
 | `working` | A worker is responsive and durable progress is recent. |
 | `no_recent_progress` | A worker is responsive, but no durable phase or Work transition has been observed recently. This may be a legitimately slow operation and is not an ETA or failure claim. |
-| `suspected_stalled` | The Run remains `running`, but durable worker liveness is stale or absent after work began. The host may safely reconcile and reclaim the same Run. |
+| `suspected_stalled` | The retained Run has no current execution owner or its durable worker liveness has expired. Status includes the exact known reason and exposes explicit `resume`; it never reclaims the Run implicitly. |
 | `waiting` | Progress depends on a reported external or Human condition, such as a blocked source or confirmation. |
 | `paused` | The Run is durably paused and requires `resume` to continue. |
 | `finished` | The Run is completed, cancelled, or failed; the top-level state provides the exact outcome. |
@@ -211,23 +212,30 @@ frozen scope, provider route, logical and actual request counts, outcomes, failu
 and known or unknown billable effects, while proving that media, renditions,
 embeddings, paths, filenames, prompts, and general metadata were not transmitted.
 
-An accepted control response proves only that the request was accepted and reports the state observed at that moment. Only a later `status` response proves the transition completed. Repeating an already-achieved target is accepted without creating another effect. An incompatible transition returns `invalid_state` and the current state and allowed actions.
+An accepted pause or cancel response proves only that the request was accepted
+and reports the state observed at that moment. A successful `resume` additionally
+proves that a live persistent host acquired and launched the execution worker;
+it does not prove producer progress or completion. Repeating an already-achieved
+target is accepted without creating another effect. An incompatible transition
+returns `invalid_state` and the current state and allowed actions.
 
-The host is responsible for invoking or rescheduling the private coordinator
-after `start` or `resume`. This internal call is not exposed as a sixth Tool
-action. A worker may finish already-admitted bounded work while a pause or
+The host is responsible for acquiring an execution lease and launching the
+private coordinator before a successful `start` or `resume` response. A
+one-shot host that cannot retain the worker must refuse those actions. `status`
+never performs this work. A worker may finish already-admitted bounded work while a pause or
 cancel request is being committed, but it must observe the durable state before
 admitting further Work or publishing a Result. Worker liveness is durably
 heartbeated at a bounded cadence. An in-process worker exit that does not reach an
 attention or terminal state changes the Run to resumable `paused`; a process loss
 that cannot run cleanup becomes `suspected_stalled` after its heartbeat expires
-and may be reclaimed by a later host without changing `run_ref`.
+and may be reclaimed only by an explicit `resume` on a live persistent host,
+without changing `run_ref`.
 
 ## Public lifecycle
 
 | State | Meaning | Required status facts | New control actions |
 | --- | --- | --- | --- |
-| `running` | Work is queued, active, or awaiting liveness reconciliation. | Progress and activity; no published Result. | `pause`, `cancel` |
+| `running` | A worker owns execution, or retained liveness evidence explicitly reports that the owner is suspected stalled. | Progress and activity; stalled execution also requires a reason and recovery condition; no published Result. | active: `pause`, `cancel`; stalled: `resume`, `cancel` |
 | `paused` | No work is progressing, but the Run is durably resumable. | Reason distinguishing at least requested pause from process interruption; recovery condition when useful. | `resume`, `cancel` |
 | `blocked` | An observable external condition prevents progress. | Reason and a verifiable condition under which resume may succeed. | `resume`, `cancel` |
 | `completed` | A Result has been atomically published. | `published_result`; no further controls. | none |
@@ -284,7 +292,7 @@ The lifecycle Mock demonstrates:
 - running phase progress, bounded localized errors, requested pause,
   interruption-safe resume, and cancellation;
 - blocked recovery information;
-- a partial, plan-ready, valid 224-item Result whose public accounting matches the existing Result Mock; and
+- a partial, plan-ready, valid 5-item Result whose public reconciliation matches the existing Result Mock; and
 - no Result on paused, blocked, or cancelled states.
 
 JSON Schema proves the closed request and response shapes. Semantic conformance

@@ -92,28 +92,33 @@ def test_prepare_resolves_and_verifies_one_real_sealed_precheck_result(
     accounts = reader.read(
         {
             "result_ref": result.result_ref,
-            "action": "traverse",
-            "relation": "accounts_for",
-            "direction": "outbound",
+            "operation": "resolve",
+            "source_set": {
+                "kind": "precheck_relation",
+                "origin": result.result_ref,
+                "relation": "accounts_for",
+                "direction": "outbound",
+            },
         }
     )
     source_item_ref = next(
-        str(item["target"])
-        for item in accounts["items"]
+        str(item["source_item_ref"])
+        for item in accounts["members"]
         if item["scope"] == "source_media"
     )
     inspected = reader.read(
         {
             "result_ref": result.result_ref,
-            "action": "inspect",
-            "target": {"kind": "source_item", "ref": source_item_ref},
+            "operation": "expand",
+            "source_item_refs": [source_item_ref],
+            "include": ["source_item", "observations"],
         }
     )
-    source_view = inspected["target"]
-    source_root_ref = source_view["locator"]["source_root_ref"]
+    included = inspected["items"][0]["included"]
+    source_root_ref = included["source_item"]["locator"]["source_root_ref"]
     verification = next(
         observation
-        for observation in source_view["observations"]
+        for observation in included["observations"]
         if observation["name"] == "source_content_verification"
     )
     assert verification["value"]["profile"] == "candidate-sha256-full-or-3x4k-v1"
@@ -164,23 +169,28 @@ def test_real_sealed_precheck_result_executes_controlled_move_and_receipt(
     accounts = reader.read(
         {
             "result_ref": result.result_ref,
-            "action": "traverse",
-            "relation": "accounts_for",
-            "direction": "outbound",
+            "operation": "resolve",
+            "source_set": {
+                "kind": "precheck_relation",
+                "origin": result.result_ref,
+                "relation": "accounts_for",
+                "direction": "outbound",
+            },
         }
     )
     source_item_ref = next(
-        str(item["target"])
-        for item in accounts["items"]
+        str(item["source_item_ref"])
+        for item in accounts["members"]
         if item["scope"] == "source_media"
     )
     source_view = reader.read(
         {
             "result_ref": result.result_ref,
-            "action": "inspect",
-            "target": {"kind": "source_item", "ref": source_item_ref},
+            "operation": "expand",
+            "source_item_refs": [source_item_ref],
+            "include": ["source_item"],
         }
-    )["target"]
+    )["items"][0]["included"]["source_item"]
     source_root_ref = source_view["locator"]["source_root_ref"]
 
     apply = ApplyRunStore.initialize(tmp_path / "apply-state" / "work.sqlite3")

@@ -237,45 +237,39 @@ def test_detector_failure_is_explicit_and_result_observations_remain_readable(
     reader = PrecheckReadTool(database)
     accounted = reader.read(
         {
-            "action": "traverse",
-            "direction": "outbound",
-            "relation": "accounts_for",
+            "operation": "resolve",
             "result_ref": sealed.result_ref,
-        }
-    )
-    source_views = [
-        reader.read(
-            {
-                "action": "inspect",
-                "result_ref": sealed.result_ref,
-                "target": {"kind": "source_item", "ref": item["target"]},
-            }
-        )["target"]
-        for item in accounted["items"]
-    ]
-    source_by_path = {item["locator"]["value"]: item["ref"] for item in source_views}
-    good_response = reader.read(
-        {
-            "action": "inspect",
-            "result_ref": sealed.result_ref,
-            "target": {"kind": "source_item", "ref": source_by_path["good.jpg"]},
-        }
-    )
-    failed_response = reader.read(
-        {
-            "action": "inspect",
-            "result_ref": sealed.result_ref,
-            "target": {
-                "kind": "source_item",
-                "ref": source_by_path["failed.jpg"],
+            "source_set": {
+                "kind": "precheck_relation",
+                "origin": sealed.result_ref,
+                "relation": "accounts_for",
+                "direction": "outbound",
             },
         }
     )
+    source_by_path = {
+        item["locator"]["value"]: item["source_item_ref"]
+        for item in accounted["members"]
+    }
+    source_response = reader.read(
+        {
+            "operation": "expand",
+            "result_ref": sealed.result_ref,
+            "source_item_refs": [
+                source_by_path["good.jpg"],
+                source_by_path["failed.jpg"],
+            ],
+            "include": ["source_item", "observations"],
+        }
+    )
     schema = json.loads((SPEC_ROOT / "precheck-read.tool.json").read_text())
-    Draft202012Validator(schema["outputSchema"]).validate(good_response)
-    Draft202012Validator(schema["outputSchema"]).validate(failed_response)
-    good_view = good_response["target"]
-    failed_view = failed_response["target"]
+    Draft202012Validator(schema["outputSchema"]).validate(source_response)
+    views = {
+        item["source_item_ref"]: item["included"]
+        for item in source_response["items"]
+    }
+    good_view = views[source_by_path["good.jpg"]]
+    failed_view = views[source_by_path["failed.jpg"]]
 
     assert any(
         item["name"] == "content_sensitivity" and item["status"] == "available"

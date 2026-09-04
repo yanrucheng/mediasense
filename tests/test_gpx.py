@@ -163,30 +163,29 @@ def test_bad_gpx_is_localized_and_result_retains_selected_track_basis(
     accounted = reader.read(
         {
             "result_ref": sealed.result_ref,
-            "action": "traverse",
-            "relation": "accounts_for",
-            "direction": "outbound",
+            "operation": "resolve",
+            "source_set": {
+                "kind": "precheck_relation",
+                "origin": sealed.result_ref,
+                "relation": "accounts_for",
+                "direction": "outbound",
+            },
         }
     )
     source_ref = next(
-        item["target"]
-        for item in accounted["items"]
-        if reader.read(
-            {
-                "result_ref": sealed.result_ref,
-                "action": "inspect",
-                "target": {"kind": "source_item", "ref": item["target"]},
-            }
-        )["target"]["locator"]["value"]
-        == "photo.jpg"
+        item["source_item_ref"]
+        for item in accounted["members"]
+        if item["locator"]["value"] == "photo.jpg"
     )
-    view = reader.read(
+    response = reader.read(
         {
             "result_ref": sealed.result_ref,
-            "action": "inspect",
-            "target": {"kind": "source_item", "ref": source_ref},
+            "operation": "expand",
+            "source_item_refs": [source_ref],
+            "include": ["source_item", "observations"],
         }
-    )["target"]
+    )
+    view = response["items"][0]["included"]
     observation = next(
         item for item in view["observations"] if item["name"] == "gpx_coordinates"
     )
@@ -198,11 +197,4 @@ def test_bad_gpx_is_localized_and_result_retains_selected_track_basis(
             / "docs/spec/spec-260826-1546-precheck-read/precheck-read.tool.json"
         ).read_text(encoding="utf-8")
     )
-    Draft202012Validator(schema["outputSchema"]).validate(
-        {
-            "outcome": "ok",
-            "result_ref": sealed.result_ref,
-            "action": "inspect",
-            "target": view,
-        }
-    )
+    Draft202012Validator(schema["outputSchema"]).validate(response)

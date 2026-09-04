@@ -7,8 +7,10 @@ from pathlib import Path
 from jsonschema import Draft202012Validator
 
 
-SPEC_ROOT = (
-    Path(__file__).parents[1] / "docs" / "spec" / "spec-260826-1546-precheck-read"
+ROOT = Path(__file__).parents[1]
+SPEC_ROOT = ROOT / "docs" / "spec" / "spec-260826-1546-precheck-read"
+RUNTIME_CONTRACT = (
+    ROOT / "src" / "mediasense" / "_resources" / "contracts" / "precheck-read.tool.json"
 )
 
 
@@ -26,145 +28,159 @@ def _objects(value) -> Iterator[dict]:
             yield from _objects(child)
 
 
-def test_contract_exposes_only_business_required_traversal_directions() -> None:
+def test_contract_is_zero_bc_and_exposes_only_consumer_operations() -> None:
     tool = _load("precheck-read.tool.json")
-    expected = {
-        ("accounts_for", "outbound"),
-        ("entry_evidence", "outbound"),
-        ("represents", "outbound"),
-        ("represents", "inbound"),
-        ("derived_from", "outbound"),
-        ("expands_to", "outbound"),
+    branches = tool["inputSchema"]["oneOf"]
+    definitions = tool["inputSchema"]["$defs"]
+    operations = {
+        definitions[branch["$ref"].rsplit("/", 1)[1]]["properties"]["operation"][
+            "const"
+        ]
+        for branch in branches
     }
-    input_branches = tool["inputSchema"]["allOf"][3]["then"]["oneOf"]
-    output_rules = tool["outputSchema"]["$defs"]["traverse_response"]["allOf"]
-    output_branches = next(rule["oneOf"] for rule in output_rules if "oneOf" in rule)
 
-    assert _relation_directions(input_branches) == expected
-    assert _relation_directions(output_branches) == expected
-    assert all(
-        branch["properties"].get("target", {}).get("$ref") == "#/$defs/opaque_ref"
-        for branch in input_branches
-        if "target" in branch["properties"]
-        and branch["properties"]["target"] is not False
-    )
-    assert all(
-        branch["properties"]["origin"]["$ref"] == "#/$defs/opaque_ref"
-        for branch in output_branches
-    )
+    assert operations == {"review", "expand", "resolve"}
+    encoded = json.dumps(tool)
+    assert '"action"' not in encoded
+    assert '"inspect"' not in encoded
+    assert '"traverse"' not in encoded
 
 
-def test_contract_keeps_qualification_and_basis_minimal() -> None:
+def test_expand_requires_one_selector_and_published_include_names() -> None:
     tool = _load("precheck-read.tool.json")
-    definitions = tool["outputSchema"]["$defs"]
+    validator = Draft202012Validator(tool["inputSchema"])
+    result_ref = "precheck-result:test"
+
+    valid = {
+        "operation": "expand",
+        "result_ref": result_ref,
+        "evidence_refs": ["evidence:a"],
+        "include": ["anchor_evidence", "prepared_targets"],
+    }
+    validator.validate(valid)
+
+    assert list(
+        validator.iter_errors(
+            {
+                **valid,
+                "source_item_refs": ["source-item:a"],
+            }
+        )
+    )
+    assert list(
+        validator.iter_errors(
+            {
+                **valid,
+                "include": ["semantic_recommendation"],
+            }
+        )
+    )
+
+
+def test_contract_publishes_projection_roles_and_bounded_pages() -> None:
+    tool = _load("precheck-read.tool.json")
+    input_defs = tool["inputSchema"]["$defs"]
+    output_defs = tool["outputSchema"]["$defs"]
+
+    assert output_defs["evidence_role"]["enum"] == [
+        "representative",
+        "boundary",
+        "outlier",
+        "conflict",
+    ]
+    assert input_defs["page_100"]["properties"]["limit"]["maximum"] == 100
+    assert input_defs["page_200"]["properties"]["limit"]["maximum"] == 200
+    assert input_defs["page_1000"]["properties"]["limit"]["maximum"] == 1000
+    assert output_defs["page"]["properties"]["stop_reason"]["enum"] == [
+        "complete",
+        "limit",
+        "byte_limit",
+    ]
+    assert output_defs["review_response"]["properties"]["page"]["allOf"][1] == {
+        "required": ["order"]
+    }
+    error_codes = output_defs["error_response"]["properties"]["error"][
+        "properties"
+    ]["code"]["enum"]
+    assert "reference_not_in_result" in error_codes
+    assert "source_set_out_of_scope" not in error_codes
+
+
+def test_contract_keeps_qualification_and_source_verification_explicit() -> None:
+    definitions = _load("precheck-read.tool.json")["outputSchema"]["$defs"]
 
     assert definitions["qualification"]["properties"]["effect"]["enum"] == [
         "limits_interpretation",
         "blocks_use",
     ]
-    available_rule = definitions["observation"]["allOf"][0]["then"]
-    failed_rule = definitions["observation"]["allOf"][1]["then"]
-    assert available_rule["required"] == ["value"]
-    assert failed_rule["required"] == ["basis"]
-    qualification_lists = [
-        value["qualifications"]
-        for value in _objects(definitions)
-        if "qualifications" in value
-        and isinstance(value["qualifications"], dict)
-        and value["qualifications"].get("type") == "array"
+    assert definitions["resolved_member"]["required"] == [
+        "source_item_ref",
+        "locator",
+        "scope",
+        "condition",
+        "source_content_verification",
     ]
-    assert qualification_lists
-    assert all(value["minItems"] == 1 for value in qualification_lists)
-
-
-def test_contract_exposes_replaceable_result_local_source_verification() -> None:
-    tool = _load("precheck-read.tool.json")
-    definitions = tool["outputSchema"]["$defs"]
-    result_view = definitions["result_view"]
-    source_locator = definitions["source_locator"]
-    verification = definitions["source_verification_value"]
-
-    assert "source_root_ref" not in result_view["required"]
-    assert "source_root_ref" not in result_view["properties"]
-    assert source_locator["required"] == ["kind", "source_root_ref", "value"]
-    assert source_locator["properties"]["source_root_ref"] == {
-        "$ref": "#/$defs/source_root_ref"
-    }
-    assert "execution_boundary" in result_view["required"]
-    assert result_view["properties"]["execution_boundary"] == {
-        "$ref": "#/$defs/execution_boundary"
-    }
-    assert verification["required"] == [
-        "profile",
-        "value",
-        "size_bytes",
-        "observed_at",
-        "producer",
-    ]
-    assert verification["properties"]["profile"]["type"] == "string"
-    assert "enum" not in verification["properties"]["profile"]
-
-    mock = _load("hong-kong.mock.json")
-    source_views = [
-        exchange["response"]["target"]
-        for exchange in mock["exchanges"]
-        if exchange["response"].get("target", {}).get("kind") == "source_item"
-    ]
-    assert source_views
-    assert all(
-        item["locator"]["source_root_ref"].startswith("source-root:")
-        for item in source_views
+    assert definitions["source_verification"]["properties"]["profile"]["type"] == (
+        "string"
     )
 
 
-def test_contract_allows_one_result_to_reference_multiple_source_roots() -> None:
-    output_schema = _load("precheck-read.tool.json")["outputSchema"]
-    validator = Draft202012Validator(output_schema)
-    result_ref = "precheck-result:multi-root"
+def test_contract_does_not_expose_private_storage_vocabulary() -> None:
+    encoded = json.dumps(_load("precheck-read.tool.json")).lower()
 
-    for item_ref, root_ref, relative_path in (
-        ("source-item:a", "source-root:disk-a", "DCIM/a.jpg"),
-        ("source-item:b", "source-root:disk-b", "archive/b.jpg"),
+    for forbidden in (
+        "sqlite",
+        "table_name",
+        "row_id",
+        "cache_key",
+        "compression_group",
     ):
-        validator.validate(
-            {
-                "outcome": "ok",
-                "result_ref": result_ref,
-                "action": "inspect",
-                "target": {
-                    "kind": "source_item",
-                    "ref": item_ref,
-                    "locator": {
-                        "kind": "source_root_relative_path",
-                        "source_root_ref": root_ref,
-                        "value": relative_path,
-                    },
-                },
-            }
-        )
+        assert forbidden not in encoded
 
 
-def test_mock_uses_kind_only_when_relationship_target_type_is_ambiguous() -> None:
+def test_mock_requests_and_responses_conform() -> None:
+    tool = _load("precheck-read.tool.json")
     mock = _load("hong-kong.mock.json")
-    for exchange in mock["exchanges"]:
-        request = exchange["request"]
-        if request["action"] != "traverse":
-            continue
-        response = exchange["response"]
-        assert isinstance(response["origin"], str)
-        if "target" in request:
-            assert isinstance(request["target"], str)
+    input_validator = Draft202012Validator(tool["inputSchema"])
+    output_validator = Draft202012Validator(tool["outputSchema"])
 
-        target_types = {type(item["target"]) for item in response["items"]}
-        if request["relation"] in {"derived_from", "expands_to"}:
-            assert target_types <= {dict}
-            assert all(
-                item["target"]["kind"] in {"source_item", "evidence"}
-                for item in response["items"]
-            )
-        else:
-            assert target_types <= {str}
-    assert not [value for value in _objects(mock) if value.get("qualifications") == []]
+    assert {exchange["request"]["operation"] for exchange in mock["exchanges"]} == {
+        "review",
+        "expand",
+        "resolve",
+    }
+    for exchange in mock["exchanges"]:
+        input_validator.validate(exchange["request"])
+        output_validator.validate(exchange["response"])
+
+
+def test_review_mock_carries_reconciliation_and_no_semantic_decision() -> None:
+    mock = _load("hong-kong.mock.json")
+    review = next(
+        exchange["response"]
+        for exchange in mock["exchanges"]
+        if exchange["request"]["operation"] == "review"
+    )
+    reconciliation = review["reconciliation"]
+    partition = reconciliation["partition"]
+
+    assert reconciliation["accounted_total"] == sum(partition.values())
+    assert partition["residual"] == 0
+    assert reconciliation["closure_check"]["status"] == "passed"
+    assert all(
+        {item["include"] for item in card["available_expansions"]}
+        == {
+            "anchor_evidence",
+            "prepared_targets",
+            "provenance",
+            "coverage_basis",
+            "member_observations",
+        }
+        for card in review["coverage_cards"]
+    )
+    encoded = json.dumps(review, ensure_ascii=False)
+    for forbidden in ("recommended_group", "directory_name", "organization_profile"):
+        assert forbidden not in encoded
 
 
 def test_all_local_schema_references_resolve() -> None:
@@ -180,14 +196,7 @@ def test_all_local_schema_references_resolve() -> None:
             assert resolved
 
 
-def _relation_directions(branches: list[dict]) -> set[tuple[str, str]]:
-    result = set()
-    for branch in branches:
-        properties = branch["properties"]
-        relations = properties["relation"].get("enum") or [
-            properties["relation"]["const"]
-        ]
-        result.update(
-            (relation, properties["direction"]["const"]) for relation in relations
-        )
-    return result
+def test_runtime_contract_matches_authoritative_spec() -> None:
+    assert json.loads(RUNTIME_CONTRACT.read_text(encoding="utf-8")) == _load(
+        "precheck-read.tool.json"
+    )

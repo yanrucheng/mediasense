@@ -1,33 +1,52 @@
 ---
 id: "spec-260826-1546-precheck-read"
-title: "MediaSense PreCheck Read Contract"
+title: "MediaSense PreCheck Read Tool Contract"
 type: spec
 status: active
 created: 2026-08-26
-updated: 2026-08-29
+updated: 2026-09-04
 timezone: "Asia/Shanghai"
 parent: "index-spec"
 depends-on:
-  - "design-260825-2235D-precheck-compression-boundary"
-  - "clarify-260826-1819-precheck-contract-concepts"
+  - "design-260823-1918-mediasense-foundation"
+  - "design-260825-2235-mediasense-information-architecture"
 superseded-by: ""
-tags: ["mediasense", "precheck", "tool-contract", "read-access"]
+tags: ["mediasense", "precheck", "tool", "result", "review"]
 ---
 
-# MediaSense PreCheck Read Contract
+# MediaSense PreCheck Read Tool Contract
 
 ## Decision
 
-Plan reads one exact immutable PreCheck Result through the read-only Tool `mediasense.precheck.read`. The contract fixes the smallest semantics needed to begin cheaply, account for every item in the declared boundary, inspect material limits, trace compression in the directions required by downstream work, and progressively expand existing evidence.
+`mediasense.precheck.read` exposes one exact immutable PreCheck Result through
+three consumer-meaningful operations:
 
-The Tool does not expose SQLite, caches, hashes, working-run state, thumbnails, embeddings, clusters, or algorithms. Those remain replaceable PreCheck implementation details.
+- `review` gives an Agent a bounded, comparable, loss-aware first reading of the
+  Result;
+- `expand` reads selected Evidence or Source Items in more detail; and
+- `resolve` expands one exact Source Set without loss for deterministic Plan and
+  Apply consumers.
 
-The contract has four addressable kinds:
+The Tool does not expose graph traversal as its public abstraction. Result
+entities and relationships remain the provenance and derivation authority, but
+the Tool internally composes them at the consumption granularity required by its
+callers.
 
-- `result`: one immutable PreCheck delivery;
-- `dataset`: the continuing business subject whose contents may change over time;
-- `source_item`: one concrete source object accounted by this Result;
-- `evidence`: content Plan can inspect directly as part of the compressed delivery.
+[`precheck-read.tool.json`](precheck-read.tool.json) is authoritative for request
+and response shape. [`hong-kong.mock.json`](hong-kong.mock.json) is a compact
+human-readable transcript over one Result-local slice.
+
+## Non-goals
+
+The Tool does not:
+
+- recognize events, people, places, activities, themes, or memories;
+- recommend an Organization Profile, group, split, order, name, or disposition;
+- correct timestamps, coordinates, paths, captions, or similarity claims;
+- create Plan Working State or retain an exploratory session;
+- acquire new Evidence or reopen PreCheck;
+- expose SQLite, tables, cache keys, private indexes, or Working Run state; or
+- authorize or perform filesystem changes.
 
 ## Backward Compatibility Policy
 
@@ -36,158 +55,208 @@ The contract has four addressable kinds:
 | Production status | Not in production |
 | BC Level | None — Zero BC policy |
 
-No production consumer exists. The earlier `collection`, `source_state`, and `representation` draft vocabulary is replaced directly; compatibility aliases, adapters, and deprecated fields are prohibited.
+No production consumers exist. The former public `inspect` and `traverse`
+actions, their cursors, fields, errors, aliases, and adapters are removed rather
+than deprecated. Clean-slate deployment is assumed.
 
-## Interface
+## Authority and responsibility
 
-Every request includes:
+The immutable PreCheck Result remains the sole authority for Result identity,
+accounting, Evidence, observations, relationships, provenance, and
+qualifications. `review` and `expand` are regenerable views over that authority;
+they have no reference, revision, persistence, or independent lifecycle.
 
-- `result_ref`: the exact immutable Result, never an implicit `latest`;
-- `action`: `inspect` or `traverse`;
-- optionally `target`: an opaque reference inside that Result; `inspect` uses `kind` to disambiguate the requested object, while `traverse` omits redundant `kind` when relation and direction already determine the origin type; omission means the Result itself;
-- for `traverse`, one relationship, one direction, and optional pagination;
-- only for outbound `accounts_for`, optional `filter.attention_only: true`.
+The Tool owns deterministic projection, pagination, exact binding, integrity
+checks, response bounds, and honest failure. The Agent owns interpretation,
+comparison, evidence selection, semantic grouping, naming, and deciding whether
+the Result is sufficient for the user's organization purpose.
 
-`inspect` returns the target's minimal stable fields. `traverse` returns a page whose outer record states `origin`, `relation`, and `direction`; members return only `target` and fields specific to that member. Relationship records have no independent ID and do not repeat `type/from/to` per member.
+`resolve` owns only exact set materialization. It proves what a Source Set means;
+it does not prove that the set is a useful organization.
 
-## Result and entity fields
+## Common binding and effects
 
-| Kind | Required | Optional when meaningful |
-| --- | --- | --- |
-| Result | `ref`, `dataset_ref`, `coverage`, `readiness`, `integrity`, `execution_boundary` | `qualifications` |
-| Dataset | `ref` | `name`, attributed `context`, `qualifications` |
-| Source Item | `ref`, `locator` | `observations`, `qualifications` |
-| Evidence | `ref`, `access` | `observations`, `qualifications` |
+Every request names an exact `result_ref`; no operation resolves an implicit
+`latest`. All three operations are immediate, read-only, local, stateless, and
+safe to retry. They cause no source mutation, network access, model use, billable
+call, Plan revision, or retained query state.
 
-`kind` remains the discriminator for `inspect` targets and returned object views, where several entity types share the same field position. Relationship origins and targets omit it when the selected relation and direction already determine the type; only `derived_from` and `expands_to` members retain a typed reference because either a Source Item or Evidence may be returned.
+The Tool may use private stores or deletable indexes internally. Public meaning
+must be derivable from the sealed Result. Removing an optimization cache cannot
+change a response's semantics.
 
-`dataset_ref` is a required Result field, not a duplicated relationship. Dataset identity may be referenced across Results. Each Source Item locator carries its own `source_root_ref` and a path relative to that root. This supports Results that account for one or multiple roots without exposing an absolute path or turning Dataset identity into a location; an explicitly unverified rebind receives a different root reference. A Dataset may expose a mutable current-discovery view elsewhere, but each Result accounts immutably for its own Source Items. Dataset context returned through this Tool is the immutable view bound to that Result; later context changes affect only later Results. Source Item references, Evidence references, and cursors are scoped to that exact Result.
+## `review`
 
-`execution_boundary` is part of the Result view because consumers cannot inspect
-private package fields. A local-only Result reports zero network and billable
-effects. If the confirmed post-compression coordinate exception ran, this view
-reports the authorization records, exact logical-query count, actual provider
-request count, providers, and known or unknown billable-call count. It never
-authorizes media, rendition, embedding, prompt, or general-metadata egress.
+`review` returns the Result trust view, a complete accounting reconciliation,
+and a page of coverage cards in immutable `frontier_order`.
 
-A Source Item reference is stable within its Result. Its runtime locator combines an opaque `source_root_ref` with a root-relative path; neither Dataset identity nor Source Item identity is an absolute path. The contract does not require permanent identity across Results. Implementations may recognize moved but unchanged media and reuse valid work without elevating a particular fingerprint or matching method into identity.
+The reconciliation partitions every accounted Source Item into:
 
-An eligible Source Item may carry a `source_content_verification` observation.
-When available, its value contains a named `profile`, opaque verification
-`value`, exact `size_bytes`, `observed_at`, and producer identity. The first
-supported profile is `sha256-full-v1`, whose value is prefixed `sha256:`. The
-profile is replaceable; it is neither the Source Item identity nor a permanent
-promise that SHA-256 is the only supported method. PreCheck revalidates every
-included observation at seal. Source Items that are excluded, unsupported,
-invalid, erroneous, unresolved, or not selected for exact proof need not carry
-one; their accounting must still remain explicit.
+- `frontier_only`: represented by default entry Evidence and not exceptional;
+- `exception_only`: handled by an explicit non-normal scope, condition, or
+  qualification and not represented by the frontier;
+- `frontier_and_exception`: represented while still materially exceptional; or
+- `residual`: explained by neither route.
 
-Plan freezes only the exact `result_ref` and selected `source_item_ref` values,
-not a copied digest. Apply resolves those references through this Tool, safely
-binds the locator's `source_root_ref`, and verifies current bytes immediately before each
-authorized file operation. An unknown profile, absent observation, unsafe root
-binding, size mismatch, or verification mismatch blocks that operation. This
-contract does not create a Dataset-wide snapshot, permanent Source identity, or
-independent source-verification service.
+These four counts must sum to `accounted_total`. A Result that claims
+`coverage: complete` but has residual items is inconsistent and cannot produce a
+successful review.
 
-Evidence access may point to a local artifact, directly reuse a Source Item, or contain inline structured content. Evidence is not source truth: it is a compressed, inspectable basis whose limits remain visible.
+A coverage card is anchored by an existing entry Evidence ref. It summarizes
+only direct `represents` members and directly prepared `expands_to` targets. It
+does not create a Coverage Region entity or silently follow an unbounded graph
+closure.
 
-## Status axes
+Each card exposes:
 
-Result status uses three independent axes:
+- the anchor Evidence access;
+- represented membership and `scope × condition` counts;
+- deterministic `capture_time` and `media_type` projections;
+- representative, boundary, outlier, and conflict Evidence refs;
+- prepared Evidence with no assigned public role;
+- material qualification counts and full qualification meanings;
+- the exact observation scope projected by the card;
+- available `expand` includes; and
+- a Source Set expression suitable for `resolve`.
 
-- `coverage`: `complete` or `partial`;
-- `readiness`: `plan_ready` or `blocked`;
-- `integrity`: `valid` or `invalid`.
+The card never reports a semantic event, suggested split, likely place, final
+group, or directory name.
 
-`partial + plan_ready + valid` is meaningful: a Result may be explicitly limited to a declared subset yet be trustworthy and sufficient for planning within that subset. A localized invalid Source Item may also coexist with a plan-ready Result when it is accounted, its affected scope is visible, and available evidence is sufficient for the declared planning boundary.
+## `expand`
 
-## Relationships
+`expand` accepts exactly one selector:
 
-Five relationship meanings are authoritative:
+- up to sixteen `evidence_refs`; or
+- up to sixteen `source_item_refs`.
 
-| Relationship | Valid outbound origin and target | Stable meaning |
-| --- | --- | --- |
-| `accounts_for` | Result → Source Item | The item belongs to this Result's immutable accounting boundary. Each member states `scope` and `condition`. |
-| `entry_evidence` | Result → Evidence | The low-cost default surface from which Plan can begin. |
-| `represents` | Evidence → Source Item | The challengeable compression claim that reading this Evidence may defer direct reading of the target Source Item. |
-| `derived_from` | Evidence → Source Item or Evidence | What actually produced this Evidence. |
-| `expands_to` | Evidence → Source Item or Evidence | Already-prepared detail available as the next inspection step. |
+Evidence expansion supports:
 
-Stable traversal directions are intentionally asymmetric:
+- `anchor_evidence`;
+- `prepared_targets`;
+- `provenance`;
+- `coverage_basis`; and
+- paged `member_observations` for exactly one Evidence ref.
 
-- `accounts_for`, `entry_evidence`, `derived_from`, and `expands_to` support their declared outbound direction;
-- `represents` supports both outbound coverage lookup and inbound lookup from a Source Item to covering Evidence.
+Source Item expansion supports:
 
-Other reverse traversals are not part of the contract unless a later business need justifies them. The supported inbound `represents` traversal is a reverse lookup over the same relationship, not a reverse alias.
+- `source_item`;
+- `observations`; and
+- `covering_evidence`.
 
-These meanings do not collapse. For example, one representative JPEG Evidence may be `derived_from` one Source Item while it `represents` many Source Items. A video frame Evidence can be derived from and represent one video while expanding to additional frames and the source video.
+Every include is explicit. An unknown include or any reference outside the
+bound Result rejects the entire request. A valid Result-recorded
+`missing`, `failed`, `not_checked`, or `not_applicable` observation is returned
+as data rather than upgraded into a Tool failure.
 
-`attention_items` is not a sixth authoritative relationship. It is the derived view returned by querying outbound `accounts_for` with `filter.attention_only: true`; implementations derive it from non-usable conditions or material member qualifications.
+## `resolve`
 
-## Accounting fields
+`resolve` accepts one Source Set composed from:
 
-Every `accounts_for` member carries two independent dimensions:
+- explicit Result-local Source Item refs;
+- outbound Result `accounts_for`;
+- outbound Evidence `represents`;
+- unions; and
+- differences.
 
-- `scope`: `source_media`, `auxiliary`, or `excluded`;
-- `condition`: `usable`, `unsupported`, `invalid`, `error`, or `unresolved`.
+It returns canonical Source Item ref ordering plus compact member records:
 
-This permits a damaged MP4 to remain both `source_media` and `invalid`, or a GPX item to be `auxiliary` and `usable`. No discovered item disappears merely because it is unsupported, invalid, excluded from planning, or unresolved.
+- exact Source Item ref;
+- Result-local locator;
+- accounting scope and condition;
+- source-content-verification observation when present; and
+- material qualifications.
 
-## Basis, observations, and qualifications
+Every page repeats a `source_set_identity`, `membership_identity`, and total.
+The membership identity covers the exact Result, canonical Source Set, and
+complete ordered membership. `complete: false` is only transport continuation;
+the Tool never presents an unproven partial set as resolved.
 
-Relationship types carry their own authority; there is no universal `epistemic_state`. In particular, `represents` is always a challengeable PreCheck compression claim rather than MediaSense semantic ground truth.
+Review counts and cards cannot substitute for `resolve`. Conversely, exact
+resolution proves no retrieval value or organization meaning.
 
-A relationship page may carry shared `basis` and `qualifications`. A member repeats or overrides them only when its basis or limitation differs. Every `represents` response must make its selection or coverage basis available; other relationships provide it only when materially useful.
+## Public projection semantics
 
-An observation contains:
+### `capture_time`
 
-- required `name` and `status`;
-- `value` when status is `available`, plus `basis` when that value is a challengeable derivation rather than a direct fact;
-- `basis` and no value when status is `failed`;
-- no value for `missing`, `not_checked`, or `not_applicable`;
-- optional `confidence` or qualifications only when they add real meaning.
+An available capture time is an observed timestamp with an explicit UTC offset,
+not corrected event time. The review projection reports every observation state
+and compares available values as instants. Timezone assumptions, basis, and
+qualifications remain available through expansion. The Tool does not classify an
+old or unusual timestamp as wrong.
 
-The five statuses distinguish a present value, an absent value, a failed attempt, work not performed, and a concept that does not apply. `null` does not silently merge those states.
+### `media_type`
 
-A qualification contains required `code`, `effect`, and human-readable `message`. It adds `basis` only when the containing object, observation, or relationship does not already provide that basis. Stable effects are `limits_interpretation` and `blocks_use`; a message with no actual effect does not become a Qualification.
+An available media type is a normalized MIME type with observation provenance.
+The review projection counts exact values and every unavailable state. It does
+not convert media type into semantic content.
 
-## Completeness, navigation, and replacement
+### Evidence roles
 
-For a Result to claim `coverage: complete`, every Source Item in its declared boundary must be reachable through `accounts_for`, and each account must have explicit scope and condition. Separately, every accounted Source Item must be reachable from entry Evidence through `represents` or `expands_to`, or through an explicit auxiliary, excluded, unsupported, invalid, error, or unresolved exception route. This does not require one visual Evidence item per Source Item.
+The public roles are `representative`, `boundary`, `outlier`, and `conflict`.
+They describe Evidence's review function inside a coverage claim. One Evidence
+may have several roles; prepared Evidence may have none. Absence of a role does
+not create a fifth role, and the Tool does not assign roles while reading.
 
-Plan normally starts with `entry_evidence`, follows outbound `expands_to` for existing detail, uses `represents` in either supported direction to test coverage, and queries the derived attention view when exceptions matter. This read behavior does not prescribe Plan's reasoning or VLM payload.
+Other observation names remain open. Every card states that its projection is
+limited to `capture_time`, `media_type`, and `evidence_role` and whether other
+observations exist.
 
-The Tool only returns existing immutable information. If Plan requires new evidence, corrected provenance, different coverage, or a changed compression claim, it requests a new PreCheck Result through stage routing. Mutable working state may reuse unaffected work, but the old Result is not modified.
+## Pagination and response bounds
 
-## Consumer-ready Mock
+The maximum encoded Tool response body is 524,288 UTF-8 JSON bytes. Requested
+limits are upper bounds:
 
-[`hong-kong.mock.json`](hong-kong.mock.json) is a human-authored development Mock, not runtime output. It demonstrates:
+- `review`: default 25, maximum 100 cards;
+- paged `expand`: default 50, maximum 200 member observations; and
+- `resolve`: default 250, maximum 1,000 members.
 
-1. direct Dataset inspection through `result.dataset_ref`;
-2. paginated `accounts_for` and the derived `attention_items` view;
-3. a low-cost `entry_evidence` surface;
-4. bundle 61 as a challengeable 201-item `represents` claim;
-5. expansion to outlier and boundary Evidence;
-6. reverse lookup from a hidden-person Source Item;
-7. distinct invalid, patched-full, and remux Source Items;
-8. a readable video whose `create_date` is `missing` rather than `null` or a decode failure;
-9. the independent `partial / plan_ready / valid` result axes.
+The Tool stops only between complete items. `stop_reason` is `complete`, `limit`,
+or `byte_limit`. A single indivisible item exceeding the response limit returns
+`response_item_too_large`.
 
-Fixture-relative locators are review conveniences. The Mock does not make the local review pack, historical bundle membership, AI Album cache, or filesystem layout part of the contract.
+Every opaque cursor binds the Result digest, operation, normalized selector,
+limit, order, and continuation position. Cursors survive process restart but
+cannot cross a Result, operation, selector, include set, Source Set, or limit.
+
+## Failure and retry
+
+Expected failures use the common error envelope. Principal codes are:
+
+- `invalid_request`;
+- `result_not_found`;
+- `result_unavailable`;
+- `result_untrusted`;
+- `result_inconsistent`;
+- `invalid_cursor`;
+- `reference_not_in_result`;
+- `unsupported_include`;
+- `invalid_source_set`;
+- `response_item_too_large`.
+
+Foreign and unknown references intentionally share
+`reference_not_in_result`; the Tool does not reveal whether a ref exists in a
+different Result.
+
+There is no top-level partial-success outcome. Request errors and Result
+integrity failures are atomic. Honest partial Result coverage, unavailable
+observations, and incomplete pagination remain explicit data states. Unexpected
+implementation exceptions propagate rather than becoming ordinary Result state.
+
+Identical requests are safe to repeat after transport timeout, 429, 503, or
+`result_unavailable`. `result_untrusted` and `result_inconsistent` require repair
+or a new Result rather than blind retry.
 
 ## Conformance
 
-[`precheck-read.tool.json`](precheck-read.tool.json) is authoritative for request and response shape. A conforming implementation must additionally satisfy the semantic rules in this document:
+A conforming implementation proves at least:
 
-- all reads bind the exact `result_ref`;
-- Result contents do not change after publication;
-- Source Item references, Evidence references, and cursors cannot escape that Result; Dataset identity may persist across Results;
-- `accounts_for` is exhaustive for a `complete` Result;
-- `attention_items` is derived rather than independently authored;
-- only the declared traversal directions are accepted, including inbound lookup for `represents` and no formal reverse traversal for the other relationships;
-- `represents` is challengeable and has an inspectable basis;
-- direct facts need not repeat inherited basis, and `kind` appears only where omission would make a reference ambiguous;
-- `derived_from` and `represents` never substitute for each other;
-- returned locators are local and read-only within PreCheck policy;
-- no storage technology or cache record is exposed as the cross-stage authority.
+- exact Result binding for every operation and cursor;
+- reconciliation of accounting, frontier, exception routes, overlap, and
+  residual items;
+- deterministic cards and public projection semantics;
+- atomic validation of batched refs and includes;
+- complete Source Set identity and membership across pages;
+- response byte bounds without partial JSON items;
+- no public SQLite, cache, or internal group identity;
+- safe retry without retained read state; and
+- no semantic organization decision in any response.

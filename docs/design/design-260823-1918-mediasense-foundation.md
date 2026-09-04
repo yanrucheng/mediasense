@@ -4,7 +4,7 @@ title: "MediaSense Foundation"
 type: design
 status: active
 created: 2026-08-23
-updated: 2026-09-02
+updated: 2026-09-03
 timezone: "Asia/Shanghai"
 parent: "index-design"
 depends-on: []
@@ -128,6 +128,31 @@ These are conceptual roles, not approved schemas. Their exact filenames, storage
 - The human owns high-impact semantic confirmation and authorization of irreversible or materially risky effects. Tools enforce that required authorization exists.
 
 A substantially stronger future Agent must be able to use better reasoning and visual understanding without replacing the stage contracts or dismantling local indexing and safety enforcement.
+
+## Execution-state honesty
+
+A lifecycle state is a factual claim about an operating mechanism, not a label
+for uncertainty. `running` requires an execution owner. `blocked` or `paused`
+requires a known condition or decision boundary. `queued` is valid only when a
+real admission mechanism owns a real queue and can explain what is waiting, why
+it is waiting, how admission is decided, and what will cause the next transition.
+
+When queue position or delay matters, the responsible scheduler should expose
+the caller-material facts it can support honestly, such as the constrained
+resource or lane, enqueue time, work ahead, position or priority basis, active
+capacity, and wake-up condition. Dynamic or unavailable facts remain explicitly
+unknown; they are not replaced by an unqualified `queued`. This principle does
+not require one universal queue schema, scheduling algorithm, state machine, or
+service. A concrete Tool contract adds only the observations needed for the real
+mechanism it operates.
+
+Expected domain conditions use explicit, typed outcomes and recovery semantics.
+Unexpected implementation exceptions and invariant violations must not be
+caught and translated into ordinary `queued`, `running`, `blocked`, or `paused`
+states. Development and test execution lets them propagate so the responsible
+boundary fails immediately. A runtime may retain bounded diagnostic evidence
+before propagation, and an external supervisor may restart a failed process,
+but neither action turns the failure into a normal business state.
 
 ## Local Agent integration boundary
 

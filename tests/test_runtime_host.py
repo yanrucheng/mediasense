@@ -5,6 +5,7 @@ from pathlib import Path
 from time import sleep
 
 from PIL import Image
+import pytest
 
 from mediasense.dataset_reference import dataset_id_from_ref
 from mediasense.precheck import (
@@ -45,22 +46,27 @@ def _opened_host_with_plan_ready_result(
         "mediasense.precheck.read",
         dataset_ref=dataset_ref,
         request={
-            "action": "traverse",
+            "operation": "resolve",
             "result_ref": result.result_ref,
-            "relation": "accounts_for",
-            "direction": "outbound",
+            "source_set": {
+                "kind": "precheck_relation",
+                "origin": result.result_ref,
+                "relation": "accounts_for",
+                "direction": "outbound",
+            },
         },
     )
-    source_item_ref = str(accounts["items"][0]["target"])
+    source_item_ref = str(accounts["members"][0]["source_item_ref"])
     source_view = host.call_tool(
         "mediasense.precheck.read",
         dataset_ref=dataset_ref,
         request={
-            "action": "inspect",
+            "operation": "expand",
             "result_ref": result.result_ref,
-            "target": {"kind": "source_item", "ref": source_item_ref},
+            "source_item_refs": [source_item_ref],
+            "include": ["source_item"],
         },
-    )["target"]
+    )["items"][0]["included"]["source_item"]
     return (
         host,
         dataset_ref,
@@ -110,6 +116,116 @@ def test_opened_dataset_can_start_precheck_immediately(tmp_path: Path) -> None:
     assert str(started["run_ref"]).startswith("precheck-run:")
     assert started["dataset_ref"] == dataset_ref
     assert started["state"] == "running"
+    status = host.call_tool(
+        "mediasense.precheck.run",
+        dataset_ref=dataset_ref,
+        request={"action": "status", "run_ref": started["run_ref"]},
+    )
+    if status["state"] == "running":
+        assert status["activity"]["state"] in {"working", "no_recent_progress"}
+
+
+def test_precheck_status_never_schedules_an_ownerless_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source = tmp_path / "source"
+    source.mkdir()
+    host = RuntimeHost()
+    opened = host.open_dataset(str(source), str(tmp_path / "workspace"))
+    dataset_ref = str(opened["dataset_ref"])
+    runtime = host._datasets[dataset_ref]
+    started = runtime.precheck_run.run(
+        {
+            "action": "start",
+            "dataset_ref": dataset_ref,
+            "request_id": "request:ownerless-status",
+        }
+    )
+
+    def unexpected_schedule(_run_ref: str) -> None:
+        pytest.fail("status must not schedule PreCheck execution")
+
+    monkeypatch.setattr(runtime, "_schedule", unexpected_schedule)
+    status = host.call_tool(
+        "mediasense.precheck.run",
+        dataset_ref=dataset_ref,
+        request={"action": "status", "run_ref": started["run_ref"]},
+    )
+
+    assert status["activity"]["state"] == "suspected_stalled"
+    assert status["reason"]["code"] == "execution_owner_missing"
+    assert set(status["allowed_actions"]) == {"resume", "cancel"}
+
+
+def test_successor_start_creates_work_and_never_reports_queued(
+    tmp_path: Path,
+) -> None:
+    host, dataset_ref, result_ref, _root_ref, _source, _source_before = (
+        _opened_host_with_plan_ready_result(tmp_path)
+    )
+
+    started = host.call_tool(
+        "mediasense.precheck.run",
+        dataset_ref=dataset_ref,
+        request={
+            "action": "start",
+            "prior_result_ref": result_ref,
+            "request_id": "request:successor-runtime",
+        },
+    )
+    assert started["outcome"] == "ok"
+
+    deadline = 200
+    while deadline:
+        status = host.call_tool(
+            "mediasense.precheck.run",
+            dataset_ref=dataset_ref,
+            request={"action": "status", "run_ref": started["run_ref"]},
+        )
+        assert status["activity"]["state"] != "queued"
+        if status["state"] != "running":
+            break
+        sleep(0.01)
+        deadline -= 1
+
+    assert status["state"] == "paused"
+    assert status["reason"]["code"] == "scope_confirmation_required"
+
+
+def test_worker_launch_failure_is_returned_and_retained(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source = tmp_path / "source"
+    source.mkdir()
+    host = RuntimeHost()
+    opened = host.open_dataset(str(source), str(tmp_path / "workspace"))
+    dataset_ref = str(opened["dataset_ref"])
+
+    def fail_start(_thread: object) -> None:
+        raise RuntimeError("simulated thread launch failure")
+
+    monkeypatch.setattr(
+        "mediasense.runtime.composition.threading.Thread.start", fail_start
+    )
+    failed = host.call_tool(
+        "mediasense.precheck.run",
+        dataset_ref=dataset_ref,
+        request={
+            "action": "start",
+            "dataset_ref": dataset_ref,
+            "request_id": "request:worker-launch-failure",
+        },
+    )
+
+    assert failed["outcome"] == "error"
+    assert failed["error"]["code"] == "operation_failed"
+    status = host.call_tool(
+        "mediasense.precheck.run",
+        dataset_ref=dataset_ref,
+        request={"action": "status", "run_ref": failed["run_ref"]},
+    )
+    assert status["state"] == "failed"
+    assert status["reason"]["code"] == "execution_worker_start_failed"
 
 
 def test_real_composition_creates_plan_from_precheck_result(tmp_path: Path) -> None:
@@ -187,16 +303,20 @@ def test_real_composition_accepts_qualified_represented_source_result(
     inspected = host.call_tool(
         "mediasense.precheck.read",
         dataset_ref=dataset_ref,
-        request={"action": "inspect", "result_ref": result.result_ref},
+        request={"operation": "review", "result_ref": result.result_ref},
     )
     accounts = host.call_tool(
         "mediasense.precheck.read",
         dataset_ref=dataset_ref,
         request={
-            "action": "traverse",
+            "operation": "resolve",
             "result_ref": result.result_ref,
-            "relation": "accounts_for",
-            "direction": "outbound",
+            "source_set": {
+                "kind": "precheck_relation",
+                "origin": result.result_ref,
+                "relation": "accounts_for",
+                "direction": "outbound",
+            },
         },
     )
     created = host.call_tool(
@@ -209,8 +329,8 @@ def test_real_composition_accepts_qualified_represented_source_result(
         },
     )
 
-    assert inspected["target"]["readiness"] == "plan_ready"
-    assert {item["condition"] for item in accounts["items"]} == {"usable"}
+    assert inspected["result"]["readiness"] == "plan_ready"
+    assert {item["condition"] for item in accounts["members"]} == {"usable"}
     assert created["outcome"] == "ok"
     assert created["result_ref"] == result.result_ref
     assert {

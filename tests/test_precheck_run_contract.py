@@ -48,31 +48,20 @@ def _validators() -> tuple[Draft202012Validator, Draft202012Validator]:
 def _result_view(result_ref: str) -> dict:
     mock = _load(READ_SPEC / "hong-kong.mock.json")
     for exchange in mock["exchanges"]:
-        target = exchange["response"].get("target", {})
-        if target.get("kind") == "result" and target.get("ref") == result_ref:
-            return target
+        result = exchange["response"].get("result", {})
+        if result.get("kind") == "result" and result.get("ref") == result_ref:
+            return result
     raise AssertionError(f"missing Result view: {result_ref}")
 
 
-def _accounting_views(result_ref: str) -> tuple[dict, dict]:
+def _review_view(result_ref: str) -> dict:
     mock = _load(READ_SPEC / "hong-kong.mock.json")
-    pages = [
-        exchange
+    return next(
+        exchange["response"]
         for exchange in mock["exchanges"]
         if exchange["request"].get("result_ref") == result_ref
-        and exchange["request"].get("relation") == "accounts_for"
-    ]
-    accounting = next(
-        exchange["response"]
-        for exchange in pages
-        if "filter" not in exchange["request"]
+        and exchange["request"].get("operation") == "review"
     )
-    attention = next(
-        exchange["response"]
-        for exchange in pages
-        if exchange["request"].get("filter") == {"attention_only": True}
-    )
-    return accounting, attention
 
 
 def _assert_progress_relations(
@@ -378,41 +367,46 @@ def test_completed_progress_matches_result_accounting_closure() -> None:
     completed = _mock()["exchanges"][5]["response"]
     progress = completed["progress"]
     result_ref = completed["published_result"]["result_ref"]
-    accounting, attention = _accounting_views(result_ref)
-
-    assert accounting["page"]["total"] == 224
-    assert attention["page"] == {"returned": 1, "total": 1, "complete": True}
-    assert attention["items"][0]["condition"] == "invalid"
-
-    exceptional_conditions = {"unsupported", "invalid", "error"}
+    review = _review_view(result_ref)
+    reconciliation = review["reconciliation"]
+    total = reconciliation["accounted_total"]
     exceptional = sum(
-        item["condition"] in exceptional_conditions for item in attention["items"]
+        route["count"]
+        for route in reconciliation["exception_routes"]
+        if route["condition"] in {"unsupported", "invalid", "error"}
     )
-    unresolved = sum(item["condition"] == "unresolved" for item in attention["items"])
-    usable = accounting["page"]["total"] - exceptional - unresolved
+    unresolved = sum(
+        route["count"]
+        for route in reconciliation["exception_routes"]
+        if route["condition"] == "unresolved"
+    )
+    usable = total - exceptional - unresolved
 
     assert progress == {
         "discovered": "unknown",
-        "accounted": accounting["page"]["total"],
+        "accounted": total,
         "usable": usable,
         "exceptional": exceptional,
         "unresolved": unresolved,
     }
-    _assert_progress_relations(progress, accounting_total=accounting["page"]["total"])
+    _assert_progress_relations(progress, accounting_total=total)
 
     result = _result_view(result_ref)
-    assert any("2,136" in item["message"] for item in result["qualifications"])
+    assert any(
+        item["code"] == "selected_slice_only" for item in result["qualifications"]
+    )
     assert progress["discovered"] == "unknown"
 
 
 def test_accounting_closure_mismatch_is_rejected_semantically() -> None:
     completed = deepcopy(_mock()["exchanges"][5]["response"])
-    accounting, _ = _accounting_views(completed["published_result"]["result_ref"])
-    completed["progress"]["accounted"] = 223
+    review = _review_view(completed["published_result"]["result_ref"])
+    accounting_total = review["reconciliation"]["accounted_total"]
+    completed["progress"]["accounted"] = accounting_total - 1
     with pytest.raises(AssertionError):
         _assert_progress_relations(
             completed["progress"],
-            accounting_total=accounting["page"]["total"],
+            accounting_total=accounting_total,
         )
 
 

@@ -6,6 +6,25 @@ Versioning, with documented breaking changes permitted in minor releases before
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-09-03
+
+### Changed
+
+- Removed public PreCheck `queued` activity. A successful `start` or `resume`
+  now requires a worker lease and a launched worker; ownerless or stale retained
+  execution is reported as `suspected_stalled` with an explicit reason and
+  `resume`, while `status` remains observational.
+- One-shot `mediasense tools call` now rejects PreCheck `start` and `resume`;
+  those long-running actions require the persistent MCP Tool Host.
+
+### Fixed
+
+- Successor PreCheck Runs now create and bind their own source-accounting Run
+  before execution instead of remaining ownerless with unknown work forever.
+- Worker preparation and launch failures now fail the Run immediately instead
+  of being hidden as queued. Failures after a worker has acquired the Run remain
+  explicit resumable interruptions so committed work is preserved.
+
 ## [0.5.0] - 2026-09-02
 
 ### Changed

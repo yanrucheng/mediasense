@@ -90,7 +90,7 @@ class FakeProvider:
 def _reader_with_coordinate() -> MockPrecheckReader:
     reader = MockPrecheckReader()
     source_ref = "source-item:215"
-    view = reader.views[("source_item", source_ref)]
+    view = reader.source_views[source_ref]
     view.setdefault("observations", []).append(
         {
             "name": "gps_coordinates",
@@ -430,7 +430,7 @@ def test_plan_geo_replay_survives_adapter_restart(tmp_path: Path) -> None:
 def test_plan_geo_partial_result_keeps_each_subject_outcome(tmp_path: Path) -> None:
     reader, plan_tool, adapter, provider, capability, created = _setup(tmp_path)
     second_ref = "source-item:geo-second"
-    reader.views[("source_item", second_ref)] = {
+    reader.source_views[second_ref] = {
         "kind": "source_item",
         "ref": second_ref,
         "observations": [

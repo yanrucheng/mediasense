@@ -87,10 +87,8 @@ def test_five_hundred_to_three_to_two_hundred_sealed_results(
         )
         page = reader.read(
             {
-                "action": "traverse",
-                "direction": "outbound",
+                "operation": "review",
                 "page": {"limit": 1},
-                "relation": "entry_evidence",
                 "result_ref": result_ref,
             }
         )

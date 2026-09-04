@@ -38,7 +38,7 @@ The three durable handoff roles are the precheck result, the frozen organization
 
 ## Current phase
 
-The `0.5.0` distribution provides the installed `mediasense` executable, portable-
+The `0.6.0` distribution provides the installed `mediasense` executable, portable-
 first Dataset discovery, one local composition root, a packaged product entry
 Skill and three stage Skills, Tool contracts, and an on-demand stdio MCP Host.
 `mediasense mcp` is part of that same

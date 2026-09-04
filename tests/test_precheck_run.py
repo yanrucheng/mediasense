@@ -159,6 +159,9 @@ def test_pause_resume_cancel_are_target_idempotent(tmp_path: Path) -> None:
     run_ref = str(started["run_ref"])
     running = tool.run({"action": "status", "run_ref": run_ref})
     _assert_valid(running)
+    assert running["activity"]["state"] == "suspected_stalled"
+    assert running["reason"]["code"] == "execution_owner_missing"
+    assert set(running["allowed_actions"]) == {"resume", "cancel"}
     assert running["progress"] == {
         "discovered": "unknown",
         "accounted": "unknown",
@@ -203,6 +206,24 @@ def test_pause_resume_cancel_are_target_idempotent(tmp_path: Path) -> None:
         "current_state": "cancelled",
         "allowed_actions": [],
     }
+
+
+def test_advance_without_execution_preparation_fails_fast(tmp_path: Path) -> None:
+    database, _accounting = _workspace(tmp_path, "dataset-a")
+    tool = PrecheckRunTool(database)
+    started = tool.run(
+        {
+            "action": "start",
+            "dataset_ref": "dataset:dataset-a",
+            "request_id": "request:unprepared",
+        }
+    )
+
+    failed = tool.advance(str(started["run_ref"]))
+
+    _assert_valid(failed)
+    assert failed["state"] == "failed"
+    assert failed["reason"]["code"] == "execution_not_prepared"
 
 
 def test_confirmation_binds_authority_to_the_frozen_work_set(tmp_path: Path) -> None:
@@ -705,6 +726,8 @@ def test_status_distinguishes_recent_work_no_progress_and_stale_worker(
     assert quiet["activity"]["state"] == "no_recent_progress"
     assert stale["state"] == "running"
     assert stale["activity"]["state"] == "suspected_stalled"
+    assert stale["reason"]["code"] == "execution_owner_stale"
+    assert set(stale["allowed_actions"]) == {"resume", "cancel"}
     assert (
         stale["activity"]["last_progress_at"]
         == (working["activity"]["last_progress_at"])

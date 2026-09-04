@@ -878,9 +878,13 @@ def test_sealed_result_exposes_candidates_and_external_effect_proof(
     accounts = reader.read(
         {
             "result_ref": sealed.result_ref,
-            "action": "traverse",
-            "relation": "accounts_for",
-            "direction": "outbound",
+            "operation": "resolve",
+            "source_set": {
+                "kind": "precheck_relation",
+                "origin": sealed.result_ref,
+                "relation": "accounts_for",
+                "direction": "outbound",
+            },
         }
     )
     read_schema = json.loads(
@@ -891,16 +895,19 @@ def test_sealed_result_exposes_candidates_and_external_effect_proof(
     )["outputSchema"]
     validator = Draft202012Validator(read_schema)
     validator.validate(accounts)
-    for account in accounts["items"]:
-        source_response = reader.read(
-            {
-                "result_ref": sealed.result_ref,
-                "action": "inspect",
-                "target": {"kind": "source_item", "ref": account["target"]},
-            }
-        )
-        validator.validate(source_response)
-        source = source_response["target"]
+    source_response = reader.read(
+        {
+            "result_ref": sealed.result_ref,
+            "operation": "expand",
+            "source_item_refs": [
+                account["source_item_ref"] for account in accounts["members"]
+            ],
+            "include": ["source_item", "observations"],
+        }
+    )
+    validator.validate(source_response)
+    for item in source_response["items"]:
+        source = item["included"]
         attempt = next(
             item
             for item in source["observations"]
@@ -914,15 +921,15 @@ def test_sealed_result_exposes_candidates_and_external_effect_proof(
         assert attempt["value"]["provider"] == "google_maps"
         assert attempt["value"]["input_coordinate"]["datum"] == "WGS84"
         assert attempt["basis"]["refs"] == [
-            {"kind": "source_item", "ref": account["target"]}
+            {"kind": "source_item", "ref": item["source_item_ref"]}
         ]
         assert candidate["value"]["address"]["formatted_address"] == ("Tokyo, Japan")
 
     result_response = reader.read(
-        {"result_ref": sealed.result_ref, "action": "inspect"}
+        {"result_ref": sealed.result_ref, "operation": "review"}
     )
     validator.validate(result_response)
-    result_view = result_response["target"]
+    result_view = result_response["result"]
     qualification = next(
         item
         for item in result_view["qualifications"]

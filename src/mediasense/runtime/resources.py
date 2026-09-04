@@ -6,6 +6,7 @@ import hashlib
 import json
 from importlib.resources import files
 from pathlib import Path
+import re
 from typing import Any
 
 CONTRACT_FILES = {
@@ -70,3 +71,23 @@ def skill_roots() -> tuple[Path, ...]:
             + ", ".join(str(path) for path in missing)
         )
     return paths
+
+
+def validate_skill_release_line(application_version: str) -> None:
+    """Require every packaged Skill to name only this application's minor line."""
+
+    try:
+        major, minor, _patch = application_version.split(".", maxsplit=2)
+    except ValueError as error:
+        raise ValueError(
+            "application version must be semantic major.minor.patch"
+        ) from error
+    expected = f"{major}.{minor}.x"
+    pattern = re.compile(r"\b\d+\.\d+\.x\b")
+    for root in skill_roots():
+        declared = set(pattern.findall((root / "SKILL.md").read_text(encoding="utf-8")))
+        if declared != {expected}:
+            raise ValueError(
+                f"installed Skill {root.name} declares {sorted(declared)}; "
+                f"expected only {expected}"
+            )

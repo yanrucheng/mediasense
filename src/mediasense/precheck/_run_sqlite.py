@@ -1018,7 +1018,7 @@ def _execution_checkpoint(value: object, *, fallback_at: str) -> dict[str, objec
             }
     else:
         decoded = {
-            "phase": "queued",
+            "phase": "unknown",
             "complete": False,
             "total": "unknown",
             "last_progress_at": fallback_at,
@@ -1026,7 +1026,7 @@ def _execution_checkpoint(value: object, *, fallback_at: str) -> dict[str, objec
         }
     return {
         "version": 1,
-        "phase": str(decoded.get("phase", "queued")),
+        "phase": str(decoded.get("phase", "unknown")),
         "complete": bool(decoded.get("complete", False)),
         "total": decoded.get("total", "unknown"),
         "last_progress_at": str(decoded.get("last_progress_at", fallback_at)),

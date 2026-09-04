@@ -4,7 +4,7 @@ title: "MediaSense Tool 最小操作契约澄清"
 type: clarify
 status: active
 created: 2026-08-27
-updated: 2026-08-27
+updated: 2026-09-04
 timezone: "Asia/Shanghai"
 parent: "index-clarify"
 depends-on:
@@ -66,34 +66,60 @@ superseded-by: ""
 }
 ```
 
-Plan 通过既有只读契约取得 Evidence：
+Plan 通过只读契约先取得 Result 的对账结论与可比较 coverage card。下面的
+`response` 省略了卡片中的部分投影字段；正式形状以 PreCheck Read 规范为准：
 
 ```json
 {
   "tool": "mediasense.precheck.read",
   "request": {
+    "operation": "review",
     "result_ref": "precheck-result:hk-001",
-    "action": "traverse",
-    "relation": "entry_evidence",
-    "direction": "outbound",
     "page": {
       "limit": 20
     }
   },
   "response": {
     "outcome": "ok",
+    "operation": "review",
     "result_ref": "precheck-result:hk-001",
-    "action": "traverse",
-    "origin": "precheck-result:hk-001",
-    "relation": "entry_evidence",
-    "direction": "outbound",
-    "items": [
+    "reconciliation": {
+      "accounted_total": 2140,
+      "partition": {
+        "frontier_only": 2133,
+        "exception_only": 7,
+        "frontier_and_exception": 0,
+        "residual": 0
+      },
+      "closure_check": {
+        "status": "passed",
+        "equation": {"left": 2140, "right": 2140}
+      }
+    },
+    "coverage_cards": [
       {
-        "target": "evidence:entry-01"
+        "anchor_evidence_ref": "evidence:entry-01",
+        "represented": {
+          "relationship": "represents",
+          "membership_count": 18,
+          "unique_source_item_count": 18
+        },
+        "available_expansions": [
+          {"include": "anchor_evidence", "estimated_items": 1},
+          {"include": "provenance", "estimated_items": 1},
+          {"include": "member_observations", "estimated_items": 18}
+        ],
+        "resolvable_source_set": {
+          "kind": "precheck_relation",
+          "origin": "evidence:entry-01",
+          "relation": "represents",
+          "direction": "outbound"
+        }
       }
     ],
     "page": {
       "returned": 1,
+      "total": 1,
       "complete": true
     }
   }
@@ -290,8 +316,9 @@ mediasense.precheck.run
 └── cancel
 
 mediasense.precheck.read
-├── inspect
-└── traverse
+├── review
+├── expand
+└── resolve
 
 mediasense.plan.work
 ├── create
@@ -323,11 +350,11 @@ Plan 阶段采用严格入口：只有 `readiness=plan_ready` 且 `integrity=val
 
 ## 证据
 
-- 本轮用户已经固定三条 Tool 边界、十一项公共操作、六种 PreCheck 公共状态、自动 Result 发布、Plan seal 后关闭 Working State、人类确认边界、`inspect` 的 revision 与分页要求，以及 Organization Profile 暂不实体化。
+- 本轮用户已经固定三条 Tool 边界、十二项公共操作、六种 PreCheck 公共状态、自动 Result 发布、Plan seal 后关闭 Working State、人类确认边界、`plan.work inspect` 的 revision 与分页要求，以及 Organization Profile 暂不实体化。
 - 用户在第 1 轮直接回答 Q1-Q7，并进一步授权：除真正容易产生业务分歧的选择外，其余问题按工程推荐方案确认；不再要求 Human 审查常规幂等、revision、分页、错误外壳和安全重试设计。
 - 用户在第 2 轮选择 Q16=A，并明确希望保持简单：`readiness` 作为严格 Plan 入口，不增加 blocked Result 的探索性 Working State 生命周期。
 - [`design-260823-1918-mediasense-foundation`](../design/design-260823-1918-mediasense-foundation.md) 规定 PreCheck 的源媒体只读、默认无远程与收费调用、长任务可观察和可恢复；Plan 负责 Agent 与 Human 收敛，不修改源媒体。
-- [`spec-260826-1546-precheck-read`](../spec/spec-260826-1546-precheck-read/index.md) 已正式固定 `mediasense.precheck.read` 的 `inspect / traverse`、精确 `result_ref`、分页、关系方向、三轴状态和错误外壳。本记录不重新询问这些已定语义。
+- [`spec-260826-1546-precheck-read`](../spec/spec-260826-1546-precheck-read/index.md) 已正式固定 `mediasense.precheck.read` 的 `review / expand / resolve`、精确 `result_ref`、分页、确定性投影、Source Set 解析和错误外壳。
 - [`spec-260827-1138-frozen-plan`](../spec/spec-260827-1138-frozen-plan/index.md) 已固定 Frozen Plan 的完整逻辑组织、精确 `result_ref`、内容身份和最终人类确认。本记录只澄清 Working State 怎样安全地产生该 artifact。
 - [`design-260827-0022-precheck-implementation`](../design/design-260827-0022-precheck-implementation.md) 证明 Working Run、恢复、自动验证和原子发布需要持久生命周期，但其中的内部阶段和存储方法不提升为公共契约。
 - `docs/clarify/` 中没有同主题的 active Tool 操作契约记录；现有两份 active 记录分别负责 PreCheck Result 概念和 Frozen Plan artifact。
@@ -336,7 +363,7 @@ Plan 阶段采用严格入口：只有 `readiness=plan_ready` 且 `integrity=val
 
 1. 保留 `mediasense.precheck.run`、`mediasense.precheck.read`、`mediasense.plan.work` 三条 Tool 边界，不合并。
 2. `precheck.run` 只有 `start / status / pause / resume / cancel`；`start` 可选接受 `prior_result_ref`，不增加 `reopen`。
-3. `precheck.read` 继续使用已有正式 `inspect / traverse` 契约，本轮不修改。
+3. `precheck.read` 使用 0 BC 的 `review / expand / resolve` 契约，不保留 `inspect / traverse` 兼容层。
 4. PreCheck 不设公共 `seal`。Run 只有在能形成诚实、稳定的 complete 或有界 partial Result 时才自动原子发布。
 5. `completed` 只表示 Result 已发布；Plan 是否可用由 Result 的 `coverage / readiness / integrity` 三轴判断。
 6. 暂停或中断中的 Working State 不是 Result；单个媒体失败不等于 Run `failed`。

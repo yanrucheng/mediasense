@@ -12,7 +12,12 @@ from pathlib import Path
 
 from .config import ConfigurationError, default_user_config_path, load_runtime_config
 from .dataset import default_local_dataset_root
-from .resources import CONTRACT_FILES, load_contract, skill_roots
+from .resources import (
+    CONTRACT_FILES,
+    load_contract,
+    skill_roots,
+    validate_skill_release_line,
+)
 from .versioning import application_version
 
 
@@ -58,6 +63,7 @@ def diagnose() -> dict[str, object]:
         for name in CONTRACT_FILES:
             load_contract(name)
         skill_roots()
+        validate_skill_release_line(application_version())
     except (OSError, ValueError) as error:
         checks.append(Diagnostic("resources", "error", str(error), True))
     else:

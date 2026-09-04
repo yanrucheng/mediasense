@@ -6,6 +6,8 @@ import re
 import pytest
 
 from mediasense.cli import build_parser, run
+from mediasense.runtime.resources import skill_roots
+from mediasense.runtime.versioning import application_version
 
 
 ROOT = Path(__file__).parents[1]
@@ -71,7 +73,7 @@ def test_entry_skill_owns_bootstrap_and_stage_local_prerequisites() -> None:
     assert "Establish readiness" in entry
     assert "<honeycomb>/.codex/config.toml" in entry
     assert "trusted project" in entry
-    assert "MediaSense `0.4.x` CLI" in entry
+    assert "MediaSense `0.6.x` CLI" in entry
     assert "MediaSense `0.2.x` CLI" not in entry
     assert "current Agent session" in entry
     assert "cannot load it dynamically" in entry
@@ -88,6 +90,16 @@ def test_entry_skill_owns_bootstrap_and_stage_local_prerequisites() -> None:
         assert "mediasense` product entry Skill's local" in stage
         assert "bootstrap" in stage
         assert "uv tool install" not in stage
+
+
+def test_packaged_skills_match_application_release_line() -> None:
+    major, minor, _patch = application_version().split(".", maxsplit=2)
+    expected = f"{major}.{minor}.x"
+    release_lines = re.compile(r"\b\d+\.\d+\.x\b")
+
+    for root in skill_roots():
+        declared = set(release_lines.findall((root / "SKILL.md").read_text()))
+        assert declared == {expected}, (root.name, declared, expected)
 
 
 def test_active_guidance_has_no_obsolete_default_commands() -> None:

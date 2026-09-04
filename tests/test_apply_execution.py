@@ -1264,7 +1264,7 @@ def test_public_prepare_rejects_invalid_frozen_plan_with_schema_valid_error(
     assert _tree_facts(destination) == before_destination
 
 
-def test_public_prepare_rejects_incomplete_result_traversal(tmp_path: Path) -> None:
+def test_public_prepare_rejects_incomplete_result_resolution(tmp_path: Path) -> None:
     source, destination, _state, _files, base_reader = _fixture(tmp_path)
     source_before = _tree_facts(source)
 
@@ -1272,16 +1272,42 @@ def test_public_prepare_rejects_incomplete_result_traversal(tmp_path: Path) -> N
         name = "mediasense.precheck.read"
 
         def read(self, request: dict[str, object]) -> dict[str, object]:
-            if request["action"] == "traverse":
+            if request["operation"] == "resolve":
+                source_set = request["source_set"]
+                encoded_set = json.dumps(
+                    source_set,
+                    ensure_ascii=False,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                ).encode()
                 return {
                     "outcome": "ok",
                     "result_ref": "precheck-result:prepare-test",
-                    "action": "traverse",
-                    "origin": "precheck-result:prepare-test",
-                    "relation": "accounts_for",
-                    "direction": "outbound",
-                    "items": [{"target": "source-item:a"}],
-                    "page": {"returned": 1, "total": 3, "complete": True},
+                    "operation": "resolve",
+                    "resolution": {
+                        "source_set_identity": "sha256:"
+                        + hashlib.sha256(encoded_set).hexdigest(),
+                        "membership_identity": "sha256:" + "0" * 64,
+                        "ordering": "source_item_ref_ascending",
+                        "total": 3,
+                    },
+                    "members": [
+                        {
+                            "source_item_ref": "source-item:a",
+                            "locator": {"kind": "test"},
+                            "scope": "source_media",
+                            "condition": "usable",
+                            "source_content_verification": {
+                                "status": "not_checked"
+                            },
+                        }
+                    ],
+                    "page": {
+                        "returned": 1,
+                        "total": 3,
+                        "complete": True,
+                        "stop_reason": "complete",
+                    },
                 }
             return base_reader.read(request)
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+import hashlib
 import json
 from pathlib import Path
 from typing import Any
@@ -67,110 +68,220 @@ class MockPrecheckReader:
     def __init__(self) -> None:
         mock = load_json(READ_SPEC / "hong-kong.mock.json")
         self.result_ref = mock["result_ref"]
-        self.views: dict[tuple[str, str], dict[str, Any]] = {}
-        self.relationships: dict[tuple[str, str, str], list[dict[str, Any]]] = {}
-        self.known_sources: set[str] = set()
-        self.known_evidence: set[str] = set()
+        review = next(
+            exchange["response"]
+            for exchange in mock["exchanges"]
+            if exchange["request"]["operation"] == "review"
+        )
+        self.result = deepcopy(review["result"])
+        self.review_response = deepcopy(review)
+        self.source_views: dict[str, dict[str, Any]] = {}
+        self.evidence_views: dict[str, dict[str, Any]] = {}
+        self.relationships: dict[tuple[str, str], tuple[str, ...]] = {}
         self.calls: list[dict[str, Any]] = []
         for exchange in mock["exchanges"]:
             response = exchange["response"]
-            target = response.get("target")
-            if isinstance(target, dict) and isinstance(target.get("kind"), str):
-                self.views[(target["kind"], target["ref"])] = deepcopy(target)
-                self._remember(target["ref"])
-                access = target.get("access")
-                if isinstance(access, dict):
-                    self._remember(access.get("source_item_ref"))
-            if response.get("action") == "traverse":
-                key = (
-                    response["origin"],
-                    response["relation"],
-                    response["direction"],
-                )
-                bucket = self.relationships.setdefault(key, [])
-                for item in response.get("items", []):
-                    target_ref = item.get("target")
-                    if isinstance(target_ref, dict):
-                        target_ref = target_ref.get("ref")
-                    self._remember(target_ref)
-                    normalized = deepcopy(item)
-                    if isinstance(normalized.get("target"), dict):
-                        normalized["target"] = normalized["target"]["ref"]
-                    if normalized not in bucket:
-                        bucket.append(normalized)
+            if response.get("operation") == "expand":
+                self._remember_expansion(response)
+            if response.get("operation") == "resolve":
+                source_set = exchange["request"]["source_set"]
+                refs = tuple(item["source_item_ref"] for item in response["members"])
+                if source_set.get("kind") == "precheck_relation":
+                    self.relationships[(source_set["origin"], source_set["relation"])] = refs
+                for member in response["members"]:
+                    self.source_views.setdefault(
+                        member["source_item_ref"], _view_from_member(member)
+                    )
+        self.relationships[("evidence:repair-patched", "represents")] = (
+            "source-item:217",
+        )
+        self.relationships[(self.result_ref, "accounts_for")] = tuple(
+            sorted(self.source_views)
+        )
+        for card in review["coverage_cards"]:
+            ref = card["anchor_evidence_ref"]
+            self.evidence_views.setdefault(ref, _synthetic_evidence(ref, card))
+            represented = self.relationships.get((ref, "represents"), ())
+            for refs in card["evidence_roles"].values():
+                for evidence_ref in refs:
+                    self.evidence_views.setdefault(
+                        evidence_ref,
+                        {
+                            "kind": "evidence",
+                            "ref": evidence_ref,
+                            "access": {
+                                "kind": "inline",
+                                "content": {"mock": True},
+                            },
+                        },
+                    )
+                    if represented:
+                        self.relationships.setdefault(
+                            (evidence_ref, "represents"), represented
+                        )
 
     def read(self, request: dict[str, Any]) -> dict[str, Any]:
         self.calls.append(deepcopy(request))
         if request.get("result_ref") != self.result_ref:
             return _read_error(request, "result_not_found")
-        action = request.get("action")
-        if action == "inspect":
-            target = request.get("target")
-            if target is None:
-                return {
-                    "outcome": "ok",
-                    "result_ref": self.result_ref,
-                    "action": "inspect",
-                    "target": deepcopy(self.views[("result", self.result_ref)]),
-                }
-            key = (target["kind"], target["ref"])
-            view = self.views.get(key)
-            if view is None:
-                view = self._synthetic_view(*key)
-            if view is None:
-                return _read_error(request, "target_not_found")
-            return {
-                "outcome": "ok",
-                "result_ref": self.result_ref,
-                "action": "inspect",
-                "target": deepcopy(view),
-            }
-        if action == "traverse":
-            origin = request.get("target", self.result_ref)
-            key = (origin, request["relation"], request["direction"])
-            items = deepcopy(self.relationships.get(key, []))
-            if not items and key not in self.relationships:
-                return _read_error(request, "relationship_not_found")
-            return {
-                "outcome": "ok",
-                "result_ref": self.result_ref,
-                "action": "traverse",
-                "origin": origin,
-                "relation": request["relation"],
-                "direction": request["direction"],
-                "items": items,
-                "page": {"returned": len(items), "total": len(items), "complete": True},
-            }
+        operation = request.get("operation")
+        if operation == "review":
+            return deepcopy(self.review_response)
+        if operation == "expand":
+            return self._expand(request)
+        if operation == "resolve":
+            return self._resolve(request)
         return _read_error(request, "invalid_request")
 
-    def _remember(self, ref: Any) -> None:
-        if isinstance(ref, str) and ref.startswith("source-item:"):
-            self.known_sources.add(ref)
-        elif isinstance(ref, str) and ref.startswith("evidence:"):
-            self.known_evidence.add(ref)
+    def _remember_expansion(self, response: dict[str, Any]) -> None:
+        for item in response.get("items", []):
+            included = item.get("included", {})
+            source = included.get("source_item")
+            if isinstance(source, dict):
+                view = deepcopy(source)
+                view["observations"] = deepcopy(included.get("observations", []))
+                self.source_views[view["ref"]] = view
+            evidence = included.get("anchor_evidence")
+            if isinstance(evidence, dict):
+                self.evidence_views[evidence["ref"]] = deepcopy(evidence)
+            for prepared in included.get("prepared_targets", []):
+                target = prepared.get("target", {})
+                if target.get("kind") == "evidence":
+                    ref = target["ref"]
+                    self.evidence_views.setdefault(
+                        ref,
+                        {
+                            "kind": "evidence",
+                            "ref": ref,
+                            "access": {"kind": "inline", "content": {"mock": True}},
+                        },
+                    )
 
-    def _synthetic_view(self, kind: str, ref: str) -> dict[str, Any] | None:
-        if kind == "source_item" and ref in self.known_sources:
-            suffix = ref.split(":", 1)[1]
-            return {
-                "kind": "source_item",
-                "ref": ref,
-                "locator": {
-                    "kind": "fixture_relative_path",
-                    "value": f"dataset/mock/item-{suffix}.jpg",
-                },
-                "observations": [
-                    {
-                        "name": "media_type",
-                        "status": "available",
-                        "value": "image/jpeg",
-                        "basis": "Synthetic locator over a Source Item present in the published Mock relationship.",
+    def _expand(self, request: dict[str, Any]) -> dict[str, Any]:
+        items = []
+        if "source_item_refs" in request:
+            for ref in request["source_item_refs"]:
+                view = self.source_views.get(ref)
+                if view is None:
+                    return _read_error(request, "reference_not_in_result")
+                included = {}
+                if "source_item" in request["include"]:
+                    included["source_item"] = {
+                        key: deepcopy(value)
+                        for key, value in view.items()
+                        if key != "observations"
                     }
-                ],
-            }
-        if kind == "evidence" and ref in self.known_evidence:
-            return {"kind": "evidence", "ref": ref}
-        return None
+                if "observations" in request["include"]:
+                    included["observations"] = deepcopy(view.get("observations", []))
+                if "covering_evidence" in request["include"]:
+                    included["covering_evidence"] = [
+                        {"evidence_ref": origin}
+                        for (origin, relation), refs in self.relationships.items()
+                        if relation == "represents" and ref in refs
+                    ]
+                items.append({"source_item_ref": ref, "included": included})
+        else:
+            for ref in request.get("evidence_refs", []):
+                view = self.evidence_views.get(ref)
+                if view is None:
+                    return _read_error(request, "reference_not_in_result")
+                included = {}
+                if "anchor_evidence" in request["include"]:
+                    included["anchor_evidence"] = deepcopy(view)
+                if "prepared_targets" in request["include"]:
+                    included["prepared_targets"] = []
+                if "provenance" in request["include"]:
+                    included["provenance"] = []
+                if "coverage_basis" in request["include"]:
+                    count = len(self.relationships.get((ref, "represents"), ()))
+                    included["coverage_basis"] = {
+                        "relationship": "represents",
+                        "member_count": count,
+                        "unqualified_member_count": count,
+                        "qualified_member_count": 0,
+                        "qualification_groups": [],
+                        "member_specific_basis": False,
+                    }
+                items.append({"anchor_evidence_ref": ref, "included": included})
+        return {
+            "outcome": "ok",
+            "operation": "expand",
+            "result_ref": self.result_ref,
+            "items": items,
+            "page": {
+                "returned": len(items),
+                "total": len(items),
+                "complete": True,
+                "stop_reason": "complete",
+            },
+        }
+
+    def _resolve(self, request: dict[str, Any]) -> dict[str, Any]:
+        try:
+            refs = tuple(sorted(self._resolve_set(request["source_set"])))
+        except (KeyError, ValueError):
+            return _read_error(request, "invalid_source_set")
+        members = [_member_from_view(self.source_views[ref]) for ref in refs]
+        source_set_json = json.dumps(
+            request["source_set"],
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        source_set_identity = "sha256:" + hashlib.sha256(
+            source_set_json.encode("utf-8")
+        ).hexdigest()
+        membership_payload = json.dumps(
+            {
+                "result_ref": self.result_ref,
+                "source_set": json.loads(source_set_json),
+                "members": refs,
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        membership_identity = "sha256:" + hashlib.sha256(
+            membership_payload
+        ).hexdigest()
+        return {
+            "outcome": "ok",
+            "operation": "resolve",
+            "result_ref": self.result_ref,
+            "resolution": {
+                "source_set_identity": source_set_identity,
+                "membership_identity": membership_identity,
+                "ordering": "source_item_ref_ascending",
+                "total": len(members),
+            },
+            "members": members,
+            "page": {
+                "returned": len(members),
+                "total": len(members),
+                "complete": True,
+                "stop_reason": "complete",
+            },
+        }
+
+    def _resolve_set(self, source_set: dict[str, Any]) -> set[str]:
+        kind = source_set.get("kind")
+        if kind == "explicit":
+            refs = set(source_set["source_item_refs"])
+        elif kind == "precheck_relation":
+            refs = set(
+                self.relationships[(source_set["origin"], source_set["relation"])]
+            )
+        elif kind == "union":
+            refs = set().union(*(self._resolve_set(child) for child in source_set["sets"]))
+        elif kind == "difference":
+            refs = self._resolve_set(source_set["base"]) - self._resolve_set(
+                source_set["subtract"]
+            )
+        else:
+            raise ValueError(kind)
+        if not refs <= self.source_views.keys():
+            raise ValueError("source outside Result")
+        return refs
 
 
 class CountingPrecheckReader(MockPrecheckReader):
@@ -185,13 +296,57 @@ class CountingPrecheckReader(MockPrecheckReader):
 class ResultOverrideReader(MockPrecheckReader):
     def __init__(self, **overrides: str) -> None:
         super().__init__()
-        self.views[("result", self.result_ref)].update(overrides)
+        self.result.update(overrides)
+        self.review_response["result"].update(overrides)
 
 
 def _read_error(request: dict[str, Any], code: str) -> dict[str, Any]:
     return {
         "outcome": "error",
         "result_ref": request.get("result_ref", "precheck-result:missing"),
-        "action": request.get("action", "inspect"),
-        "error": {"code": code, "message": code.replace("_", " ")},
+        "operation": request.get("operation", "unknown"),
+        "error": {
+            "code": code,
+            "message": code.replace("_", " "),
+            "retryable": False,
+        },
+    }
+
+
+def _synthetic_evidence(ref: str, card: dict[str, Any]) -> dict[str, Any]:
+    observations = [
+        {"name": "evidence_role", "status": "available", "value": {"role": role}}
+        for role, refs in card["evidence_roles"].items()
+        if ref in refs
+    ]
+    return {
+        "kind": "evidence",
+        "ref": ref,
+        "access": deepcopy(card["anchor_access"]),
+        "observations": observations,
+        "roles": [item["value"]["role"] for item in observations],
+    }
+
+
+def _view_from_member(member: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "kind": "source_item",
+        "ref": member["source_item_ref"],
+        "locator": deepcopy(member["locator"]),
+        "observations": [],
+    }
+
+
+def _member_from_view(view: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "source_item_ref": view["ref"],
+        "locator": deepcopy(view["locator"]),
+        "scope": "source_media",
+        "condition": "invalid" if view["ref"] == "source-item:215" else "usable",
+        "source_content_verification": {"status": "not_checked"},
+        **(
+            {"qualifications": deepcopy(view["qualifications"])}
+            if view.get("qualifications")
+            else {}
+        ),
     }

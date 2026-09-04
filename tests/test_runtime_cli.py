@@ -44,6 +44,25 @@ def test_doctor_distinguishes_optional_missing_dependencies(
     assert checks["local_models"]["status"] == "warning"
 
 
+def test_doctor_rejects_skill_release_mismatch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys
+) -> None:
+    monkeypatch.setenv("MEDIASENSE_DATA_HOME", str(tmp_path / "data"))
+    monkeypatch.setenv("MEDIASENSE_CONFIG_HOME", str(tmp_path / "config"))
+    monkeypatch.setattr(
+        "mediasense.runtime.doctor.validate_skill_release_line",
+        lambda _version: (_ for _ in ()).throw(
+            ValueError("installed Skill declares 0.5.x; expected only 0.6.x")
+        ),
+    )
+
+    assert run(["doctor", "--json"]) == 1
+    result = json.loads(capsys.readouterr().out)
+    resources = next(item for item in result["checks"] if item["name"] == "resources")
+    assert resources["status"] == "error"
+    assert "expected only 0.6.x" in resources["message"]
+
+
 def test_dataset_open_command_reports_selected_workspace(
     tmp_path: Path, capsys
 ) -> None:
@@ -150,6 +169,42 @@ def test_tool_call_reports_dataset_binding_and_business_result(
     assert value["dataset"]["workspace"] == str(workspace)
     assert value["dataset"]["configuration"]["offline"] is True
     assert value["result"]["error"]["code"] == "run_not_found"
+
+
+@pytest.mark.parametrize(
+    "request_json",
+    [
+        '{"action":"start","dataset_ref":"dataset:any",'
+        '"request_id":"request:one-shot"}',
+        '{"action":"resume","run_ref":"precheck-run:any"}',
+    ],
+)
+def test_one_shot_tool_call_rejects_precheck_worker_actions(
+    tmp_path: Path, capsys, request_json: str
+) -> None:
+    source = tmp_path / "source"
+    source.mkdir()
+    workspace = tmp_path / "workspace"
+
+    exit_code = run(
+        [
+            "tools",
+            "call",
+            "mediasense.precheck.run",
+            "--source",
+            str(source),
+            "--workspace",
+            str(workspace),
+            "--request",
+            request_json,
+            "--json",
+        ]
+    )
+    value = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 2
+    assert value["error"]["code"] == "persistent_host_required"
+    assert not workspace.exists()
 
 
 def test_packaged_resources_are_complete_and_contracts_match_authorities() -> None:
