@@ -4,7 +4,7 @@ title: "MediaSense Default Organization Profile"
 type: spec
 status: active
 created: 2026-08-28
-updated: 2026-08-28
+updated: 2026-09-04
 timezone: "Asia/Shanghai"
 parent: "index-spec"
 depends-on:
@@ -20,9 +20,9 @@ tags: ["mediasense", "plan", "organization-profile", "default-policy"]
 
 ## Decision
 
-This document defines MediaSense's default product policy for the logical media tree proposed during Plan. It preserves the useful shape repeatedly observed in the owner's accepted media collections: events are the primary browsing unit, simple events remain shallow, complex events expand only as needed, related media stay together, and auxiliary or unresolved material remains visibly separated from normal groups.
+This document defines MediaSense's first mature Organization Profile and the default candidate starting point for the logical media tree proposed during Plan. Event-first organization is adopted as the primary browsing axis only after it fits the Dataset evidence and the Human's future retrieval purpose. When adopted, the profile preserves the useful shape repeatedly observed in the owner's accepted media collections: simple events remain shallow, complex events expand only as needed, related media stay together, and auxiliary or unresolved material remains visibly separated from normal groups.
 
-This profile is a versioned product policy, not a Tool-managed object. It has no `profile_ref`, registry, independent runtime lifecycle, or public operation. `mediasense.plan.work` continues to store only the exact plan-scoped `organization_preferences` snapshot. The Planning Agent applies this default when preferences do not override it, combines it with the actual Dataset evidence and Human feedback, and writes only the resulting organization into candidate content. A Frozen Plan remains self-contained and does not require this profile to be interpreted or applied.
+This profile is a versioned product policy, not a Tool-managed object. It has no `profile_ref`, registry, independent runtime lifecycle, or public operation. `mediasense.plan.work` continues to store only the exact plan-scoped `organization_preferences` snapshot. The Planning Agent treats this event-first profile as the default candidate starting point, validates it against Dataset evidence and the Human's retrieval purpose, and falls back to first-principles organization design when the candidate clearly does not fit. The Agent writes only the resulting organization into candidate content. A Frozen Plan remains self-contained and does not require this profile to be interpreted or applied.
 
 The policy and a complete conforming Frozen Plan example have received Human review. The later Hong Kong exercise remains an end-to-end product acceptance target rather than a prerequisite for this policy. Its naming and folder examples are product proposals, not historical or geographic truth.
 
@@ -64,7 +64,7 @@ Auxiliary and exception containers do not count as semantic grouping levels. A d
 
 ## Event and depth policy
 
-- The event is the primary Human browsing unit.
+- Once this profile has been selected, the event is the primary Human browsing unit.
 - A small or semantically coherent event places its media directly in the event directory. Plan must not create a one-child chapter or content-group directory merely to reproduce a nominal hierarchy.
 - A large or heterogeneous event may add chapters when they make distinct days, places, or themes materially easier to browse.
 - A chapter may add ordered content groups when several meaningful scenes or activities would otherwise be mixed together.
@@ -121,9 +121,10 @@ The Frozen Plan must still account for every in-scope Source Item. If later Appl
 
 ## Preference and authority rules
 
-- Explicit Human preferences override this default within their authorized scope.
-- Dataset evidence may justify a departure, but the Agent must present a material or easily misunderstood departure for Human review.
+- Explicit Human preferences govern Profile selection and override this profile's defaults within their authorized scope.
+- Dataset evidence may refute this candidate or justify an adapted form. The Agent must present a material or easily misunderstood selection, departure, or adaptation for Human review.
 - `organization_preferences` records the exact preferences used by one Plan Working State; it is not a pointer to this document and does not make the Tool choose names or groups.
+- An empty `organization_preferences` snapshot means that no explicit Human preference is currently stored. It neither selects nor confirms this profile.
 - The Frozen Plan contains final paths, memberships, source-name overrides, and justified other outcomes. It does not store a dependency on this profile.
 - Apply executes the Frozen Plan exactly. It must not reinterpret this profile or make new organization decisions.
 
@@ -164,7 +165,7 @@ The Hong Kong labels above are product proposals only. When the real Hong Kong a
 
 ## Acceptance boundary
 
-This active profile is accepted because the accompanying complete proposed Frozen Plan demonstrates that the existing artifact contract can express:
+This active profile is accepted as a mature candidate starting point, not as a universally applicable organization answer. The accompanying complete proposed Frozen Plan demonstrates that the existing artifact contract can express:
 
 - a folded small event;
 - a multi-day or otherwise complex event with ordered groups;
