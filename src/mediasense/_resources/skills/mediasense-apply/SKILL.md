@@ -13,7 +13,7 @@ truth.
 ## Tool Host prerequisite
 
 Proceed only when the current Honeycomb session exposes a compatible MediaSense
-`0.6.x` Tool Host and both `mediasense.apply.run` and `mediasense.apply.read` are
+`0.7.x` Tool Host and both `mediasense.apply.run` and `mediasense.apply.read` are
 discoverable. A CLI found in `PATH` or an MCP table present on disk is not
 sufficient. If the Host is absent or incompatible, stop before preparation and
 use the `mediasense` product entry Skill's local Honeycomb bootstrap; do not duplicate

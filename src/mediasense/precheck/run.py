@@ -11,9 +11,10 @@ import sqlite3
 from threading import Event, Thread
 from uuid import uuid4
 
-from mediasense.dataset_reference import dataset_id_from_ref
+from mediasense.dataset_reference import dataset_id_from_ref, dataset_ref_from_id
 
 from ._run_sqlite import (
+    RunBindingError,
     RunDecisionError,
     RunExecutionConflict,
     RunIdempotencyConflict,
@@ -510,13 +511,38 @@ class PrecheckRunTool:
             except sqlite3.Error:
                 continue
 
-    def prepare_execution(self, run_ref: str, *, dataset_id: str) -> None:
-        """Bind and configure one Run without starting long-running work."""
+    def prepare_execution(
+        self,
+        run_ref: str,
+        *,
+        dataset_id: str,
+        source_root: Path | None = None,
+        rebind_reason: str | None = None,
+    ) -> None:
+        """Prepare the exact bound accounting Run without starting long work.
 
-        accounting_run_id = self._store.unfinished_accounting_run(dataset_id)
-        if accounting_run_id is None:
-            return
+        An unbound newly-created public Run may adopt the Dataset's unfinished
+        accounting Run. Once bound, every resume stays on that same Run.
+        """
+
+        record = self._store.get(run_ref)
+        expected_dataset_ref = dataset_ref_from_id(dataset_id)
+        if record["dataset_ref"] != expected_dataset_ref:
+            raise RunBindingError(
+                "public Run belongs to a different Dataset than execution preparation"
+            )
+        accounting_run_id = record["accounting_run_id"]
+        if not isinstance(accounting_run_id, str):
+            accounting_run_id = self._store.unfinished_accounting_run(dataset_id)
+            if accounting_run_id is None:
+                return
         self._store.bind_accounting_run(run_ref, accounting_run_id)
+        if source_root is not None:
+            AccountingStore(self.database_path).resume_run_attachment(
+                accounting_run_id,
+                source_root,
+                rebind_reason=rebind_reason,
+            )
         self._store.configure_execution(
             run_ref,
             self._resolved_execution_config(accounting_run_id).value(),
@@ -541,6 +567,27 @@ class PrecheckRunTool:
     ) -> dict[str, object]:
         reason = _reason(code, message)
         return self._status_record(self._store.mark_failed(run_ref, reason))
+
+    def stop_unstarted_execution(
+        self,
+        run_ref: str,
+        *,
+        target_state: str,
+        code: str,
+        message: str,
+        resume_when: str | None = None,
+        worker_token: str | None = None,
+    ) -> dict[str, object]:
+        """Stop a public Run and pause accounting before execution starts."""
+
+        return self._status_record(
+            self._store.stop_unstarted_execution(
+                run_ref,
+                target_state=target_state,
+                reason=_reason(code, message, resume_when=resume_when),
+                worker_token=worker_token,
+            )
+        )
 
     def complete_with_result(self, run_ref: str, result_ref: str) -> dict[str, object]:
         """Atomically bind completion only after the sealed Result verifies."""
@@ -666,7 +713,26 @@ class PrecheckRunTool:
                 "idempotency_conflict",
                 "request_id was already used with different start inputs",
             )
-        self.prepare_execution(str(record["run_ref"]), dataset_id=dataset_id)
+        try:
+            self.prepare_execution(str(record["run_ref"]), dataset_id=dataset_id)
+        except (RunBindingError, RunExecutionConflict, ValueError, OSError):
+            _LOGGER.exception(
+                "PreCheck start preparation failed for %s", record["run_ref"]
+            )
+            failed = self.stop_unstarted_execution(
+                str(record["run_ref"]),
+                target_state="failed",
+                code="execution_initialization_failed",
+                message="The Run could not prepare a source-bound execution.",
+            )
+            return _error(
+                "start",
+                "operation_failed",
+                str(failed["reason"]["message"]),
+                str(record["run_ref"]),
+                current_state="failed",
+                allowed_actions=[],
+            )
         return _start_response(record)
 
     def _status(

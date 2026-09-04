@@ -102,6 +102,16 @@ def test_schemas_strictly_compile_as_draft_2020_12() -> None:
     Draft202012Validator.check_schema(tool["outputSchema"])
 
 
+def test_published_result_axes_match_the_precheck_result_contract() -> None:
+    published = _tool()["outputSchema"]["$defs"]["published_result"]["properties"]
+    result = _read_tool()["outputSchema"]["$defs"]["result_view"]["properties"]
+
+    assert published["coverage"] == result["coverage"]
+    assert published["readiness"] == result["readiness"]
+    assert published["integrity"] == {"const": "valid"}
+    assert "valid" in result["integrity"]["enum"]
+
+
 def test_mock_requests_and_responses_conform() -> None:
     input_validator, output_validator = _validators()
     for exchange in _mock()["exchanges"]:

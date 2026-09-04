@@ -17,6 +17,7 @@ from mediasense.precheck import (
     ImageRenditionProducer,
     ResultStore,
 )
+from mediasense.precheck.source_attachment import SourceRebindRequired
 from mediasense.runtime.host import RuntimeHost
 
 
@@ -192,6 +193,230 @@ def test_successor_start_creates_work_and_never_reports_queued(
     assert status["reason"]["code"] == "scope_confirmation_required"
 
 
+def test_scope_confirmation_resume_reuses_the_bound_accounting_run(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source"
+    source.mkdir()
+    media = source / "original.jpg"
+    Image.new("RGB", (80, 40), "purple").save(media)
+    source_before = media.read_bytes()
+    workspace = tmp_path / "workspace"
+    host = RuntimeHost()
+    opened = host.open_dataset(str(source), str(workspace))
+    dataset_ref = str(opened["dataset_ref"])
+    started = host.call_tool(
+        "mediasense.precheck.run",
+        dataset_ref=dataset_ref,
+        request={
+            "action": "start",
+            "dataset_ref": dataset_ref,
+            "request_id": "request:runtime-scope-resume",
+        },
+    )
+    paused = _wait_for_precheck_attention(host, dataset_ref, str(started["run_ref"]))
+    assert paused["state"] == "paused"
+    assert paused["reason"]["code"] == "scope_confirmation_required"
+
+    database = workspace / "precheck" / "work.sqlite3"
+    with sqlite3.connect(database) as connection:
+        before = connection.execute(
+            "SELECT run_id, status FROM working_runs ORDER BY started_at"
+        ).fetchall()
+        bound_run = connection.execute(
+            "SELECT accounting_run_id FROM precheck_runs WHERE run_ref = ?",
+            (started["run_ref"],),
+        ).fetchone()[0]
+    assert before == [(bound_run, "completed")]
+
+    resumed = host.call_tool(
+        "mediasense.precheck.run",
+        dataset_ref=dataset_ref,
+        request={
+            "action": "resume",
+            "run_ref": started["run_ref"],
+            "decision": {
+                "kind": "source_scope",
+                "inventory_fingerprint": paused["confirmation"]["inventory"][
+                    "inventory_fingerprint"
+                ],
+                "default_disposition": "include",
+                "exceptions": [],
+            },
+        },
+    )
+    assert resumed["outcome"] == "accepted"
+    assert resumed["target_state"] == "running"
+
+    finished = _wait_for_precheck_attention(
+        host, dataset_ref, str(started["run_ref"]), attempts=1000
+    )
+    assert finished["state"] == "completed", finished
+    assert finished["activity"]["phase"] == "complete"
+    with sqlite3.connect(database) as connection:
+        after = connection.execute(
+            "SELECT run_id, status FROM working_runs ORDER BY started_at"
+        ).fetchall()
+        public = connection.execute(
+            "SELECT state, accounting_run_id FROM precheck_runs WHERE run_ref = ?",
+            (started["run_ref"],),
+        ).fetchone()
+        scope_state = connection.execute(
+            """
+            SELECT state FROM precheck_scope_reviews
+            WHERE run_ref = ? ORDER BY revision DESC LIMIT 1
+            """,
+            (started["run_ref"],),
+        ).fetchone()[0]
+        orphan_running = connection.execute(
+            """
+            SELECT COUNT(*) FROM working_runs AS accounting
+            LEFT JOIN precheck_runs AS public
+              ON public.accounting_run_id = accounting.run_id
+            WHERE accounting.status = 'running' AND public.run_ref IS NULL
+            """
+        ).fetchone()[0]
+    assert after == [(bound_run, "completed")]
+    assert public == ("completed", bound_run)
+    assert scope_state == "accepted"
+    assert orphan_running == 0
+    assert media.read_bytes() == source_before
+
+
+def test_scope_resume_initialization_failure_has_no_orphan_accounting_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source = tmp_path / "source"
+    source.mkdir()
+    (source / "item.txt").write_text("account me", encoding="utf-8")
+    workspace = tmp_path / "workspace"
+    host = RuntimeHost()
+    opened = host.open_dataset(str(source), str(workspace))
+    dataset_ref = str(opened["dataset_ref"])
+    runtime = host._datasets[dataset_ref]
+    started = host.call_tool(
+        "mediasense.precheck.run",
+        dataset_ref=dataset_ref,
+        request={
+            "action": "start",
+            "dataset_ref": dataset_ref,
+            "request_id": "request:runtime-scope-resume-failure",
+        },
+    )
+    paused = _wait_for_precheck_attention(host, dataset_ref, str(started["run_ref"]))
+
+    def fail_preparation(*_args, **_kwargs) -> None:
+        raise ValueError("simulated invariant failure")
+
+    monkeypatch.setattr(runtime.precheck_run, "prepare_execution", fail_preparation)
+    failed = host.call_tool(
+        "mediasense.precheck.run",
+        dataset_ref=dataset_ref,
+        request={
+            "action": "resume",
+            "run_ref": started["run_ref"],
+            "decision": {
+                "kind": "source_scope",
+                "inventory_fingerprint": paused["confirmation"]["inventory"][
+                    "inventory_fingerprint"
+                ],
+                "default_disposition": "include",
+                "exceptions": [],
+            },
+        },
+    )
+
+    assert failed["outcome"] == "error"
+    assert failed["error"]["code"] == "operation_failed"
+    assert failed["error"]["current_state"] == "failed"
+    assert failed["error"]["allowed_actions"] == []
+    status = host.call_tool(
+        "mediasense.precheck.run",
+        dataset_ref=dataset_ref,
+        request={"action": "status", "run_ref": started["run_ref"]},
+    )
+    assert status["state"] == "failed"
+    assert status["reason"]["code"] == "execution_initialization_failed"
+    assert status["scope_selection"]["provenance"] == "accepted"
+    with sqlite3.connect(workspace / "precheck" / "work.sqlite3") as connection:
+        accounting = connection.execute(
+            "SELECT status FROM working_runs ORDER BY started_at"
+        ).fetchall()
+        orphan_running = connection.execute(
+            """
+            SELECT COUNT(*) FROM working_runs AS accounting
+            LEFT JOIN precheck_runs AS public
+              ON public.accounting_run_id = accounting.run_id
+            WHERE accounting.status = 'running' AND public.run_ref IS NULL
+            """
+        ).fetchone()[0]
+    assert accounting == [("completed",)]
+    assert orphan_running == 0
+
+
+def test_scope_resume_reports_recoverable_source_rebind_as_blocked(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source = tmp_path / "source"
+    source.mkdir()
+    (source / "item.txt").write_text("account me", encoding="utf-8")
+    workspace = tmp_path / "workspace"
+    host = RuntimeHost()
+    opened = host.open_dataset(str(source), str(workspace))
+    dataset_ref = str(opened["dataset_ref"])
+    started = host.call_tool(
+        "mediasense.precheck.run",
+        dataset_ref=dataset_ref,
+        request={
+            "action": "start",
+            "dataset_ref": dataset_ref,
+            "request_id": "request:runtime-scope-rebind",
+        },
+    )
+    paused = _wait_for_precheck_attention(host, dataset_ref, str(started["run_ref"]))
+
+    def require_rebind(*_args, **_kwargs):
+        raise SourceRebindRequired("source attachment changed")
+
+    monkeypatch.setattr(
+        AccountingStore,
+        "resume_run_attachment",
+        require_rebind,
+    )
+    response = host.call_tool(
+        "mediasense.precheck.run",
+        dataset_ref=dataset_ref,
+        request={
+            "action": "resume",
+            "run_ref": started["run_ref"],
+            "decision": {
+                "kind": "source_scope",
+                "inventory_fingerprint": paused["confirmation"]["inventory"][
+                    "inventory_fingerprint"
+                ],
+                "default_disposition": "include",
+                "exceptions": [],
+            },
+        },
+    )
+
+    assert response["outcome"] == "error"
+    assert response["error"] == {
+        "code": "operation_failed",
+        "message": "source attachment changed",
+        "current_state": "blocked",
+        "allowed_actions": ["resume", "cancel"],
+    }
+    status = host.call_tool(
+        "mediasense.precheck.run",
+        dataset_ref=dataset_ref,
+        request={"action": "status", "run_ref": started["run_ref"]},
+    )
+    assert status["state"] == "blocked"
+    assert status["reason"]["code"] == "source_rebind_required"
+    assert "rebind_reason" in status["reason"]["resume_when"]
+
+
 def test_worker_launch_failure_is_returned_and_retained(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -226,6 +451,87 @@ def test_worker_launch_failure_is_returned_and_retained(
     )
     assert status["state"] == "failed"
     assert status["reason"]["code"] == "execution_worker_start_failed"
+    runtime = host._datasets[dataset_ref]
+    with sqlite3.connect(runtime.precheck_run.database_path) as connection:
+        accounting_status = connection.execute(
+            """
+            SELECT accounting.status
+            FROM precheck_runs AS public
+            JOIN working_runs AS accounting
+              ON accounting.run_id = public.accounting_run_id
+            WHERE public.run_ref = ?
+            """,
+            (failed["run_ref"],),
+        ).fetchone()[0]
+        checkpoint = connection.execute(
+            "SELECT execution_checkpoint FROM precheck_runs WHERE run_ref = ?",
+            (failed["run_ref"],),
+        ).fetchone()[0]
+    assert accounting_status == "paused"
+    assert '"worker":null' in checkpoint
+
+
+def test_start_preparation_failure_pauses_the_unowned_accounting_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source = tmp_path / "source"
+    source.mkdir()
+    (source / "item.txt").write_text("account me", encoding="utf-8")
+    workspace = tmp_path / "workspace"
+    host = RuntimeHost()
+    opened = host.open_dataset(str(source), str(workspace))
+    dataset_ref = str(opened["dataset_ref"])
+    runtime = host._datasets[dataset_ref]
+
+    def fail_preparation(*_args, **_kwargs) -> None:
+        raise ValueError("simulated preparation failure")
+
+    monkeypatch.setattr(
+        runtime.precheck_run,
+        "_resolved_execution_config",
+        fail_preparation,
+    )
+    failed = host.call_tool(
+        "mediasense.precheck.run",
+        dataset_ref=dataset_ref,
+        request={
+            "action": "start",
+            "dataset_ref": dataset_ref,
+            "request_id": "request:runtime-start-preparation-failure",
+        },
+    )
+
+    assert failed["outcome"] == "error"
+    assert failed["error"]["current_state"] == "failed"
+    with sqlite3.connect(workspace / "precheck" / "work.sqlite3") as connection:
+        accounting = connection.execute(
+            "SELECT status FROM working_runs ORDER BY started_at"
+        ).fetchall()
+        public = connection.execute(
+            "SELECT state FROM precheck_runs WHERE run_ref = ?",
+            (failed["run_ref"],),
+        ).fetchone()[0]
+    assert accounting == [("paused",)]
+    assert public == "failed"
+
+
+def _wait_for_precheck_attention(
+    host: RuntimeHost,
+    dataset_ref: str,
+    run_ref: str,
+    *,
+    attempts: int = 500,
+) -> dict[str, object]:
+    for _ in range(attempts):
+        status = host.call_tool(
+            "mediasense.precheck.run",
+            dataset_ref=dataset_ref,
+            request={"action": "status", "run_ref": run_ref},
+        )
+        if status["state"] != "running":
+            return status
+        sleep(0.01)
+    raise AssertionError("PreCheck Run did not reach an attention or terminal state")
 
 
 def test_real_composition_creates_plan_from_precheck_result(tmp_path: Path) -> None:

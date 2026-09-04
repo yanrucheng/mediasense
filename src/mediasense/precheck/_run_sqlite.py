@@ -294,6 +294,63 @@ class SQLiteRunStore:
                 connection, run_ref, checkpoint, observed_at=self.now()
             )
 
+    def stop_unstarted_execution(
+        self,
+        run_ref: str,
+        *,
+        target_state: str,
+        reason: dict[str, object],
+        worker_token: str | None = None,
+    ) -> dict[str, object]:
+        """Atomically stop a Run before a claimed worker starts."""
+
+        if target_state not in {"blocked", "failed"}:
+            raise ValueError("unstarted execution may stop only as blocked or failed")
+
+        with self._transaction() as connection:
+            observed = _record(self._require(connection, run_ref))
+            if observed["state"] == target_state:
+                return observed
+            if observed["state"] != "running":
+                raise RunStateConflict(observed)
+            checkpoint = observed["execution_checkpoint"]
+            assert isinstance(checkpoint, dict)
+            worker = checkpoint["worker"]
+            if worker_token is None:
+                if worker is not None:
+                    raise RunExecutionConflict(
+                        "unstarted execution already has a worker owner"
+                    )
+            elif not isinstance(worker, dict) or worker.get("token") != worker_token:
+                raise RunExecutionConflict(
+                    "unstarted execution is not owned by the expected worker"
+                )
+            observed_at = self.now()
+            if worker is not None:
+                checkpoint["worker"] = None
+                self._write_execution_checkpoint(
+                    connection,
+                    run_ref,
+                    checkpoint,
+                    observed_at=observed_at,
+                )
+            accounting_run_id = observed["accounting_run_id"]
+            if isinstance(accounting_run_id, str):
+                connection.execute(
+                    """
+                    UPDATE working_runs
+                    SET status = 'paused', blocked_reason = NULL, updated_at = ?
+                    WHERE run_id = ? AND status = 'running'
+                    """,
+                    (observed_at, accounting_run_id),
+                )
+            return self._update_state(
+                connection,
+                run_ref,
+                target_state,
+                reason=reason,
+            )
+
     def execution_facts(self, accounting_run_id: str | None) -> dict[str, object]:
         """Read bounded aggregate facts used by the public activity projection."""
 

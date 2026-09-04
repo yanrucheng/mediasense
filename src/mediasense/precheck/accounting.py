@@ -128,6 +128,23 @@ class AccountingStore:
     def get_source_attachment(self, run_id: str) -> SourceAttachment:
         return self._database.active_attachment(run_id)
 
+    def resume_run_attachment(
+        self,
+        run_id: str,
+        source_root: Path,
+        *,
+        rebind_reason: str | None = None,
+    ) -> SourceAttachment:
+        """Revalidate one exact Run attachment without selecting or creating a Run."""
+
+        self._database.load_run(run_id)
+        self._resume_attachment(
+            run_id,
+            self._probe(source_root),
+            rebind_reason=rebind_reason,
+        )
+        return self.get_source_attachment(run_id)
+
     def get_source_rebindings(self, run_id: str) -> tuple[SourceRebinding, ...]:
         return self._database.get_rebindings(run_id)
 

@@ -13,7 +13,7 @@ goal.
 ## Tool Host prerequisite
 
 Proceed only when the current Honeycomb session exposes a compatible MediaSense
-`0.6.x` Tool Host and `mediasense.dataset.open`, `mediasense.precheck.run`, and
+`0.7.x` Tool Host and `mediasense.dataset.open`, `mediasense.precheck.run`, and
 `mediasense.precheck.read` are discoverable. A CLI found in `PATH` or an MCP table
 present on disk is not sufficient. If the Host is absent or incompatible, stop
 PreCheck work and use the `mediasense` product entry Skill's local Honeycomb
@@ -32,7 +32,8 @@ the current session reloaded a newly written project configuration.
   for discovery, long work, controls, confirmation enforcement, recovery, and
   automatic publication. Use
   [`mediasense.precheck.read`](references/precheck-read.tool.json)
-  for immutable Result facts and Result-local navigation.
+  for immutable Result review, targeted expansion, and exact Source Set
+  resolution.
 - Treat the Tool responses and the linked Run and Read contract snapshots as
   authoritative for the installed release. Read the relevant snapshot when an
   exact field or action is needed. Do not invent actions or fields, copy their
@@ -110,8 +111,7 @@ Do not turn Source Item counts into Evidence counts, logical queries into
 provider requests, or an unavailable estimate into a promise. The purpose is to
 let the user judge whether the observed compression and prospective cost are
 reasonable, not to force a target before the Dataset has been processed. Claim
-an exact frontier count only after `mediasense.precheck.read` reports it or a
-complete traversal accounts for every page.
+an exact frontier count only after a complete `review` pagination reports it.
 
 ## Observe and control the Run
 
@@ -192,9 +192,11 @@ can authorize the batch.
 
 If the user dislikes the observed frontier, first ask what is wrong with its
 content or distribution. A large or small count alone is not evidence of a bad
-Result. Inspect the exact Result through `mediasense.precheck.read` and compare
-the complaint with representation bases, coverage, outliers, boundaries,
-qualifications, processing provenance, and cost.
+Result. `review` the exact Result, select Evidence refs from coverage-card
+anchors, and request only advertised `expand` includes needed to compare the
+complaint with representation bases, coverage, outliers, boundaries,
+qualifications, processing provenance, and cost. Use `resolve` when exact member
+identity is required; do not substitute review summaries for membership proof.
 
 Identify the narrowest producer, profile choice, parameter, or upstream
 evidence gap that plausibly caused the problem. Explain how a proposed change
@@ -211,10 +213,12 @@ rewrites, or proof that any one count is inherently correct.
 
 ## Judge the immutable Result
 
-After publication, inspect the exact `result_ref` through
+After publication, `review` the exact `result_ref` through
 `mediasense.precheck.read`. Interpret coverage, readiness, and integrity as
 independent axes and preserve qualifications, omissions, provenance, confidence,
-failures, and externally observable cost.
+failures, and externally observable cost. Follow each card's
+`available_expansions` menu for targeted detail and use its
+`resolvable_source_set` when exact members are needed.
 
 Every accounted Source Item must remain reachable through the normal Evidence
 frontier or an explicit auxiliary, excluded, unsupported, invalid, error, or

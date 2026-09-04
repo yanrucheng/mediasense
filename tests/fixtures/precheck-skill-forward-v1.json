@@ -71,18 +71,21 @@
         {
           "tool": "mediasense.precheck.read",
           "request": {
-            "action": "inspect",
+            "operation": "review",
             "result_ref": "precheck-result:revision-one"
           }
         },
         {
           "tool": "mediasense.precheck.read",
           "request": {
-            "action": "traverse",
+            "operation": "resolve",
             "result_ref": "precheck-result:revision-one",
-            "target": "evidence:burst-example",
-            "relation": "represents",
-            "direction": "outbound"
+            "source_set": {
+              "kind": "precheck_relation",
+              "origin": "evidence:burst-example",
+              "relation": "represents",
+              "direction": "outbound"
+            }
           }
         },
         {
@@ -103,7 +106,7 @@
         {
           "tool": "mediasense.precheck.read",
           "request": {
-            "action": "inspect",
+            "operation": "review",
             "result_ref": "precheck-result:revision-two"
           }
         },
@@ -297,18 +300,21 @@
         {
           "tool": "mediasense.precheck.read",
           "request": {
-            "action": "inspect",
+            "operation": "review",
             "result_ref": "precheck-result:partial-ready"
           }
         },
         {
           "tool": "mediasense.precheck.read",
           "request": {
-            "action": "traverse",
+            "operation": "resolve",
             "result_ref": "precheck-result:partial-ready",
-            "relation": "accounts_for",
-            "direction": "outbound",
-            "filter": {"attention_only": true},
+            "source_set": {
+              "kind": "precheck_relation",
+              "origin": "precheck-result:partial-ready",
+              "relation": "accounts_for",
+              "direction": "outbound"
+            },
             "page": {"limit": 1000}
           }
         }
@@ -327,18 +333,21 @@
         {
           "tool": "mediasense.precheck.read",
           "request": {
-            "action": "inspect",
+            "operation": "review",
             "result_ref": "precheck-result:blocked"
           }
         },
         {
           "tool": "mediasense.precheck.read",
           "request": {
-            "action": "traverse",
+            "operation": "resolve",
             "result_ref": "precheck-result:blocked",
-            "relation": "accounts_for",
-            "direction": "outbound",
-            "filter": {"attention_only": true},
+            "source_set": {
+              "kind": "precheck_relation",
+              "origin": "precheck-result:blocked",
+              "relation": "accounts_for",
+              "direction": "outbound"
+            },
             "page": {"limit": 1000}
           }
         }
@@ -357,7 +366,7 @@
         {
           "tool": "mediasense.precheck.read",
           "request": {
-            "action": "inspect",
+            "operation": "review",
             "result_ref": "precheck-result:summer-7"
           }
         }

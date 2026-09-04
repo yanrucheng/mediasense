@@ -646,6 +646,25 @@ def test_later_run_at_same_root_keeps_attachment_reuse_domain(tmp_path: Path) ->
     assert second_attachment.binding_reason == "verified_existing_source"
 
 
+def test_resume_run_attachment_targets_one_exact_completed_run(tmp_path: Path) -> None:
+    source = tmp_path / "source"
+    source.mkdir()
+    (source / "photo.JPG").write_bytes(b"photo")
+    store = AccountingStore(tmp_path / "working.sqlite3")
+    completed = _complete_run(store, "dataset-a", source)
+
+    attachment = store.resume_run_attachment(completed.run_id, source)
+
+    assert attachment == store.get_source_attachment(completed.run_id)
+    with store._database.connect() as connection:
+        rows = connection.execute(
+            "SELECT run_id, status FROM working_runs ORDER BY started_at"
+        ).fetchall()
+    assert [(row["run_id"], row["status"]) for row in rows] == [
+        (completed.run_id, "completed")
+    ]
+
+
 def test_same_physical_root_relocation_is_verified_and_audited(
     tmp_path: Path,
 ) -> None:

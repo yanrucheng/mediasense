@@ -242,23 +242,45 @@ class DatasetRuntime:
                 return _execution_start_error(str(action), failed)
             if action == "resume":
                 try:
-                    AccountingStore(
-                        self.precheck_run.database_path
-                    ).start_or_resume_run(
-                        self.dataset_id,
-                        self.opened.source_root,
-                        rebind_reason=authority.get("rebind_reason"),
-                    )
+                    # The public Run already owns its accounting identity. A
+                    # resume may revalidate that attachment, never select a
+                    # newer Dataset-level accounting Run.
                     self.precheck_run.prepare_execution(
                         run_ref,
                         dataset_id=self.dataset_id,
+                        source_root=self.opened.source_root,
+                        rebind_reason=authority.get("rebind_reason"),
                     )
-                except (SourceAttachmentError, ValueError, OSError):
+                except SourceRebindRequired as error:
+                    blocked = self.precheck_run.stop_unstarted_execution(
+                        run_ref,
+                        target_state="blocked",
+                        code="source_rebind_required",
+                        message=str(error),
+                        resume_when=(
+                            "Provide authority.rebind_reason for the intended source "
+                            "root, then resume this Run."
+                        ),
+                    )
+                    return _execution_start_error(str(action), blocked)
+                except SourceAttachmentError as error:
+                    blocked = self.precheck_run.stop_unstarted_execution(
+                        run_ref,
+                        target_state="blocked",
+                        code="source_attachment_unavailable",
+                        message=str(error),
+                        resume_when=(
+                            "Make the bound source available, then resume this Run."
+                        ),
+                    )
+                    return _execution_start_error(str(action), blocked)
+                except (ValueError, OSError):
                     _LOGGER.exception(
                         "PreCheck resume preparation failed for %s", run_ref
                     )
-                    failed = self.precheck_run.mark_failed(
+                    failed = self.precheck_run.stop_unstarted_execution(
                         run_ref,
+                        target_state="failed",
                         code="execution_initialization_failed",
                         message=("The Run could not prepare a source-bound execution."),
                     )
@@ -288,10 +310,12 @@ class DatasetRuntime:
             except Exception:
                 self._workers.pop(run_ref, None)
                 _LOGGER.exception("PreCheck worker launch failed for %s", run_ref)
-                return self.precheck_run.mark_failed(
+                return self.precheck_run.stop_unstarted_execution(
                     run_ref,
+                    target_state="failed",
                     code="execution_worker_start_failed",
                     message="The execution worker could not be started.",
+                    worker_token=worker_token,
                 )
         return None
 
@@ -338,23 +362,29 @@ class DatasetRuntime:
 
 
 def _execution_start_error(
-    action: str, failed: Mapping[str, object]
+    action: str, status: Mapping[str, object]
 ) -> dict[str, object]:
-    reason = failed.get("reason")
+    reason = status.get("reason")
     message = (
         str(reason.get("message"))
         if isinstance(reason, Mapping)
         else "The execution worker could not be started."
     )
+    state = str(status.get("state", "failed"))
+    allowed_actions = status.get("allowed_actions")
     return {
         "outcome": "error",
         "action": action,
-        "run_ref": failed["run_ref"],
+        "run_ref": status["run_ref"],
         "error": {
             "code": "operation_failed",
             "message": message,
-            "current_state": "failed",
-            "allowed_actions": [],
+            "current_state": state,
+            "allowed_actions": (
+                list(allowed_actions)
+                if isinstance(allowed_actions, list)
+                else []
+            ),
         },
     }
 

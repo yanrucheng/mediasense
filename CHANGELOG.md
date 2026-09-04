@@ -6,6 +6,34 @@ Versioning, with documented breaking changes permitted in minor releases before
 
 ## [Unreleased]
 
+### Fixed
+
+- Scope-confirmation `resume` now continues the public Run's exact bound
+  accounting Run instead of creating a second unowned accounting attempt and
+  failing the public Run on a binding conflict.
+- Pre-worker failures leave bound accounting state non-running, and the MCP
+  PreCheck Run output schema is self-contained for client-side validation.
+
+## [0.7.0] - 2026-09-04
+
+### Changed
+
+- **Breaking:** replaced the public `mediasense.precheck.read` `inspect` and
+  `traverse` operations with consumer-oriented `review`, `expand`, and
+  `resolve`; there is no compatibility layer.
+- Added deterministic Result reconciliation and frontier-ordered coverage
+  cards with public `capture_time`, `media_type`, and Evidence-role projections.
+- Added bounded Evidence and Source Item expansion plus exact Source Set
+  resolution with Result-bound cursors, membership identities, atomic failures,
+  and a 512 KiB response limit.
+- Updated Plan, Apply, Runtime, packaged Skills, and public examples to consume
+  the new PreCheck Read contract without exposing SQLite or cache state.
+
+### Fixed
+
+- Plan and Apply now verify resolved Source Set identity, complete membership,
+  ordering, and cross-page consistency before trusting a handoff.
+
 ## [0.6.0] - 2026-09-03
 
 ### Changed

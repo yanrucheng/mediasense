@@ -12,7 +12,7 @@ Apply semantics in their independently loadable Skills.
 
 ## Establish readiness
 
-This Skill set targets the MediaSense `0.6.x` CLI and its bundled Tool contracts.
+This Skill set targets the MediaSense `0.7.x` CLI and its bundled Tool contracts.
 If the compatible CLI and complete release-matched Skill set are present and all
 seven exact Tool names below are already discoverable in the current session, do
 not repeat setup. A `mediasense` command in `PATH`, installed Skill files, or a
@@ -28,7 +28,7 @@ the Tool Host.
    installed copy. Do not install back into that checkout unless the Human
    explicitly selects it for operational MediaSense work.
 2. Inspect the CLI without changing state: run `command -v mediasense`, then
-   `mediasense --version` when present. If it is absent or not `0.6.x`, identify
+   `mediasense --version` when present. If it is absent or not `0.7.x`, identify
    the exact trusted wheel or source checkout and executable destination,
    explain whether `uv tool install <trusted-source-or-wheel>` may use the
    network, and obtain Human authorization before installing or replacing the

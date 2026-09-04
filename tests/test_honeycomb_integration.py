@@ -73,7 +73,7 @@ def test_entry_skill_owns_bootstrap_and_stage_local_prerequisites() -> None:
     assert "Establish readiness" in entry
     assert "<honeycomb>/.codex/config.toml" in entry
     assert "trusted project" in entry
-    assert "MediaSense `0.6.x` CLI" in entry
+    assert "MediaSense `0.7.x` CLI" in entry
     assert "MediaSense `0.2.x` CLI" not in entry
     assert "current Agent session" in entry
     assert "cannot load it dynamically" in entry

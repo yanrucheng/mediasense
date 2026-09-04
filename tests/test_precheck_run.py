@@ -575,6 +575,32 @@ def test_corrupt_result_fails_without_publishing_on_the_run(tmp_path: Path) -> N
     assert "published_result" not in failed
 
 
+def test_prepare_execution_never_rebinds_to_a_newer_accounting_run(
+    tmp_path: Path,
+) -> None:
+    database, accounting = _workspace(tmp_path, "dataset-a")
+    source = tmp_path / "source"
+    source.mkdir()
+    first_accounting = accounting.start_or_resume_run("dataset-a", source)
+    tool = PrecheckRunTool(database)
+    started = tool.run(
+        {
+            "action": "start",
+            "dataset_ref": "dataset:dataset-a",
+            "request_id": "request:fixed-accounting-binding",
+        }
+    )
+    accounting.process_run(first_accounting)
+    second_accounting = accounting.start_or_resume_run("dataset-a", source)
+    assert second_accounting != first_accounting
+
+    tool.prepare_execution(str(started["run_ref"]), dataset_id="dataset-a")
+
+    assert tool._store.get(str(started["run_ref"]))["accounting_run_id"] == (
+        first_accounting
+    )
+
+
 def test_progress_rejects_nonclosing_or_derived_counts(tmp_path: Path) -> None:
     database, _accounting = _workspace(tmp_path, "dataset-a")
     tool = PrecheckRunTool(database)

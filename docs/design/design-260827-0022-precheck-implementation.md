@@ -962,6 +962,11 @@ publishes completion only through an internally sealed and re-verified Result.
 and returns `run_ref` before discovery or producer execution. The host invokes
 the private `advance(run_ref)` coordinator on a worker; `resume` likewise only
 changes durable control state, after which the host reschedules that worker.
+The accounting binding is immutable for that public Run: scope confirmation
+continues and rescans the same bound accounting state rather than resolving a
+new Dataset-level attempt. A pre-worker failure atomically removes execution
+ownership and leaves accounting non-running before the public Run becomes
+blocked or failed.
 This keeps polling, pause, and cancel available throughout a multi-hour Run
 without creating a sixth public action, scheduler service, or job entity.
 Result construction or workspace-write failure therefore becomes an explicit

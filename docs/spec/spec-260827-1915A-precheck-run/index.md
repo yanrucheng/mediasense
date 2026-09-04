@@ -4,7 +4,7 @@ title: "MediaSense PreCheck Run Tool Contract"
 type: spec
 status: active
 created: 2026-08-27
-updated: 2026-09-03
+updated: 2026-09-04
 timezone: "Asia/Shanghai"
 parent: "index-spec"
 depends-on:
@@ -68,6 +68,13 @@ The first worker pass completes source discovery and ordinarily pauses for a
 scope selection before admitting expensive producer Work. A later Run may skip
 that pause only when it discovers an inventory exactly compatible with a prior
 accepted selection for the same Dataset.
+
+One public Run keeps one source-accounting identity for its whole lifetime.
+`resume` revalidates and continues that exact bound accounting state; it never
+selects or creates a newer Dataset-level accounting Run. A refreshed inventory
+is another generation of the same bound Run. If preparation or worker launch
+stops before an execution owner exists, any bound accounting state is retained
+as non-running before the public response is returned.
 
 - A first Run supplies exactly one `dataset_ref`.
 - A successor Run supplies exactly one `prior_result_ref`; its Dataset is derived from that immutable Result and returned as `dataset_ref`.
@@ -218,6 +225,11 @@ proves that a live persistent host acquired and launched the execution worker;
 it does not prove producer progress or completion. Repeating an already-achieved
 target is accepted without creating another effect. An incompatible transition
 returns `invalid_state` and the current state and allowed actions.
+
+If source attachment continuity needs caller action, `resume` returns an error
+whose `current_state` is `blocked` and whose `allowed_actions` remain `resume`
+and `cancel`; `status.reason` supplies the stable reason and recovery condition.
+An unrecoverable initialization failure reports `failed` with no allowed action.
 
 The host is responsible for acquiring an execution lease and launching the
 private coordinator before a successful `start` or `resume` response. A

@@ -4,10 +4,12 @@ import sys
 from pathlib import Path
 import subprocess
 import json
+import sqlite3
 
 import anyio
 from mcp import ClientSession, StdioServerParameters, types
 from mcp.client.stdio import stdio_client
+from PIL import Image
 
 from mediasense.runtime.mcp_host import create_mcp_server
 
@@ -131,6 +133,148 @@ def test_stdio_mcp_handshake_discovery_and_non_destructive_call(
             assert status.structured_content is not None
             assert status.structured_content["outcome"] == "error"
             assert status.structured_content["error"]["code"] == "run_not_found"
+
+    anyio.run(scenario)
+
+
+def test_stdio_mcp_scope_confirmation_resume_continues_the_same_run(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source"
+    source.mkdir()
+    media = source / "original.jpg"
+    Image.new("RGB", (80, 40), "purple").save(media)
+    source_before = media.read_bytes()
+    workspace = tmp_path / "workspace"
+
+    async def scenario() -> None:
+        parameters = StdioServerParameters(
+            command=sys.executable,
+            args=["-m", "mediasense", "mcp"],
+            cwd=str(ROOT),
+        )
+        async with (
+            stdio_client(parameters) as (read_stream, write_stream),
+            ClientSession(read_stream, write_stream) as session,
+        ):
+            await session.initialize()
+            opened = await session.call_tool(
+                "mediasense.dataset.open",
+                {"source_root": str(source), "workspace": str(workspace)},
+            )
+            assert opened.is_error is False
+            assert opened.structured_content is not None
+            dataset_ref = str(opened.structured_content["dataset_ref"])
+            started = await session.call_tool(
+                "mediasense.precheck.run",
+                {
+                    "dataset_ref": dataset_ref,
+                    "request": {
+                        "action": "start",
+                        "dataset_ref": dataset_ref,
+                        "request_id": "request:mcp-scope-resume",
+                    },
+                },
+            )
+            assert started.structured_content is not None
+            run_ref = str(started.structured_content["run_ref"])
+
+            paused: dict[str, object] | None = None
+            for _ in range(500):
+                current = await session.call_tool(
+                    "mediasense.precheck.run",
+                    {
+                        "dataset_ref": dataset_ref,
+                        "request": {"action": "status", "run_ref": run_ref},
+                    },
+                )
+                assert current.structured_content is not None
+                paused = dict(current.structured_content)
+                if paused["state"] != "running":
+                    break
+                await anyio.sleep(0.01)
+            assert paused is not None
+            assert paused["state"] == "paused"
+            assert paused["reason"]["code"] == "scope_confirmation_required"
+
+            database = workspace / "precheck" / "work.sqlite3"
+            with sqlite3.connect(database) as connection:
+                before = connection.execute(
+                    "SELECT run_id, status FROM working_runs ORDER BY started_at"
+                ).fetchall()
+                bound_run = connection.execute(
+                    "SELECT accounting_run_id FROM precheck_runs WHERE run_ref = ?",
+                    (run_ref,),
+                ).fetchone()[0]
+            assert before == [(bound_run, "completed")]
+
+            resumed = await session.call_tool(
+                "mediasense.precheck.run",
+                {
+                    "dataset_ref": dataset_ref,
+                    "request": {
+                        "action": "resume",
+                        "run_ref": run_ref,
+                        "decision": {
+                            "kind": "source_scope",
+                            "inventory_fingerprint": paused["confirmation"][
+                                "inventory"
+                            ]["inventory_fingerprint"],
+                            "default_disposition": "include",
+                            "exceptions": [],
+                        },
+                    },
+                },
+            )
+            assert resumed.is_error is False
+            assert resumed.structured_content is not None
+            assert resumed.structured_content["outcome"] == "accepted"
+
+            finished: dict[str, object] | None = None
+            for _ in range(1000):
+                current = await session.call_tool(
+                    "mediasense.precheck.run",
+                    {
+                        "dataset_ref": dataset_ref,
+                        "request": {"action": "status", "run_ref": run_ref},
+                    },
+                )
+                assert current.structured_content is not None
+                finished = dict(current.structured_content)
+                if finished["state"] != "running":
+                    break
+                await anyio.sleep(0.01)
+            assert finished is not None
+            assert finished["state"] == "completed", finished
+
+            with sqlite3.connect(database) as connection:
+                after = connection.execute(
+                    "SELECT run_id, status FROM working_runs ORDER BY started_at"
+                ).fetchall()
+                public = connection.execute(
+                    "SELECT state, accounting_run_id FROM precheck_runs WHERE run_ref = ?",
+                    (run_ref,),
+                ).fetchone()
+                scope_state = connection.execute(
+                    """
+                    SELECT state FROM precheck_scope_reviews
+                    WHERE run_ref = ? ORDER BY revision DESC LIMIT 1
+                    """,
+                    (run_ref,),
+                ).fetchone()[0]
+                orphan_running = connection.execute(
+                    """
+                    SELECT COUNT(*) FROM working_runs AS accounting
+                    LEFT JOIN precheck_runs AS public
+                      ON public.accounting_run_id = accounting.run_id
+                    WHERE accounting.status = 'running' AND public.run_ref IS NULL
+                    """
+                ).fetchone()[0]
+            assert after == [(bound_run, "completed")]
+            assert public == ("completed", bound_run)
+            assert scope_state == "accepted"
+            assert orphan_running == 0
+            assert media.read_bytes() == source_before
 
     anyio.run(scenario)
 

@@ -1,6 +1,6 @@
 # Installation and first use
 
-MediaSense 0.6 is a pre-release local product for Python 3.11 or newer. macOS is
+MediaSense 0.7 is a pre-release local product for Python 3.11 or newer. macOS is
 the first product-certified platform. Linux can run the Python package, but its
 removable-volume and Apply filesystem behavior is not yet certified. Windows is
 not currently supported.
@@ -39,7 +39,7 @@ replace an existing MediaSense tool environment.
 For a built release artifact, install the exact wheel instead:
 
 ```bash
-uv tool install ./dist/mediasense-0.6.0-py3-none-any.whl
+uv tool install ./dist/mediasense-0.7.0-py3-none-any.whl
 ```
 
 `uv` may download declared Python dependencies. MediaSense does not install
@@ -144,13 +144,14 @@ trusted channel used to install it. MediaSense checks manifest and component-sto
 versions before ordinary use and refuses newer or unsupported state without
 rewriting it.
 
-The PreCheck source-scope review was introduced as a breaking `0.4.0` change.
-Replace an installed `0.3.x` tool environment with the exact trusted current
-`0.6.x` artifact; do not keep both under the same `mediasense` command or infer
+MediaSense `0.7.0` replaces the public PreCheck Read `inspect` and `traverse`
+operations with `review`, `expand`, and `resolve`, without a compatibility
+layer. Replace an older tool environment with the exact trusted current `0.7.x`
+artifact; do not keep both under the same `mediasense` command or infer
 compatibility from seven-Tool discovery alone:
 
 ```bash
-uv tool install --force ./dist/mediasense-0.6.0-py3-none-any.whl
+uv tool install --force ./dist/mediasense-0.7.0-py3-none-any.whl
 ```
 
 Application versions follow SemVer during `0.y.z`: minor releases may contain
@@ -158,11 +159,11 @@ documented breaking CLI, Host, manifest, or store changes; patch releases are
 compatible fixes. A changed application version alone never invalidates all
 PreCheck work.
 
-The supported `0.6.x` combination is:
+The supported `0.7.x` combination is:
 
 | Surface | Supported value |
 | --- | --- |
-| Application | `0.6.x` |
+| Application | `0.7.x` |
 | Dataset manifest | `1` |
 | PreCheck store | `17` |
 | Plan store | `2` |
@@ -172,7 +173,7 @@ The supported `0.6.x` combination is:
 
 PreCheck store 16 has no supported migration to 17. Preserve an existing
 `0.3.x` Dataset workspace for rollback and create a distinct workspace for
-`0.6.x`; do not copy only its PreCheck database or edit its version marker.
+`0.7.x`; do not copy only its PreCheck database or edit its version marker.
 
 After replacing the CLI, upgrade the four release-matched Skills in each
 explicit Honeycomb:
@@ -183,7 +184,7 @@ mediasense skills upgrade --target <absolute-honeycomb>/.agents/skills
 
 This operation changes only the four MediaSense Skill directories, preserves
 unrelated Skills, and rolls back its own replacements if the set cannot be
-completed. Start a new Agent session afterwards so it loads the `0.6.x` Skills
+completed. Start a new Agent session afterwards so it loads the `0.7.x` Skills
 and MCP Host.
 
 Public Tool contracts are identified by their stable contract ID and exact schema

@@ -526,20 +526,9 @@
         "required": ["result_ref", "coverage", "readiness", "integrity"],
         "properties": {
           "result_ref": { "$ref": "#/$defs/result_ref" },
-          "coverage": {
-            "$ref": "urn:mediasense:tool:precheck-read:output#/$defs/result_view/properties/coverage"
-          },
-          "readiness": {
-            "$ref": "urn:mediasense:tool:precheck-read:output#/$defs/result_view/properties/readiness"
-          },
-          "integrity": {
-            "allOf": [
-              {
-                "$ref": "urn:mediasense:tool:precheck-read:output#/$defs/result_view/properties/integrity"
-              },
-              { "const": "valid" }
-            ]
-          }
+          "coverage": { "enum": ["complete", "partial"] },
+          "readiness": { "enum": ["plan_ready", "blocked"] },
+          "integrity": { "const": "valid" }
         }
       },
       "start_response": {

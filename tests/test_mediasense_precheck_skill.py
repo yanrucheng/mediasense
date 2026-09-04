@@ -41,18 +41,23 @@ SCENARIOS = json.loads(
 )["scenarios"]
 
 
-def _action_constants(value: object) -> set[str]:
+def _operation_constants(value: object) -> set[str]:
     if isinstance(value, list):
-        return set().union(*(_action_constants(item) for item in value))
+        return set().union(*(_operation_constants(item) for item in value))
     if not isinstance(value, dict):
         return set()
-    actions: set[str] = set()
+    operations: set[str] = set()
     properties = value.get("properties")
     if isinstance(properties, dict):
-        action = properties.get("action")
-        if isinstance(action, dict) and isinstance(action.get("const"), str):
-            actions.add(action["const"])
-    return actions | set().union(*(_action_constants(item) for item in value.values()))
+        for field in ("action", "operation"):
+            operation = properties.get(field)
+            if isinstance(operation, dict) and isinstance(
+                operation.get("const"), str
+            ):
+                operations.add(operation["const"])
+    return operations | set().union(
+        *(_operation_constants(item) for item in value.values())
+    )
 
 
 def test_skill_package_is_minimal_and_normally_discoverable() -> None:
@@ -184,13 +189,14 @@ def test_forward_scenarios_cover_required_behavior_and_phase_boundaries() -> Non
     assert all(not scenario["tool_route"] for scenario in negative)
     assert all(scenario["must"] and scenario["must_not"] for scenario in SCENARIOS)
 
-    contract_actions = {
-        name: _action_constants(schema) for name, schema in TOOL_SCHEMAS.items()
+    contract_operations = {
+        name: _operation_constants(schema) for name, schema in TOOL_SCHEMAS.items()
     }
     for scenario in positive:
         for step in scenario["tool_route"]:
             assert set(step) == {"tool", "request"}
             tool_name = step["tool"]
             assert tool_name in TOOL_SCHEMAS
-            assert step["request"]["action"] in contract_actions[tool_name]
+            operation = step["request"].get("action", step["request"].get("operation"))
+            assert operation in contract_operations[tool_name]
             Draft202012Validator(TOOL_SCHEMAS[tool_name]).validate(step["request"])
