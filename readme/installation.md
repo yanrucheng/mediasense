@@ -39,7 +39,7 @@ replace an existing MediaSense tool environment.
 For a built release artifact, install the exact wheel instead:
 
 ```bash
-uv tool install ./dist/mediasense-0.7.0-py3-none-any.whl
+uv tool install ./dist/mediasense-0.7.1-py3-none-any.whl
 ```
 
 `uv` may download declared Python dependencies. MediaSense does not install
@@ -151,7 +151,7 @@ artifact; do not keep both under the same `mediasense` command or infer
 compatibility from seven-Tool discovery alone:
 
 ```bash
-uv tool install --force ./dist/mediasense-0.7.0-py3-none-any.whl
+uv tool install --force ./dist/mediasense-0.7.1-py3-none-any.whl
 ```
 
 Application versions follow SemVer during `0.y.z`: minor releases may contain

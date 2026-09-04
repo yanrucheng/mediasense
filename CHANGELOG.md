@@ -6,6 +6,8 @@ Versioning, with documented breaking changes permitted in minor releases before
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-09-04
+
 ### Fixed
 
 - Scope-confirmation `resume` now continues the public Run's exact bound
