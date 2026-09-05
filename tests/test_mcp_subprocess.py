@@ -20,7 +20,6 @@ EXPECTED_TOOLS = {
     "mediasense.precheck.run",
     "mediasense.precheck.read",
     "mediasense.plan.work",
-    "mediasense.geo.query",
     "mediasense.apply.run",
     "mediasense.apply.read",
 }

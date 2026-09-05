@@ -35,7 +35,7 @@ from .versioning import DATASET_MANIFEST_VERSION, DATASET_STORE_VERSIONS
 
 _MANIFEST_NAME = "dataset.json"
 _FORMAT = "mediasense.dataset"
-_STORES = ("precheck", "plan", "geo", "apply")
+_STORES = ("precheck", "plan", "apply")
 
 
 class DatasetOpenError(RuntimeError):
@@ -394,7 +394,7 @@ class DatasetResolver:
                         path=workspace,
                     )
             else:
-                manifest = _read_manifest(manifest_path)
+                manifest = _read_manifest(manifest_path, migrate=True)
                 _verify_manifest_source(manifest, locator, path=manifest_path)
                 _verify_component_stores(workspace, manifest)
                 return DatasetOpenResult(
@@ -623,14 +623,31 @@ def _automatic_workspace(root: Path, locator: SourceLocator, *, portable: bool) 
     return root / f"dataset-{key}"
 
 
-def _read_manifest(path: Path) -> DatasetManifest:
+def _read_manifest(path: Path, *, migrate: bool = False) -> DatasetManifest:
     try:
         value: Any = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
         raise DatasetOpenError(
             "manifest_invalid", f"Dataset manifest cannot be read: {error}", path=path
         ) from error
+    if migrate and _is_supported_v1_manifest(value):
+        migrated = dict(value)
+        migrated["format_version"] = DATASET_MANIFEST_VERSION
+        migrated["stores"] = dict(DATASET_STORE_VERSIONS)
+        manifest = DatasetManifest.from_value(migrated, path=path)
+        _write_manifest(path, manifest)
+        return manifest
     return DatasetManifest.from_value(value, path=path)
+
+
+def _is_supported_v1_manifest(value: object) -> bool:
+    return (
+        isinstance(value, Mapping)
+        and value.get("format") == _FORMAT
+        and value.get("format_version") == 1
+        and value.get("stores")
+        == {"apply": 2, "geo": 1, "plan": 2, "precheck": 17}
+    )
 
 
 def _write_manifest(path: Path, manifest: DatasetManifest) -> None:
@@ -673,8 +690,7 @@ def _verify_manifest_source(
 def _verify_component_stores(workspace: Path, manifest: DatasetManifest) -> None:
     paths = {
         "precheck": workspace / "precheck" / "work.sqlite3",
-        "plan": workspace / "plan" / "work.sqlite3",
-        "geo": workspace / "geo" / "journal.sqlite3",
+        "plan": workspace / "plan" / "work-v3.sqlite3",
         "apply": workspace / "apply" / "work.sqlite3",
     }
     for name, database in paths.items():

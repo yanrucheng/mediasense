@@ -65,7 +65,13 @@ Exact implementations—ExifTool, FFmpeg, embedding model, index, clustering alg
 
 ### `mediasense.plan`: interactive convergence
 
-`plan` starts from one static precheck result. It may use a modern multimodal model or an authorization-bound stage-neutral capability, but it must not inspect every asset or acquire new evidence by default. It progressively selects representative, boundary, outlier, and conflict evidence under explicit visual, external-effect, cost, and user-attention budgets. If additional place evidence is material, Plan owns the exact query purpose, selected Result coordinates, authorization binding, retained observations, and stopping decision; it does not inherit PreCheck Run authority. Plan-local observations never rewrite the bound PreCheck Result.
+`plan` starts from one static precheck result. It may use a modern multimodal model
+for semantic interpretation, but it must not inspect every asset or acquire map-
+provider evidence. It progressively selects representative, boundary, outlier,
+and conflict evidence under explicit visual, model, cost, and user-attention
+budgets. If machine place evidence is insufficient, Plan may ask the Human for a
+semantic judgment or require a successor PreCheck; Human input never impersonates
+provider evidence.
 
 It must keep these meanings separate:
 
@@ -82,13 +88,21 @@ The stage ends only when every in-scope asset has an explicit disposition, confl
 
 ## Evidence acquisition and downstream policy
 
-`precheck` owns reusable source-derived evidence acquisition and its immutable Result projection; `plan` owns the policy for interpreting and using that evidence. Plan may additionally retain a bounded observation acquired for one planning question through an authorization-bound stage-neutral capability. That observation is Plan-owned, revision-bound candidate evidence and never edits or impersonates PreCheck evidence. A downstream policy's current choice not to consume an observation is not, by itself, a reason to remove an independently useful upstream evidence capability.
+`precheck` owns reusable source-derived evidence acquisition and its immutable
+Result projection; `plan` owns the policy for interpreting and using that evidence.
+Geo provider observations therefore belong to PreCheck. Plan neither repairs a
+missing acquisition nor owns a second Geo lifecycle.
 
 - `precheck` may produce local, source-derived candidate signals, including content-sensitivity observations. Such signals must retain their producer, effective profile, score or quality where available, completion or failure state, and other provenance needed to challenge or regenerate them. They are evidence, not semantic truth, user authorization, or a routing decision.
 - The exact detector, model, labels, thresholds, and implementation remain replaceable. The stage boundary preserves the evidence capability and its traceability, not one historical classifier or taxonomy.
 - `plan` may use or ignore sensitivity evidence according to an explicit policy. Valid policies may include all-local processing, all-remote processing, signal-informed routing, warnings before remote use, user confirmation, or future mechanisms. No one mechanism is part of the stage contract.
 - VLM providers expose their locality and data-egress effects; `plan` selects and invokes them under the applicable user policy and authorization. A provider must not silently change locality or fall back from local to remote execution.
-- `precheck` does not choose a local or remote VLM path from sensitivity signals. Local evidence acquisition does not relax its source-read-only, local-first, external-call-disabled-by-default, or explicit authorization and effect-reporting guarantees. Coordinate-only reverse geocoding may run after compression freezes the exact logical query set and the user confirms it; this does not authorize media, feature, or prompt egress.
+- `precheck` does not choose a local or remote VLM path from sensitivity signals.
+  Local evidence acquisition does not relax its source-read-only, local-first, or
+  explicit authorization and effect-reporting guarantees. Coordinate-only reverse
+  geocoding may run after compression freezes the exact logical query set and
+  trusted Human confirmation binds its provider-policy disclosure; this does not
+  authorize media, feature, or prompt egress.
 
 This separation lets evidence collection improve independently from planning policy, while allowing stronger future Agents and providers to replace today's interpretation and routing methods without changing the precheck handoff boundary.
 
@@ -168,7 +182,7 @@ assets and do not activate the product for Agents working on the implementation.
 MCP transports structured discovery and calls but does not own business semantics
 or state. The CLI supplies diagnostics and entry points. The `mediasense` Skill
 owns product setup guidance and stage routing; the three stage Skills guide their
-own Agent interaction. The seven MediaSense Tools own their bounded business
+own Agent interaction. The six MediaSense Tools own their bounded business
 operations and observable outcomes. A client loads project configuration only
 under its own trust policy, and configuration presence is not proof that an
 already-running session has discovered the Tools.

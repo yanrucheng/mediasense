@@ -14,7 +14,6 @@ ROOT = Path(__file__).parents[1]
 WORK_SPEC = ROOT / "docs" / "spec" / "spec-260827-1915B-plan-work"
 PLAN_SPEC = ROOT / "docs" / "spec" / "spec-260827-1138-frozen-plan"
 READ_SPEC = ROOT / "docs" / "spec" / "spec-260826-1546-precheck-read"
-GEO_SPEC = ROOT / "docs" / "spec" / "spec-260830-2034-geo-query"
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -38,12 +37,7 @@ def valid_candidate() -> dict[str, Any]:
 def validators() -> tuple[Draft202012Validator, Draft202012Validator]:
     tool = load_json(WORK_SPEC / "plan-work.tool.json")
     frozen = load_json(PLAN_SPEC / "frozen-plan.schema.json")
-    geo = load_json(GEO_SPEC / "geo-query.tool.json")
     registry = Registry().with_resource(frozen["$id"], Resource.from_contents(frozen))
-    for resource in (geo["inputSchema"], geo["outputSchema"]):
-        registry = registry.with_resource(
-            resource["$id"], Resource.from_contents(resource)
-        )
     return (
         Draft202012Validator(tool["inputSchema"], registry=registry),
         Draft202012Validator(tool["outputSchema"], registry=registry),
@@ -127,6 +121,32 @@ class MockPrecheckReader:
         operation = request.get("operation")
         if operation == "review":
             return deepcopy(self.review_response)
+        if operation == "geo_summary":
+            return {
+                "outcome": "ok",
+                "operation": "geo_summary",
+                "result_ref": self.result_ref,
+                "acquisition_status": "not_applicable",
+                "coordinate_evidence": {
+                    "gps": {},
+                    "gpx": {},
+                    "combined": {},
+                },
+                "deduplication": {
+                    "rule": "exact_normalized_coordinate_v1",
+                    "fields": ["latitude", "longitude", "datum"],
+                    "rounding": "none",
+                },
+                "unique_coordinate_count": 0,
+                "coordinate_groups": [],
+                "page": {
+                    "returned": 0,
+                    "total": 0,
+                    "complete": True,
+                    "stop_reason": "complete",
+                    "order": "latitude_longitude_datum",
+                },
+            }
         if operation == "expand":
             return self._expand(request)
         if operation == "resolve":

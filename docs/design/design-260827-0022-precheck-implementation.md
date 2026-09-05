@@ -534,7 +534,7 @@ failed Run and returned by the initiating call. There is no public queue between
 Run creation and worker ownership, and `status` never starts or repairs work as a
 side effect.
 
-When a bounded optional resource action requires user confirmation, the runtime first freezes the exact pending work set and automatically enters `paused`. Status reports the capability and logical request count. Resuming with `proceed` authorizes only that frozen work; resuming with `skip_optional_work` records the omission and continues without it. If the pending set changes, the runtime pauses again rather than widening the earlier confirmation. This is a general Working Run checkpoint, not a geography-specific stage or entity.
+When a bounded external effect requires Human authorization, the runtime first freezes the exact pending work set and automatically enters `paused`. Status reports the capability, logical request count, effect ceilings, and Provider-policy disclosure. A trusted `proceed` decision authorizes only that frozen work; a `decline` decision terminates required acquisition without publishing a Result. If the pending set changes, the runtime pauses again rather than widening the earlier authorization. This is a general Working Run checkpoint, not a geography-specific stage or entity; the current Geo use does not make incomplete acquisition optional.
 
 ### Work execution states
 

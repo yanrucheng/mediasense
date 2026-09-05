@@ -2,7 +2,7 @@
 id: "design-260830-1626-geo-capability-evolution"
 title: "MediaSense Geo Capability Evolution"
 type: design
-status: active
+status: superseded
 created: 2026-08-30
 updated: 2026-08-30
 timezone: "Asia/Shanghai"
@@ -11,10 +11,14 @@ depends-on:
   - "design-260823-1918-mediasense-foundation"
   - "design-260825-2235B-stage-ownership"
   - "design-260830-1527-reusable-capability-architecture"
-superseded-by: ""
+superseded-by: "consolidate-geo-acquisition-in-precheck"
 ---
 
 # MediaSense Geo Capability Evolution
+
+> Superseded by `consolidate-geo-acquisition-in-precheck`: Geo acquisition is
+> PreCheck-owned; the public Geo Tool and Plan Geo lifecycle described below were
+> removed after production evidence disproved their independent purpose.
 
 ## Status and accepted direction
 

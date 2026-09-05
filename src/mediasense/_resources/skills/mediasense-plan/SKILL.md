@@ -23,13 +23,16 @@ or claim the current session reloaded a newly written project configuration.
 - The Agent selects and applies the Profile, interprets evidence, proposes groups and names, and chooses what to ask. `mediasense.plan.work` stores and validates decisions already made; it makes no semantic fallback.
 - Keep Observations, Candidate Relations, Agent judgment, Human preferences, and Human confirmation distinguishable.
 - Do not move, copy, rename, delete, or rewrite source media. Apply owns those effects after a Plan is frozen and separately authorized.
-- Prefer qualified place evidence already in the Result. When missing place evidence can materially change the Plan decision, use only the authorization-bound Geo capability through `mediasense.plan.work` `enrich_geo`; never call a map provider or import its adapter directly.
-- Make remote provider, media or metadata egress, model use, cost, and material uncertainty visible before optional remote semantic work.
 - A Frozen Plan is self-contained. Never make Apply interpret a `profile_ref` or infer an omitted organization decision.
 
 ## Enter Plan and choose the active Profile
 
-Use only an exact Result whose `readiness` is `plan_ready` and `integrity` is `valid`; bounded partial coverage is acceptable when its limit is explicit. Read Result qualifications, accounting reconciliation, exception routes, and the coverage-card frontier before making a Dataset-wide claim.
+Use only an exact Result whose `readiness` is `plan_ready`, `integrity` is `valid`,
+and `geo_summary.acquisition_status` is `complete` or `not_applicable`; bounded
+partial coverage is acceptable when its limit is explicit. A historical Result
+whose Geo summary is `incomplete` must return to PreCheck. Read Result
+qualifications, accounting reconciliation, exception routes, and the coverage-card
+frontier before making a Dataset-wide claim.
 
 Event memory is the single mature default Profile. Before selection it is a challengeable candidate. When a bounded trip, gathering, exhibition, or other event clearly fits its proposition, activate it without forcing the Human through a profile questionnaire; after selection its defaults constrain the Candidate. If fit is unclear, ask only a high-information question about future finding behavior. If the Dataset clearly does not fit, or contains a materially distinct sub-scope, read [Organization Profile alternatives](references/organization-profiles.md); do not load that reference merely to make every direction compete.
 
@@ -92,25 +95,14 @@ Before `update`, show a directional Preview whenever Profile fit, the primary or
 
 When the Human accepts a user-visible direction, preserve that scope precisely. Confirmation of one event, person, restaurant, or group does not silently confirm unrelated media or the complete Candidate.
 
-For a bounded location gap, first identify exact Result-bound Source Items with
-available coordinates. Call `enrich_geo` without inventing authorization. If it
-returns `authorization_required`, show the Human the exact coordinate count, data
-egress, allowed providers, request or cost ceiling, and retention, then continue
-only through the trusted authorization boundary. If the Human declines, record the
-Plan decision if useful and do not invoke Geo merely to manufacture a `refused`
-result. Missing or mismatched authority remains `authorization_required`; provider
-unavailability is not a Human refusal.
+## Place evidence remains Result-bound
 
-Begin with `resolve_place`. Use `reverse_geocode` or `nearby_places` only when the
-returned candidate remains materially insufficient or conflicting. A continuation
-does not inherit authority for larger effects. Treat every returned place as a
-provider observation: preserve provenance and uncertainty, keep it distinct from
-your interpretation, and stop when more lookup cannot change the Plan decision.
-
-The Tool records accepted Geo outcomes in Plan Working State under a new revision.
-Reinspect that revision before updating the candidate. Missing or contradictory
-coordinates, or evidence needs beyond the bounded Geo contract, still require an
-upstream PreCheck reopen.
+Use qualified place Evidence from the immutable Result and its deterministic Geo
+summary. Plan does not call a map provider, request Geo authorization, or retain
+provider observations. When machine place evidence is insufficient, ask the
+Human only for semantic context they own, or stop and require a successor
+PreCheck. Record Human input as Human input, never as provider or PreCheck
+observation.
 
 ## Build, preview, and freeze
 

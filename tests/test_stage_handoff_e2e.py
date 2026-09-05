@@ -193,7 +193,7 @@ def test_public_precheck_plan_apply_prepare_handoff_has_no_hidden_protocol(
     assert "frozen_plan_path" not in str(prepare_request)
     assert all(call["result_ref"] == result.result_ref for call in read_boundary.calls)
     assert all(
-        call["operation"] in {"review", "expand", "resolve"}
+        call["operation"] in {"review", "expand", "resolve", "geo_summary"}
         for call in read_boundary.calls
     )
     assert (source / "original.jpg").read_bytes() == source_before

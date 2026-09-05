@@ -15,20 +15,19 @@ from mediasense.apply import (
     ApplyReceiptReader,
     ApplyRunTool,
 )
-from mediasense.capabilities.geo import (
-    GeoAuthorization,
-    GeoEffectEnvelope,
-    GeoOperation,
-    GeoOperationJournal,
-    GeoProviderCapabilities,
-    GeoQueryTool,
-    GeoRetention,
-    MapDatum,
+from mediasense.geo import (
+    AMapReverseGeocoder,
+    AdaptiveReverseGeocoder,
+    GoogleMapsReverseGeocoder,
 )
-from mediasense.capabilities.geo.service import GeoCapability
-from mediasense.geo import AMapReverseGeocoder, GoogleMapsReverseGeocoder
 from mediasense.plan import ConfirmationContext, PlanWorkTool
-from mediasense.precheck import AccountingStore, PrecheckReadTool, PrecheckRunTool
+from mediasense.precheck import (
+    AccountingStore,
+    PrecheckConfirmationContext,
+    PrecheckExecutionDependencies,
+    PrecheckReadTool,
+    PrecheckRunTool,
+)
 from mediasense.precheck.source_attachment import (
     SourceAttachmentError,
     SourceRebindRequired,
@@ -44,27 +43,6 @@ _LOGGER = logging.getLogger(__name__)
 
 class HostRequestError(RuntimeError):
     """The transport envelope cannot be bound to a public Tool call."""
-
-
-class _OfflineRouting:
-    def routes(
-        self, request: object, context: object, providers: tuple[object, ...]
-    ) -> tuple[str, ...]:
-        return ()
-
-    def observe(self, request: object, context: object, execution: object) -> object:
-        return context
-
-
-class _OfflineProvider:
-    capabilities = GeoProviderCapabilities(
-        "offline-disabled",
-        (GeoOperation.REVERSE_GEOCODE, GeoOperation.NEARBY_PLACES),
-        MapDatum.WGS84,
-    )
-
-    def execute(self, *args: object, **kwargs: object) -> object:
-        raise AssertionError("offline routing must never execute a provider")
 
 
 @dataclass(frozen=True, slots=True)
@@ -95,15 +73,18 @@ class DatasetRuntime:
         precheck_database = workspace / "precheck" / "work.sqlite3"
         self.dataset_id = opened.manifest.dataset_id
         AccountingStore(precheck_database).register_dataset(self.dataset_id)
-        self.precheck_run = PrecheckRunTool(precheck_database)
+        self.precheck_run = PrecheckRunTool(
+            precheck_database,
+            execution_dependencies=PrecheckExecutionDependencies(
+                geocoder=_precheck_geocoder(config)
+            ),
+        )
         self.precheck_read = PrecheckReadTool(precheck_database)
-        self.geo_query = _geo_tool(workspace / "geo", config)
         frozen_plan = schema_path("frozen-plan.schema.json")
         self.plan_work = PlanWorkTool(
             workspace / "plan",
             self.precheck_read,
             frozen_plan_schema=frozen_plan,
-            geo_tool=self.geo_query,
         )
         self.apply_run = ApplyRunTool(
             workspace / "apply",
@@ -135,11 +116,6 @@ class DatasetRuntime:
             response = self.plan_work.handle(
                 payload,
                 confirmation=_confirmation(context, ConfirmationContext),
-                geo_authorization=_geo_authorization(context),
-            )
-        elif name == "mediasense.geo.query":
-            response = self.geo_query.handle(
-                payload, authorization=_geo_authorization(context)
             )
         elif name == "mediasense.apply.run":
             response = self.apply_run.handle(
@@ -212,7 +188,10 @@ class DatasetRuntime:
                         "message": str(error),
                     },
                 }
-        response = self.precheck_run.run(request)
+        response = self.precheck_run.run(
+            request,
+            confirmation=_confirmation(authority, PrecheckConfirmationContext),
+        )
         run_ref = response.get("run_ref")
         should_schedule = isinstance(run_ref, str) and (
             (
@@ -396,7 +375,6 @@ def tool_descriptors() -> tuple[ToolDescriptor, ...]:
         "mediasense.precheck.run",
         "mediasense.precheck.read",
         "mediasense.plan.work",
-        "mediasense.geo.query",
         "mediasense.apply.run",
         "mediasense.apply.read",
     ):
@@ -420,26 +398,24 @@ def contract_path_for(name: str) -> Path:
     return contract_path(name)
 
 
-def _geo_tool(workspace: Path, config: RuntimeConfig) -> GeoQueryTool:
+def _precheck_geocoder(config: RuntimeConfig) -> AdaptiveReverseGeocoder | None:
+    import os
+
     providers: dict[str, Any] = {}
-    if not config.offline:
-        import os
-
-        amap_key = os.environ.get(config.amap_api_key_env)
-        google_key = os.environ.get(config.google_maps_api_key_env)
-        if amap_key:
-            providers["amap"] = AMapReverseGeocoder(amap_key)
-        if google_key:
-            providers["google_maps"] = GoogleMapsReverseGeocoder(google_key)
-    if providers:
-        from mediasense.capabilities.geo import OrderedGeoRoutingPolicy
-
-        routing: Any = OrderedGeoRoutingPolicy(tuple(providers))
-    else:
-        providers = {"offline-disabled": _OfflineProvider()}
-        routing = _OfflineRouting()
-    capability = GeoCapability(providers, routing)
-    return GeoQueryTool(capability, GeoOperationJournal(workspace / "journal.sqlite3"))
+    amap_key = os.environ.get(config.amap_api_key_env)
+    google_key = os.environ.get(config.google_maps_api_key_env)
+    if amap_key:
+        providers["amap"] = AMapReverseGeocoder(amap_key)
+    if google_key:
+        providers["google_maps"] = GoogleMapsReverseGeocoder(google_key)
+    if not providers:
+        return None
+    order = tuple(providers)
+    return AdaptiveReverseGeocoder(
+        providers,
+        provider_order=order,
+        initial_provider="google_maps" if "google_maps" in providers else order[0],
+    )
 
 
 def _confirmation(value: Mapping[str, Any], confirmation_type: type[Any]) -> Any | None:
@@ -453,36 +429,6 @@ def _confirmation(value: Mapping[str, Any], confirmation_type: type[Any]) -> Any
         confirmed_content_identity=str(value["confirmed_content_identity"]),
         confirmed_at=_datetime(value["confirmed_at"]),
     )
-
-
-def _geo_authorization(value: Mapping[str, Any]) -> GeoAuthorization | None:
-    envelope = value.get("effect_envelope")
-    required = {"principal_ref", "request_fingerprint", "authorized_at"}
-    if not required <= set(value) or not isinstance(envelope, Mapping):
-        return None
-    try:
-        return GeoAuthorization(
-            principal_ref=str(value["principal_ref"]),
-            request_fingerprint=str(value["request_fingerprint"]),
-            authorized_at=_datetime(value["authorized_at"]),
-            envelope=GeoEffectEnvelope(
-                allowed_providers=tuple(envelope.get("allowed_providers", ())),
-                allowed_data_classes=tuple(envelope.get("allowed_data_classes", ())),
-                max_logical_queries=int(envelope.get("max_logical_queries", 0)),
-                max_provider_requests=int(envelope.get("max_provider_requests", 0)),
-                max_billable_units=(
-                    None
-                    if envelope.get("max_billable_units") is None
-                    else int(envelope["max_billable_units"])
-                ),
-                allow_unknown_billable_units=bool(
-                    envelope.get("allow_unknown_billable_units", False)
-                ),
-                retention=GeoRetention(str(envelope.get("retention", "none"))),
-            ),
-        )
-    except (TypeError, ValueError) as error:
-        raise HostRequestError(f"invalid Geo authorization: {error}") from error
 
 
 def _datetime(value: object) -> datetime:

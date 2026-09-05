@@ -74,10 +74,23 @@ def _mapped_result_observations(
     for item in observations:
         observation = {
             key: item[key]
-            for key in ("name", "status", "value", "confidence", "qualifications")
+            for key in (
+                "name",
+                "status",
+                "value",
+                "confidence",
+                "qualifications",
+                "provenance",
+            )
             if key in item
         }
         provenance = item.get("provenance")
+        if isinstance(provenance, dict):
+            observation["provenance"] = {
+                key: value
+                for key, value in provenance.items()
+                if key != "basis_work_ids"
+            }
         summary = "reusable external coordinate observation"
         if isinstance(provenance, dict):
             summary = (

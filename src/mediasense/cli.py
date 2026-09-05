@@ -277,7 +277,16 @@ def _dataset_text(value: dict[str, object]) -> str:
         f"  created: {'yes' if value['created'] else 'no'}",
     ]
     if isinstance(config, dict):
-        lines.append(f"  offline: {str(config.get('offline')).lower()}")
+        providers = config.get("providers", {})
+        if isinstance(providers, dict):
+            available = [
+                str(name)
+                for name, facts in providers.items()
+                if isinstance(facts, dict) and facts.get("capability") == "available"
+            ]
+            lines.append(
+                "  map providers: " + (", ".join(available) or "unavailable")
+            )
         sources = config.get("sources", [])
         lines.append(
             "  config: "

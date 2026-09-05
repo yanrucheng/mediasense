@@ -90,7 +90,6 @@ def test_composition_root_constructs_all_tools_offline(tmp_path: Path) -> None:
         "mediasense.precheck.run",
         "mediasense.precheck.read",
         "mediasense.plan.work",
-        "mediasense.geo.query",
         "mediasense.apply.run",
         "mediasense.apply.read",
     ]
@@ -558,7 +557,7 @@ def test_real_composition_creates_plan_from_precheck_result(tmp_path: Path) -> N
     assert created["state"] == "open"
     assert (source / "original.jpg").read_bytes() == source_before
     with sqlite3.connect(
-        tmp_path / "workspace" / "plan" / "work.sqlite3"
+        tmp_path / "workspace" / "plan" / "work-v3.sqlite3"
     ) as connection:
         work_count = connection.execute("SELECT COUNT(*) FROM plan_works").fetchone()[0]
     assert work_count == 1
@@ -784,36 +783,3 @@ def test_reopen_does_not_rewrite_legacy_prefixed_dataset_registration(
             )
         ]
     assert set(stored_ids) == {dataset_id, dataset_ref}
-
-
-def test_offline_geo_call_is_unavailable_without_provider_effect(
-    tmp_path: Path,
-) -> None:
-    source = tmp_path / "source"
-    source.mkdir()
-    host = RuntimeHost()
-    opened = host.open_dataset(str(source), str(tmp_path / "workspace"))
-
-    result = host.call_tool(
-        "mediasense.geo.query",
-        dataset_ref=str(opened["dataset_ref"]),
-        request={
-            "request_id": "request:offline",
-            "operation": "reverse_geocode",
-            "subjects": [
-                {
-                    "subject_ref": "source-item:test",
-                    "coordinate": {
-                        "latitude": 22.3193,
-                        "longitude": 114.1694,
-                        "datum": "WGS84",
-                    },
-                }
-            ],
-            "locale": "zh-HK",
-        },
-    )
-
-    assert result["outcome"] == "unavailable"
-    assert result["effects"]["provider_requests"] == 0
-    assert result["effects"]["transmitted_data_classes"] == []

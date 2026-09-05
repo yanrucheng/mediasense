@@ -13,7 +13,6 @@ depends-on:
   - "spec-260827-1138-frozen-plan"
   - "spec-260827-1915B-plan-work"
   - "spec-260828-2026-default-organization-profile"
-  - "spec-260830-2034-geo-query"
 superseded-by: ""
 tags: ["mediasense", "plan", "storage", "artifacts"]
 ---
@@ -32,7 +31,11 @@ Plan uses the smallest mixed local persistence shape that gives mutable work and
     └── <artifact-key-2>.json
 ```
 
-`work.sqlite3` is the authoritative home for mutable Plan Working State, including Plan-owned Geo observations acquired for that Work. Each JSON file under `frozen/` is the authoritative, immutable Frozen Plan identified by its internal `plan_ref` and `seal.content_identity`. No persisted preview, manifest, per-action directory, shared Geo cache, Profile copy, or PreCheck Result copy is required.
+The current Plan database is the authoritative home for mutable Plan Working
+State. Each JSON file under `frozen/` is the authoritative, immutable Frozen Plan
+identified by its internal `plan_ref` and `seal.content_identity`. No persisted
+preview, manifest, per-action directory, Profile copy, or PreCheck Result copy is
+required.
 
 This is a storage design beneath the existing Tool and artifact contracts. It does not change their request fields, response fields, lifecycle states, references, or validation rules.
 
@@ -52,14 +55,19 @@ The database supports the mutable and transactional responsibilities already own
 - open or closed lifecycle;
 - the current opaque revision and complete candidate content;
 - the current plan-scoped `organization_preferences` snapshot;
-- revision-bound Geo observations together with their exact Result-coordinate binding, authorization evidence, provenance, qualifications, and provider effects;
 - idempotency records needed to return the same result for the same accepted `request_id`;
 - concurrency protection needed to reject a stale `base_revision`; and
 - the successful seal outcome needed for retry and recovery.
 
-It is not a Frozen Plan, a PreCheck Result replica, a shared Geo cache, or an Apply input. Stored provider observations remain challengeable evidence; they do not own event interpretation, grouping, names, Human preference, confirmed place truth, or Default Organization Profile semantics. Table names, columns, indexes, journaling mode, page size, migrations, and other SQLite choices remain implementation details.
+It is not a Frozen Plan, a PreCheck Result replica, or an Apply input. Provider
+observations remain in the immutable PreCheck Result rather than Plan state. Table
+names, columns, indexes, journaling mode, page size, migrations, and other SQLite
+choices remain implementation details.
 
-The contract requires only the observable state needed to honor `create`, `update`, `enrich_geo`, `inspect`, and `seal`. It does not require permanent storage of every historical revision. Retention of closed Working States and old revisions remains open until product or recovery evidence requires a policy.
+The contract requires only the observable state needed to honor `create`,
+`update`, `inspect`, and `seal`. It does not require permanent storage of every
+historical revision. Retention of closed Working States and old revisions remains
+open until product or recovery evidence requires a policy.
 
 Removing this component would lose durable draft recovery, revision conflict detection, safe retry, and the authoritative open/closed Working State lifecycle. Those responsibilities cannot honestly be carried by immutable Frozen Plan files.
 
@@ -91,7 +99,6 @@ Removing a published JSON artifact would destroy the immutable stage handoff eve
 | Information | Authoritative home | May be rebuilt? |
 | --- | --- | --- |
 | Open Working State, current revision, candidate, preferences, retry and close state | `work.sqlite3` | No, except through an explicitly defined future recovery path |
-| Plan-selected Geo observations, authorization evidence, provenance, qualifications, and effects | `work.sqlite3`, bound to the Work revision | No; reacquisition is a new authorized effect, not reconstruction from PreCheck |
 | Published organization decision and seal | Frozen Plan JSON | No |
 | `plan_ref` to artifact-location lookup | SQLite acceleration index or runtime scan | Yes, from valid Frozen Plan files |
 | Human-readable tree or Markdown preview | Adapter output | Yes; it is not persisted by default |
@@ -99,20 +106,6 @@ Removing a published JSON artifact would destroy the immutable stage handoff eve
 | Default Organization Profile | Its product specification | No copy is required in the store |
 
 An index entry is never sufficient evidence that a Frozen Plan exists. Resolution succeeds only after reading the located file, validating it against the active Frozen Plan Contract, and matching its internal `plan_ref` and content identity. If the index is absent or stale, the implementation may scan `frozen/` and rebuild it.
-
-## Plan-owned Geo observation boundary
-
-`enrich_geo` is a coordination action of the existing `mediasense.plan.work` Tool, not a second Plan Tool and not a private provider client. Plan selects an exact coordinate through the bound PreCheck Result contract, delegates provider-neutral lookup to `mediasense.geo.query`, and persists only the observation needed by the current Work together with the evidence needed to explain and replay that effect.
-
-The persistence boundary has the following consequences:
-
-- Plan never reads PreCheck SQLite, Work records, caches, provider credentials, or internal table fields. It stores the Result reference and exact coordinate binding, not a copy of the PreCheck Result.
-- An authorization preflight or refusal produces no provider effect and does not advance the Plan revision. Authorization is scoped to the exact Geo request and does not become standing authority for a later request, stage, or coordinate.
-- Persisting a terminal Geo outcome atomically appends its observation, authorization evidence, provenance, qualifications, and reported effects under a new revision while preserving the candidate and immutable Result binding.
-- Replaying the same accepted Plan `request_id` returns the recorded outcome without another revision or provider call. A changed coordinate, operation, provider constraint, request ceiling, cost ceiling, egress class, or retention term requires a distinct request and matching authority.
-- `inspect` and preview read the stored revision-bound observation. They do not invoke `mediasense.geo.query`, contact a provider, or reinterpret the observation as a confirmed place judgment.
-
-This state is Plan-private evidence, not reusable provider truth. PreCheck does not read it, Apply does not depend on it, and another Plan Work does not silently inherit its authorization. A future cross-Work Geo cache would need an independent contract for freshness, retention, provider terms, authorization, invalidation, and provenance; the current SQLite rows do not establish that responsibility.
 
 ## Reference and filename boundary
 
@@ -164,7 +157,10 @@ The first authoritative file a Human can open after seal is the Frozen Plan JSON
 
 Those views are deliberately absent from the minimum stored tree. They carry no independent decisions, can be deleted safely, and must be reproducible from the Frozen Plan plus the referenced PreCheck Result when expanded membership or source names are needed. If later evidence shows that a persistent review document has an independent archival or signing purpose, it requires a separate design decision.
 
-Before seal, Human inspection is served through `mediasense.plan.work.inspect`; material Plan-owned Geo observations may appear there and in preview with their candidate status, provenance, and qualifications. These views read the stored exact revision and perform zero provider requests. A mutable working file editable outside the Tool would create competing authority and bypass revision protection.
+Before seal, Human inspection is served through `mediasense.plan.work.inspect`.
+Place evidence is read from the immutable PreCheck Result rather than copied into
+Plan state. A mutable working file editable outside the Tool would create
+competing authority and bypass revision protection.
 
 ## Default Profile interaction
 
@@ -183,7 +179,6 @@ Neither the SQLite store nor Frozen Plan needs a copied Profile document or `pro
 | SQLite contains an open Work and no final artifact exists | Resume or update the Work normally. |
 | Geo authority is absent or does not match before a provider effect | Return the bounded authorization requirement and preserve the current revision. |
 | Human declines Plan's proposed Geo request | Record the Plan decision if useful, do not invoke Geo, and preserve the current revision. |
-| An accepted `enrich_geo` response is lost after its state transition | Replay the recorded outcome for the same request without another revision or provider call. |
 | SQLite contains a closed Work and its recorded Frozen Plan validates | Return or resolve the existing Plan. |
 | A verified pending artifact exists but the Work is not closed | Recover the same seal attempt; do not allocate another `plan_ref`. |
 | SQLite claims publication but the artifact is missing or invalid | Report corruption or incomplete publication; do not reconstruct a different Plan from mutable rows. |
@@ -251,7 +246,7 @@ The first event demonstrates folding: media appears directly in the event direct
 | --- | --- | --- | --- | --- |
 | Frozen Plan Contract | One immutable, Human-confirmed organization decision bound to one immutable PreCheck Result; the JSON artifact is authoritative. | Uses existing source sets, groups, outcomes, notes, and seal only; it does not absorb Working State, Profile, or Apply responsibilities. | The example has a seven-item explicit scope, six disjoint groups, unique paths and names, complete closure, Result-local references, Human-confirmation fields, and a verified digest. | Pass |
 | Default Organization Profile | Supplies reusable default organization policy while Agent judgment and Human preference remain authoritative for each Plan. | Adds no Tool, registry, `profile_ref`, or runtime state; method-specific thresholds remain open. | The example covers a folded small event, a complex event with chapter and ordered groups, assumed cross-format associated media, auxiliary material, assumed context-known damage, fixture-confirmed unassigned damage, and readable unresolved media. | Pass |
-| Plan Local Artifact Design | Separates mutable recoverable work, including Plan-owned Geo observations, from immutable cross-stage delivery. | Only SQLite Working State and Frozen Plan JSON are authoritative; indexes and views are rebuildable, and no manifest, latest pointer, per-Plan directory, shared Geo cache, or copied upstream artifact is introduced. | The design specifies revision-bound Geo evidence, exact authorization and replay behavior, `plan_ref` validation, idempotent repeat seal, interrupted-publication recovery, corruption refusal, and coexistence of multiple Works and Plans. | Pass |
+| Plan Local Artifact Design | Separates mutable recoverable decisions from immutable cross-stage delivery. | Only SQLite Working State and Frozen Plan JSON are authoritative; indexes and views are rebuildable, and no manifest, latest pointer, per-Plan directory, or copied upstream artifact is introduced. | The design specifies `plan_ref` validation, idempotent repeat seal, interrupted-publication recovery, corruption refusal, and coexistence of multiple Works and Plans. | Pass |
 
 The three artifacts are consistent with `mediasense.precheck.read`, `mediasense.plan.work`, and the Apply boundary. Downstream implementation does not need to invent product behavior for scope closure, default directory semantics, authority placement, seal identity, or publication recovery. The implementation choices deliberately left open below do not block independent PreCheck and Plan development.
 
@@ -263,7 +258,6 @@ The following are explicitly outside this design:
 - SQLite schema, migrations, journal mode, locks, backups, and compaction;
 - artifact filename encoding and optional sharding;
 - retention of drafts, closed Works, and obsolete Frozen Plans;
-- retention and freshness policy beyond the exact revision-bound lifecycle of a Plan-owned Geo observation;
 - cloning or initializing a Working State from a Frozen Plan;
 - persisted preview or catalog generation;
 - CLI and UI presentation;

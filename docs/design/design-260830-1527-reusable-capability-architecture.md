@@ -564,13 +564,12 @@ than memorized call order.
 
 ## Geo pressure test
 
-The Geo pressure test has now advanced from a reusable kernel to an active
-Agent-facing Tool family. The stage-neutral values, ports, routing, effect guard,
-idempotency journal, and composition live under
-`src/mediasense/capabilities/geo/`. The compatibility module
-`src/mediasense/geo.py` retains coordinate conversion, transport, current provider
-adapters, and the legacy ordered-batch composition while callers migrate. Neither
-boundary reads PreCheck, Plan, Apply, SQLite, Work, or Result state.
+The 0.7.1 production flow disproved Geo's independent public identity. Its only
+real product responsibility is reusable source-derived evidence acquisition owned
+by PreCheck. The provider-neutral values and ports under
+`src/mediasense/capabilities/geo/`, plus conversion, transport, provider adapters,
+and bounded routing in `src/mediasense/geo.py`, remain an internal kernel. They do
+not own a public Tool, Skill, journal, Artifact, service, or Dataset store.
 
 Its current logical shape is:
 
@@ -585,38 +584,15 @@ AdaptiveReverseGeocoder
     └── UrllibJsonTransport
 ```
 
-The accepted Agent-facing surface is one Tool family with caller-meaningful
-operations, not one Tool per provider:
+PreCheck owns the frozen batch, provider availability check, trusted Run
+authorization, Work reuse, effect accounting, and Result projection. Provider
+observations are immutable candidate Evidence, never place truth. Plan only reads
+that Evidence through `mediasense.precheck.read`; if it is insufficient, Plan asks
+the Human for semantic context or requests a successor PreCheck.
 
-```text
-geo capability Tool
-├── resolve_place        # goal-oriented default
-├── reverse_geocode      # address and administrative components
-├── nearby_places        # nearby POI evidence
-```
-
-`coordinate.convert`, raw HTTP transport, AMap, and Google remain internal
-operations or adapters unless a real caller proves an independent public purpose.
-Provider selection defaults and fallback may stay internal, but the result reports
-providers actually attempted and cannot cross the authorized effect envelope.
-
-PreCheck retains its frozen batch, Run-level confirmation, Work, reuse, and Result
-projection through its batch engine and may reuse the family's provider-neutral
-ports and adapters without invoking the public Geo Tool. Plan uses
-`mediasense.plan.work` `enrich_geo` to validate exact Result-bound coordinates,
-invoke `mediasense.geo.query`, and retain the returned observation under a new Plan
-revision. The public capability Tool owns only effect enforcement, normalized
-observations, provenance, and safe request replay; it owns neither stage's query
-selection, authorization record, cache, nor evidence lifecycle.
-
-The active Tool contract is
-[`spec-260830-2034-geo-query`](../spec/spec-260830-2034-geo-query/). Provider
-attempts remain in the ordinary result; no `inspect_attempts` operation or Geo
-Artifact has been created.
-
-A Geo Skill is still not justified. The first real selection and stopping criteria
-remain in the Plan Skill. A separate Skill is created only if those judgments recur
-across independent Agent workflows and need their own evolution lifecycle.
+The removed public `mediasense.geo.query`, Plan `enrich_geo`, and independent Geo
+journal failed the independent-identity test: deleting them loses no authority or
+lifecycle not already owned by PreCheck. A Geo Skill remains unjustified.
 
 ## Additional pressure tests
 

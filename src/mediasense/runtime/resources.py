@@ -14,7 +14,6 @@ CONTRACT_FILES = {
     "mediasense.precheck.run": "precheck-run.tool.json",
     "mediasense.precheck.read": "precheck-read.tool.json",
     "mediasense.plan.work": "plan-work.tool.json",
-    "mediasense.geo.query": "geo-query.tool.json",
     "mediasense.apply.run": "apply-run.tool.json",
     "mediasense.apply.read": "apply-read.tool.json",
 }

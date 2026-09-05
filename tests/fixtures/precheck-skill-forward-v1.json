@@ -263,8 +263,8 @@
       "must_not": ["synthesize_confirmation", "widen_egress", "claim_resume_is_completion"]
     },
     {
-      "id": "geocode_skip",
-      "covers": ["reverse_geocode", "skip_optional"],
+      "id": "geocode_decline",
+      "covers": ["reverse_geocode", "authorization_declined"],
       "prompt": "The frozen reverse-geocode proposal contains 17 logical queries. I do not want any online call.",
       "expected_activation": true,
       "expected_owner": "mediasense-precheck",
@@ -278,7 +278,7 @@
           "request": {
             "action": "resume",
             "run_ref": "precheck-run:geo-skip",
-            "decision": "skip_optional_work"
+            "decision": "decline"
           }
         },
         {
@@ -286,8 +286,8 @@
           "request": {"action": "status", "run_ref": "precheck-run:geo-skip"}
         }
       ],
-      "interaction_checkpoints": ["honor_explicit_skip"],
-      "must": ["honor_skip", "explain_missing_optional_evidence", "verify_result_boundary"],
+      "interaction_checkpoints": ["honor_explicit_decline"],
+      "must": ["honor_decline", "explain_terminal_non_success", "verify_no_result_published"],
       "must_not": ["provider_call", "invent_durable_qualification", "silent_evidence_claim"]
     },
     {

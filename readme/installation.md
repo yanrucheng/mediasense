@@ -89,11 +89,12 @@ incompatible higher-priority state is an error; it is never hidden by silently
 creating a lower-priority Dataset.
 
 Every successful open reports the exact source, stable `dataset_ref`, workspace,
-selection tier, loaded configuration files, and offline policy. Dataset databases,
-derived Artifacts, Results, Plans, Apply journals, and Receipts remain together in
-that workspace. Credentials, Agent-client settings, and shared model downloads do
-not travel with the Dataset. Neither a source path nor a Dataset workspace selects
-or implies a Honeycomb directory.
+selection tier, loaded configuration files, and Provider credential, capability,
+and data-handling facts. Dataset databases, derived Artifacts, Results, Plans,
+Apply journals, and Receipts remain together in that workspace. Credentials,
+Agent-client settings, and shared model downloads do not travel with the Dataset.
+Neither a source path nor a Dataset workspace selects or implies a Honeycomb
+directory.
 
 Inspect an existing workspace without opening stage stores:
 
@@ -123,17 +124,17 @@ order, with later layers overriding earlier ones:
 Supported initial keys are:
 
 ```toml
-[runtime]
-offline = true
-
 [providers]
 amap_api_key_env = "AMAP_API_KEY"
 google_maps_api_key_env = "GOOGLE_MAPS_API_KEY"
 ```
 
-The default is offline. Configuration names environment variables that contain
-credentials; credentials themselves must not be written to a Dataset workspace.
-Every diagnostic reports only `configured` or `not_configured`.
+Configuration names environment variables that contain credentials; credentials
+themselves must not be written to a Dataset workspace. Credential presence is a
+capability fact, not authorization. PreCheck keeps zero external effects until a
+Human authorizes the exact frozen Provider request batch and disclosed policy.
+Diagnostics report credential and capability status plus Provider data handling;
+an unknown policy is reported as `unknown`, never as `none`.
 `MEDIASENSE_CONFIG_HOME` may select another machine-local configuration base.
 
 ## Upgrade and rollback

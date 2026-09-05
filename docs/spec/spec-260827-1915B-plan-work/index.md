@@ -11,7 +11,6 @@ depends-on:
   - "design-260823-1918-mediasense-foundation"
   - "spec-260826-1546-precheck-read"
   - "spec-260827-1138-frozen-plan"
-  - "spec-260830-2034-geo-query"
   - "clarify-260827-1604-tool-operation-contracts"
 superseded-by: ""
 tags: ["mediasense", "plan", "tool-contract", "working-state"]
@@ -25,7 +24,7 @@ tags: ["mediasense", "plan", "tool-contract", "working-state"]
 
 [`plan-work.tool.json`](plan-work.tool.json) is the authoritative request and response shape. [`hong-kong.mock.json`](hong-kong.mock.json) is a complete human-readable transcript validated by [`tests/test_plan_work_contract.py`](../../../tests/test_plan_work_contract.py).
 
-The Tool has five actions: `create`, `update`, `enrich_geo`, `inspect`, and `seal`. There is no `preview`, `validate`, independent Confirm Tool, or Frozen Plan read Tool.
+The Tool has four actions: `create`, `update`, `inspect`, and `seal`. There is no Geo acquisition, `preview`, `validate`, independent Confirm Tool, or Frozen Plan read Tool.
 
 ## Backward Compatibility Policy
 
@@ -42,8 +41,6 @@ The Tool is authoritative for:
 
 - one `work_ref`, its exact bound `result_ref`, open or closed lifecycle, and revision tokens;
 - the current organization preference snapshot and complete candidate organization content;
-- Plan-owned Geo observations, their exact Result and Source Item binding,
-  authorization evidence, provenance, and observed effects;
 - deterministic validation issues and the global identity of an exact sealable candidate; and
 - the successful transition from an exact confirmed candidate to one `plan_ref`.
 
@@ -55,16 +52,26 @@ Only a trusted Human authentication context may authorize `seal`. The ordinary r
 
 `create` binds one exact immutable PreCheck Result. The Tool resolves its Result view through the existing [`mediasense.precheck.read`](../spec-260826-1546-precheck-read/) semantics and accepts only:
 
-- `readiness: plan_ready`; and
-- `integrity: valid`.
+- `readiness: plan_ready`;
+- `integrity: valid`; and
+- `geo_summary.acquisition_status: complete` or `not_applicable`.
 
-Coverage may be `complete` or honestly bounded `partial`. A blocked or invalid Result returns `result_not_ready` or `result_untrusted` and creates no Working State.
+Coverage may be `complete` or honestly bounded `partial`. A blocked, invalid, or
+Geo-incomplete Result returns `result_not_ready` or `result_untrusted` and creates
+no Working State. This check intentionally invalidates historical readiness claims
+that omitted required Geo acquisition.
 
-A new Working State is `open`. Every accepted `update` replaces its candidate atomically and produces a new opaque revision token. Every retained `enrich_geo` observation appends Plan-owned evidence and also produces a new revision; authorization preflight or mismatch does not. A Human refusal stops before Geo invocation and therefore creates no provider observation. Successful `seal` closes the exact revision, publishes a Frozen Plan, and returns that complete Frozen Plan object as the formal input to Apply preparation. A closed Work remains inspectable but rejects update, enrichment, and a semantically different seal. Later changes require another `create`; draft retention and cloning from a Frozen Plan are outside this contract.
+A new Working State is `open`. Every accepted `update` replaces its candidate
+atomically and produces a new opaque revision token. Successful `seal` closes the
+exact revision, publishes a Frozen Plan, and returns that complete Frozen Plan
+object as the formal input to Apply preparation. A closed Work remains inspectable
+but rejects update and a semantically different seal. Later changes require
+another `create`; draft retention and cloning from a Frozen Plan are outside this
+contract.
 
 ## Safe retry and concurrency
 
-`create`, `update`, `enrich_geo`, and `seal` require `request_id`:
+`create`, `update`, and `seal` require `request_id`:
 
 - the same ID with the same request returns the same result;
 - the same ID with a different request returns `idempotency_conflict`; and
@@ -106,31 +113,6 @@ Omitting `sections` requests all sections. The default complete content section 
 Every cursor binds `work_ref`, revision, collection, query shape, and continuation position. A page from another revision or section is invalid. Paging changes only transport: every page of one sealable revision reports the same global `candidate_content_identity`. Page identities do not exist. The complete candidate must remain obtainable by following `next_cursor` until `complete: true`.
 
 Validation issues are deterministic Tool findings, not Agent judgments. `seal_ready: true` requires a complete candidate content identity. `seal_ready: false` returns issues and no sealable identity.
-
-The optional `geo_evidence` section returns Plan-owned Geo observations attached to
-the current revision. Each item retains its exact Result and Source Item binding,
-authorization evidence, provider provenance, effects, candidate status, and
-qualifications. Reading this section performs no provider request.
-
-## `enrich_geo`
-
-`enrich_geo` coordinates one bounded [`mediasense.geo.query`](../spec-260830-2034-geo-query/)
-request with Plan Working State. It accepts only coordinates already present as
-available observations on Source Items in the exact bound PreCheck Result. It never
-reads PreCheck SQLite, Work, caches, or provider credentials.
-
-Authorization remains out of band through a trusted context. Without matching
-authority, the action returns the Geo authorization requirement and preserves the
-current Plan revision. Refusal is likewise non-mutating.
-
-A terminal authorized outcome is appended as Plan-owned candidate evidence and
-advances the opaque revision, even when candidate organization content is
-unchanged. This keeps inspection and preview deterministic. The observation remains
-distinct from PreCheck fact, Agent interpretation, and Human confirmation.
-
-The Plan request and nested Geo request have separate idempotency identities. An
-identical Plan replay returns its original revision and response; the nested Geo
-Tool independently prevents a lost response from repeating provider effects.
 
 ## `seal`
 

@@ -97,4 +97,4 @@ Generated fixtures should be defined by small tracked recipes and manifests. Gen
 
 The data owner authorized this fixture for internal testing without redacting faces, private scenes, GPS, or metadata. That authorization does not make the package public or suitable for arbitrary distribution. A material change in purpose, recipients, or publication scope requires renewed review.
 
-The package contains no credentials. Receiving machines must provide any optional runtime credentials independently. MediaSense precheck must remain offline by default regardless of credentials present in the environment.
+The package contains no credentials. Receiving machines must provide any optional runtime credentials independently. Credential presence does not authorize external effects: MediaSense PreCheck must make zero Provider requests until a Human authorizes the exact frozen request batch and disclosed policy.

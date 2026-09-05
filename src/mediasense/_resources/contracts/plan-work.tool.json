@@ -9,7 +9,6 @@
     "oneOf": [
       { "$ref": "#/$defs/create_request" },
       { "$ref": "#/$defs/update_request" },
-      { "$ref": "#/$defs/enrich_geo_request" },
       { "$ref": "#/$defs/inspect_request" },
       { "$ref": "#/$defs/seal_request" }
     ],
@@ -118,20 +117,8 @@
           "request_id": { "$ref": "#/$defs/request_id" }
         }
       },
-      "enrich_geo_request": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["action", "work_ref", "base_revision", "request_id", "geo_request"],
-        "properties": {
-          "action": { "const": "enrich_geo" },
-          "work_ref": { "$ref": "#/$defs/work_ref" },
-          "base_revision": { "$ref": "#/$defs/revision" },
-          "request_id": { "$ref": "#/$defs/request_id" },
-          "geo_request": { "$ref": "urn:mediasense:tool:geo-query-input" }
-        }
-      },
       "section": {
-        "enum": ["overview", "preferences", "content", "validation", "geo_evidence"]
+        "enum": ["overview", "preferences", "content", "validation"]
       },
       "page_request": {
         "type": "object",
@@ -189,7 +176,6 @@
     "oneOf": [
       { "$ref": "#/$defs/create_response" },
       { "$ref": "#/$defs/update_response" },
-      { "$ref": "#/$defs/enrich_geo_response" },
       { "$ref": "#/$defs/inspect_response" },
       { "$ref": "#/$defs/seal_response" },
       { "$ref": "#/$defs/error_response" }
@@ -258,22 +244,6 @@
           "result_ref": { "$ref": "#/$defs/result_ref" },
           "revision": { "$ref": "#/$defs/revision" },
           "state": { "const": "open" }
-        }
-      },
-      "enrich_geo_response": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["outcome", "action", "work_ref", "result_ref", "revision", "state", "geo_result"],
-        "properties": {
-          "outcome": {
-            "enum": ["ok", "authorization_required", "refused", "unavailable", "error"]
-          },
-          "action": { "const": "enrich_geo" },
-          "work_ref": { "$ref": "#/$defs/work_ref" },
-          "result_ref": { "$ref": "#/$defs/result_ref" },
-          "revision": { "$ref": "#/$defs/revision" },
-          "state": { "const": "open" },
-          "geo_result": { "$ref": "urn:mediasense:tool:geo-query-output" }
         }
       },
       "issue": {
@@ -424,41 +394,7 @@
           },
           "preferences": { "$ref": "#/$defs/organization_preferences" },
           "content": { "$ref": "#/$defs/content_section" },
-          "validation": { "$ref": "#/$defs/validation" },
-          "geo_evidence": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": ["count", "items"],
-            "properties": {
-              "count": { "type": "integer", "minimum": 0 },
-              "items": {
-                "type": "array",
-                "items": {
-                  "type": "object",
-                  "additionalProperties": false,
-                  "required": ["geo_request_id", "request_fingerprint", "authorization", "result"],
-                  "properties": {
-                    "geo_request_id": { "$ref": "#/$defs/request_id" },
-                    "request_fingerprint": { "$ref": "#/$defs/content_identity" },
-                    "authorization": {
-                      "type": "object",
-                      "additionalProperties": false,
-                      "required": ["principal_ref", "request_fingerprint", "authorized_at", "effect_envelope"],
-                      "properties": {
-                        "principal_ref": { "type": "string", "minLength": 1 },
-                        "request_fingerprint": { "$ref": "#/$defs/content_identity" },
-                        "authorized_at": { "type": "string", "format": "date-time" },
-                        "effect_envelope": {
-                          "$ref": "urn:mediasense:tool:geo-query-output#/$defs/effect_envelope"
-                        }
-                      }
-                    },
-                    "result": { "$ref": "urn:mediasense:tool:geo-query-output" }
-                  }
-                }
-              }
-            }
-          }
+          "validation": { "$ref": "#/$defs/validation" }
         }
       },
       "inspect_response": {
@@ -476,7 +412,7 @@
             "type": "array",
             "minItems": 1,
             "uniqueItems": true,
-            "items": { "enum": ["overview", "preferences", "content", "validation", "geo_evidence"] }
+            "items": { "enum": ["overview", "preferences", "content", "validation"] }
           },
           "sections": { "$ref": "#/$defs/inspect_sections" },
           "candidate_content_identity": { "$ref": "#/$defs/content_identity" }
@@ -554,7 +490,7 @@
         "required": ["outcome", "action", "error"],
         "properties": {
           "outcome": { "const": "error" },
-          "action": { "enum": ["create", "update", "enrich_geo", "inspect", "seal"] },
+          "action": { "enum": ["create", "update", "inspect", "seal"] },
           "work_ref": { "$ref": "#/$defs/work_ref" },
           "revision": { "$ref": "#/$defs/revision" },
           "error": {

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
 
@@ -23,6 +23,7 @@ from mediasense.precheck import (
     DependencyKind,
     ImageRenditionProducer,
     PrecheckReadTool,
+    PrecheckConfirmationContext,
     PrecheckRunTool,
     ReverseGeocodeProducer,
     ReverseGeocodeProfile,
@@ -69,20 +70,25 @@ class FakeTransport:
 class FakeGoogle:
     provider_id: str = "google_maps"
     datum: MapDatum = MapDatum.WGS84
+    status: str = "success"
     calls: list[GeoCoordinate] = field(default_factory=list)
 
     def lookup(self, coordinate: GeoCoordinate, *, language: str) -> GeoProviderResult:
         self.calls.append(coordinate)
         return GeoProviderResult(
-            status="success",
+            status=self.status,
             provider=self.provider_id,
             language=language,
             input_coordinate=coordinate,
             provider_coordinate=coordinate,
-            location={
-                "formatted_address": "Tokyo, Japan",
-                "components": {"country": "Japan", "country_code": "JP"},
-            },
+            location=(
+                None
+                if self.status == "no_result"
+                else {
+                    "formatted_address": "Tokyo, Japan",
+                    "components": {"country": "Japan", "country_code": "JP"},
+                }
+            ),
             pois=(),
             request_count=2,
         )
@@ -191,6 +197,19 @@ def _public_run(tool: PrecheckRunTool, request_id: str) -> str:
         }
     )
     return str(response["run_ref"])
+
+
+def _authorize(tool: PrecheckRunTool, run_ref: str) -> dict[str, object]:
+    status = tool.run({"action": "status", "run_ref": run_ref})
+    identity = status["confirmation"]["content_identity"]
+    return tool.run(
+        {"action": "resume", "run_ref": run_ref, "decision": "proceed"},
+        confirmation=PrecheckConfirmationContext(
+            principal_ref="human:test",
+            confirmed_content_identity=identity,
+            confirmed_at=datetime.now(timezone.utc),
+        ),
+    )
 
 
 def test_amap_preserves_datum_conversion_and_normalizes_pois() -> None:
@@ -454,7 +473,11 @@ def test_capability_adapter_preserves_indeterminate_transmitted_request() -> Non
     assert result.attempt.billable_units is None
 
 
-def test_optional_batch_pauses_before_exact_deduplicated_queries(
+def test_geo_profile_has_no_optional_activation_switch() -> None:
+    assert "enabled" not in ReverseGeocodeProfile.__dataclass_fields__
+
+
+def test_batch_pauses_before_exact_deduplicated_queries(
     tmp_path: Path,
 ) -> None:
     database = tmp_path / "workspace" / "working.sqlite3"
@@ -480,7 +503,7 @@ def test_optional_batch_pauses_before_exact_deduplicated_queries(
             initial_language="ja",
         ),
     )
-    profile = ReverseGeocodeProfile(enabled=True, provider_profile="mock-google-v1")
+    profile = ReverseGeocodeProfile(provider_profile="mock-google-v1")
 
     pending = producer.produce(
         public_run_ref,
@@ -497,7 +520,7 @@ def test_optional_batch_pauses_before_exact_deduplicated_queries(
     assert status["confirmation"]["quantity"] == 1
     assert status["confirmation"]["unit"] == "logical_queries"
 
-    run_tool.run({"action": "resume", "run_ref": public_run_ref, "decision": "proceed"})
+    _authorize(run_tool, public_run_ref)
     completed = producer.produce(
         public_run_ref,
         run_id,
@@ -547,6 +570,22 @@ def test_optional_batch_pauses_before_exact_deduplicated_queries(
     )
 
 
+def test_provider_no_result_remains_an_executed_observation() -> None:
+    provider = FakeGoogle(status="no_result")
+    geocoder = AdaptiveReverseGeocoder(
+        providers={"google_maps": provider},
+        provider_order=("google_maps",),
+        initial_provider="google_maps",
+    )
+
+    result = geocoder.lookup(GeoCoordinate(35.658, 139.7013))
+
+    assert result.status == "no_result"
+    assert result.location is None
+    assert result.provider_request_count == 2
+    assert len(provider.calls) == 1
+
+
 def test_reused_query_restores_route_and_sequence_is_a_work_dependency(
     tmp_path: Path,
 ) -> None:
@@ -561,7 +600,7 @@ def test_reused_query_restores_route_and_sequence_is_a_work_dependency(
     first_public_ref = _public_run(run_tool, "request:route-seed")
     first_google = FakeCountryProvider("google_maps", "China", "CN", MapDatum.WGS84)
     first_amap = FakeCountryProvider("amap", "中国", "CN", MapDatum.GCJ02)
-    profile = ReverseGeocodeProfile(enabled=True, provider_profile="route-test-v1")
+    profile = ReverseGeocodeProfile(provider_profile="route-test-v1")
     first_producer = ReverseGeocodeProducer(
         database,
         run_tool,
@@ -578,9 +617,7 @@ def test_reused_query_restores_route_and_sequence_is_a_work_dependency(
         ).status
         == "confirmation_required"
     )
-    run_tool.run(
-        {"action": "resume", "run_ref": first_public_ref, "decision": "proceed"}
-    )
+    _authorize(run_tool, first_public_ref)
     first_completed = first_producer.produce(
         first_public_ref, first_run, [beijing.work_id], profile=profile
     )
@@ -618,13 +655,7 @@ def test_reused_query_restores_route_and_sequence_is_a_work_dependency(
     )
     assert pending.status == "confirmation_required"
     assert pending.batch.pending_query_count == 1
-    run_tool.run(
-        {
-            "action": "resume",
-            "run_ref": second_public_ref,
-            "decision": "proceed",
-        }
-    )
+    _authorize(run_tool, second_public_ref)
     completed = second_producer.produce(
         second_public_ref,
         second_run,
@@ -650,7 +681,7 @@ def test_reused_query_restores_route_and_sequence_is_a_work_dependency(
     assert standalone.work[0].work_id != chained.work_id
 
 
-def test_disabled_profile_and_skipped_confirmation_make_no_calls(
+def test_missing_authority_and_decline_make_no_calls(
     tmp_path: Path,
 ) -> None:
     database = tmp_path / "workspace" / "working.sqlite3"
@@ -674,30 +705,21 @@ def test_disabled_profile_and_skipped_confirmation_make_no_calls(
         ),
     )
 
-    disabled = producer.produce(public_run_ref, run_id, [metadata.work_id])
-    assert disabled.status == "policy_disabled"
+    pending = producer.produce(public_run_ref, run_id, [metadata.work_id])
+    assert pending.status == "confirmation_required"
     assert provider.calls == []
-    assert (
-        run_tool.run({"action": "status", "run_ref": public_run_ref})["state"]
-        == "running"
+    missing = run_tool.run(
+        {"action": "resume", "run_ref": public_run_ref, "decision": "proceed"}
     )
-
-    profile = ReverseGeocodeProfile(enabled=True, provider_profile="mock-google-v1")
-    pending = producer.produce(
-        public_run_ref, run_id, [metadata.work_id], profile=profile
-    )
-    run_tool.run(
+    assert missing["error"]["code"] == "authorization_required"
+    declined = run_tool.run(
         {
             "action": "resume",
             "run_ref": public_run_ref,
-            "decision": "skip_optional_work",
+            "decision": "decline",
         }
     )
-    skipped = producer.produce(
-        public_run_ref, run_id, [metadata.work_id], profile=profile
-    )
-    assert pending.status == "confirmation_required"
-    assert skipped.status == "not_requested"
+    assert declined["target_state"] == "cancelled"
     assert provider.calls == []
 
 
@@ -725,11 +747,11 @@ def test_changed_pending_set_requires_new_confirmation(tmp_path: Path) -> None:
             initial_language="ja",
         ),
     )
-    profile = ReverseGeocodeProfile(enabled=True, provider_profile="mock-google-v1")
+    profile = ReverseGeocodeProfile(provider_profile="mock-google-v1")
     first_pending = producer.produce(
         public_run_ref, run_id, [first.work_id], profile=profile
     )
-    run_tool.run({"action": "resume", "run_ref": public_run_ref, "decision": "proceed"})
+    _authorize(run_tool, public_run_ref)
     producer.produce(public_run_ref, run_id, [first.work_id], profile=profile)
 
     changed = producer.produce(
@@ -791,14 +813,14 @@ def test_cancellation_stops_new_external_queries_without_discarding_finished_wor
             initial_language="ja",
         ),
     )
-    profile = ReverseGeocodeProfile(enabled=True, provider_profile="mock-google-v1")
+    profile = ReverseGeocodeProfile(provider_profile="mock-google-v1")
     producer.produce(
         public_run_ref,
         run_id,
         [item.work_id for item in metadata],
         profile=profile,
     )
-    run_tool.run({"action": "resume", "run_ref": public_run_ref, "decision": "proceed"})
+    _authorize(run_tool, public_run_ref)
 
     interrupted = producer.produce(
         public_run_ref,
@@ -846,14 +868,14 @@ def test_sealed_result_exposes_candidates_and_external_effect_proof(
             initial_language="ja",
         ),
     )
-    profile = ReverseGeocodeProfile(enabled=True, provider_profile="mock-google-v1")
+    profile = ReverseGeocodeProfile(provider_profile="mock-google-v1")
     producer.produce(
         public_run_ref,
         run_id,
         [item.work_id for item in metadata],
         profile=profile,
     )
-    run_tool.run({"action": "resume", "run_ref": public_run_ref, "decision": "proceed"})
+    _authorize(run_tool, public_run_ref)
     geocoded = producer.produce(
         public_run_ref,
         run_id,
@@ -940,3 +962,16 @@ def test_sealed_result_exposes_candidates_and_external_effect_proof(
     assert boundary["logical_external_queries"] == 1
     assert boundary["provider_requests"] == 2
     assert boundary["billable_calls"] == "unknown"
+
+    summary = reader.read(
+        {"result_ref": sealed.result_ref, "operation": "geo_summary"}
+    )
+    validator.validate(summary)
+    assert summary["acquisition_status"] == "complete"
+    assert summary["unique_coordinate_count"] == 1
+    assert summary["coordinate_groups"][0]["member_count"] == 2
+    assert summary["coordinate_groups"][0]["reverse_geocode"] == "success"
+    assert len(summary["coordinate_groups"][0]["candidate_evidence_refs"]) == 1
+    assert set(
+        summary["coordinate_groups"][0]["source_set"]["source_item_refs"]
+    ) == {item["source_item_ref"] for item in accounts["members"]}

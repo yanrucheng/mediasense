@@ -191,5 +191,6 @@ def test_preview_uses_only_read_contract_and_asset_resolver(tmp_path) -> None:
         "review",
         "expand",
         "resolve",
+        "geo_summary",
     }
     assert resolver_calls

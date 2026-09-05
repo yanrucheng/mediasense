@@ -207,7 +207,11 @@ Plan seals the primary organization outcome. The handoff candidate must carry or
 
 It need not contain every Semantic Claim, model response, Agent Judgment, dialogue turn, review view, or VLM payload. Plan remains free to use better methods as long as the frozen result is complete and independently executable.
 
-Plan alone decides which existing evidence to read, how to crop, scale, compose, or re-encode it for a VLM, and when a bounded stage-neutral capability can materially improve the organization decision. Any remote provider use remains subject to exact data-egress, request, cost, retention, and Human-authorization controls. A Plan-owned Geo observation is revision-bound candidate evidence; it does not mutate PreCheck evidence or become final place truth.
+Plan alone decides which existing evidence to read and how to crop, scale,
+compose, or re-encode it for a VLM. Geo provider acquisition remains in PreCheck
+under exact data-egress, request, cost, provider-policy, and Human-authorization
+controls. Plan may interpret that immutable candidate Evidence or ask the Human
+for semantic context, but it owns no provider observation lifecycle.
 
 ### Apply Receipt
 

@@ -29,8 +29,7 @@ platform application-data directory; it is never an Agent configuration root.
 - A MediaSense **Tool** is a concrete business capability:
   `mediasense.dataset.open`, `mediasense.precheck.run`,
   `mediasense.precheck.read`, `mediasense.plan.work`,
-  `mediasense.geo.query`, `mediasense.apply.run`, or
-  `mediasense.apply.read`.
+  `mediasense.apply.run`, or `mediasense.apply.read`.
 - The **CLI** is the installed local executable. It provides diagnostics, Human
   control surfaces, and runtime entry points.
 - **`mediasense mcp`** is the CLI package's stdio server. MCP transports Tool

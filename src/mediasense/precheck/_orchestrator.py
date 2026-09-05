@@ -175,10 +175,9 @@ class PrecheckExecutionConfig:
             raise ValueError("compression_target must be positive")
         if (
             self.resource_budget is not None
-            and self.reverse_geocode_profile.enabled
             and self.resource_budget.capacity.network_slots < 1
         ):
-            raise ValueError("enabled reverse geocoding requires one network slot")
+            raise ValueError("PreCheck Geo acquisition requires one network slot")
 
     def value(self) -> dict[str, object]:
         if (
@@ -210,7 +209,6 @@ class PrecheckExecutionConfig:
                 "max_workers": self.resource_budget.max_workers,
             },
             "reverse_geocode_profile": {
-                "enabled": self.reverse_geocode_profile.enabled,
                 "max_attempts": self.reverse_geocode_profile.max_attempts,
                 "provider_profile": self.reverse_geocode_profile.provider_profile,
                 "refresh_token": self.reverse_geocode_profile.refresh_token,
@@ -220,7 +218,7 @@ class PrecheckExecutionConfig:
             "sensitivity_profile": _sensitivity_profile_value(self.sensitivity_profile),
             "source_storage": self.source_storage_hint,
             "source_storage_evidence": self.source_storage_evidence,
-            "version": 4,
+            "version": 5,
             "video": self.video,
             "video_frame_limit": self.video_frame_limit,
         }
@@ -265,7 +263,7 @@ class PrecheckExecutionConfig:
             evidence = f"operator_conservative_override:{storage}:{evidence}"
         budget = resolve_resource_budget(
             source_storage=storage,
-            network_enabled=self.reverse_geocode_profile.enabled,
+            network_enabled=True,
             ceiling=self.resource_budget,
             logical_cpu_count=logical_cpu_count,
             available_memory_bytes=available_memory_bytes,
@@ -297,7 +295,7 @@ class PrecheckExecutionConfig:
 
     @classmethod
     def from_value(cls, value: Mapping[str, object]) -> PrecheckExecutionConfig:
-        if value.get("version") != 4:
+        if value.get("version") != 5:
             raise ValueError("unsupported PreCheck execution configuration")
         budget_value = cast(Mapping[str, object], value["resource_budget"])
         capacity_value = cast(Mapping[str, object], budget_value["capacity"])
@@ -327,7 +325,6 @@ class PrecheckExecutionConfig:
                 cast(Mapping[str, object] | None, value["sensitivity_profile"])
             ),
             reverse_geocode_profile=ReverseGeocodeProfile(
-                enabled=bool(geocode_value["enabled"]),
                 provider_profile=str(geocode_value["provider_profile"]),
                 routing_policy=str(geocode_value["routing_policy"]),
                 refresh_token=str(geocode_value["refresh_token"]),
@@ -580,6 +577,15 @@ class PrecheckOrchestrator:
         )
         if geocode.status == "confirmation_required":
             return self.run_control.sync_accounting(run_ref)
+        if geocode.status == "unavailable":
+            return self.run_control.mark_failed(
+                run_ref,
+                code="provider_unavailable",
+                message=(
+                    "A frozen coordinate batch requires reverse geocoding, but no "
+                    "compatible provider is configured."
+                ),
+            )
         if not self._finish_phase(run_ref, "external_evidence"):
             return self.run_control.sync_accounting(run_ref)
 
@@ -1155,9 +1161,7 @@ class PrecheckOrchestrator:
                     "reverse-geocode",
                     ResourceClaim(
                         cpu_slots=1,
-                        network_slots=(
-                            1 if config.reverse_geocode_profile.enabled else 0
-                        ),
+                        network_slots=1,
                     ),
                     lambda: producer.produce(
                         run_ref,

@@ -666,6 +666,7 @@ class SQLiteRunStore:
         run_ref: str,
         *,
         decision: object,
+        authority: Mapping[str, object] | None = None,
     ) -> tuple[dict[str, object], dict[str, object]]:
         with self._transaction() as connection:
             row = self._require(connection, run_ref)
@@ -738,14 +739,47 @@ class SQLiteRunStore:
                 else:
                     if not isinstance(decision, str) or decision not in {
                         "proceed",
-                        "skip_optional_work",
+                        "decline",
                     }:
                         raise RunDecisionError("unknown confirmation decision")
-                    if decision == "skip_optional_work" and not bool(
-                        confirmation["skip_allowed"]
+                    if decision == "proceed":
+                        if not isinstance(authority, Mapping):
+                            raise RunDecisionError(
+                                "proceed requires trusted Human authorization"
+                            )
+                        if authority.get("confirmed_content_identity") != observed[
+                            "confirmation_fingerprint"
+                        ]:
+                            raise RunDecisionError(
+                                "trusted authorization names different content"
+                            )
+                        confirmation = {
+                            **confirmation,
+                            "accepted_authority": dict(authority),
+                        }
+                    if decision == "decline" and not bool(
+                        confirmation.get("skip_allowed", False)
+                    ):
+                        current = self._update_state(
+                            connection,
+                            run_ref,
+                            "cancelled",
+                            reason={
+                                "code": "authorization_declined",
+                                "message": "The Human declined the disclosed external effect.",
+                            },
+                            confirmation=confirmation,
+                            confirmation_fingerprint=str(
+                                observed["confirmation_fingerprint"]
+                            ),
+                            confirmation_decision="decline",
+                        )
+                        return observed, current
+                    if decision == "decline" and bool(
+                        confirmation.get("skip_allowed", False)
                     ):
                         raise RunDecisionError(
-                            "the pending optional work cannot be skipped"
+                            "decline is not valid for skippable optional work"
                         )
                     fingerprint = str(observed["confirmation_fingerprint"])
                     generic_decision = str(decision)
@@ -760,6 +794,12 @@ class SQLiteRunStore:
                 connection,
                 run_ref,
                 "running",
+                confirmation=(
+                    confirmation
+                    if isinstance(confirmation, dict)
+                    and generic_decision == "proceed"
+                    else None
+                ),
                 confirmation_fingerprint=fingerprint,
                 confirmation_decision=generic_decision,
             )
@@ -794,7 +834,7 @@ class SQLiteRunStore:
                 observed["state"] == "running"
                 and observed["confirmation_fingerprint"] == fingerprint
                 and observed["confirmation_decision"]
-                in {"proceed", "skip_optional_work"}
+                == "proceed"
             ):
                 return observed, False
             if observed["state"] == "paused" and observed["confirmation"] is not None:
@@ -818,12 +858,7 @@ class SQLiteRunStore:
                         "require confirmation."
                     ),
                     "resume_when": (
-                        "The caller chooses proceed"
-                        + (
-                            " or skip_optional_work."
-                            if confirmation["skip_allowed"]
-                            else "."
-                        )
+                        "The Human authorizes the exact disclosure or declines it."
                     ),
                 },
                 confirmation=confirmation,

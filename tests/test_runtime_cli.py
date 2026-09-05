@@ -36,7 +36,7 @@ def test_doctor_distinguishes_optional_missing_dependencies(
     assert checks["resources"] == {
         "name": "resources",
         "status": "ok",
-        "message": "7 Tool contracts and 4 Skills are available.",
+        "message": "6 Tool contracts and 4 Skills are available.",
         "required": True,
     }
     assert checks["exiftool"]["status"] == "warning"
@@ -86,7 +86,7 @@ def test_dataset_open_command_reports_selected_workspace(
     result = json.loads(capsys.readouterr().out)
     assert result["selection_tier"] == "explicit"
     assert result["workspace"] == str(workspace)
-    assert result["configuration"]["offline"] is True
+    assert "offline" not in result["configuration"]
 
     assert run(["dataset", "inspect", str(workspace), "--json"]) == 0
     inspected = json.loads(capsys.readouterr().out)
@@ -131,11 +131,10 @@ def test_tool_discovery_lists_dataset_and_six_existing_tools(capsys) -> None:
         "mediasense.precheck.run",
         "mediasense.precheck.read",
         "mediasense.plan.work",
-        "mediasense.geo.query",
         "mediasense.apply.run",
         "mediasense.apply.read",
     ]
-    assert len(tool_descriptors()) == 7
+    assert len(tool_descriptors()) == 6
 
     assert run(["tools", "show", "mediasense.precheck.run", "--json"]) == 0
     detail = json.loads(capsys.readouterr().out)
@@ -167,7 +166,7 @@ def test_tool_call_reports_dataset_binding_and_business_result(
 
     assert exit_code == 2
     assert value["dataset"]["workspace"] == str(workspace)
-    assert value["dataset"]["configuration"]["offline"] is True
+    assert "offline" not in value["dataset"]["configuration"]
     assert value["result"]["error"]["code"] == "run_not_found"
 
 
@@ -218,8 +217,6 @@ def test_packaged_resources_are_complete_and_contracts_match_authorities() -> No
         / "docs/spec/spec-260826-1546-precheck-read/precheck-read.tool.json",
         "mediasense.plan.work": root
         / "docs/spec/spec-260827-1915B-plan-work/plan-work.tool.json",
-        "mediasense.geo.query": root
-        / "docs/spec/spec-260830-2034-geo-query/geo-query.tool.json",
         "mediasense.apply.run": root
         / "docs/spec/spec-260829-0050-apply/apply-run.tool.json",
         "mediasense.apply.read": root

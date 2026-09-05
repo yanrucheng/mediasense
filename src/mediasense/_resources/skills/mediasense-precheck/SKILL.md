@@ -92,8 +92,9 @@ extraction, decoding, models, thresholds, directory layouts, or a fixed profile
 as permanent method. Use only configuration choices the Tool host actually
 supports, and never invent request fields to express a preference.
 
-State before starting that external work is disabled by default. Do not enable
-remote models, uploads, online maps, or billable services as an optimization.
+State before starting that external work is disabled until an exact Run-scoped
+authorization is accepted. Credential or provider availability never grants
+authority by itself.
 
 ## Explain cost when it becomes knowable
 
@@ -161,32 +162,31 @@ material Human decision, explain their consequences and ask. If the Tool does
 not expose a verifiable recovery condition or retained-work fact, call it
 unknown rather than guessing.
 
-## Keep the external exception exact
+## Keep Geo acquisition exact
 
-The sole current online exception is reverse geocoding after compression has
-produced a normalized, deduplicated, frozen coordinate set. When the Tool pauses
-for it, proceed only if the returned confirmation clearly identifies that exact
-contract-bound exception; otherwise stop and surface the ambiguity.
+PreCheck owns reverse geocoding after compression has produced a normalized,
+deduplicated, frozen coordinate set. A non-empty set is a required Result closure
+gate. When the Tool pauses, proceed only if the returned confirmation clearly
+identifies that exact contract-bound effect; otherwise stop and surface the
+ambiguity.
 
 1. Show the exact Tool-reported number of logical queries and the coordinate-only
    scope.
 2. Explain that the coordinates themselves leave the local boundary and may
-   reveal visited places. State that provider, precision, retention,
-   jurisdiction, request amplification, and price are unknown unless the Tool
-   reports them.
+   reveal visited places. Report the exact providers, request ceiling, cost
+   knowledge, immutable Result retention, and each known or explicitly unknown
+   provider data-handling policy from the disclosure.
 3. Explain that media, renditions, features, prompts, and ordinary metadata are
    not authorized to leave the local boundary.
-4. Obtain the Human's matching proceed or skip decision for the complete frozen
-   Run batch, then use only the supported Tool transition. Do not request
-   per-coordinate confirmation, synthesize confirmation, or reuse it for a changed
-   batch.
+4. Obtain trusted Human confirmation bound to the exact disclosure identity, or
+   submit the Human's decline. Do not request per-coordinate confirmation,
+   synthesize confirmation, or reuse it for a changed batch.
 
-Skipping continues without this optional evidence. Tell the user it will be
-absent, but claim a durable qualification only if the immutable Result returns
-one. Retry and fallback never widen the frozen authorized set. PreCheck may use
-its own batch engine and shared provider-neutral adapters; do not assume that its
-Run contract is a sequence of `mediasense.geo.query` calls or that Plan authority
-can authorize the batch.
+A decline ends the Run without a Plan-ready Result. `provider_unavailable` is a
+different terminal condition and must be reported before asking for authority.
+Retry and fallback never widen the frozen authorized set. PreCheck uses its own
+batch engine and provider-neutral adapters; there is no public Geo Tool and Plan
+cannot authorize or complete this acquisition.
 
 ## Diagnose before revising compression
 
@@ -219,6 +219,10 @@ independent axes and preserve qualifications, omissions, provenance, confidence,
 failures, and externally observable cost. Follow each card's
 `available_expansions` menu for targeted detail and use its
 `resolvable_source_set` when exact members are needed.
+
+Read `geo_summary` before handoff. A valid Result reports Geo acquisition as
+`complete` or `not_applicable`; `incomplete` means the Result cannot enter Plan
+even if a historical readiness field says `plan_ready`.
 
 Every accounted Source Item must remain reachable through the normal Evidence
 frontier or an explicit auxiliary, excluded, unsupported, invalid, error, or

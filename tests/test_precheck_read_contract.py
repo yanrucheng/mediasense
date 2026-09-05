@@ -39,7 +39,7 @@ def test_contract_is_zero_bc_and_exposes_only_consumer_operations() -> None:
         for branch in branches
     }
 
-    assert operations == {"review", "expand", "resolve"}
+    assert operations == {"review", "expand", "resolve", "geo_summary"}
     encoded = json.dumps(tool)
     assert '"action"' not in encoded
     assert '"inspect"' not in encoded

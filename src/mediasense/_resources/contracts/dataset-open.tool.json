@@ -42,31 +42,29 @@
           "store_versions": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["precheck", "plan", "geo", "apply"],
+            "required": ["precheck", "plan", "apply"],
             "properties": {
               "precheck": { "type": "integer", "minimum": 1 },
               "plan": { "type": "integer", "minimum": 1 },
-              "geo": { "type": "integer", "minimum": 1 },
               "apply": { "type": "integer", "minimum": 1 }
             }
           },
           "configuration": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["offline", "sources", "credentials"],
+            "required": ["sources", "providers"],
             "properties": {
-              "offline": { "type": "boolean" },
               "sources": {
                 "type": "array",
                 "items": { "type": "string", "minLength": 1 }
               },
-              "credentials": {
+              "providers": {
                 "type": "object",
                 "additionalProperties": false,
                 "required": ["amap", "google_maps"],
                 "properties": {
-                  "amap": { "enum": ["configured", "not_configured"] },
-                  "google_maps": { "enum": ["configured", "not_configured"] }
+                  "amap": { "$ref": "#/$defs/provider_status" },
+                  "google_maps": { "$ref": "#/$defs/provider_status" }
                 }
               }
             }
@@ -95,6 +93,18 @@
           }
         }
       }
-    ]
+    ],
+    "$defs": {
+      "provider_status": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["credential", "capability", "data_handling"],
+        "properties": {
+          "credential": { "enum": ["configured", "not_configured"] },
+          "capability": { "enum": ["available", "unavailable"] },
+          "data_handling": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
   }
 }

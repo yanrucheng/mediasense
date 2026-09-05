@@ -168,6 +168,8 @@ class _RateLimiter:
 class AMapReverseGeocoder:
     provider_id = "amap"
     datum = MapDatum.GCJ02
+    max_provider_requests_per_lookup = 1
+    data_handling = "unknown"
     capabilities = GeoProviderCapabilities(
         provider_id,
         (GeoOperation.REVERSE_GEOCODE, GeoOperation.NEARBY_PLACES),
@@ -310,6 +312,8 @@ class AMapReverseGeocoder:
 class GoogleMapsReverseGeocoder:
     provider_id = "google_maps"
     datum = MapDatum.WGS84
+    max_provider_requests_per_lookup = 2
+    data_handling = "unknown"
     capabilities = GeoProviderCapabilities(
         provider_id,
         (GeoOperation.REVERSE_GEOCODE, GeoOperation.NEARBY_PLACES),
@@ -589,6 +593,24 @@ class AdaptiveReverseGeocoder:
             "provider": self.current_provider,
             "language": self.current_language,
         }
+
+    def effect_disclosure(
+        self, logical_query_count: int
+    ) -> tuple[dict[str, object], ...]:
+        return tuple(
+            {
+                "provider": provider_id,
+                "data_handling": str(
+                    getattr(provider, "data_handling", "unknown")
+                ),
+                "max_provider_requests": (
+                    logical_query_count
+                    * self.max_route_attempts
+                    * int(getattr(provider, "max_provider_requests_per_lookup", 1))
+                ),
+            }
+            for provider_id, provider in self.providers.items()
+        )
 
     def lookup(self, coordinate: GeoCoordinate) -> GeoLookupResult:
         attempted: set[tuple[str, str]] = set()

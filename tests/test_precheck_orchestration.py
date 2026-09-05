@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field, replace
+from datetime import datetime, timezone
 from pathlib import Path
 import subprocess
 from threading import Event, Thread
@@ -20,6 +21,7 @@ from mediasense.precheck import (
     Detection,
     EmbeddingProfile,
     PrecheckReadTool,
+    PrecheckConfirmationContext,
     PrecheckRunTool,
     ResultStore,
     SensitivityProfile,
@@ -34,9 +36,15 @@ from mediasense.precheck.work import WorkStore
 
 
 class FakeExifTool:
-    def __init__(self, capture_times: dict[str, str] | None = None) -> None:
+    def __init__(
+        self,
+        capture_times: dict[str, str] | None = None,
+        *,
+        include_gps: bool = False,
+    ) -> None:
         self.calls: list[tuple[str, ...]] = []
         self.capture_times = capture_times or {}
+        self.include_gps = include_gps
 
     def __call__(self, command) -> subprocess.CompletedProcess[str]:
         command = tuple(command)
@@ -52,8 +60,6 @@ class FakeExifTool:
             else:
                 record.update(
                     {
-                        "Composite:GPSLatitude": 22.3193,
-                        "Composite:GPSLongitude": 114.1694,
                         "File:MIMEType": (
                             "video/mp4"
                             if path.suffix.casefold() == ".mp4"
@@ -61,6 +67,13 @@ class FakeExifTool:
                         ),
                     }
                 )
+                if self.include_gps:
+                    record.update(
+                        {
+                            "Composite:GPSLatitude": 22.3193,
+                            "Composite:GPSLongitude": 114.1694,
+                        }
+                    )
                 if path.name in self.capture_times:
                     record["XMP:DateTimeOriginal"] = self.capture_times[path.name]
             records.append(record)
@@ -215,6 +228,7 @@ def test_start_then_internal_worker_drives_mixed_source_to_readable_result(
     video = FakeVideoTools()
     encoder = FakeEncoder()
     detector = FakeSensitivityDetector()
+    geo_provider = FakeGeocodeProvider()
     tool = PrecheckRunTool(
         database,
         execution_config=PrecheckExecutionConfig(
@@ -237,6 +251,12 @@ def test_start_then_internal_worker_drives_mixed_source_to_readable_result(
             ffmpeg_version="ffmpeg 8.1",
             embedding_encoder=encoder,
             sensitivity_detector=detector,
+            geocoder=AdaptiveReverseGeocoder(
+                providers={"fake_maps": geo_provider},
+                provider_order=("fake_maps",),
+                initial_provider="fake_maps",
+                initial_language="zh",
+            ),
         ),
     )
 
@@ -249,7 +269,21 @@ def test_start_then_internal_worker_drives_mixed_source_to_readable_result(
     )
     assert started["state"] == "running"
     assert WorkStore(database).list_run_work(_accounting_run_id) == ()
-    _advance_after_scope(tool, str(started["run_ref"]))
+    advanced = _advance_after_scope(tool, str(started["run_ref"]))
+    if advanced["state"] == "paused" and advanced["reason"]["code"] == "confirmation_required":
+        tool.run(
+            {
+                "action": "resume",
+                "run_ref": started["run_ref"],
+                "decision": "proceed",
+            },
+            confirmation=PrecheckConfirmationContext(
+                principal_ref="human:test",
+                confirmed_content_identity=advanced["confirmation"]["content_identity"],
+                confirmed_at=datetime.now(timezone.utc),
+            ),
+        )
+        tool.advance(str(started["run_ref"]))
     status = tool.run({"action": "status", "run_ref": started["run_ref"]})
 
     assert started["outcome"] == "ok"
@@ -544,7 +578,6 @@ def test_geocode_pauses_for_exact_frozen_query_count_before_fake_provider(
         compression_target=2,
         reverse_geocode_profile=replace(
             base.reverse_geocode_profile,
-            enabled=True,
             provider_profile="fake-maps-v1",
         ),
         resource_budget=replace(auto_budget, capacity=capacity),
@@ -553,7 +586,7 @@ def test_geocode_pauses_for_exact_frozen_query_count_before_fake_provider(
         database,
         execution_config=config,
         execution_dependencies=PrecheckExecutionDependencies(
-            metadata_runner=FakeExifTool(),
+            metadata_runner=FakeExifTool(include_gps=True),
             exiftool_version="13.30",
             geocoder=geocoder,
         ),
@@ -579,7 +612,12 @@ def test_geocode_pauses_for_exact_frozen_query_count_before_fake_provider(
             "action": "resume",
             "run_ref": started["run_ref"],
             "decision": "proceed",
-        }
+        },
+        confirmation=PrecheckConfirmationContext(
+            principal_ref="human:test",
+            confirmed_content_identity=paused["confirmation"]["content_identity"],
+            confirmed_at=datetime.now(timezone.utc),
+        ),
     )
     assert (
         tool.run({"action": "status", "run_ref": started["run_ref"]})["state"]
@@ -599,6 +637,84 @@ def test_geocode_pauses_for_exact_frozen_query_count_before_fake_provider(
     boundary = inspected["result"]["execution_boundary"]
     assert boundary["logical_external_queries"] == 1
     assert boundary["provider_requests"] == 2
+
+
+def test_nonempty_geo_batch_without_provider_is_terminal_unavailable(
+    tmp_path: Path,
+) -> None:
+    database, source, _accounting_run_id = _prepare_source_bound_run(tmp_path)
+    Image.new("RGB", (48, 32), "red").save(source / "gps.jpg")
+    tool = PrecheckRunTool(
+        database,
+        execution_config=PrecheckExecutionConfig(
+            gpx=False, video=False, bundles=False, compression_target=1
+        ),
+        execution_dependencies=PrecheckExecutionDependencies(
+            metadata_runner=FakeExifTool(include_gps=True),
+            exiftool_version="13.30",
+        ),
+    )
+    started = tool.run(
+        {
+            "action": "start",
+            "dataset_ref": "dataset:dataset-a",
+            "request_id": "request:no-geo-provider",
+        }
+    )
+
+    _advance_after_scope(tool, str(started["run_ref"]))
+    status = tool.run({"action": "status", "run_ref": started["run_ref"]})
+
+    assert status["state"] == "failed"
+    assert status["reason"]["code"] == "provider_unavailable"
+    assert "published_result" not in status
+
+
+def test_human_declines_frozen_geo_batch_without_provider_request(
+    tmp_path: Path,
+) -> None:
+    database, source, _accounting_run_id = _prepare_source_bound_run(tmp_path)
+    Image.new("RGB", (48, 32), "red").save(source / "gps.jpg")
+    provider = FakeGeocodeProvider()
+    tool = PrecheckRunTool(
+        database,
+        execution_config=PrecheckExecutionConfig(
+            gpx=False, video=False, bundles=False, compression_target=1
+        ),
+        execution_dependencies=PrecheckExecutionDependencies(
+            metadata_runner=FakeExifTool(include_gps=True),
+            exiftool_version="13.30",
+            geocoder=AdaptiveReverseGeocoder(
+                providers={"fake_maps": provider},
+                provider_order=("fake_maps",),
+                initial_provider="fake_maps",
+            ),
+        ),
+    )
+    started = tool.run(
+        {
+            "action": "start",
+            "dataset_ref": "dataset:dataset-a",
+            "request_id": "request:decline-geo",
+        }
+    )
+    _advance_after_scope(tool, str(started["run_ref"]))
+    paused = tool.run({"action": "status", "run_ref": started["run_ref"]})
+
+    assert paused["state"] == "paused"
+    assert provider.calls == []
+    declined = tool.run(
+        {
+            "action": "resume",
+            "run_ref": started["run_ref"],
+            "decision": "decline",
+        }
+    )
+    assert declined["target_state"] == "cancelled"
+    assert provider.calls == []
+    assert "published_result" not in tool.run(
+        {"action": "status", "run_ref": started["run_ref"]}
+    )
 
 
 def test_local_item_failure_isolated_while_other_source_completes(

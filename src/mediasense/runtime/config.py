@@ -16,22 +16,32 @@ class ConfigurationError(RuntimeError):
 
 @dataclass(frozen=True, slots=True)
 class RuntimeConfig:
-    offline: bool
     amap_api_key_env: str
     google_maps_api_key_env: str
     sources: tuple[Path, ...]
 
     def public_value(self) -> dict[str, object]:
         return {
-            "offline": self.offline,
             "sources": [str(path) for path in self.sources],
-            "credentials": {
-                "amap": "configured"
-                if os.environ.get(self.amap_api_key_env)
-                else "not_configured",
-                "google_maps": "configured"
-                if os.environ.get(self.google_maps_api_key_env)
-                else "not_configured",
+            "providers": {
+                "amap": {
+                    "credential": "configured"
+                    if os.environ.get(self.amap_api_key_env)
+                    else "not_configured",
+                    "capability": "available"
+                    if os.environ.get(self.amap_api_key_env)
+                    else "unavailable",
+                    "data_handling": "unknown",
+                },
+                "google_maps": {
+                    "credential": "configured"
+                    if os.environ.get(self.google_maps_api_key_env)
+                    else "not_configured",
+                    "capability": "available"
+                    if os.environ.get(self.google_maps_api_key_env)
+                    else "unavailable",
+                    "data_handling": "unknown",
+                },
             },
         }
 
@@ -65,10 +75,8 @@ def load_runtime_config(
     *,
     dataset_workspace: Path | None = None,
     user_config: Path | None = None,
-    offline: bool | None = None,
 ) -> RuntimeConfig:
     values: dict[str, Any] = {
-        "offline": True,
         "amap_api_key_env": "AMAP_API_KEY",
         "google_maps_api_key_env": "GOOGLE_MAPS_API_KEY",
     }
@@ -82,10 +90,7 @@ def load_runtime_config(
         parsed = _read_config(path)
         values.update(parsed)
         sources.append(path)
-    if offline is not None:
-        values["offline"] = offline
     return RuntimeConfig(
-        offline=bool(values["offline"]),
         amap_api_key_env=str(values["amap_api_key_env"]),
         google_maps_api_key_env=str(values["google_maps_api_key_env"]),
         sources=tuple(sources),
@@ -99,21 +104,14 @@ def _read_config(path: Path) -> dict[str, object]:
         raise ConfigurationError(
             f"Cannot read configuration {path}: {error}"
         ) from error
-    if set(value) - {"runtime", "providers"}:
+    if set(value) - {"providers"}:
         raise ConfigurationError(f"Unknown configuration section in {path}")
-    runtime = value.get("runtime", {})
     providers = value.get("providers", {})
-    if not isinstance(runtime, dict) or not isinstance(providers, dict):
+    if not isinstance(providers, dict):
         raise ConfigurationError(f"Configuration sections must be tables in {path}")
-    if set(runtime) - {"offline"}:
-        raise ConfigurationError(f"Unknown runtime configuration key in {path}")
     if set(providers) - {"amap_api_key_env", "google_maps_api_key_env"}:
         raise ConfigurationError(f"Unknown provider configuration key in {path}")
     result: dict[str, object] = {}
-    if "offline" in runtime:
-        if not isinstance(runtime["offline"], bool):
-            raise ConfigurationError(f"runtime.offline must be boolean in {path}")
-        result["offline"] = runtime["offline"]
     for key in ("amap_api_key_env", "google_maps_api_key_env"):
         if key in providers:
             item = providers[key]

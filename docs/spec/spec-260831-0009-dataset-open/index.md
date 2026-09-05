@@ -47,8 +47,9 @@ mismatch blocks automatic reuse, and an explicit rebind begins a separately
 audited reuse domain. Workspace creation is atomic and reopening the same Dataset
 is idempotent.
 
-The Tool owns Dataset resolution only. PreCheck, Plan, Geo, and Apply retain their
-existing stage contracts and effect boundaries.
+The Tool owns Dataset resolution only. PreCheck, Plan, and Apply retain their
+existing stage contracts and effect boundaries. Geo acquisition is PreCheck-owned
+and has no independent Dataset store.
 
 ## Files
 

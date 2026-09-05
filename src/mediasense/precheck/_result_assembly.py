@@ -300,6 +300,7 @@ def build_minimal_result(
     relationships: list[ResultRelationship] = []
     entry_evidence: list[str] = []
     primary_evidence_by_path: dict[str, str] = {}
+    geo_evidence_by_work: dict[str, str] = {}
     for row in rows:
         relative_path = str(row["relative_path"])
         scope = str(row["scope"])
@@ -487,6 +488,39 @@ def build_minimal_result(
                 qualifications=tuple(qualifications),
             )
         )
+        if geocode_work is not None:
+            geocode_work_id = str(geocode_work["work_id"])
+            geo_evidence_ref = geo_evidence_by_work.get(geocode_work_id)
+            if geo_evidence_ref is None:
+                geo_evidence_ref = result_local_reference(
+                    "evidence", run_id, "reverse-geocode", geocode_work_id
+                )
+                geo_evidence_by_work[geocode_work_id] = geo_evidence_ref
+                evidence.append(
+                    ResultEvidence(
+                        ref=geo_evidence_ref,
+                        access={
+                            "kind": "inline",
+                            "value": {"type": "provider_geo_candidate"},
+                        },
+                        observations=tuple(
+                            _mapped_result_observations(
+                                geocode_work,
+                                source_ref,
+                                label="reverse geocode",
+                            )
+                        ),
+                    )
+                )
+            relationships.append(
+                ResultRelationship(
+                    origin_ref=geo_evidence_ref,
+                    relation="represents",
+                    target_ref=source_ref,
+                    target_kind="source_item",
+                    basis="exact member of the frozen reverse-geocode query",
+                )
+            )
         if not rendition_outputs:
             video_entry = _append_video_evidence(
                 artifacts,
@@ -670,18 +704,6 @@ def build_minimal_result(
                     "queries and observed "
                     f"{external_boundary['provider_requests']} provider requests; "
                     "provider data remains a candidate rather than confirmed place truth."
-                ),
-            }
-        )
-    elif external_policy_status in {"policy_disabled", "not_requested"}:
-        result_qualifications.append(
-            {
-                "code": f"reverse_geocode_{external_policy_status}",
-                "effect": "limits_interpretation",
-                "message": (
-                    "Reverse-geocode candidate Evidence was disabled by policy."
-                    if external_policy_status == "policy_disabled"
-                    else "Reverse-geocode candidate Evidence was skipped by user decision."
                 ),
             }
         )

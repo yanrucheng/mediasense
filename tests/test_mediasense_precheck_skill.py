@@ -110,9 +110,9 @@ def test_skill_links_only_to_existing_authoritative_precheck_contracts() -> None
 
 def test_skill_keeps_reverse_geocoding_run_scoped_and_batch_bound() -> None:
     skill = SKILL_PATH.read_text(encoding="utf-8")
-    assert "matching proceed or skip decision for the complete frozen" in skill
+    assert "trusted Human confirmation bound to the exact disclosure identity" in skill
     assert "per-coordinate confirmation" in skill
-    assert "do not assume that its\nRun contract is a sequence" in skill
+    assert "there is no public Geo Tool" in skill
 
 
 def test_skill_distinguishes_source_accounting_from_execution_liveness() -> None:
@@ -157,7 +157,7 @@ def test_forward_scenarios_cover_required_behavior_and_phase_boundaries() -> Non
         "reverse_geocode",
         "exact_confirmation",
         "coordinate_privacy",
-        "skip_optional",
+        "authorization_declined",
         "partial_result",
         "plan_ready",
         "blocked_result",

@@ -64,7 +64,7 @@ the Tool Host.
    normally cannot load it dynamically. Ask the Human to start a new session from
    the trusted Honeycomb. In that new session, verify discovery of exactly
    `mediasense.dataset.open`, `mediasense.precheck.run`,
-   `mediasense.precheck.read`, `mediasense.plan.work`, `mediasense.geo.query`,
+   `mediasense.precheck.read`, `mediasense.plan.work`,
    `mediasense.apply.run`, and `mediasense.apply.read` before claiming setup is
    complete.
 

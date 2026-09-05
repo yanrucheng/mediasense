@@ -149,7 +149,7 @@ class _ResultGraph:
 
 
 class PrecheckReadTool:
-    """Implement ``review``, ``expand``, and ``resolve`` Result reads."""
+    """Implement deterministic reads over one immutable Result."""
 
     name = "mediasense.precheck.read"
 
@@ -166,10 +166,10 @@ class PrecheckReadTool:
                 raise _ReadFailure(
                     "invalid_request", "result_ref must be a non-empty string."
                 )
-            if operation not in {"review", "expand", "resolve"}:
+            if operation not in {"review", "expand", "resolve", "geo_summary"}:
                 raise _ReadFailure(
                     "invalid_request",
-                    "operation must be review, expand, or resolve.",
+                    "operation must be review, expand, resolve, or geo_summary.",
                 )
             package, result_digest = self._load(result_ref)
             graph = _ResultGraph(package)
@@ -182,6 +182,8 @@ class PrecheckReadTool:
                 return self._review(graph, result_digest, request)
             if operation == "expand":
                 return self._expand(graph, result_digest, request)
+            if operation == "geo_summary":
+                return self._geo_summary(graph, result_digest, request)
             return self._resolve(graph, result_digest, request)
         except _ReadFailure as failure:
             return _error(
@@ -293,6 +295,44 @@ class PrecheckReadTool:
             operation="review",
             query_key=query_key,
             page_extra={"order": "frontier_order"},
+        )
+
+    def _geo_summary(
+        self,
+        graph: _ResultGraph,
+        result_digest: str,
+        request: Mapping[str, object],
+    ) -> dict[str, object]:
+        _require_keys(request, {"result_ref", "operation", "page"})
+        projection = _geo_projection(graph)
+        groups = cast(list[dict[str, object]], projection.pop("coordinate_groups"))
+        query_key = "geo_summary:exact_coordinate_order"
+        limit, offset = _page_request(
+            request.get("page"),
+            default=50,
+            maximum=200,
+            result_ref=graph.result_ref,
+            result_digest=result_digest,
+            operation="geo_summary",
+            query_key=query_key,
+        )
+        base: dict[str, object] = {
+            "outcome": "ok",
+            "operation": "geo_summary",
+            "result_ref": graph.result_ref,
+            **projection,
+        }
+        return _paged_response(
+            base,
+            collection="coordinate_groups",
+            values=groups,
+            offset=offset,
+            limit=limit,
+            result_ref=graph.result_ref,
+            result_digest=result_digest,
+            operation="geo_summary",
+            query_key=query_key,
+            page_extra={"order": "latitude_longitude_datum"},
         )
 
     def _expand(
@@ -969,6 +1009,167 @@ def _source_verification(view: Mapping[str, object]) -> dict[str, object]:
         if field in observation:
             result[field] = observation[field]
     return result
+
+
+def _geo_projection(graph: _ResultGraph) -> dict[str, object]:
+    state_names = (*_OBSERVATION_STATES, "unreported")
+    gps_counts = Counter({state: 0 for state in state_names})
+    gpx_counts = Counter({state: 0 for state in state_names})
+    combined = Counter({state: 0 for state in ("available", "missing", "failed", "conflicting")})
+    groups: dict[str, dict[str, object]] = {}
+
+    for source_ref in sorted(graph.sources):
+        account = graph.accounts.get(source_ref)
+        if not isinstance(account, Mapping) or account.get("scope") != "source_media":
+            continue
+        source = graph.sources[source_ref]
+        gps = _one_observation(source, "gps_coordinates")
+        gpx = _one_observation(source, "gpx_coordinates")
+        gps_counts[_geo_observation_state(gps)] += 1
+        gpx_counts[_geo_observation_state(gpx)] += 1
+        gps_coordinate = _geo_coordinate_value(gps)
+        gpx_coordinate = _geo_coordinate_value(gpx)
+        conflict = (
+            gps_coordinate is not None
+            and gpx_coordinate is not None
+            and gps_coordinate != gpx_coordinate
+        )
+        selected = gpx_coordinate or gps_coordinate
+        if conflict:
+            combined["conflicting"] += 1
+        if selected is not None:
+            combined["available"] += 1
+            key = _canonical_json(selected)
+            group = groups.setdefault(
+                key,
+                {
+                    "coordinate": selected,
+                    "source_item_refs": [],
+                    "candidate_evidence_refs": set(),
+                },
+            )
+            cast(list[str], group["source_item_refs"]).append(source_ref)
+        elif _geo_observation_state(gps) == "failed" or _geo_observation_state(gpx) == "failed":
+            combined["failed"] += 1
+        else:
+            combined["missing"] += 1
+
+    evidence_by_source: dict[str, set[str]] = defaultdict(set)
+    for relationship in graph.relationships:
+        if relationship.get("relation") != "represents":
+            continue
+        origin = relationship.get("origin")
+        member = relationship.get("member")
+        if not isinstance(origin, str) or origin not in graph.evidence or not isinstance(member, Mapping):
+            continue
+        target = member.get("target")
+        if not isinstance(target, str) or target not in graph.sources:
+            continue
+        if _one_observation(graph.evidence[origin], "reverse_geocode_candidate") is not None:
+            evidence_by_source[target].add(origin)
+
+    coordinate_groups: list[dict[str, object]] = []
+    incomplete = False
+    for key in sorted(groups):
+        group = groups[key]
+        members = tuple(sorted(cast(list[str], group["source_item_refs"])))
+        evidence_refs = sorted(
+            {ref for member in members for ref in evidence_by_source.get(member, ())}
+        )
+        outcomes: set[str] = set()
+        provenance: list[object] = []
+        qualifications: list[object] = []
+        for evidence_ref in evidence_refs:
+            observation = _one_observation(
+                graph.evidence[evidence_ref], "reverse_geocode_candidate"
+            )
+            assert observation is not None
+            outcomes.add(
+                {
+                    "available": "success",
+                    "missing": "no_result",
+                    "failed": "failure",
+                }.get(str(observation.get("status")), "failure")
+            )
+            if "provenance" in observation:
+                provenance.append(observation["provenance"])
+            qualifications.extend(_qualifications(observation))
+        if not outcomes:
+            outcome = "not_requested"
+            incomplete = True
+        elif len(outcomes) == 1:
+            outcome = next(iter(outcomes))
+        else:
+            outcome = "failure" if "failure" in outcomes else "success"
+        coordinate_groups.append(
+            {
+                "coordinate": group["coordinate"],
+                "member_count": len(members),
+                "source_set": {
+                    "kind": "explicit",
+                    "source_item_refs": list(members),
+                },
+                "reverse_geocode": outcome,
+                "candidate_evidence_refs": evidence_refs,
+                "provenance": provenance,
+                "qualifications": qualifications,
+            }
+        )
+
+    acquisition_status = (
+        "not_applicable" if not coordinate_groups else "incomplete" if incomplete else "complete"
+    )
+    return {
+        "acquisition_status": acquisition_status,
+        "coordinate_evidence": {
+            "gps": dict(gps_counts),
+            "gpx": dict(gpx_counts),
+            "combined": dict(combined),
+        },
+        "deduplication": {
+            "rule": "exact_normalized_coordinate_v1",
+            "fields": ["latitude", "longitude", "datum"],
+            "rounding": "none",
+        },
+        "unique_coordinate_count": len(coordinate_groups),
+        "coordinate_groups": coordinate_groups,
+    }
+
+
+def _geo_observation_state(observation: Mapping[str, object] | None) -> str:
+    if observation is None:
+        return "unreported"
+    status = observation.get("status")
+    if status not in _OBSERVATION_STATES:
+        raise _ReadFailure(
+            "result_inconsistent", "Geo observation has an unsupported status."
+        )
+    return str(status)
+
+
+def _geo_coordinate_value(
+    observation: Mapping[str, object] | None,
+) -> dict[str, object] | None:
+    if observation is None or observation.get("status") != "available":
+        return None
+    value = observation.get("value")
+    if not isinstance(value, Mapping):
+        raise _ReadFailure(
+            "result_inconsistent", "Available Geo observation has no coordinate."
+        )
+    try:
+        latitude = float(value["latitude"])
+        longitude = float(value["longitude"])
+        datum = str(value["datum"])
+    except (KeyError, TypeError, ValueError) as error:
+        raise _ReadFailure(
+            "result_inconsistent", "Available Geo observation is invalid."
+        ) from error
+    if not -90 <= latitude <= 90 or not -180 <= longitude <= 180 or not datum:
+        raise _ReadFailure(
+            "result_inconsistent", "Available Geo observation is out of range."
+        )
+    return {"latitude": latitude, "longitude": longitude, "datum": datum}
 
 
 def _resolve_source_set(

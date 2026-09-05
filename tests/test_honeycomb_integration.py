@@ -17,7 +17,6 @@ TOOL_NAMES = {
     "mediasense.precheck.run",
     "mediasense.precheck.read",
     "mediasense.plan.work",
-    "mediasense.geo.query",
     "mediasense.apply.run",
     "mediasense.apply.read",
 }
@@ -58,6 +57,12 @@ def test_skills_install_requires_and_uses_only_explicit_target(
         "mediasense-plan",
         "mediasense-apply",
     }
+    assert (
+        target
+        / "mediasense-plan"
+        / "references"
+        / "organization-profiles.md"
+    ).is_file()
     assert not (home / ".codex").exists()
     assert not (home / ".agents").exists()
     assert list(dataset_workspace.iterdir()) == []

@@ -82,29 +82,24 @@ def diagnose() -> dict[str, object]:
         config = load_runtime_config()
     except ConfigurationError as error:
         checks.append(Diagnostic("configuration", "error", str(error), True))
-        offline = None
         config_sources: list[str] = []
     else:
-        offline = config.offline
         config_sources = [str(path) for path in config.sources]
         configured_provider = bool(
             os.environ.get(config.amap_api_key_env)
             or os.environ.get(config.google_maps_api_key_env)
         )
-        if config.offline:
-            configuration_status = "ok"
-            configuration_message = "Offline by default."
-        elif configured_provider:
+        if configured_provider:
             configuration_status = "ok"
             configuration_message = (
-                "External providers are configured; each effect still requires "
+                "A map provider is available; each effect still requires "
                 "matching authorization."
             )
         else:
             configuration_status = "warning"
             configuration_message = (
-                "External providers are enabled but no configured provider "
-                "credential is available."
+                "No map-provider credential is configured; Geo acquisition is "
+                "unavailable when a frozen coordinate batch is non-empty."
             )
         checks.append(
             Diagnostic(
@@ -176,7 +171,6 @@ def diagnose() -> dict[str, object]:
         "checks": [item.to_value() for item in checks],
         "configuration_sources": config_sources,
         "user_config": str(default_user_config_path()),
-        "offline": offline,
     }
 
 

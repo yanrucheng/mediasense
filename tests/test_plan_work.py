@@ -49,6 +49,22 @@ def test_constructor_rejects_callable_without_read_boundary(tmp_path: Path) -> N
         PlanWorkTool(tmp_path / "plan-store", callable_only)  # type: ignore[arg-type]
 
 
+def test_create_rejects_historical_result_with_incomplete_geo_acquisition(
+    tmp_path: Path,
+) -> None:
+    class IncompleteGeoReader(MockPrecheckReader):
+        def read(self, request):
+            response = super().read(request)
+            if request.get("operation") == "geo_summary":
+                response["acquisition_status"] = "incomplete"
+            return response
+
+    result = _create(_tool(tmp_path, IncompleteGeoReader()))
+
+    assert result["outcome"] == "error"
+    assert result["error"]["code"] == "result_not_ready"
+
+
 def _update(
     tool: PlanWorkTool,
     created: dict,

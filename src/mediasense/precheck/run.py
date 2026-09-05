@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 import hashlib
 import logging
@@ -96,6 +97,20 @@ _ERROR_PHASE_LIMIT = 5
 _LOGGER = logging.getLogger(__name__)
 
 
+@dataclass(frozen=True, slots=True)
+class PrecheckConfirmationContext:
+    principal_ref: str
+    confirmed_content_identity: str
+    confirmed_at: datetime
+
+    def value(self) -> dict[str, str]:
+        return {
+            "principal_ref": self.principal_ref,
+            "confirmed_content_identity": self.confirmed_content_identity,
+            "confirmed_at": self.confirmed_at.isoformat(),
+        }
+
+
 class PrecheckRunTool:
     """Implement ``mediasense.precheck.run`` without exposing private Work state."""
 
@@ -136,7 +151,12 @@ class PrecheckRunTool:
             execution_dependencies,
         )
 
-    def run(self, request: dict[str, object]) -> dict[str, object]:
+    def run(
+        self,
+        request: dict[str, object],
+        *,
+        confirmation: PrecheckConfirmationContext | None = None,
+    ) -> dict[str, object]:
         """Apply one public lifecycle operation and return its contract envelope."""
 
         if not isinstance(request, dict):
@@ -160,7 +180,9 @@ class PrecheckRunTool:
                     scope_path=request.get("scope_path"),
                     scope_after=request.get("scope_after"),
                 )
-            return self._control(action, run_ref, request.get("decision"))
+            return self._control(
+                action, run_ref, request.get("decision"), confirmation=confirmation
+            )
         except sqlite3.Error:
             return _error(
                 action,
@@ -244,8 +266,9 @@ class PrecheckRunTool:
         unit: str,
         skip_allowed: bool,
         pending_fingerprint: str,
+        disclosure: Mapping[str, object] | None = None,
     ) -> dict[str, object]:
-        """Pause before one exact, frozen optional work set may cause effects."""
+        """Pause before one exact, frozen work set may cause external effects."""
 
         if not summary.strip():
             raise ValueError("confirmation summary must be non-empty")
@@ -258,12 +281,15 @@ class PrecheckRunTool:
         if not pending_fingerprint.strip():
             raise ValueError("pending_fingerprint must be non-empty")
         confirmation = {
-            "kind": "optional_work",
+            "kind": "external_effect",
             "summary": summary,
             "quantity": quantity,
             "unit": unit,
             "skip_allowed": skip_allowed,
+            "content_identity": pending_fingerprint,
         }
+        if disclosure is not None:
+            confirmation["disclosure"] = dict(disclosure)
         record, _paused = self._store.pause_for_confirmation(
             run_ref,
             confirmation=confirmation,
@@ -281,6 +307,18 @@ class PrecheckRunTool:
             return None
         decision = record["confirmation_decision"]
         return None if decision is None else str(decision)
+
+    def confirmation_authority(
+        self, run_ref: str, *, pending_fingerprint: str
+    ) -> Mapping[str, object] | None:
+        record = self._store.get(run_ref)
+        if record["confirmation_fingerprint"] != pending_fingerprint:
+            return None
+        confirmation = record.get("confirmation")
+        if not isinstance(confirmation, Mapping):
+            return None
+        authority = confirmation.get("accepted_authority")
+        return authority if isinstance(authority, Mapping) else None
 
     def scope_selection_submitted(self, run_ref: str) -> bool:
         review = self._store.latest_scope_review(run_ref)
@@ -816,7 +854,12 @@ class PrecheckRunTool:
         return response
 
     def _control(
-        self, action: str, run_ref: str, decision: object
+        self,
+        action: str,
+        run_ref: str,
+        decision: object,
+        *,
+        confirmation: PrecheckConfirmationContext | None,
     ) -> dict[str, object]:
         normalized_decision: object = decision
         try:
@@ -850,10 +893,28 @@ class PrecheckRunTool:
                     )
                 elif decision is not None:
                     normalized_decision = str(decision)
+                authority = None
+                if normalized_decision == "proceed":
+                    record = self._store.get(run_ref)
+                    pending = record.get("confirmation")
+                    identity = record.get("confirmation_fingerprint")
+                    if (
+                        not isinstance(pending, Mapping)
+                        or pending.get("kind") != "external_effect"
+                        or confirmation is None
+                        or confirmation.confirmed_content_identity != identity
+                    ):
+                        return _error(
+                            action,
+                            "authorization_required",
+                            "Proceed requires trusted confirmation for the exact pending disclosure.",
+                            run_ref,
+                        )
+                    authority = confirmation.value()
                 observed, _current = self._store.request_resume(
-                    run_ref, decision=normalized_decision
+                    run_ref, decision=normalized_decision, authority=authority
                 )
-                target = "running"
+                target = str(_current["state"])
             else:
                 observed, _current = self._store.request_cancel(run_ref)
                 target = "cancelled"
@@ -1208,10 +1269,10 @@ def _validate_request(action: str, request: dict[str, object]) -> None:
         decision = request["decision"]
         if not isinstance(decision, (dict, str)) or (
             isinstance(decision, str)
-            and decision not in {"proceed", "skip_optional_work"}
+                and decision not in {"proceed", "decline"}
         ):
             raise ValueError(
-                "decision must be proceed, skip_optional_work, or source_scope"
+                "decision must be proceed, decline, or source_scope"
             )
 
 

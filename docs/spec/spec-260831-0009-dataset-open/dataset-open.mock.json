@@ -10,19 +10,25 @@
     "workspace": "/Volumes/PhotoDisk/.mediasense/datasets/dataset-c2b69fcd2e3a6d4bbfa32f22",
     "selection_tier": "external_volume",
     "created": true,
-    "manifest_version": 1,
+    "manifest_version": 2,
     "store_versions": {
       "precheck": 17,
-      "plan": 2,
-      "geo": 1,
+      "plan": 3,
       "apply": 2
     },
     "configuration": {
-      "offline": true,
       "sources": [],
-      "credentials": {
-        "amap": "not_configured",
-        "google_maps": "not_configured"
+      "providers": {
+        "amap": {
+          "credential": "not_configured",
+          "capability": "unavailable",
+          "data_handling": "unknown"
+        },
+        "google_maps": {
+          "credential": "not_configured",
+          "capability": "unavailable",
+          "data_handling": "unknown"
+        }
       }
     },
     "warnings": []

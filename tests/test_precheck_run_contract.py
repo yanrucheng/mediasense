@@ -216,7 +216,7 @@ def test_confirmation_pause_reuses_resume_without_adding_an_action() -> None:
         {
             "action": "resume",
             "run_ref": "precheck-run:test",
-            "decision": "skip_optional_work",
+            "decision": "decline",
         }
     )
     input_validator.validate(
@@ -244,14 +244,19 @@ def test_confirmation_pause_reuses_resume_without_adding_an_action() -> None:
     paused["reason"] = {
         "code": "confirmation_required",
         "message": "237 reverse-geocode lookups are ready.",
-        "resume_when": "The caller chooses proceed or skip_optional_work.",
+        "resume_when": "The Human authorizes the exact disclosure or declines it.",
     }
     paused["confirmation"] = {
-        "kind": "optional_work",
+        "kind": "external_effect",
         "summary": "Reverse-geocode the frozen representative set.",
         "quantity": 237,
         "unit": "logical_queries",
-        "skip_allowed": True,
+        "skip_allowed": False,
+        "content_identity": "sha256:" + "a" * 64,
+        "disclosure": {
+            "operation": "reverse_geocode",
+            "provider_policy": "unknown",
+        },
     }
     paused["activity"]["state"] = "waiting"
     output_validator.validate(paused)

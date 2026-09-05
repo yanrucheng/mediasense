@@ -30,8 +30,8 @@
         "type": "string",
         "pattern": "^request:[^\\s]+$"
       },
-      "optional_work_decision": {
-        "enum": ["proceed", "skip_optional_work"]
+      "external_effect_decision": {
+        "enum": ["proceed", "decline"]
       },
       "source_scope_selection": {
         "type": "object",
@@ -59,7 +59,7 @@
       },
       "confirmation_decision": {
         "oneOf": [
-          { "$ref": "#/$defs/optional_work_decision" },
+          { "$ref": "#/$defs/external_effect_decision" },
           { "$ref": "#/$defs/source_scope_selection" }
         ]
       },
@@ -154,8 +154,8 @@
       "public_state": {
         "enum": ["running", "paused", "blocked", "completed", "cancelled", "failed"]
       },
-      "optional_work_decision": {
-        "enum": ["proceed", "skip_optional_work"]
+      "external_effect_decision": {
+        "enum": ["proceed", "decline"]
       },
       "source_scope_selection": {
         "type": "object",
@@ -183,7 +183,7 @@
       },
       "confirmation_decision": {
         "oneOf": [
-          { "$ref": "#/$defs/optional_work_decision" },
+          { "$ref": "#/$defs/external_effect_decision" },
           { "$ref": "#/$defs/source_scope_selection" }
         ]
       },
@@ -481,16 +481,19 @@
           }
         }
       },
-      "optional_work_confirmation": {
+      "external_effect_confirmation": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["kind", "summary", "quantity", "unit", "skip_allowed"],
+        "required": ["kind", "summary", "quantity", "unit", "skip_allowed", "content_identity", "disclosure"],
         "properties": {
-          "kind": { "const": "optional_work" },
+          "kind": { "const": "external_effect" },
           "summary": { "type": "string", "minLength": 1 },
           "quantity": { "type": "integer", "minimum": 1 },
           "unit": { "type": "string", "minLength": 1 },
-          "skip_allowed": { "type": "boolean" }
+          "skip_allowed": { "const": false },
+          "content_identity": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+          "disclosure": { "type": "object", "minProperties": 1 },
+          "accepted_authority": { "type": "object", "minProperties": 3 }
         }
       },
       "source_scope_confirmation": {
@@ -516,7 +519,7 @@
       },
       "confirmation": {
         "oneOf": [
-          { "$ref": "#/$defs/optional_work_confirmation" },
+          { "$ref": "#/$defs/external_effect_confirmation" },
           { "$ref": "#/$defs/source_scope_confirmation" }
         ]
       },
@@ -735,7 +738,8 @@
                   { "properties": { "state": { "const": "finished" } } }
                 ]
               },
-              "allowed_actions": { "$ref": "#/$defs/no_actions" }
+              "allowed_actions": { "$ref": "#/$defs/no_actions" },
+              "reason": { "$ref": "#/$defs/reason" }
             }
           }
         ],
@@ -784,7 +788,7 @@
           "run_ref": { "$ref": "#/$defs/run_ref" },
           "decision": { "$ref": "#/$defs/confirmation_decision" },
           "observed_state": { "$ref": "#/$defs/public_state" },
-          "target_state": { "const": "running" }
+          "target_state": { "enum": ["running", "cancelled"] }
         }
       },
       "cancel_response": {
@@ -822,7 +826,8 @@
                   "invalid_state",
                   "idempotency_conflict",
                   "access_denied",
-                  "operation_failed"
+                  "operation_failed",
+                  "authorization_required"
                 ]
               },
               "message": { "type": "string", "minLength": 1 },

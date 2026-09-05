@@ -15,7 +15,6 @@ import re
 from typing import Any
 from uuid import uuid4
 
-from mediasense.capabilities.geo import GeoAuthorization, GeoQueryTool
 from mediasense.frozen_plan import (
     load_frozen_content_validator,
     load_frozen_plan_validator,
@@ -40,7 +39,6 @@ from ._sqlite import (
     WorkNotFound,
     WorkSnapshot,
 )
-from .geo import PlanGeoAdapter
 
 
 _WORK_REF = re.compile(r"^plan-work:[^\s]+$")
@@ -49,7 +47,7 @@ _REVISION = re.compile(r"^work-revision:[^\s]+$")
 _REQUEST_ID = re.compile(r"^request:[^\s]+$")
 _CONTENT_IDENTITY = re.compile(r"^sha256:[0-9a-f]{64}$")
 _DEFAULT_SECTIONS = ("overview", "preferences", "content", "validation")
-_SECTIONS = (*_DEFAULT_SECTIONS, "geo_evidence")
+_SECTIONS = _DEFAULT_SECTIONS
 _COLLECTIONS = ("groups", "other_outcomes", "decision_notes")
 
 
@@ -87,11 +85,10 @@ class PlanWorkTool:
         *,
         id_factory: Callable[[str], str] | None = None,
         frozen_plan_schema: Path | None = None,
-        geo_tool: GeoQueryTool | None = None,
     ) -> None:
         precheck_boundary = require_precheck_read_boundary(precheck_read)
         self.plan_store = Path(plan_store)
-        self.store = SQLitePlanStore(self.plan_store / "work.sqlite3")
+        self.store = SQLitePlanStore(self.plan_store / "work-v3.sqlite3")
         self.frozen_dir = self.plan_store / "frozen"
         self.precheck_read = precheck_boundary
         self._id_factory = id_factory or (lambda prefix: f"{prefix}:{uuid4()}")
@@ -103,29 +100,17 @@ class PlanWorkTool:
             self.frozen_dir, self._frozen_plan_validator
         )
         self._cursor_signing_key = self.store.cursor_signing_key()
-        self._geo_adapter = (
-            None
-            if geo_tool is None
-            else PlanGeoAdapter(
-                self.store,
-                self.precheck_read,
-                geo_tool,
-                id_factory=self._id_factory,
-            )
-        )
 
     def handle(
         self,
         request: Mapping[str, Any],
         *,
         confirmation: ConfirmationContext | None = None,
-        geo_authorization: GeoAuthorization | None = None,
-        cancelled: Callable[[], bool] | None = None,
     ) -> dict[str, Any]:
         action = request.get("action") if isinstance(request, Mapping) else None
-        if action not in {"create", "update", "inspect", "seal", "enrich_geo"}:
+        if action not in {"create", "update", "inspect", "seal"}:
             raise ValueError(
-                "request action must be create, update, inspect, enrich_geo, or seal"
+                "request action must be create, update, inspect, or seal"
             )
         try:
             if action == "create":
@@ -134,12 +119,6 @@ class PlanWorkTool:
                 return self._update(dict(request))
             if action == "inspect":
                 return self._inspect(dict(request))
-            if action == "enrich_geo":
-                return self._enrich_geo(
-                    dict(request),
-                    authorization=geo_authorization,
-                    cancelled=cancelled,
-                )
             return self._seal(dict(request), confirmation)
         except PlanFailure as exc:
             return _error_response(action, exc)
@@ -193,34 +172,6 @@ class PlanWorkTool:
                     work_ref=_maybe_work_ref(request),
                 ),
             )
-
-    def _enrich_geo(
-        self,
-        request: dict[str, Any],
-        *,
-        authorization: GeoAuthorization | None,
-        cancelled: Callable[[], bool] | None,
-    ) -> dict[str, Any]:
-        if self._geo_adapter is None:
-            raise PlanFailure(
-                "capability_unavailable",
-                "The Geo capability is not configured.",
-                work_ref=_maybe_work_ref(request),
-            )
-        payload = dict(request)
-        payload.pop("action", None)
-        try:
-            return self._geo_adapter.enrich(
-                payload,
-                authorization=authorization,
-                cancelled=cancelled,
-            )
-        except ValueError as error:
-            raise PlanFailure(
-                "invalid_request",
-                str(error),
-                work_ref=_maybe_work_ref(request),
-            ) from error
 
     def snapshot_for_preview(
         self, work_ref: str, revision: str
@@ -303,6 +254,22 @@ class PlanWorkTool:
         if target.get("coverage") not in {"complete", "partial"}:
             raise PlanFailure(
                 "result_not_ready", "The PreCheck Result has unsupported coverage."
+            )
+        geo = self.precheck_read.read(
+            {
+                "result_ref": result_ref,
+                "operation": "geo_summary",
+                "page": {"limit": 1},
+            }
+        )
+        if not isinstance(geo, Mapping) or geo.get("outcome") != "ok":
+            raise PlanFailure(
+                "operation_failed", "PreCheck returned an invalid Geo summary."
+            )
+        if geo.get("acquisition_status") not in {"complete", "not_applicable"}:
+            raise PlanFailure(
+                "result_not_ready",
+                "The PreCheck Result has incomplete required Geo acquisition.",
             )
 
         work_ref = self._id_factory("plan-work")
@@ -480,13 +447,6 @@ class PlanWorkTool:
                 }
             else:
                 values["validation"] = {"seal_ready": True, "issues": []}
-        if "geo_evidence" in sections:
-            returned.append("geo_evidence")
-            values["geo_evidence"] = {
-                "count": len(snapshot.geo_observations),
-                "items": list(snapshot.geo_observations),
-            }
-
         result: dict[str, Any] = {
             "outcome": "ok",
             "action": "inspect",

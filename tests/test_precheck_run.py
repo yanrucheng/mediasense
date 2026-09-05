@@ -15,6 +15,7 @@ from PIL import Image
 from mediasense.precheck import (
     AccountingStore,
     ImageRenditionProducer,
+    PrecheckConfirmationContext,
     PrecheckRunTool,
     ResultStore,
 )
@@ -243,8 +244,9 @@ def test_confirmation_binds_authority_to_the_frozen_work_set(tmp_path: Path) -> 
         summary="Reverse-geocode the frozen representative set.",
         quantity=237,
         unit="logical_queries",
-        skip_allowed=True,
-        pending_fingerprint="sha256:frozen-a",
+        skip_allowed=False,
+        pending_fingerprint="sha256:" + "a" * 64,
+        disclosure={"provider_policy": "unknown"},
     )
     _assert_valid(paused)
     assert paused["state"] == "paused"
@@ -256,10 +258,17 @@ def test_confirmation_binds_authority_to_the_frozen_work_set(tmp_path: Path) -> 
     assert missing_decision["error"]["code"] == "invalid_request"
     assert tool.run({"action": "status", "run_ref": run_ref})["state"] == "paused"
 
-    resumed = tool.run({"action": "resume", "run_ref": run_ref, "decision": "proceed"})
+    resumed = tool.run(
+        {"action": "resume", "run_ref": run_ref, "decision": "proceed"},
+        confirmation=PrecheckConfirmationContext(
+            principal_ref="human:test",
+            confirmed_content_identity="sha256:" + "a" * 64,
+            confirmed_at=datetime.now(timezone.utc),
+        ),
+    )
     _assert_valid(resumed)
     assert (
-        tool.confirmation_decision(run_ref, pending_fingerprint="sha256:frozen-a")
+        tool.confirmation_decision(run_ref, pending_fingerprint="sha256:" + "a" * 64)
         == "proceed"
     )
 
@@ -268,8 +277,9 @@ def test_confirmation_binds_authority_to_the_frozen_work_set(tmp_path: Path) -> 
         summary="Reverse-geocode the frozen representative set.",
         quantity=237,
         unit="logical_queries",
-        skip_allowed=True,
-        pending_fingerprint="sha256:frozen-a",
+        skip_allowed=False,
+        pending_fingerprint="sha256:" + "a" * 64,
+        disclosure={"provider_policy": "unknown"},
     )
     assert still_running["state"] == "running"
 
@@ -278,8 +288,9 @@ def test_confirmation_binds_authority_to_the_frozen_work_set(tmp_path: Path) -> 
         summary="Reverse-geocode the changed representative set.",
         quantity=238,
         unit="logical_queries",
-        skip_allowed=True,
-        pending_fingerprint="sha256:frozen-b",
+        skip_allowed=False,
+        pending_fingerprint="sha256:" + "b" * 64,
+        disclosure={"provider_policy": "unknown"},
     )
     _assert_valid(changed)
     assert changed["state"] == "paused"

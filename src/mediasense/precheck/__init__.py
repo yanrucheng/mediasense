@@ -126,7 +126,8 @@ from .read import (
     PrecheckReadTool,
     require_precheck_read_boundary,
 )
-from .run import PrecheckRunTool
+from ._orchestrator import PrecheckExecutionDependencies
+from .run import PrecheckConfirmationContext, PrecheckRunTool
 from .source_attachment import (
     AttachmentState,
     FilesystemCapabilities,
@@ -243,6 +244,8 @@ __all__ = [
     "ImageRenditionProducer",
     "PrecheckReadBoundary",
     "PrecheckReadTool",
+    "PrecheckExecutionDependencies",
+    "PrecheckConfirmationContext",
     "require_precheck_read_boundary",
     "PrecheckRunTool",
     "RecordedIssue",

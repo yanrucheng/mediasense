@@ -185,12 +185,13 @@ Control operations are target-state idempotent and do not require `request_id`:
 - `resume` requests `running` and returns without waiting for resumed work; and
 - `cancel` requests `cancelled`.
 
-The runtime may also enter `paused` automatically for either source-scope
-selection or a frozen optional work set. A source-scope confirmation contains
-the exact inventory fingerprint and bounded factual inventory. An optional-work
-confirmation contains a concise summary, exact logical quantity, unit, and
-whether the work may be skipped. It does not predict provider-specific calls or
-monetary cost when those are not yet knowable.
+The runtime may also enter `paused` automatically for source-scope selection or
+for the required frozen Geo acquisition boundary. A source-scope confirmation
+contains the exact inventory fingerprint and bounded factual inventory. An
+external-effect confirmation contains its exact content identity, coordinates,
+logical quantity, providers, request ceiling, known cost or `unknown`, provider
+data-handling policy or `unknown`, transmitted data classes, and fixed immutable
+Result retention.
 
 For an ordinary pause, `resume` carries no decision. For a confirmation pause,
 `resume.decision` is required by runtime semantics:
@@ -198,8 +199,10 @@ For an ordinary pause, `resume` carries no decision. For a confirmation pause,
 - a source-scope decision supplies the matching inventory fingerprint, a
   default `include` or `exclude` disposition, and non-overlapping subtree
   exceptions with the opposite disposition;
-- `proceed` authorizes only the frozen pending work reported by the current status;
-- `skip_optional_work` records that optional work as not requested and continues without it, and is accepted only when `confirmation.skip_allowed` is true.
+- `proceed` requires trusted Human confirmation bound to the exact disclosure and
+  authorizes only that frozen pending work; and
+- `decline` terminates the Run with `authorization_declined`, performs no provider
+  request, and publishes no Result.
 
 Before applying a source-scope decision, the worker performs another discovery
 generation. If the inventory changes, the old decision is not applied and the
@@ -212,9 +215,8 @@ If optional pending work changes, the runtime pauses again. A prior decision
 never authorizes a larger or different work set. No separate authorization
 action or public resource entity is introduced.
 
-The Run may execute this fixed batch through a PreCheck-owned engine while reusing
-stage-neutral provider adapters. It is not required to translate the batch into
-Plan-style per-coordinate `mediasense.geo.query` calls. The Result must report the
+The Run executes this fixed batch through a PreCheck-owned engine while reusing
+provider-neutral adapters. There is no public Geo Tool. The Result must report the
 frozen scope, provider route, logical and actual request counts, outcomes, failures,
 and known or unknown billable effects, while proving that media, renditions,
 embeddings, paths, filenames, prompts, and general metadata were not transmitted.

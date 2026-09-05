@@ -900,9 +900,12 @@ def _validate_execution_boundary(boundary: object) -> None:
         raise ResultSealError("external Result lacks authorization evidence")
     for authorization in authorizations:
         if not isinstance(authorization, Mapping) or set(authorization) != {
+            "confirmed_at",
+            "confirmed_content_identity",
             "confirmed_logical_queries",
             "decision",
             "pending_fingerprint",
+            "principal_ref",
             "run_ref",
         }:
             raise ResultSealError("external Result authorization is invalid")
@@ -916,6 +919,12 @@ def _validate_execution_boundary(boundary: object) -> None:
             authorization.get("pending_fingerprint"),
             "authorization pending fingerprint",
         )
+        if authorization.get("confirmed_content_identity") != authorization.get(
+            "pending_fingerprint"
+        ):
+            raise ResultSealError("external Result authorization identity is invalid")
+        _nonempty(authorization.get("principal_ref"), "authorization principal")
+        _nonempty(authorization.get("confirmed_at"), "authorization timestamp")
 
 
 def _validate_access(access: dict[str, object], source_refs: set[str]) -> None:
@@ -963,7 +972,15 @@ def _validate_source_locator(value: object, relative_path: Path) -> None:
 
 
 def _validate_observations(observations: tuple[dict[str, object], ...]) -> None:
-    allowed = {"name", "status", "value", "basis", "confidence", "qualifications"}
+    allowed = {
+        "name",
+        "status",
+        "value",
+        "basis",
+        "confidence",
+        "qualifications",
+        "provenance",
+    }
     statuses = {"available", "missing", "failed", "not_checked", "not_applicable"}
     for observation in observations:
         if not isinstance(observation, dict) or set(observation) - allowed:

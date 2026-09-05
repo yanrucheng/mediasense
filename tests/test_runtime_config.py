@@ -19,35 +19,33 @@ def test_dataset_config_overrides_user_config_and_reports_sources(
     workspace.mkdir()
     dataset = workspace / "config.toml"
     user.write_text(
-        '[runtime]\noffline = true\n[providers]\namap_api_key_env = "USER_AMAP"\n',
+        '[providers]\namap_api_key_env = "USER_AMAP"\n',
         encoding="utf-8",
     )
     dataset.write_text(
-        '[runtime]\noffline = false\n[providers]\namap_api_key_env = "DATASET_AMAP"\n',
+        '[providers]\namap_api_key_env = "DATASET_AMAP"\n',
         encoding="utf-8",
     )
 
     config = load_runtime_config(dataset_workspace=workspace, user_config=user)
 
-    assert config.offline is False
     assert config.amap_api_key_env == "DATASET_AMAP"
     assert config.sources == (user, dataset)
 
 
-def test_explicit_offline_value_overrides_files(tmp_path: Path) -> None:
+def test_legacy_offline_mode_is_rejected(tmp_path: Path) -> None:
     user = tmp_path / "user.toml"
     user.write_text("[runtime]\noffline = false\n", encoding="utf-8")
 
-    config = load_runtime_config(user_config=user, offline=True)
-
-    assert config.offline is True
+    with pytest.raises(ConfigurationError, match="Unknown configuration section"):
+        load_runtime_config(user_config=user)
 
 
 def test_unknown_configuration_is_rejected(tmp_path: Path) -> None:
     user = tmp_path / "user.toml"
     user.write_text("[runtime]\nmagic = true\n", encoding="utf-8")
 
-    with pytest.raises(ConfigurationError, match="Unknown runtime"):
+    with pytest.raises(ConfigurationError, match="Unknown configuration section"):
         load_runtime_config(user_config=user)
 
 

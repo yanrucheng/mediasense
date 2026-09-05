@@ -228,8 +228,7 @@ def test_workspace_inspection_is_read_only(tmp_path: Path) -> None:
     "component,relative_path",
     [
         ("precheck", "precheck/work.sqlite3"),
-        ("plan", "plan/work.sqlite3"),
-        ("geo", "geo/journal.sqlite3"),
+        ("plan", "plan/work-v3.sqlite3"),
         ("apply", "apply/work.sqlite3"),
     ],
 )
@@ -272,8 +271,36 @@ def test_dataset_open_tool_reports_configuration_without_secret_values(
     Draft202012Validator(
         load_contract("mediasense.dataset.open")["outputSchema"]
     ).validate(result)
-    assert result["configuration"]["credentials"]["amap"] == "configured"
+    assert result["configuration"]["providers"]["amap"]["credential"] == "configured"
+    assert result["configuration"]["providers"]["amap"]["capability"] == "available"
+    assert "offline" not in result["configuration"]
     assert "must-not-be-reported" not in json.dumps(result)
+
+
+def test_open_migrates_supported_v1_manifest_without_touching_private_stores(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source"
+    source.mkdir()
+    workspace = tmp_path / "workspace"
+    resolver = DatasetResolver(local_root=tmp_path / "local")
+    resolver.open(source, explicit_workspace=workspace)
+    manifest_path = workspace / "dataset.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["format_version"] = 1
+    manifest["stores"] = {"apply": 2, "geo": 1, "plan": 2, "precheck": 17}
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    historical = workspace / "geo" / "journal.sqlite3"
+    historical.parent.mkdir()
+    historical.write_bytes(b"historical")
+
+    opened = resolver.open(source, explicit_workspace=workspace)
+    migrated = json.loads(manifest_path.read_text(encoding="utf-8"))
+
+    assert opened.created is False
+    assert migrated["format_version"] == 2
+    assert migrated["stores"] == {"apply": 2, "plan": 3, "precheck": 17}
+    assert historical.read_bytes() == b"historical"
 
 
 def test_portable_workspace_survives_mount_path_change(tmp_path: Path) -> None:
