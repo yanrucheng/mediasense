@@ -20,9 +20,9 @@ tags: ["mediasense", "plan", "organization-profile", "default-policy"]
 
 ## Decision
 
-This document defines MediaSense's first mature Organization Profile and the default candidate starting point for the logical media tree proposed during Plan. Event-first organization is adopted as the primary browsing axis only after it fits the Dataset evidence and the Human's future retrieval purpose. When adopted, the profile preserves the useful shape repeatedly observed in the owner's accepted media collections: simple events remain shallow, complex events expand only as needed, related media stay together, and auxiliary or unresolved material remains visibly separated from normal groups.
+This document defines MediaSense's first mature Organization Profile and the default candidate starting point for the logical media tree proposed during Plan. Before selection, event-first organization remains challengeable and may be rejected when it does not fit the Dataset evidence or the Human's future retrieval purpose. Once that fit is established, this profile becomes the active default policy for the Plan: the Agent applies its organization roles and constraints rather than redesigning the primary structure from scratch. The profile preserves the useful shape repeatedly observed in the owner's accepted media collections: simple events remain shallow, complex events expand only as needed, related media stay together, and auxiliary or unresolved material remains visibly separated from normal groups.
 
-This profile is a versioned product policy, not a Tool-managed object. It has no `profile_ref`, registry, independent runtime lifecycle, or public operation. `mediasense.plan.work` continues to store only the exact plan-scoped `organization_preferences` snapshot. The Planning Agent treats this event-first profile as the default candidate starting point, validates it against Dataset evidence and the Human's retrieval purpose, and falls back to first-principles organization design when the candidate clearly does not fit. The Agent writes only the resulting organization into candidate content. A Frozen Plan remains self-contained and does not require this profile to be interpreted or applied.
+This profile is a versioned product policy, not a Tool-managed object. It has no `profile_ref`, registry, independent runtime lifecycle, or public operation. `mediasense.plan.work` continues to store only the exact plan-scoped `organization_preferences` snapshot. The Planning Agent first treats this event-first profile as the default candidate, validates its fit against Dataset evidence and the Human's retrieval purpose, and then either applies the profile as the active default or rejects it explicitly. Clear mismatch returns to another reviewed Profile direction or first-principles organization design; clear fit does not require the Agent to make every organization method compete again. The Agent writes only the resulting organization into candidate content. A Frozen Plan remains self-contained and does not require this profile to be interpreted or applied.
 
 The policy and a complete conforming Frozen Plan example have received Human review. The later Hong Kong exercise remains an end-to-end product acceptance target rather than a prerequisite for this policy. Its naming and folder examples are product proposals, not historical or geographic truth.
 
@@ -64,10 +64,11 @@ Auxiliary and exception containers do not count as semantic grouping levels. A d
 
 ## Event and depth policy
 
-- Once this profile has been selected, the event is the primary Human browsing unit.
+- Once this profile has been selected, the event is the primary Human browsing unit and its defaults govern unless explicit Human preference or reviewed Dataset evidence justifies a visible departure.
 - A small or semantically coherent event places its media directly in the event directory. Plan must not create a one-child chapter or content-group directory merely to reproduce a nominal hierarchy.
-- A large or heterogeneous event may add chapters when they make distinct days, places, or themes materially easier to browse.
-- A chapter may add ordered content groups when several meaningful scenes or activities would otherwise be mixed together.
+- A large or heterogeneous event adds chapters when distinct days, places, activities, or themes make it materially easier to browse. Date commonly preserves chronology; place, activity, or theme supplies useful recall semantics when trustworthy.
+- A chapter adds ordered content groups when several meaningful scenes or activities would otherwise remain mixed together. A broad time-of-day bucket is not an adequate final group merely because it is deterministic when available Evidence supports a more useful scene distinction.
+- Time remains available for boundaries, ordering, and chapter identity. The profile does not discard time when it uses place, activity, theme, or scene as a stronger retrieval cue.
 - The Planning Agent decides whether a distinction is meaningful from available evidence and Human intent. File counts, geographic distances, embedding thresholds, cluster weights, and model pipelines are replaceable methods and are not part of this profile.
 
 ## Naming and ordering
@@ -125,6 +126,7 @@ The Frozen Plan must still account for every in-scope Source Item. If later Appl
 - Dataset evidence may refute this candidate or justify an adapted form. The Agent must present a material or easily misunderstood selection, departure, or adaptation for Human review.
 - `organization_preferences` records the exact preferences used by one Plan Working State; it is not a pointer to this document and does not make the Tool choose names or groups.
 - An empty `organization_preferences` snapshot means that no explicit Human preference is currently stored. It neither selects nor confirms this profile.
+- Agent selection of this Profile is Agent judgment, not a Human preference. Do not record a Profile label in `organization_preferences` unless the Human actually expressed that preference; retain material Agent rationale and departures as Plan decision notes instead.
 - The Frozen Plan contains final paths, memberships, source-name overrides, and justified other outcomes. It does not store a dependency on this profile.
 - Apply executes the Frozen Plan exactly. It must not reinterpret this profile or make new organization decisions.
 
@@ -165,7 +167,7 @@ The Hong Kong labels above are product proposals only. When the real Hong Kong a
 
 ## Acceptance boundary
 
-This active profile is accepted as a mature candidate starting point, not as a universally applicable organization answer. The accompanying complete proposed Frozen Plan demonstrates that the existing artifact contract can express:
+This profile is accepted as a mature conditional default: it is challengeable before fit is established and prescriptive after selection, not a universally applicable organization answer. The accompanying complete proposed Frozen Plan demonstrates that the existing artifact contract can express:
 
 - a folded small event;
 - a multi-day or otherwise complex event with ordered groups;
