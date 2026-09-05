@@ -16,6 +16,39 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
 
+EXPECTED_TOOLS = {
+    "mediasense.dataset.open",
+    "mediasense.precheck.run",
+    "mediasense.precheck.read",
+    "mediasense.plan.work",
+    "mediasense.apply.run",
+    "mediasense.apply.read",
+}
+EXPECTED_CONTRACT_FILES = {
+    "apply-read.tool.json",
+    "apply-receipt.schema.json",
+    "apply-run.tool.json",
+    "dataset-open.tool.json",
+    "frozen-plan.schema.json",
+    "plan-work.tool.json",
+    "precheck-read.tool.json",
+    "precheck-run.tool.json",
+}
+EXPECTED_SKILL_FILES = {
+    "mediasense/SKILL.md",
+    "mediasense/agents/openai.yaml",
+    "mediasense-apply/SKILL.md",
+    "mediasense-apply/agents/openai.yaml",
+    "mediasense-plan/SKILL.md",
+    "mediasense-plan/agents/openai.yaml",
+    "mediasense-plan/references/organization-profiles.md",
+    "mediasense-precheck/SKILL.md",
+    "mediasense-precheck/agents/openai.yaml",
+    "mediasense-precheck/references/precheck-read.tool.json",
+    "mediasense-precheck/references/precheck-run.tool.json",
+}
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("wheel", type=Path)
@@ -82,8 +115,11 @@ def main() -> int:
             environment=environment,
             cwd=root,
         )
-        if len(tools["tools"]) != 7:
-            raise AssertionError("installed Tool discovery did not return seven Tools")
+        tool_names = {str(tool["name"]) for tool in tools["tools"]}
+        if tool_names != EXPECTED_TOOLS:
+            raise AssertionError(
+                f"installed Tool discovery mismatch: {sorted(tool_names)}"
+            )
         first = _json_run(
             [str(executable), "dataset", "open", str(source), "--json"],
             environment=environment,
@@ -228,8 +264,11 @@ async def _mcp_scenario(
                 "installed MCP server version is not the installed CLI version"
             )
         listed = await session.list_tools()
-        if len(listed.tools) != 7:
-            raise AssertionError("installed MCP discovery did not return seven Tools")
+        tool_names = {tool.name for tool in listed.tools}
+        if tool_names != EXPECTED_TOOLS:
+            raise AssertionError(
+                f"installed MCP discovery mismatch: {sorted(tool_names)}"
+            )
         for tool in listed.tools:
             metadata = tool.meta or {}
             if not str(metadata.get("contract_id", "")).startswith("urn:mediasense:"):
@@ -314,14 +353,26 @@ def _verify_wheel(wheel: Path, expected_version: str) -> None:
         )
         metadata = archive.read(metadata_name).decode()
         entry_points = archive.read(entry_name).decode()
-        contracts = [name for name in names if "/_resources/contracts/" in name]
-        skill_files = [name for name in names if "/_resources/skills/" in name]
+        contracts = {
+            name.split("/_resources/contracts/", maxsplit=1)[1]
+            for name in names
+            if "/_resources/contracts/" in name
+        }
+        skill_files = {
+            name.split("/_resources/skills/", maxsplit=1)[1]
+            for name in names
+            if "/_resources/skills/" in name
+        }
     if f"Version: {expected_version}" not in metadata:
         raise AssertionError("wheel metadata version does not match pyproject.toml")
     if "mediasense = mediasense.cli:main" not in entry_points:
         raise AssertionError("wheel does not contain the mediasense entry point")
-    if len(contracts) != 9 or len(skill_files) != 10:
-        raise AssertionError("wheel does not contain the required contracts and Skills")
+    if contracts != EXPECTED_CONTRACT_FILES:
+        raise AssertionError(
+            f"wheel contract resources mismatch: {sorted(contracts)}"
+        )
+    if skill_files != EXPECTED_SKILL_FILES:
+        raise AssertionError(f"wheel Skill resources mismatch: {sorted(skill_files)}")
 
 
 def _run(command: list[str], *, environment: dict[str, str], cwd: Path) -> str:

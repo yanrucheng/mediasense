@@ -117,6 +117,84 @@ def _assert_response_conforms(response: dict[str, object]) -> None:
     Draft202012Validator(schema["outputSchema"]).validate(response)
 
 
+def test_geo_summary_source_set_stays_bounded_for_high_fanout_coordinate() -> None:
+    result_ref = "precheck-result:high-fanout"
+    evidence_ref = "evidence:geo-high-fanout"
+    coordinate = {"latitude": 22.3193, "longitude": 114.1694, "datum": "WGS84"}
+    source_refs = [f"source-item:{index:05d}" for index in range(10_000)]
+    graph = precheck_read_module._ResultGraph(
+        {
+            "result": {"kind": "result", "ref": result_ref},
+            "dataset": {},
+            "sources": [
+                {
+                    "view": {
+                        "kind": "source_item",
+                        "ref": source_ref,
+                        "observations": [
+                            {
+                                "name": "gps_coordinates",
+                                "status": "available",
+                                "value": coordinate,
+                            }
+                        ],
+                    }
+                }
+                for source_ref in source_refs
+            ],
+            "evidence": [
+                {
+                    "view": {
+                        "kind": "evidence",
+                        "ref": evidence_ref,
+                        "observations": [
+                            {
+                                "name": "reverse_geocode_candidate",
+                                "status": "available",
+                                "value": {"formatted_address": "Hong Kong"},
+                                "provenance": {"provider": "fake_maps"},
+                                "qualifications": [],
+                            }
+                        ],
+                    }
+                }
+            ],
+            "relationships": [
+                *[
+                    {
+                        "origin": result_ref,
+                        "relation": "accounts_for",
+                        "member": {"target": source_ref, "scope": "source_media"},
+                    }
+                    for source_ref in source_refs
+                ],
+                *[
+                    {
+                        "origin": evidence_ref,
+                        "relation": "represents",
+                        "member": {"target": source_ref},
+                    }
+                    for source_ref in source_refs
+                ],
+            ],
+        }
+    )
+
+    projection = precheck_read_module._geo_projection(graph)
+    group = projection["coordinate_groups"][0]
+
+    assert group["member_count"] == len(source_refs)
+    assert group["source_set"] == {
+        "kind": "geo_coordinate",
+        "coordinate": coordinate,
+        "selection_rule": "gpx_over_gps_exact_normalized_v1",
+    }
+    assert precheck_read_module._encoded_size(group) < 512 * 1024
+    assert precheck_read_module._resolve_source_set(
+        graph, group["source_set"]
+    ) == frozenset(source_refs)
+
+
 def test_end_to_end_result_is_sealed_and_read_only_through_exact_reference(
     tmp_path: Path,
 ) -> None:

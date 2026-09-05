@@ -14,7 +14,7 @@ Apply semantics in their independently loadable Skills.
 
 This Skill set targets the MediaSense `0.7.x` CLI and its bundled Tool contracts.
 If the compatible CLI and complete release-matched Skill set are present and all
-seven exact Tool names below are already discoverable in the current session, do
+six exact Tool names below are already discoverable in the current session, do
 not repeat setup. A `mediasense` command in `PATH`, installed Skill files, or a
 configuration file on disk is not proof that the current Agent session has loaded
 the Tool Host.

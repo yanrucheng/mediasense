@@ -655,6 +655,19 @@ def test_reused_query_restores_route_and_sequence_is_a_work_dependency(
     )
     assert pending.status == "confirmation_required"
     assert pending.batch.pending_query_count == 1
+    assert pending.batch.logical_query_count == 2
+    status = run_tool.run({"action": "status", "run_ref": second_public_ref})
+    disclosure = status["confirmation"]["disclosure"]
+    assert status["confirmation"]["quantity"] == 1
+    assert status["confirmation"]["content_identity"] == (
+        pending.batch.pending_fingerprint
+    )
+    assert disclosure["frozen_batch_identity"] == pending.batch.batch_fingerprint
+    assert disclosure["coordinates"] == [
+        GeoCoordinate(31.2304, 121.4737, MapDatum.WGS84).value()
+    ]
+    assert disclosure["max_provider_requests"] == 6
+    assert pending.batch.pending_fingerprint != pending.batch.batch_fingerprint
     _authorize(run_tool, second_public_ref)
     completed = second_producer.produce(
         second_public_ref,
@@ -666,7 +679,9 @@ def test_reused_query_restores_route_and_sequence_is_a_work_dependency(
     assert completed.outcomes[0].reused is True
     assert completed.outcomes[0].work.work_id == first_work_id
     assert second_google.calls == []
-    assert len(second_amap.calls) == 1
+    assert second_amap.calls == [
+        (GeoCoordinate(31.2304, 121.4737, MapDatum.WGS84), "zh")
+    ]
     chained = completed.outcomes[1].work
     assert any(
         dependency.kind is DependencyKind.UPSTREAM_WORK
@@ -972,6 +987,15 @@ def test_sealed_result_exposes_candidates_and_external_effect_proof(
     assert summary["coordinate_groups"][0]["member_count"] == 2
     assert summary["coordinate_groups"][0]["reverse_geocode"] == "success"
     assert len(summary["coordinate_groups"][0]["candidate_evidence_refs"]) == 1
+    assert summary["coordinate_groups"][0]["source_set"]["kind"] == "geo_coordinate"
+    resolved_members = reader.read(
+        {
+            "result_ref": sealed.result_ref,
+            "operation": "resolve",
+            "source_set": summary["coordinate_groups"][0]["source_set"],
+        }
+    )
+    validator.validate(resolved_members)
     assert set(
-        summary["coordinate_groups"][0]["source_set"]["source_item_refs"]
+        item["source_item_ref"] for item in resolved_members["members"]
     ) == {item["source_item_ref"] for item in accounts["members"]}

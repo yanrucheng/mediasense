@@ -103,7 +103,7 @@ estimates and unknowns. Include what is material among:
 
 - completed, reused, remaining, and blocked local work and resource pressure;
 - the compression frontier and represented population;
-- the exact pending logical-query count for the optional coordinate lookup;
+- the exact pending logical-query count for required coordinate acquisition;
 - the expected downstream Evidence-review and user-attention burden; and
 - after publication, actual provider requests, fallback or retries, and known
   or unknown billable calls from the Result execution boundary.
@@ -178,9 +178,13 @@ ambiguity.
    provider data-handling policy from the disclosure.
 3. Explain that media, renditions, features, prompts, and ordinary metadata are
    not authorized to leave the local boundary.
-4. Obtain trusted Human confirmation bound to the exact disclosure identity, or
-   submit the Human's decline. Do not request per-coordinate confirmation,
-   synthesize confirmation, or reuse it for a changed batch.
+4. Request `resume` with the intended `proceed` or `decline` decision. For an
+   external-effect `proceed`, the MCP Host must obtain trusted Human confirmation bound to the exact disclosure identity
+   through session elicitation and create the trusted confirmation context only
+   after acceptance; never place a
+   caller-authored `authority` object in the MCP request. Do not request
+   per-coordinate confirmation, synthesize confirmation, or reuse it for a
+   changed pending effect set.
 
 A decline ends the Run without a Plan-ready Result. `provider_unavailable` is a
 different terminal condition and must be reported before asking for authority.
@@ -222,7 +226,9 @@ failures, and externally observable cost. Follow each card's
 
 Read `geo_summary` before handoff. A valid Result reports Geo acquisition as
 `complete` or `not_applicable`; `incomplete` means the Result cannot enter Plan
-even if a historical readiness field says `plan_ready`.
+even if a historical readiness field says `plan_ready`. Each coordinate group
+contains a compact `geo_coordinate` Source Set; pass it unchanged to paged
+`resolve` when exact members are needed instead of expecting all refs inline.
 
 Every accounted Source Item must remain reachable through the normal Evidence
 frontier or an explicit auxiliary, excluded, unsupported, invalid, error, or

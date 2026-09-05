@@ -33,6 +33,122 @@ class FailingRuntimeHost:
         raise self.error
 
 
+class GeoElicitationRuntimeHost:
+    content_identity = "sha256:" + "a" * 64
+    disclosure = {
+        "frozen_batch_identity": "sha256:" + "b" * 64,
+        "operation": "reverse_geocode",
+        "coordinates": [
+            {"latitude": 22.3193, "longitude": 114.1694, "datum": "WGS84"}
+        ],
+        "transmitted_data_classes": ["coordinate", "datum", "locale"],
+        "providers": [
+            {
+                "provider": "fake_maps",
+                "data_handling": "unknown",
+                "max_provider_requests": 1,
+            }
+        ],
+        "max_provider_requests": 1,
+        "billable_calls": "unknown",
+        "result_retention": "immutable_precheck_result",
+    }
+
+    def __init__(self) -> None:
+        self.authorities: list[object] = []
+        self.provider_coordinates: list[object] = []
+
+    def call_tool(
+        self,
+        name: str,
+        *,
+        dataset_ref: str,
+        request: dict[str, object],
+        authority: object = None,
+    ) -> dict[str, object]:
+        assert name == "mediasense.precheck.run"
+        assert dataset_ref == "dataset:test"
+        if request.get("action") == "status":
+            return {
+                "outcome": "ok",
+                "action": "status",
+                "run_ref": "precheck-run:test",
+                "state": "paused",
+                "confirmation": {
+                    "kind": "external_effect",
+                    "content_identity": self.content_identity,
+                    "disclosure": self.disclosure,
+                },
+            }
+        self.authorities.append(authority)
+        if request.get("decision") == "decline":
+            return {
+                "outcome": "accepted",
+                "action": "resume",
+                "run_ref": "precheck-run:test",
+                "observed_state": "paused",
+                "target_state": "cancelled",
+            }
+        if authority is None:
+            return {
+                "outcome": "error",
+                "action": "resume",
+                "run_ref": "precheck-run:test",
+                "error": {
+                    "code": "authorization_required",
+                    "message": "Human authorization is required.",
+                },
+            }
+        self.provider_coordinates.extend(self.disclosure["coordinates"])
+        return {
+            "outcome": "accepted",
+            "action": "resume",
+            "run_ref": "precheck-run:test",
+            "observed_state": "paused",
+            "target_state": "running",
+        }
+
+
+async def _mcp_geo_resume(
+    runtime: GeoElicitationRuntimeHost,
+    elicitation_callback=None,
+) -> types.CallToolResult:
+    server_to_client_send, server_to_client_receive = (
+        anyio.create_memory_object_stream(10)
+    )
+    client_to_server_send, client_to_server_receive = (
+        anyio.create_memory_object_stream(10)
+    )
+    server = create_mcp_server(runtime)  # type: ignore[arg-type]
+    result: types.CallToolResult
+    async with anyio.create_task_group() as group:
+        group.start_soon(
+            server.run,
+            client_to_server_receive,
+            server_to_client_send,
+            server.create_initialization_options(),
+        )
+        async with ClientSession(
+            server_to_client_receive,
+            client_to_server_send,
+            elicitation_callback=elicitation_callback,
+        ) as session:
+            await session.initialize()
+            result = await session.call_tool(
+                "mediasense.precheck.run",
+                {
+                    "dataset_ref": "dataset:test",
+                    "request": {
+                        "action": "resume",
+                        "run_ref": "precheck-run:test",
+                        "decision": "proceed",
+                    },
+                },
+            )
+        group.cancel_scope.cancel()
+    return result
+
+
 def _host_error(
     error: Exception, *, arguments: dict | None = None
 ) -> dict[str, object]:
@@ -56,6 +172,73 @@ def _host_error(
         return json.loads(result.content[0].text)
 
     return anyio.run(scenario)
+
+
+def test_mcp_geo_resume_uses_session_elicitation_as_trusted_authority() -> None:
+    prompts: list[str] = []
+
+    async def approve(_context, params):
+        prompts.append(params.message)
+        return types.ElicitResult(action="accept", content={"approve": True})
+
+    async def decline(_context, _params):
+        return types.ElicitResult(action="decline")
+
+    async def fail(_context, _params):
+        return types.ErrorData(
+            code=types.INTERNAL_ERROR,
+            message="elicitation implementation failed",
+        )
+
+    async def scenario() -> None:
+        accepted_runtime = GeoElicitationRuntimeHost()
+        accepted = await _mcp_geo_resume(accepted_runtime, approve)
+        assert accepted.is_error is False
+        assert accepted.structured_content is not None
+        assert accepted.structured_content["target_state"] == "running"
+        assert accepted_runtime.provider_coordinates == (
+            accepted_runtime.disclosure["coordinates"]
+        )
+        assert accepted_runtime.authorities == [
+            {
+                "principal_ref": "human:mcp-elicitation",
+                "confirmed_content_identity": accepted_runtime.content_identity,
+                "confirmed_at": accepted_runtime.authorities[0]["confirmed_at"],
+            }
+        ]
+        assert "22.3193" in prompts[0]
+        assert '"max_provider_requests": 1' in prompts[0]
+
+        declined_runtime = GeoElicitationRuntimeHost()
+        declined = await _mcp_geo_resume(declined_runtime, decline)
+        assert declined.is_error is False
+        assert declined.structured_content is not None
+        assert declined.structured_content["target_state"] == "cancelled"
+        assert declined_runtime.authorities == [None]
+        assert declined_runtime.provider_coordinates == []
+
+        unsupported_runtime = GeoElicitationRuntimeHost()
+        unsupported = await _mcp_geo_resume(unsupported_runtime)
+        assert unsupported.structured_content is not None
+        assert unsupported.structured_content["error"]["code"] == (
+            "authorization_required"
+        )
+        assert unsupported_runtime.authorities == [None]
+        assert unsupported_runtime.provider_coordinates == []
+
+        failed_runtime = GeoElicitationRuntimeHost()
+        failed = await _mcp_geo_resume(failed_runtime, fail)
+        assert failed.is_error is True
+        assert failed.structured_content is None
+        failed_payload = json.loads(failed.content[0].text)
+        assert failed_payload["error"]["code"] == "host_operation_failed"
+        assert "elicitation implementation failed" not in (
+            failed_payload["error"]["message"]
+        )
+        assert failed_runtime.authorities == []
+        assert failed_runtime.provider_coordinates == []
+
+    anyio.run(scenario)
 
 
 def test_mcp_host_reports_request_binding_failure() -> None:
@@ -106,6 +289,7 @@ def test_stdio_mcp_handshake_discovery_and_non_destructive_call(
             precheck_run = next(
                 tool for tool in listed.tools if tool.name == "mediasense.precheck.run"
             )
+            assert "authority" not in precheck_run.input_schema["properties"]
             assert precheck_run.input_schema["properties"]["request"]["$id"] == (
                 "urn:mediasense:tool:precheck-run-input"
             )

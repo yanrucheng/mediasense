@@ -105,7 +105,7 @@ remaining setup guidance and installs the complete release-matched Skill set:
 6. Start a new Agent session from the trusted Honeycomb. Codex only loads project
    `.codex/` configuration for trusted projects, and an already-running session
    normally does not acquire a newly added MCP server.
-7. Discover Tools in the new session and verify all seven exact names listed
+7. Discover Tools in the new session and verify all six exact names listed
    above. File presence or CLI availability alone is not acceptance evidence.
 8. Only then route the request: begin PreCheck for a source that needs preparation,
    enter Plan for an exact Plan-ready `result_ref`, or enter Apply for an exact
@@ -115,7 +115,8 @@ The intended first request can remain simple:
 
 ```text
 Prepare /Volumes/PhotoDisk/Photos with MediaSense. Keep the source read-only and
-do not use network providers.
+before any Provider request show me the exact pending-coordinate disclosure and
+wait for my authorization.
 ```
 
 ## Codex scope and trust
@@ -133,6 +134,13 @@ official documentation:
 The native `codex mcp add` command currently targets user configuration, so it is
 not the default MediaSense setup route. User-wide Skill installation is likewise
 an explicit advanced choice, never the first-use default.
+
+When `mediasense.precheck.run` pauses for an external effect, its MCP `resume`
+request carries the intended decision but no caller-authored authority object.
+The MediaSense MCP Host uses the connected session's elicitation channel to show
+the exact pending disclosure and constructs the confirmation context only after
+the Human accepts. A client without elicitation support leaves the Run paused and
+causes no Provider request.
 
 ## Other MCP clients
 

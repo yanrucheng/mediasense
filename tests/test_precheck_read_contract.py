@@ -148,10 +148,36 @@ def test_mock_requests_and_responses_conform() -> None:
         "review",
         "expand",
         "resolve",
+        "geo_summary",
     }
     for exchange in mock["exchanges"]:
         input_validator.validate(exchange["request"])
         output_validator.validate(exchange["response"])
+
+
+def test_geo_summary_mock_is_human_reviewable_and_resolvable() -> None:
+    mock = _load("hong-kong.mock.json")
+    summary = next(
+        exchange["response"]
+        for exchange in mock["exchanges"]
+        if exchange["request"]["operation"] == "geo_summary"
+    )
+
+    assert summary["acquisition_status"] == "complete"
+    assert summary["deduplication"] == {
+        "rule": "exact_normalized_coordinate_v1",
+        "fields": ["latitude", "longitude", "datum"],
+        "rounding": "none",
+    }
+    group = summary["coordinate_groups"][0]
+    assert group["member_count"] == 3
+    assert group["source_set"]["kind"] == "geo_coordinate"
+    assert group["reverse_geocode"] == "success"
+    assert group["candidate_evidence_refs"]
+    assert group["provenance"][0]["provider"] == "amap"
+    assert group["qualifications"][0]["code"] == (
+        "provider_candidate_not_place_truth"
+    )
 
 
 def test_review_mock_carries_reconciliation_and_no_semantic_decision() -> None:

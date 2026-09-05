@@ -155,6 +155,7 @@ as data rather than upgraded into a Tool failure.
 - explicit Result-local Source Item refs;
 - outbound Result `accounts_for`;
 - outbound Evidence `represents`;
+- one exact normalized `geo_coordinate` under the declared GPX-over-GPS rule;
 - unions; and
 - differences.
 
@@ -179,10 +180,12 @@ resolution proves no retrieval value or organization meaning.
 `geo_summary` is a deterministic, paged projection over the exact immutable
 Result. It reports GPS and GPX observation states, conflicting observations, the
 exact no-rounding coordinate deduplication rule, and one ordered record per unique
-coordinate. Each record contains its explicit Result-bound Source Set,
-reverse-geocode outcome, provider candidate Evidence references, provenance, and
-qualifications. `not_applicable` means no coordinate entered the frozen batch;
-`incomplete` prevents Plan entry.
+coordinate. Each record contains its member count and a compact Result-bound
+`geo_coordinate` Source Set whose exact members are retrieved through paged
+`resolve`, plus reverse-geocode outcome, Provider candidate Evidence references,
+provenance, and qualifications. `not_applicable` means no coordinate entered the
+frozen batch; `incomplete` prevents Plan entry. A large same-coordinate population
+therefore cannot make one `geo_summary` item exceed the response byte limit.
 
 The operation performs no provider request and does not infer an event, a true
 place, a grouping, or a directory name.

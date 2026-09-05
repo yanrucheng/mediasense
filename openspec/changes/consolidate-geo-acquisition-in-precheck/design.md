@@ -93,13 +93,16 @@ provider configuration changes.
 Alternative rejected: publish a locally complete partial Result. It repeats the
 0.7.1 defect by turning an internal stage boundary into a successful handoff.
 
-### 2. Authorization binds the frozen batch and full disclosure
+### 2. Authorization binds the pending effect set within the frozen batch
 
 The existing Run confirmation checkpoint remains the one attention boundary, but
 its external-effect confirmation becomes non-optional and content-addressed. The
-confirmation content includes:
+Run keeps two identities with different purposes: the full frozen-batch identity
+includes reused and pending queries so routing and reuse remain reproducible; the
+external-effect identity includes only queries that can still leave the process.
+The confirmation content includes:
 
-- every exact normalized coordinate and the batch fingerprint;
+- every exact normalized coordinate still pending and the parent batch identity;
 - operation and transmitted data classes;
 - configured provider identities and maximum provider-request ceiling;
 - known cost ceiling or explicit `unknown`;
@@ -107,12 +110,14 @@ confirmation content includes:
 - fixed Result retention for accepted observations.
 
 `resume` with `proceed` requires transport-only trusted Human confirmation whose
-`confirmed_content_identity` equals this content identity. The authority is stored
-with the Run decision and copied into completed Work provenance. A plain request
-field, an old decision, credentials, or a changed batch is insufficient. `decline`
-needs no effect authority and terminates the Run. Because the MCP resume request
-contains only the Run reference, decision, and trusted content identity, exact
-coordinates do not enter a separate public effectful Provider Tool call.
+`confirmed_content_identity` equals the external-effect identity. The authority is
+stored with the Run decision and copied into completed Work provenance. A plain
+business-request field, an old decision, credentials, or a changed batch is
+insufficient. `decline` needs no effect authority and terminates the Run. The MCP
+adapter obtains the decision through the connected session's Human-elicitation
+channel and constructs the confirmation context internally; caller-authored JSON
+is not promoted to trusted PreCheck authority. Exact coordinates remain inside
+the PreCheck Run disclosure and never enter a second public Provider Tool call.
 
 Unknown provider policy is not encoded as `none`: it appears as `unknown` inside
 the exact content the Human accepts. Accepted candidate observations always belong
@@ -165,13 +170,19 @@ entire response from the verified immutable Result and reports:
 - GPS and GPX observation-state counts plus combined available, missing, failed,
   and conflicting Source Item counts;
 - exact normalized-coordinate deduplication rule and unique-coordinate count;
-- per coordinate: member count, explicit Result-bound Source Set, acquisition
+- per coordinate: member count, compact Result-bound Source Set, acquisition
   outcome, candidate Evidence refs, provenance, and qualifications; and
 - overall acquisition status: `not_applicable`, `complete`, or `incomplete`.
 
-The projection performs no I/O beyond ordinary Result verification, no provider
-request, and no semantic inference. Pagination order is canonical coordinate key.
-Tests compare the projection with exhaustive Result traversal.
+The Source Set is a compact `geo_coordinate` expression in the existing
+Result-bound Source Set grammar. Exact members are retrieved through the existing
+paged `resolve` operation instead of being embedded without bound in one
+coordinate-group item. The expression repeats the declared GPX-over-GPS selection
+rule rather than persisting a new cluster or Artifact. The projection performs no
+I/O beyond ordinary Result verification, no provider request, and no semantic
+inference. Pagination order is canonical coordinate key. Tests compare the
+projection with exhaustive Result traversal and cover a single high-fanout
+coordinate without exceeding the response byte limit.
 
 Alternative rejected: add a Geo summary Tool or retained summary Artifact. Both
 duplicate the Result authority and lifecycle.
@@ -222,7 +233,11 @@ providers or spies directly; product semantics do not need a global mode.
   and require Human confirmation bound to it; never translate it to `none`.
 - **[Geo summary could drift from exhaustive Result semantics]** → Share one
   canonical coordinate parser/precedence rule and test projection equivalence
-  against complete Result traversal.
+  against complete Result traversal. Keep each group bounded by returning a
+  resolvable relationship Source Set rather than embedding every member ref.
+- **[The MCP client may not support Human elicitation]** → Leave the Run paused
+  with `authorization_required` and perform zero Provider requests; never accept a
+  caller-authored authority object as a fallback.
 - **[Removing Plan Geo breaks current callers]** → Zero BC is explicit. Remove
   schemas, dispatch, Skill guidance, fixtures, and tests together so no false
   partial compatibility remains.
@@ -254,4 +269,3 @@ dual path: once shipped, a successor PreCheck Result is required for Plan.
 
 None. Product ownership, Zero BC, provider-policy handling, and the absence of new
 public entities are decided by this change.
-

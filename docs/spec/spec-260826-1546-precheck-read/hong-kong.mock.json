@@ -21,11 +21,13 @@
           "coverage": "partial",
           "readiness": "plan_ready",
           "integrity": "valid",
-          "execution_boundary": {
-            "billable_calls": 0,
-            "network_access": false,
-            "remote_models": false,
-            "source_read_only": true
+      "execution_boundary": {
+        "billable_calls": "unknown",
+        "logical_external_queries": 1,
+        "network_access": true,
+        "provider_requests": 1,
+        "remote_models": false,
+        "source_read_only": true
           },
           "qualifications": [
             {
@@ -352,6 +354,72 @@
         "page": {
           "returned": 2,
           "total": 2,
+          "complete": true,
+          "stop_reason": "complete"
+        }
+      }
+    },
+    {
+      "request": {
+        "operation": "geo_summary",
+        "result_ref": "precheck-result:hk-review-slice-002",
+        "page": { "limit": 50 }
+      },
+      "response": {
+        "outcome": "ok",
+        "operation": "geo_summary",
+        "result_ref": "precheck-result:hk-review-slice-002",
+        "acquisition_status": "complete",
+        "coordinate_evidence": {
+          "gps": { "available": 3, "missing": 2, "failed": 0, "conflicting": 0 },
+          "gpx": { "available": 0, "missing": 5, "failed": 0, "conflicting": 0 },
+          "combined": { "available": 3, "missing": 2, "failed": 0, "conflicting": 0 }
+        },
+        "deduplication": {
+          "rule": "exact_normalized_coordinate_v1",
+          "fields": ["latitude", "longitude", "datum"],
+          "rounding": "none"
+        },
+        "unique_coordinate_count": 1,
+        "coordinate_groups": [
+          {
+            "coordinate": {
+              "latitude": 22.3193,
+              "longitude": 114.1694,
+              "datum": "WGS84"
+            },
+            "member_count": 3,
+            "source_set": {
+              "kind": "geo_coordinate",
+              "coordinate": {
+                "latitude": 22.3193,
+                "longitude": 114.1694,
+                "datum": "WGS84"
+              },
+              "selection_rule": "gpx_over_gps_exact_normalized_v1"
+            },
+            "reverse_geocode": "success",
+            "candidate_evidence_refs": ["evidence:geo-hong-kong-candidate"],
+            "provenance": [
+              {
+                "method": "adaptive_reverse_geocode_v1",
+                "provider": "amap",
+                "observed_at": "2026-05-03T12:00:00+00:00"
+              }
+            ],
+            "qualifications": [
+              {
+                "code": "provider_candidate_not_place_truth",
+                "effect": "limits_interpretation",
+                "message": "The Provider response is a candidate observation, not confirmed place truth."
+              }
+            ]
+          }
+        ],
+        "page": {
+          "order": "latitude_longitude_datum",
+          "returned": 1,
+          "total": 1,
           "complete": true,
           "stop_reason": "complete"
         }

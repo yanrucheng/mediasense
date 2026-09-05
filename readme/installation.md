@@ -149,7 +149,7 @@ MediaSense `0.7.0` replaces the public PreCheck Read `inspect` and `traverse`
 operations with `review`, `expand`, and `resolve`, without a compatibility
 layer. Replace an older tool environment with the exact trusted current `0.7.x`
 artifact; do not keep both under the same `mediasense` command or infer
-compatibility from seven-Tool discovery alone:
+compatibility from six-Tool discovery alone:
 
 ```bash
 uv tool install --force ./dist/mediasense-0.7.1-py3-none-any.whl

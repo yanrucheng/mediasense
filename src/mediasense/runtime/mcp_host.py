@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 import json
 import logging
+from collections.abc import Mapping
 from typing import Any
 from uuid import uuid4
 
@@ -11,6 +13,7 @@ import anyio
 from mcp import types
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
+from mcp.shared.exceptions import NoBackChannelError
 
 from .composition import HostRequestError, ToolDescriptor, tool_descriptors
 from .host import RuntimeHost
@@ -58,8 +61,19 @@ def create_mcp_server(host: RuntimeHost | None = None) -> Server[Any]:
                     raise HostRequestError("dataset_ref must be a non-empty string")
                 if not isinstance(request, dict):
                     raise HostRequestError("request must be an object")
+                if params.name == "mediasense.precheck.run" and "authority" in arguments:
+                    raise HostRequestError(
+                        "PreCheck authority is supplied only by MCP Human elicitation"
+                    )
                 if authority is not None and not isinstance(authority, dict):
                     raise HostRequestError("authority must be an object")
+                if params.name == "mediasense.precheck.run":
+                    request, authority = await _elicit_precheck_authority(
+                        _context,
+                        runtime,
+                        dataset_ref,
+                        request,
+                    )
                 result = await anyio.to_thread.run_sync(
                     lambda: runtime.call_tool(
                         params.name,
@@ -125,25 +139,27 @@ def _mcp_tool(descriptor: ToolDescriptor) -> types.Tool:
     if descriptor.name == "mediasense.dataset.open":
         input_schema = descriptor.input_schema
     else:
+        properties: dict[str, object] = {
+            "dataset_ref": {
+                "type": "string",
+                "pattern": "^dataset:[^\\s]+$",
+                "description": "Exact identity returned by mediasense.dataset.open.",
+            },
+            "request": descriptor.input_schema,
+        }
+        if descriptor.name != "mediasense.precheck.run":
+            properties["authority"] = {
+                "type": "object",
+                "description": (
+                    "Transport-only confirmation or effect authorization; omitted "
+                    "for operations that do not require it."
+                ),
+            }
         input_schema = {
             "type": "object",
             "additionalProperties": False,
             "required": ["dataset_ref", "request"],
-            "properties": {
-                "dataset_ref": {
-                    "type": "string",
-                    "pattern": "^dataset:[^\\s]+$",
-                    "description": "Exact identity returned by mediasense.dataset.open.",
-                },
-                "request": descriptor.input_schema,
-                "authority": {
-                    "type": "object",
-                    "description": (
-                        "Transport-only trusted confirmation or effect authorization; "
-                        "omitted for operations that do not require it."
-                    ),
-                },
-            },
+            "properties": properties,
         }
     return types.Tool(
         name=descriptor.name,
@@ -155,6 +171,78 @@ def _mcp_tool(descriptor: ToolDescriptor) -> types.Tool:
             "contract_digest": descriptor.contract_digest,
         },
     )
+
+
+async def _elicit_precheck_authority(
+    context: Any,
+    runtime: RuntimeHost,
+    dataset_ref: str,
+    request: dict[str, Any],
+) -> tuple[dict[str, Any], Mapping[str, object] | None]:
+    if request.get("action") != "resume" or request.get("decision") != "proceed":
+        return request, None
+    status = await anyio.to_thread.run_sync(
+        lambda: runtime.call_tool(
+            "mediasense.precheck.run",
+            dataset_ref=dataset_ref,
+            request={"action": "status", "run_ref": request.get("run_ref")},
+        )
+    )
+    confirmation = status.get("confirmation")
+    if not isinstance(confirmation, Mapping) or confirmation.get("kind") != (
+        "external_effect"
+    ):
+        return request, None
+    content_identity = confirmation.get("content_identity")
+    disclosure = confirmation.get("disclosure")
+    if not isinstance(content_identity, str) or not isinstance(disclosure, Mapping):
+        return request, None
+    session = getattr(context, "session", None)
+    if session is None:
+        return request, None
+    capabilities = getattr(session, "client_capabilities", None)
+    elicitation = getattr(capabilities, "elicitation", None)
+    if getattr(elicitation, "form", None) is None:
+        return request, None
+    try:
+        elicited = await session.elicit_form(
+            (
+                "MediaSense requests Human authorization for this exact external "
+                "effect. Confirm only after reviewing the disclosure:\n"
+                + json.dumps(disclosure, ensure_ascii=False, sort_keys=True)
+            ),
+            {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["approve"],
+                "properties": {
+                    "approve": {
+                        "type": "boolean",
+                        "const": True,
+                        "title": "Authorize this exact external effect",
+                    }
+                },
+            },
+            related_request_id=getattr(context, "request_id", None),
+        )
+    except NoBackChannelError:
+        _LOGGER.info(
+            "MCP client did not provide Human elicitation for PreCheck authorization",
+        )
+        return request, None
+    if elicited.action == "decline":
+        return {**request, "decision": "decline"}, None
+    if (
+        elicited.action != "accept"
+        or not isinstance(elicited.content, Mapping)
+        or elicited.content.get("approve") is not True
+    ):
+        return request, None
+    return request, {
+        "principal_ref": "human:mcp-elicitation",
+        "confirmed_content_identity": content_identity,
+        "confirmed_at": datetime.now(timezone.utc).isoformat(),
+    }
 
 
 def _tool_result(

@@ -24,9 +24,12 @@ embeddings, paths, filenames, prompts, or general metadata.
 The runtime SHALL derive reverse-geocode inputs only from the completed
 compression frontier, apply GPX-over-embedded-GPS precedence per Source Item,
 normalize coordinates, deduplicate exact `(latitude, longitude, datum)` triples,
-and freeze the ordered logical-query set before requesting authorization.
-Selection, authorization binding, Work reuse, and Result projection SHALL remain
-owned by that PreCheck Run and SHALL NOT be inherited from Plan state.
+and freeze the ordered logical-query set before requesting authorization. The Run
+SHALL retain a full-batch identity for reuse and routing semantics and derive a
+separate external-effect identity from only the queries that remain uncomputed,
+their exact disclosure, and the parent full-batch identity. Selection,
+authorization binding, Work reuse, and Result projection SHALL remain owned by
+that PreCheck Run and SHALL NOT be inherited from Plan state.
 
 #### Scenario: Duplicate representative coordinates
 - **WHEN** multiple selected representatives have the same exact normalized coordinate triple
@@ -40,13 +43,18 @@ owned by that PreCheck Run and SHALL NOT be inherited from Plan state.
 - **WHEN** coordinates, provider set, provider policy, request ceiling, cost knowledge, or operation changes after an earlier confirmation
 - **THEN** the earlier confirmation does not authorize the changed work and no provider request occurs
 
+#### Scenario: Frozen batch mixes reused and pending coordinates
+- **WHEN** a frozen batch contains reusable completed queries and uncomputed queries
+- **THEN** the full-batch identity retains both classes while the external-effect disclosure, logical-query count, exact coordinates, request ceiling, and confirmation identity contain only the uncomputed queries
+
 ### Requirement: Confirmation is an automatic Run checkpoint
 PreCheck SHALL enter `paused` before the first provider request for a non-empty
-batch with available providers and expose one content-addressed disclosure containing the
-exact coordinates, operation, transmitted data classes, provider identities,
-maximum provider requests, known cost ceiling or `unknown`, provider data-handling
-policy or `unknown`, and fixed immutable-Result retention. `proceed` SHALL require
-transport-only trusted Human confirmation bound to that exact content identity.
+pending effect set with available providers and expose one content-addressed
+disclosure containing only its exact coordinates, operation, transmitted data
+classes, provider identities, maximum provider requests, known cost ceiling or
+`unknown`, provider data-handling policy or `unknown`, fixed immutable-Result
+retention, and parent frozen-batch identity. `proceed` SHALL require
+transport-only trusted Human confirmation bound to that exact effect identity.
 
 #### Scenario: Confirmation required
 - **WHEN** uncomputed logical queries have a compatible configured provider
@@ -109,13 +117,18 @@ Work identity, persisted output, Result content, or logs.
 only from one verified immutable Result. It SHALL report GPS/GPX observation-state
 counts, combined available/missing/failed/conflicting counts, the exact
 deduplication rule, unique-coordinate count, and for each coordinate its member
-count, explicit Result-bound Source Set, acquisition outcome, candidate Evidence
-refs, provenance, and qualifications. It SHALL NOT create event semantics, place
-truth, recommended grouping, or directory names.
+count, compact Result-bound Source Set resolvable through the existing paged
+`resolve` operation, acquisition outcome, candidate Evidence refs, provenance,
+and qualifications. It SHALL NOT embed an unbounded member list or create event
+semantics, place truth, recommended grouping, or directory names.
 
 #### Scenario: Summary matches exhaustive traversal
 - **WHEN** a caller exhausts every page of `geo_summary` and independently traverses every Source Item and Geo candidate Evidence in the same Result
 - **THEN** coordinate keys, membership, outcome counts, provenance, and qualifications are identical
+
+#### Scenario: One coordinate represents many Source Items
+- **WHEN** one coordinate group contains more member refs than fit in a Tool response
+- **THEN** `geo_summary` returns a bounded Result-local relationship Source Set whose exact members can be exhausted through `resolve` without `response_item_too_large`
 
 #### Scenario: Old Result omitted required acquisition
 - **WHEN** a Result contains an available coordinate but no completed candidate Evidence for that coordinate

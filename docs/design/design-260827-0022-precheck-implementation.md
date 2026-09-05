@@ -4,7 +4,7 @@ title: "MediaSense PreCheck Implementation Design"
 type: design
 status: active
 created: 2026-08-27
-updated: 2026-09-04
+updated: 2026-09-05
 timezone: "Asia/Shanghai"
 parent: ""
 depends-on:
@@ -91,7 +91,7 @@ normal-frontier representation remains `unresolved` and blocks `plan_ready`.
 
 ## Goals
 
-- Preserve the read-only source and a zero-network default path; optional external Evidence work must pause before execution, disclose its exact logical request count, and require user confirmation.
+- Preserve the read-only source and a zero-network default path; authorization-gated external Evidence work must pause before execution, disclose its exact logical request count, and require user confirmation. A non-empty frozen Geo batch is required acquisition, not optional work.
 - Scale by reusing valid work across runs, profiles, and Results.
 - Support many-to-one, one-to-many, and multi-level Evidence without making clustering a permanent abstraction.
 - Make progress, reuse, invalidation, failures, resource consumption, and remaining work observable.
@@ -363,7 +363,7 @@ Each producer declares:
 
 This is static internal wiring in the first implementation. There is no runtime plugin discovery, registry service, package negotiation, or public provider schema.
 
-Locality does not decide stage ownership. A future local model may create a source-derived, inspectable, provenance-bearing candidate observation in PreCheck. A deterministic rule that makes a final organization choice still belongs to Plan. Slice 1 producers perform no network or billable work; later external Evidence producers remain optional, user-confirmed, bounded, and observable.
+Locality does not decide stage ownership. A future local model may create a source-derived, inspectable, provenance-bearing candidate observation in PreCheck. A deterministic rule that makes a final organization choice still belongs to Plan. Slice 1 producers perform no network or billable work; later external Evidence producers remain user-confirmed, bounded, and observable. Whether an external producer is required for Result closure belongs to its accepted contract; the current non-empty Geo batch is required.
 
 The implemented default demand order is accounting, `index-v1` metadata,
 bundle candidates, then visual/video/model work for only the bundle
@@ -1003,9 +1003,10 @@ private worker, observe progress through `status`, and use `pause`, `resume`, or
 `cancel` without discarding completed reusable Work. After `resume`, the host
 reschedules the same durable Run. If the enabled reverse-geocode producer freezes
 pending work, the Run reports one confirmation with the exact logical-query count
-and remains paused until the operator chooses `proceed` or `skip_optional_work`.
-The confirmed unit is the whole frozen Run batch; PreCheck may use its own batch
-engine and is not required to call the Plan-facing Geo Tool per coordinate. A blocked
+and remains paused until the operator chooses `proceed` or `decline`. A decline
+terminates the Run without a Plan-ready Result. The confirmed external-effect unit
+is the exact pending subset within the full frozen Run batch; PreCheck uses its own
+batch engine and does not call a public or Plan-facing Geo Tool. A blocked
 workspace is resumed only after its stated `resume_when` condition is satisfied.
 Successful completion returns one exact `result_ref`; consumers then use only
 `mediasense.precheck.read`. Maintenance first audits, then quarantines or

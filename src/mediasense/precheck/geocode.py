@@ -1,4 +1,4 @@
-"""Optional, authorization-bound reverse-geocode Evidence Work."""
+"""Required, authorization-bound reverse-geocode Evidence Work."""
 
 from __future__ import annotations
 
@@ -71,6 +71,7 @@ class FrozenGeocodeQuery:
 class FrozenGeocodeBatch:
     queries: tuple[FrozenGeocodeQuery, ...]
     work: tuple[WorkRecord, ...]
+    batch_fingerprint: str
     pending_fingerprint: str
 
     @property
@@ -79,14 +80,15 @@ class FrozenGeocodeBatch:
 
     @property
     def pending_query_count(self) -> int:
-        return sum(
-            record.status
-            in {
-                WorkStatus.PENDING,
-                WorkStatus.READY,
-                WorkStatus.RETRYABLE_FAILURE,
-            }
-            for record in self.work
+        return len(self.pending_queries)
+
+    @property
+    def pending_queries(self) -> tuple[FrozenGeocodeQuery, ...]:
+        return tuple(
+            query
+            for query, record in zip(self.queries, self.work, strict=True)
+            if record.status
+            in {WorkStatus.PENDING, WorkStatus.READY, WorkStatus.RETRYABLE_FAILURE}
         )
 
 
@@ -151,8 +153,7 @@ class ReverseGeocodeProducer:
             )
             records.append(record)
             previous_work = record
-        disclosure = self._disclosure(queries)
-        fingerprint = (
+        batch_fingerprint = (
             "sha256:"
             + hashlib.sha256(
                 _json(
@@ -160,12 +161,38 @@ class ReverseGeocodeProducer:
                         "work_ids": [record.work_id for record in records],
                         "profile": profile.descriptor(),
                         "queries": [query.key for query in queries],
+                    }
+                ).encode("utf-8")
+            ).hexdigest()
+        )
+        pending = [
+            (query, record)
+            for query, record in zip(queries, records, strict=True)
+            if record.status
+            in {WorkStatus.PENDING, WorkStatus.READY, WorkStatus.RETRYABLE_FAILURE}
+        ]
+        disclosure = self._disclosure(
+            [query for query, _record in pending],
+            batch_fingerprint=batch_fingerprint,
+        )
+        pending_fingerprint = (
+            "sha256:"
+            + hashlib.sha256(
+                _json(
+                    {
+                        "batch_fingerprint": batch_fingerprint,
+                        "pending_work_ids": [record.work_id for _query, record in pending],
                         "disclosure": disclosure,
                     }
                 ).encode("utf-8")
             ).hexdigest()
         )
-        return FrozenGeocodeBatch(queries, tuple(records), fingerprint)
+        return FrozenGeocodeBatch(
+            queries,
+            tuple(records),
+            batch_fingerprint,
+            pending_fingerprint,
+        )
 
     def produce(
         self,
@@ -183,7 +210,10 @@ class ReverseGeocodeProducer:
         if self.geocoder is None and batch.pending_query_count:
             return ReverseGeocodeBatchOutcome("unavailable", batch, (), 0)
         if batch.pending_query_count:
-            disclosure = self._disclosure(batch.queries)
+            disclosure = self._disclosure(
+                batch.pending_queries,
+                batch_fingerprint=batch.batch_fingerprint,
+            )
             status = self.run_tool.require_confirmation(
                 public_run_ref,
                 summary="Reverse-geocode the frozen representative coordinate set.",
@@ -248,7 +278,7 @@ class ReverseGeocodeProducer:
                 {
                     "authorization": {
                         **dict(authority),
-                        "confirmed_logical_queries": batch.logical_query_count,
+                        "confirmed_logical_queries": batch.pending_query_count,
                         "decision": "proceed",
                         "pending_fingerprint": batch.pending_fingerprint,
                         "run_ref": public_run_ref,
@@ -286,7 +316,10 @@ class ReverseGeocodeProducer:
         )
 
     def _disclosure(
-        self, queries: Sequence[FrozenGeocodeQuery]
+        self,
+        queries: Sequence[FrozenGeocodeQuery],
+        *,
+        batch_fingerprint: str,
     ) -> dict[str, object]:
         provider = self.geocoder
         if provider is None:
@@ -306,6 +339,7 @@ class ReverseGeocodeProducer:
             for item in provider_disclosure
         )
         return {
+            "frozen_batch_identity": batch_fingerprint,
             "operation": "reverse_geocode",
             "coordinates": [query.coordinate.value() for query in queries],
             "transmitted_data_classes": ["coordinate", "datum", "locale"],

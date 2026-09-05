@@ -1106,8 +1106,9 @@ def _geo_projection(graph: _ResultGraph) -> dict[str, object]:
                 "coordinate": group["coordinate"],
                 "member_count": len(members),
                 "source_set": {
-                    "kind": "explicit",
-                    "source_item_refs": list(members),
+                    "kind": "geo_coordinate",
+                    "coordinate": group["coordinate"],
+                    "selection_rule": "gpx_over_gps_exact_normalized_v1",
                 },
                 "reverse_geocode": outcome,
                 "candidate_evidence_refs": evidence_refs,
@@ -1197,6 +1198,36 @@ def _resolve_source_set(
                 details={"invalid_inputs": invalid},
             )
         return frozenset(refs)
+    if kind == "geo_coordinate":
+        _require_exact_keys(
+            source_set,
+            {"kind", "coordinate", "selection_rule"},
+            "source_set",
+        )
+        if source_set.get("selection_rule") != "gpx_over_gps_exact_normalized_v1":
+            raise _ReadFailure(
+                "invalid_source_set", "Geo Source Set has an unsupported selection rule."
+            )
+        coordinate = source_set.get("coordinate")
+        if not isinstance(coordinate, Mapping):
+            raise _ReadFailure(
+                "invalid_source_set", "Geo Source Set coordinate must be an object."
+            )
+        target = _geo_coordinate_value(
+            {"status": "available", "value": coordinate}
+        )
+        assert target is not None
+        members: set[str] = set()
+        for source_ref, source in graph.sources.items():
+            account = graph.accounts.get(source_ref)
+            if not isinstance(account, Mapping) or account.get("scope") != "source_media":
+                continue
+            selected = _geo_coordinate_value(
+                _one_observation(source, "gpx_coordinates")
+            ) or _geo_coordinate_value(_one_observation(source, "gps_coordinates"))
+            if selected == target:
+                members.add(source_ref)
+        return frozenset(members)
     if kind == "precheck_relation":
         _require_exact_keys(
             source_set, {"kind", "origin", "relation", "direction"}, "source_set"

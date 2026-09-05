@@ -41,3 +41,38 @@
   - Remaining operational risk is Provider policy/configuration drift outside the
     repository; each Run therefore binds authorization to the disclosed policy and
     treats unknown policy as `unknown`, never as implicit acceptance.
+
+## 7. Acceptance remediation
+
+- [x] 7.1 Replace distribution smoke resource and Tool counts with exact expected filename/name sets, update packaged entry guidance, and pass a clean wheel install.
+- [x] 7.2 Separate the full frozen-batch identity from the pending external-effect identity so disclosure, quantity, coordinates, and request ceilings describe only work that can still be transmitted.
+- [x] 7.3 Replace unbounded inline Geo group membership with the existing Result-bound resolvable Source Set and add high-fanout response-size coverage.
+- [x] 7.4 Add a human-reviewable `geo_summary` mock exchange and synchronize its canonical and packaged copies.
+- [x] 7.5 Remove remaining active optional/Plan-local Geo wording and align information architecture, Skills, module descriptions, and README.
+- [x] 7.6 Make MCP Geo resume obtain trusted confirmation through host elicitation rather than caller-authored authority JSON, and add a real stdio MCP acceptance test for accept, decline, and unsupported elicitation.
+- [x] 7.7 Re-run focused tests, clean wheel smoke, full pytest, Ruff, strict OpenSpec validation, and diff/worktree audits.
+  - The remediation-focused suite passed `202` tests. The final explicit MCP
+    subprocess/runtime/contract consistency suite passed `160` tests, including
+    accept, decline, unsupported elicitation, and non-capability implementation
+    error behavior. The explicit Honeycomb integration suite passed `5` tests.
+  - The default full suite passed `568` tests with `16` deselected. Ruff reported
+    `All checks passed!`; strict OpenSpec validation passed; and
+    `git diff --check` passed. No type checker is configured.
+  - `mediasense 0.7.1` was rebuilt at
+    `/private/tmp/mediasense-wheel-docfix.SrOCu2/mediasense-0.7.1-py3-none-any.whl`;
+    its offline clean-install distribution smoke passed with the exact six-Tool,
+    contract-file, and Skill-file sets.
+  - Canonical, packaged, and Skill-reference contract copies matched by SHA-256:
+    PreCheck Read `5c3ebe10dba65a07f69041eb6b66b62343d344ad892482b71ececabf568d9273`,
+    PreCheck Run `29b8de27bd3b4d7af5b848ed1793c5714f6a51c251bb7114ed5c3095f4fd296a`,
+    Plan Work `b0c53f357b35266b81e29627bf6a4804025fe6e459e8be2d83d1beea80668777`,
+    and Dataset Open `09c95b73009c1363fa3ccf88611205d6f42202f2bc8cb9df0d2353880bd67543`.
+  - A real local Codex CLI `0.153.4` app-server session connected to the
+    MediaSense stdio MCP server and issued form elicitation for both accept and
+    decline. Accept produced Host-authored `human:mcp-elicitation` authority and
+    exactly one request for the disclosed pending coordinate; decline produced a
+    cancelled terminal state and zero Provider requests. This verifies the real
+    installed client protocol path, not a graphical Codex UI interaction.
+  - The final stale-vocabulary scan found only removal/history/negative assertions,
+    and the worktree audit found no untracked media, caches, raw logs, model output,
+    or other untracked files.

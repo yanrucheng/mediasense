@@ -19,3 +19,11 @@ by exact Run authority.
 - **WHEN** a configuration file contains `runtime.offline`
 - **THEN** configuration validation rejects the obsolete product key instead of silently accepting or translating it
 
+### Requirement: Distribution verification follows exact public resources
+The clean-install wheel smoke SHALL compare packaged contract paths, Skill paths,
+CLI Tool names, and MCP Tool names with explicit expected sets rather than stale
+aggregate counts.
+
+#### Scenario: Removed Geo resources stay absent
+- **WHEN** a wheel is built after removal of the public Geo Tool and addition of a packaged Plan reference
+- **THEN** clean-install verification accepts exactly the current six Tool names, eight contract files, and eleven Skill files while rejecting missing or unexpected paths

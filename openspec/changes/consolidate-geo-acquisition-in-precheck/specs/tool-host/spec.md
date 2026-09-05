@@ -26,8 +26,16 @@ confirmation, cancellation, and effect-authorization context outside that
 business request.
 
 #### Scenario: Transport envelope contains confirmation
-- **WHEN** a PreCheck external-effect, Plan seal, or Apply call supplies transport authorization
+- **WHEN** a Plan seal or Apply call supplies transport authorization
 - **THEN** the Host binds it to the underlying Tool's accepted context without adding transport fields to the business request
+
+#### Scenario: MCP requests PreCheck external-effect authorization
+- **WHEN** a stdio MCP caller requests `proceed` for a paused PreCheck external-effect disclosure
+- **THEN** the MCP Host obtains the Human decision through session elicitation, constructs matching confirmation context only after acceptance, and never treats caller-authored authority JSON as trusted
+
+#### Scenario: MCP client cannot elicit authorization
+- **WHEN** the connected MCP client declines, cancels, or cannot support the elicitation
+- **THEN** the Run is respectively terminated by explicit decline or remains paused with zero Provider requests, and no caller-authored fallback authority is accepted
 
 #### Scenario: PreCheck authorization is absent
 - **WHEN** PreCheck `proceed` lacks trusted confirmation for the pending frozen-batch disclosure
@@ -44,4 +52,3 @@ business request.
 #### Scenario: Tool implementation fails unexpectedly
 - **WHEN** a validly bound Tool call raises an unexpected implementation or composition exception
 - **THEN** the Host returns a sanitized `host_operation_failed` result with a diagnostic identifier and does not describe the caller's request as invalid
-

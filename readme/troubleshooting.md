@@ -73,7 +73,7 @@ Check these cases distinctly:
   not overwrite it;
 - if the table was added during the current session, start a new Agent session
   from that Honeycomb;
-- in the new session, verify all seven MediaSense Tools through discovery rather
+- in the new session, verify all six MediaSense Tools through discovery rather
   than treating file presence as success.
 
 From a directory with no applicable local MediaSense configuration and no
