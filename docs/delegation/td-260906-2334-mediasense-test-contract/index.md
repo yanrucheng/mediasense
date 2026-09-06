@@ -2,7 +2,7 @@
 id: "td-260906-2334-mediasense-test-contract"
 title: "Research a Fast Test Contract for MediaSense"
 type: delegation
-status: draft
+status: active
 created: 2026-09-06
 updated: 2026-09-06
 timezone: "Asia/Shanghai"
@@ -80,11 +80,17 @@ below a ten-second feedback budget.
 
 | Request | Recipient | Result | Status |
 | --- | --- | --- | --- |
-| [01-request-checker-sdk](01-request-checker-sdk.md) | `team:checker-sdk` | [01-result-checker-sdk](01-result-checker-sdk.md) | prepared for autonomous delivery |
+| [01-request-checker-sdk](01-request-checker-sdk.md) | `team:checker-sdk` | [01-result-checker-sdk](01-result-checker-sdk.md) | returned and accepted for synthesis |
 
 ## Material handoff evidence
 
 - 2026-09-06 23:34 Asia/Shanghai — The user asked MediaSense to confirm its
   registered identity and research Checker SDK's `make test`, source-file size
   discipline, and sub-ten-second feedback target before considering changes.
-
+- 2026-09-06 23:34 Asia/Shanghai — MediaSense delivered request 01
+  autonomously to `team:checker-sdk` through its local workspace route without
+  changing user focus.
+- 2026-09-06 23:54 Asia/Shanghai — Checker SDK returned the raw research result.
+  MediaSense independently verified the Makefile recipe, pytest markers,
+  source-size gate, one warm `make test` run, and the clean recipient worktree,
+  then accepted the result for synthesis.

@@ -15,7 +15,7 @@ superseded-by: ""
 
 | ID | Title | Status | Created | Summary |
 | --- | --- | --- | --- | --- |
-| [td-260906-2334-mediasense-test-contract](td-260906-2334-mediasense-test-contract/index.md) | Research a Fast Test Contract for MediaSense | draft | 2026-09-06 | Delegates read-only research into Checker SDK's `make test`, source-size discipline, and feedback-time budget before MediaSense chooses its own test contract. |
+| [td-260906-2334-mediasense-test-contract](td-260906-2334-mediasense-test-contract/index.md) | Research a Fast Test Contract for MediaSense | active | 2026-09-06 | Confirms both Team identities, verifies Checker SDK's parallel test and 400-line contracts, and recommends a measured, ratcheted MediaSense adoption path. |
 | [td-260906-1032-mediasense-dotfiles-env](td-260906-1032-mediasense-dotfiles-env/index.md) | MediaSense Credential Delivery through DotFiles | active | 2026-09-06 | Records selection and verified implementation of a DotFiles-produced two-key MediaSense profile with child-only Honeycomb MCP delivery and no second secret authority. |
 | [td-260831-1739-git-lg-cmux-filter](td-260831-1739-git-lg-cmux-filter/index.md) | Filter cmux Recovery Refs from git lg | active | 2026-08-31 | Delegates the canonical high-density `git lg` cmux-ref filter and current-device convergence to DotFiles through an explicit interactive review. |
 | [td-260830-2227-mediasense-distribution](td-260830-2227-mediasense-distribution/index.md) | MediaSense Installation, Tool Hosting, and Versioning | active | 2026-08-30 | Retains the original distribution work and explicit corrections for Dataset identity and Honeycomb-local Agent integration; overall acceptance and closure remain pending. |

@@ -1,7 +1,7 @@
 ---
 id: "01-request-checker-sdk"
 title: "Research Checker SDK's Fast Test Contract for MediaSense"
-type: task-delegation
+type: "task-delegation"
 status: active
 created: 2026-09-06
 updated: 2026-09-06
@@ -66,4 +66,3 @@ MediaSense 目前没有自己的 `make test`。发起方希望先理解 Checker 
 
 不要修改请求、package index、synthesis 或其他文件。写完后返回简短写回回执。验证、综合判断、接受与后续实现仍由 MediaSense 发起方负责。
 ````
-
