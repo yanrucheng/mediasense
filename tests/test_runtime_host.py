@@ -90,6 +90,7 @@ def test_composition_root_constructs_all_tools_offline(tmp_path: Path) -> None:
         "mediasense.precheck.run",
         "mediasense.precheck.read",
         "mediasense.plan.work",
+        "mediasense.geo.query",
         "mediasense.apply.run",
         "mediasense.apply.read",
     ]

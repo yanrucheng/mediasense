@@ -21,6 +21,7 @@ EXPECTED_TOOLS = {
     "mediasense.precheck.run",
     "mediasense.precheck.read",
     "mediasense.plan.work",
+    "mediasense.geo.query",
     "mediasense.apply.run",
     "mediasense.apply.read",
 }
@@ -30,6 +31,7 @@ EXPECTED_CONTRACT_FILES = {
     "apply-run.tool.json",
     "dataset-open.tool.json",
     "frozen-plan.schema.json",
+    "geo-query.tool.json",
     "plan-work.tool.json",
     "precheck-read.tool.json",
     "precheck-run.tool.json",

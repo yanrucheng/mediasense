@@ -1,19 +1,18 @@
 ## ADDED Requirements
 
-### Requirement: Dataset state contains no independent Geo store
-New Dataset manifests and workspaces SHALL contain PreCheck, Plan, Apply, and
-immutable handoff state only. They SHALL NOT declare or create a Geo journal or
-Geo store because provider acquisition is part of PreCheck.
+### Requirement: Dataset state declares the independent Geo effect journal
+Dataset manifests and workspaces SHALL declare a versioned `geo` store for the
+stage-neutral Geo Tool's effect-idempotency journal. The journal SHALL NOT become
+the authority for PreCheck per-Source-Item outcomes or Plan decisions.
 
 #### Scenario: New Dataset is created
 - **WHEN** `mediasense.dataset.open` creates a new workspace
-- **THEN** its manifest and directories contain no Geo store entry
+- **THEN** its version 3 manifest and directories contain a `geo` store at version 1
 
-#### Scenario: Supported predecessor manifest is migrated
-- **WHEN** a 0.7.1 Dataset manifest has the exact supported predecessor shape including a Geo store declaration
-- **THEN** Dataset open atomically replaces it with the clean current manifest without reading or rewriting private databases or immutable Results
+#### Scenario: Supported version 2 manifest is migrated
+- **WHEN** Dataset open encounters the exact supported version 2 manifest without a Geo declaration
+- **THEN** it atomically advances the manifest to version 3 and adds `geo: 1` without rewriting existing private stores or immutable Results
 
-#### Scenario: Historical Geo bytes exist
-- **WHEN** an upgraded workspace still physically contains old Geo journal bytes
-- **THEN** no runtime component reads, writes, discovers, or treats them as current Dataset state
-
+#### Scenario: Historical version 1 Geo journal exists
+- **WHEN** a supported version 1 workspace already contains a valid Geo journal
+- **THEN** migration preserves and verifies that journal rather than discarding its idempotency evidence

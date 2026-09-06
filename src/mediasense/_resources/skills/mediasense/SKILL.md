@@ -14,7 +14,7 @@ Apply semantics in their independently loadable Skills.
 
 This Skill set targets the MediaSense `0.7.x` CLI and its bundled Tool contracts.
 If the compatible CLI and complete release-matched Skill set are present and all
-six exact Tool names below are already discoverable in the current session, do
+seven exact Tool names below are already discoverable in the current session, do
 not repeat setup. A `mediasense` command in `PATH`, installed Skill files, or a
 configuration file on disk is not proof that the current Agent session has loaded
 the Tool Host.
@@ -64,7 +64,7 @@ the Tool Host.
    normally cannot load it dynamically. Ask the Human to start a new session from
    the trusted Honeycomb. In that new session, verify discovery of exactly
    `mediasense.dataset.open`, `mediasense.precheck.run`,
-   `mediasense.precheck.read`, `mediasense.plan.work`,
+   `mediasense.precheck.read`, `mediasense.plan.work`, `mediasense.geo.query`,
    `mediasense.apply.run`, and `mediasense.apply.read` before claiming setup is
    complete.
 

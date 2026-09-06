@@ -16,9 +16,10 @@ superseded-by: "consolidate-geo-acquisition-in-precheck"
 
 # MediaSense Geo Capability Evolution
 
-> Superseded by `consolidate-geo-acquisition-in-precheck`: Geo acquisition is
-> PreCheck-owned; the public Geo Tool and Plan Geo lifecycle described below were
-> removed after production evidence disproved their independent purpose.
+> Superseded by `consolidate-geo-acquisition-in-precheck`: the public Geo Tool
+> remains stage-neutral, while PreCheck now owns media-aware bulk compression and
+> per-Source-Item Result projection. The Plan-private lifecycle described below
+> was removed.
 
 ## Status and accepted direction
 
@@ -27,7 +28,7 @@ lookup. It records the accepted product direction that Plan may perform live,
 coordinate-only Geo enrichment when the exact request and its effects have been
 authorized.
 
-This is the active Geo capability design. The public
+This is the historical design that introduced the public
 [`mediasense.geo.query`](../spec/spec-260830-2034-geo-query/) contract and the
 `mediasense.plan.work` `enrich_geo` integration implement the accepted direction.
 An unconfigured runtime still reports the capability as unavailable and performs
@@ -180,7 +181,7 @@ Gate 1 is accepted only if the Human agrees that:
   distinct; and
 - refusal leaves a useful Plan path instead of forcing an unsafe workaround.
 
-## Current baseline
+## Historical baseline
 
 The current implementation has the following responsibility structure:
 
@@ -198,7 +199,7 @@ PreCheck
 Plan
 ├── reads existing qualified place evidence from the PreCheck Result
 └── PlanGeoAdapter
-    └── mediasense.geo.query                     public Plan-facing Tool
+    └── mediasense.geo.query                     stage-neutral Tool
         ├── normalized request and result values
         ├── effect guard and idempotency journal
         ├── request-scoped routing

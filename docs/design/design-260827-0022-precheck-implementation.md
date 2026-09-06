@@ -1006,7 +1006,8 @@ pending work, the Run reports one confirmation with the exact logical-query coun
 and remains paused until the operator chooses `proceed` or `decline`. A decline
 terminates the Run without a Plan-ready Result. The confirmed external-effect unit
 is the exact pending subset within the full frozen Run batch; PreCheck uses its own
-batch engine and does not call a public or Plan-facing Geo Tool. A blocked
+media-aware compression policy and calls the stage-neutral `mediasense.geo.query`
+Tool for the authorized pending set. A blocked
 workspace is resumed only after its stated `resume_when` condition is satisfied.
 Successful completion returns one exact `result_ref`; consumers then use only
 `mediasense.precheck.read`. Maintenance first audits, then quarantines or

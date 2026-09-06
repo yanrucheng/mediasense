@@ -1151,9 +1151,11 @@ def _phase_work_progress(
     for row in rows:
         if not isinstance(row, dict) or row.get("capability") not in capabilities:
             continue
+        status = str(row["status"])
+        if status in {"cancelled", "invalidated"}:
+            continue
         count = int(row["count"])
         observed += count
-        status = str(row["status"])
         if status == "succeeded":
             if row["attempted_here"]:
                 completed += count

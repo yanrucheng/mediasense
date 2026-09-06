@@ -13,8 +13,8 @@ goal.
 ## Tool Host prerequisite
 
 Proceed only when the current Honeycomb session exposes a compatible MediaSense
-`0.7.x` Tool Host and `mediasense.dataset.open`, `mediasense.precheck.run`, and
-`mediasense.precheck.read` are discoverable. A CLI found in `PATH` or an MCP table
+`0.7.x` Tool Host and `mediasense.dataset.open`, `mediasense.precheck.run`,
+`mediasense.precheck.read`, and `mediasense.geo.query` are discoverable. A CLI found in `PATH` or an MCP table
 present on disk is not sufficient. If the Host is absent or incompatible, stop
 PreCheck work and use the `mediasense` product entry Skill's local Honeycomb
 bootstrap; do not duplicate setup, edit user-level Agent configuration, or claim
@@ -162,14 +162,24 @@ material Human decision, explain their consequences and ask. If the Tool does
 not expose a verifiable recovery condition or retained-work fact, call it
 unknown rather than guessing.
 
-## Keep Geo acquisition exact
+## Keep Geo coverage complete and acquisition compressed
 
-PreCheck owns reverse geocoding for every Source Item with an available final
-coordinate. It may normalize, deduplicate, and freeze those coordinates for
-execution, but visual compression must not narrow their Source Item coverage. A
-non-empty set is a required Result closure gate. When the Tool pauses, proceed
-only if the returned confirmation clearly identifies that exact contract-bound
-effect; otherwise stop and surface the ambiguity.
+PreCheck owns the decision about which Source Items may share one geographic
+observation. It first uses local media relationships, time, coordinates, GPX
+movement, and other available evidence to form conservative acquisition units;
+then it calls the stage-neutral `mediasense.geo.query` Tool for the remaining
+coordinates and projects each returned observation back to every covered Source
+Item. Bundle or compression membership is a candidate scope, never proof that one
+representative location applies to every member. Exact or near-coordinate
+deduplication is a final request defense, not a substitute for this media-aware
+step.
+
+Every Source Item with an available final coordinate must receive its own
+reverse-geocode outcome before a Result is Plan-ready. That does not require one
+Provider call per Source Item. A non-empty compressed query set is a required
+Result closure gate. When the Run pauses, proceed only if the returned
+confirmation identifies the exact `mediasense.geo.query` request fingerprint and
+effect envelope; otherwise stop and surface the ambiguity.
 
 1. Show the exact Tool-reported number of logical queries and the coordinate-only
    scope.
@@ -192,9 +202,9 @@ effect; otherwise stop and surface the ambiguity.
 
 A decline ends the Run without a Plan-ready Result. `provider_unavailable` is a
 different terminal condition and must be reported before asking for authority.
-Retry and fallback never widen the frozen authorized set. PreCheck uses its own
-batch engine and provider-neutral adapters; there is no public Geo Tool and Plan
-cannot authorize or complete this acquisition.
+Retry and fallback never widen the frozen authorized set. The shared Geo Tool
+owns provider routing, request accounting, idempotency, and hard effect ceilings;
+PreCheck owns compression, the Run checkpoint, and Result projection.
 
 ## Diagnose before revising compression
 

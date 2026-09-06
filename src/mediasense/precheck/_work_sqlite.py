@@ -365,6 +365,75 @@ class SQLiteWorkStore:
             self._promote_dependents(connection, lease.work_id, observed_at)
             return self._get_work(connection, lease.work_id)
 
+    def succeed_work_many(
+        self,
+        values: Iterable[tuple[WorkLease, object]],
+        *,
+        now: datetime | None = None,
+    ) -> tuple[WorkRecord, ...]:
+        """Commit a related set of small outputs atomically after one batch effect."""
+
+        entries = tuple(values)
+        if not entries:
+            return ()
+        work_ids = tuple(lease.work_id for lease, _output in entries)
+        if len(set(work_ids)) != len(work_ids):
+            raise ValueError("batch Work leases must be unique")
+        encoded = tuple(
+            (
+                lease,
+                output_json,
+                "inline-json-sha256-v1:"
+                + hashlib.sha256(output_json.encode("utf-8")).hexdigest(),
+            )
+            for lease, output in entries
+            for output_json in (_output_json(output),)
+        )
+        observed_at = _utc(now)
+        with self._transaction(immediate=True) as connection:
+            self._recover_expired(connection, observed_at)
+            for lease, _output_json_value, _output_digest in encoded:
+                self._require_lease(connection, lease)
+            for lease, output_json, output_digest in encoded:
+                connection.execute(
+                    """
+                    UPDATE work_attempts
+                    SET finished_at = ?, outcome = ?, retryable = 0
+                    WHERE work_id = ? AND attempt_number = ?
+                    """,
+                    (
+                        observed_at,
+                        AttemptOutcome.SUCCEEDED,
+                        lease.work_id,
+                        lease.attempt_number,
+                    ),
+                )
+                connection.execute(
+                    """
+                    UPDATE work_records
+                    SET status = ?, lease_run_id = NULL, lease_owner = NULL,
+                        lease_token = NULL, lease_expires_at = NULL,
+                        retry_not_before = NULL, last_failure_code = NULL,
+                        last_failure_message = NULL, output_json = ?,
+                        output_digest = ?, succeeded_at = ?, updated_at = ?
+                    WHERE work_id = ?
+                    """,
+                    (
+                        WorkStatus.SUCCEEDED,
+                        output_json,
+                        output_digest,
+                        observed_at,
+                        observed_at,
+                        lease.work_id,
+                    ),
+                )
+            for lease, _output_json_value, _output_digest in encoded:
+                self._promote_dependents(connection, lease.work_id, observed_at)
+            return tuple(
+                self._get_work(connection, lease.work_id)
+                for lease, _output_json_value, _output_digest in encoded
+            )
+
     def fail_work(
         self,
         lease: WorkLease,
@@ -562,6 +631,49 @@ class SQLiteWorkStore:
             ):
                 raise KeyError(f"Work Record is not attached to this run: {work_id}")
             return self._get_work(connection, work_id)
+
+    def detach_run_work(
+        self,
+        run_id: str,
+        work_ids: Iterable[str],
+    ) -> tuple[str, ...]:
+        """Detach superseded, inactive Work from one mutable Run without deleting it."""
+
+        selected = tuple(dict.fromkeys(str(work_id) for work_id in work_ids))
+        if not selected:
+            return ()
+        detached: list[str] = []
+        with self._transaction(immediate=True) as connection:
+            self._require_run(connection, run_id)
+            for work_id in selected:
+                row = connection.execute(
+                    """
+                    SELECT work_records.status, work_records.lease_run_id
+                    FROM run_work_records
+                    JOIN work_records USING (work_id)
+                    WHERE run_work_records.run_id = ?
+                      AND run_work_records.work_id = ?
+                    """,
+                    (run_id, work_id),
+                ).fetchone()
+                if row is None:
+                    continue
+                if (
+                    WorkStatus(row["status"]) is WorkStatus.RUNNING
+                    and row["lease_run_id"] == run_id
+                ):
+                    raise InvalidWorkTransition(
+                        f"cannot detach actively leased Work: {work_id}"
+                    )
+                connection.execute(
+                    """
+                    DELETE FROM run_work_records
+                    WHERE run_id = ? AND work_id = ?
+                    """,
+                    (run_id, work_id),
+                )
+                detached.append(work_id)
+        return tuple(detached)
 
     def get_attempts(self, work_id: str) -> tuple[WorkAttempt, ...]:
         with self._connect() as connection:

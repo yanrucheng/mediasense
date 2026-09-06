@@ -1,3 +1,3 @@
 # consolidate-geo-acquisition-in-precheck
 
-Return Geo evidence acquisition to PreCheck, remove product offline mode and Plan/public Geo acquisition paths, and expose a Result-bound Geo summary through PreCheck Read.
+Restore media-aware Geo compression inside PreCheck, execute Provider work through the shared stage-neutral Geo Tool, preserve per-Source-Item Result outcomes, and keep bounded Plan investigation possible without creating a second Geo lifecycle.

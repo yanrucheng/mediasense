@@ -1,47 +1,54 @@
-## REMOVED Requirements
-
-### Requirement: Geo exposes progressive caller-meaningful operations
-**Reason**: No independent Agent-facing caller remains after Plan Geo acquisition is removed.
-
-**Migration**: PreCheck invokes only its internal reverse-geocode kernel for the frozen batch; there is no public operation migration.
+## MODIFIED Requirements
 
 ### Requirement: Every external effect is bound to exact authority
-**Reason**: This responsibility moves to the existing PreCheck Run frozen-batch authorization boundary.
+Every Geo Provider effect SHALL require trusted authority for the exact canonical
+request fingerprint and a machine-enforced envelope covering Provider identities,
+data classes, logical queries, Provider requests, billable-unit policy, and
+retention. The Provider-request ceiling SHALL apply to the whole invocation,
+including retries and fallback, and SHALL be checked before each request.
 
-**Migration**: Authorize the exact PreCheck confirmation disclosure and start or resume that Run.
+#### Scenario: First live lookup requires authorization
+- **WHEN** any caller submits a valid Geo request without trusted authority
+- **THEN** the Tool returns `authorization_required`, the exact request fingerprint, and the proposed hard envelope while sending zero Provider requests
 
-### Requirement: Geo enforces coordinate-only data egress
-**Reason**: The invariant is now enforced by PreCheck and its internal provider adapters rather than a public Tool.
+#### Scenario: Provider fallback reaches the ceiling
+- **WHEN** another Provider attempt would exceed the authorized batch ceiling
+- **THEN** the Tool does not start that attempt and returns an explicit failed or not-requested component
 
-**Migration**: Use PreCheck Run; no direct public Geo request is supported.
-
-### Requirement: Results preserve component outcomes and effect evidence
-**Reason**: Component outcomes and effects now belong to immutable PreCheck Result Evidence and execution accounting.
-
-**Migration**: Read them through `mediasense.precheck.read/geo_summary` and ordinary Result expansion.
-
-### Requirement: Geo request validation is strict and contract-conformant
-**Reason**: The public Geo request contract is deleted.
-
-**Migration**: PreCheck derives subjects from its frozen Result-bound batch; callers supply no Geo request.
-
-### Requirement: Provider replacement preserves capability semantics
-**Reason**: Provider replacement remains an internal kernel invariant, not a public Tool-family contract.
-
-**Migration**: Provider adapters continue to satisfy PreCheck's internal provider-neutral port.
+#### Scenario: A frozen request changes
+- **WHEN** operation, coordinate subjects, locale, options, or retention changes
+- **THEN** prior authority does not authorize the changed request
 
 ### Requirement: Routing and caller state remain isolated
-**Reason**: There is no caller-selected Geo state or retention after observations become fixed Result evidence.
+Provider routing SHALL be scoped to one Tool invocation and SHALL NOT leak mutable
+state across callers. Every coordinate in a batch SHALL begin from the request's
+declared route context so insertion or reordering of another coordinate does not
+silently change its Provider/language semantics. Any returned route context is an
+explicit hint for a future caller request, not hidden shared state.
 
-**Migration**: Routing stays internal to PreCheck and accepted observations retain immutable Result ownership.
+#### Scenario: PreCheck and Plan calls overlap
+- **WHEN** PreCheck and Plan invoke Geo concurrently or sequentially
+- **THEN** neither call changes the other's route selection, authorization, retention, or result identity
 
-### Requirement: Credentials remain outside durable identity and evidence
-**Reason**: The invariant remains in PreCheck/provider implementation but no longer defines an independent public capability.
-
-**Migration**: Configure provider credential environment names; credentials remain absent from Run and Result identity.
+#### Scenario: Batch subjects are reordered
+- **WHEN** the same subjects and semantics are supplied in another order
+- **THEN** the canonical request fingerprint is unchanged and each coordinate begins from the same route seed
 
 ### Requirement: Effectful request replay is safe
-**Reason**: The public Geo journal and request replay lifecycle are deleted with the Tool.
+The Geo Tool SHALL durably admit an authorized request before its first Provider
+effect. Reuse of the same request ID and canonical request SHALL replay the
+retained terminal or indeterminate result without another authorization prompt or
+Provider effect. If authority is supplied on replay, it SHALL match the original
+binding.
 
-**Migration**: PreCheck reuses dependency-complete per-coordinate Work and reports indeterminate provider effects honestly; no standalone request replay is available.
+#### Scenario: Successful response was lost
+- **WHEN** the same authorized request is retried after its terminal response was not received
+- **THEN** the Tool returns the journaled result and makes no additional Provider request
 
+#### Scenario: Request ID is reused with changed authority
+- **WHEN** a request ID names different canonical input or authority
+- **THEN** the Tool returns `idempotency_conflict` before a Provider effect
+
+#### Scenario: Prior Provider effect is indeterminate
+- **WHEN** the process cannot prove whether an admitted Provider effect completed
+- **THEN** replay returns `indeterminate` and does not automatically repeat the request

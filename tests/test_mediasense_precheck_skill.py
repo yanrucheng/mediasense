@@ -116,7 +116,8 @@ def test_skill_keeps_reverse_geocoding_run_scoped_and_batch_bound() -> None:
     assert "single final\n   authorization control" in skill
     assert "Dismissing the elicitation leaves the Run paused" in skill
     assert "per-coordinate confirmation" in skill
-    assert "there is no public Geo Tool" in skill
+    assert "stage-neutral `mediasense.geo.query` Tool" in skill
+    assert "one\nProvider call per Source Item" in skill
 
 
 def test_skill_distinguishes_source_accounting_from_execution_liveness() -> None:

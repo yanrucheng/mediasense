@@ -600,9 +600,7 @@ class AdaptiveReverseGeocoder:
         return tuple(
             {
                 "provider": provider_id,
-                "data_handling": str(
-                    getattr(provider, "data_handling", "unknown")
-                ),
+                "data_handling": str(getattr(provider, "data_handling", "unknown")),
                 "max_provider_requests": (
                     logical_query_count
                     * self.max_route_attempts
@@ -1126,6 +1124,7 @@ def _address_candidates(result: GeoProviderResult) -> tuple[GeoCandidate, ...]:
             components=tuple(
                 sorted((str(key), str(value)) for key, value in components.items())
             ),
+            provider_ref=result.provider,
         ),
     )
 

@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 from jsonschema import Draft202012Validator
 
+from mediasense.capabilities.geo import GeoOperationJournal
 from mediasense.precheck.source_attachment import (
     UnsafeWorkspace,
     probe_source_attachment,
@@ -291,16 +292,38 @@ def test_open_migrates_supported_v1_manifest_without_touching_private_stores(
     manifest["stores"] = {"apply": 2, "geo": 1, "plan": 2, "precheck": 17}
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
     historical = workspace / "geo" / "journal.sqlite3"
-    historical.parent.mkdir()
-    historical.write_bytes(b"historical")
+    GeoOperationJournal(historical)
+    historical_before = historical.read_bytes()
 
     opened = resolver.open(source, explicit_workspace=workspace)
     migrated = json.loads(manifest_path.read_text(encoding="utf-8"))
 
     assert opened.created is False
-    assert migrated["format_version"] == 2
-    assert migrated["stores"] == {"apply": 2, "plan": 3, "precheck": 17}
-    assert historical.read_bytes() == b"historical"
+    assert migrated["format_version"] == 3
+    assert migrated["stores"] == {
+        "apply": 2,
+        "geo": 1,
+        "plan": 3,
+        "precheck": 17,
+    }
+    assert historical.read_bytes() == historical_before
+
+
+def test_open_migrates_supported_v2_manifest_by_restoring_geo_store(
+    tmp_path: Path,
+) -> None:
+    resolver, _volume, source = _external_resolver(tmp_path)
+    opened = resolver.open(source)
+    manifest_path = opened.workspace / "dataset.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["format_version"] = 2
+    manifest["stores"] = {"apply": 2, "plan": 3, "precheck": 17}
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    reopened = resolver.open(source)
+
+    assert reopened.manifest.format_version == 3
+    assert reopened.manifest.stores["geo"] == 1
 
 
 def test_portable_workspace_survives_mount_path_change(tmp_path: Path) -> None:

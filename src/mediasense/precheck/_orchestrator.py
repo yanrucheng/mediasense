@@ -12,7 +12,7 @@ from pathlib import Path
 import subprocess
 from typing import Protocol, TypeVar, cast
 
-from mediasense.capabilities.geo import ReverseGeocodeBatchEngine
+from mediasense.capabilities.geo import GeoQueryTool
 
 from ._accounting_types import AccountedItem
 from ._compression_producer import (
@@ -89,11 +89,16 @@ class _RunControl(Protocol):
         unit: str,
         skip_allowed: bool,
         pending_fingerprint: str,
+        disclosure: Mapping[str, object] | None = None,
     ) -> dict[str, object]: ...
 
     def confirmation_decision(
         self, run_ref: str, *, pending_fingerprint: str
     ) -> str | None: ...
+
+    def confirmation_authority(
+        self, run_ref: str, *, pending_fingerprint: str
+    ) -> Mapping[str, object] | None: ...
 
     def scope_selection_submitted(self, run_ref: str) -> bool: ...
 
@@ -325,8 +330,16 @@ class PrecheckExecutionConfig:
                 cast(Mapping[str, object] | None, value["sensitivity_profile"])
             ),
             reverse_geocode_profile=ReverseGeocodeProfile(
-                provider_profile=str(geocode_value["provider_profile"]),
-                routing_policy=str(geocode_value["routing_policy"]),
+                provider_profile=(
+                    "geo-query-reverse-geocode-v1"
+                    if geocode_value["provider_profile"] == "amap-google-address-poi-v1"
+                    else str(geocode_value["provider_profile"])
+                ),
+                routing_policy=(
+                    "ordered-per-coordinate-v1"
+                    if geocode_value["routing_policy"] == "c90-continuity-bounded-v1"
+                    else str(geocode_value["routing_policy"])
+                ),
                 refresh_token=str(geocode_value["refresh_token"]),
                 max_attempts=int(geocode_value["max_attempts"]),
                 retry_delay_seconds=float(geocode_value["retry_delay_seconds"]),
@@ -361,7 +374,7 @@ class PrecheckExecutionDependencies:
     ffmpeg_version: str | None = None
     embedding_encoder: ImageEmbeddingEncoder | None = None
     sensitivity_detector: SensitivityDetector | None = None
-    geocoder: ReverseGeocodeBatchEngine | None = None
+    geo_tool: GeoQueryTool | None = None
 
 
 class PrecheckOrchestrator:
@@ -570,12 +583,20 @@ class PrecheckOrchestrator:
         )
         if not self._finish_phase(run_ref, "compression"):
             return self.run_control.sync_accounting(run_ref)
+        geo_bundle_work_ids = tuple(
+            WorkStore(self.database_path).iter_run_work_ids(
+                accounting_run_id,
+                capability="bundle-candidate",
+                status=WorkStatus.SUCCEEDED,
+            )
+        )
         self._checkpoint(run_ref, "external_evidence", total="unknown")
         geocode = self._geocode(
             run_ref,
             accounting_run_id,
             all_metadata,
             gpx,
+            geo_bundle_work_ids,
             config,
             executor,
         )
@@ -1140,6 +1161,7 @@ class PrecheckOrchestrator:
         run_id: str,
         metadata: Mapping[Path, MetadataOutcome],
         gpx: Mapping[Path, GPXOutcome],
+        bundle_work_ids: Sequence[str],
         config: PrecheckExecutionConfig,
         executor: BoundedWorkExecutor,
     ) -> ReverseGeocodeBatchOutcome:
@@ -1154,7 +1176,7 @@ class PrecheckOrchestrator:
         producer = ReverseGeocodeProducer(
             self.database_path,
             self.run_control,
-            self.dependencies.geocoder,
+            self.dependencies.geo_tool,
         )
         outcomes = self._execute(
             run_ref,
@@ -1170,6 +1192,7 @@ class PrecheckOrchestrator:
                         run_ref,
                         run_id,
                         work_ids,
+                        bundle_work_ids=bundle_work_ids,
                         profile=config.reverse_geocode_profile,
                     ),
                 ),

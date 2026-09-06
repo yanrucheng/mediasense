@@ -1,281 +1,220 @@
-# Design: Consolidate Geo Acquisition in PreCheck
+# Design: Compressed PreCheck Geo Acquisition Through a Shared Capability
 
 ## Context
 
-MediaSense currently has two paths from coordinates to provider observations.
-PreCheck owns a frozen, deduplicated source-coordinate reverse-geocode batch, but
-its product `offline` mode lets the Run publish without that evidence. Plan then
-offers `enrich_geo`, validates Result coordinates, calls the public
-`mediasense.geo.query` Tool, and stores a revision-bound observation. In the
-reported 0.7.1 flow this divided ownership made Plan attempt authorization before
-the runtime could report the more fundamental fact that no provider existed.
+The current Run contains 2,136 media items, 241 bundle candidates, 200 adaptive
+visual-compression groups, 1,838 located Source Items, and 1,611 exact coordinate
+queries. The Run is paused before authorization and has sent no Provider request.
+The large query set is not evidence that bundling is absent: the orchestrator
+builds bundles first, but Geo later consumes all metadata and GPX Work without the
+bundle relation.
 
-The current contracts are not production contracts and explicitly use Zero BC.
-Old immutable Results remain historical bytes; they are never rewritten. Source
-media remains read-only. Existing local PreCheck Work may be reused by a successor
-Run, but private databases are not read or patched as a product migration API.
+AI Album demonstrates useful local compression through same-asset association and
+temporal shooting chains. It also demonstrates the danger of promoting that
+method into a rule: a transitive 60-second chain produced bundles as large as 201
+items and 322 seconds. MediaSense therefore preserves the capability but changes
+the decision boundary.
 
-This design applies `$yanru-guidelines` directly:
+Two earlier corrections produced opposite regressions. Representative-only Geo
+left many Source Items without an outcome; all-coordinate Geo restored coverage
+but discarded PreCheck compression. This design fixes both by separating coverage
+from acquisition.
 
-- **Anchor purpose and home:** PreCheck's stable purpose includes acquiring
-  reusable source-derived Geo evidence and publishing it in the immutable Result.
-  Plan's stable purpose is interpretation and Human interaction over that Result.
-- **Leave methods open:** exact provider, normalization library, routing heuristic,
-  batching, Work layout, and summary implementation remain replaceable. The
-  contract fixes only frozen scope, authorization, outcome distinctions,
-  provenance, accounting, and immutable handoff semantics.
-- **Independent-identity test:** Plan Geo disappears without losing an independent
-  responsibility; PreCheck already owns the subject selection, acquisition
-  lifecycle, and authoritative persistence. Product `offline` likewise has no
-  independent purpose: it conflates a default effect policy with runtime
-  capability. A public Geo Tool has no remaining real caller after Plan Geo is
-  removed. The provider-neutral values/adapters/routing kernel does retain an
-  independent implementation responsibility because PreCheck must replace
-  providers without changing Result semantics.
-- **Capability-growth test:** a stronger Plan Agent can ask better semantic
-  questions or use better Result views without reconstructing provider
-  acquisition, while a stronger PreCheck implementation can change coordinate
-  selection and routing methods without creating a second stage lifecycle.
+## Purpose and ownership
 
-## Goals / Non-Goals
+The purpose anchor is: PreCheck performs the least reusable and controlled local
+and external work that can prepare sufficient facts for every Source Item.
 
-### Goals
+The ownership anchors are:
 
-- Make one PreCheck Run own local coordinate extraction, exact deduplication,
-  provider availability, trusted authorization, provider execution, accounting,
-  immutable Geo Evidence, and publication gating.
-- Keep zero provider requests before authorization and prove it with provider and
-  transport spies.
-- Distinguish `provider_unavailable`, `authorization_required`,
-  `authorization_declined`, `no_result`, localized failure, and unexpected
-  implementation failure.
-- Give each located Source Item its own Result-bound reverse-geocode outcome,
-  while retaining a bounded deterministic Geo summary for PreCheck diagnostics.
-- Make Result readiness reject missing per-item Geo outcomes so Plan needs no
-  knowledge of acquisition batches, deduplication, caching, or provider routing.
-- Remove Plan Geo, the public Geo Tool, and Geo-only durable state completely.
+- PreCheck Result owns the authoritative per-Source-Item location outcome.
+- PreCheck owns media/bundle interpretation, acquisition-unit selection, query
+  freezing, Run confirmation, cache reuse, and Result projection.
+- `mediasense.geo.query` owns stage-neutral Provider access, routing, effect
+  limits, request accounting, and effect idempotency.
+- Plan consumes per-item Result facts. It may call the same Geo Tool for bounded
+  Plan-local investigation, but cannot mutate the Result or repair missing
+  PreCheck coverage.
+- MediaSense is authoritative for these contracts. AI Album is migration evidence
+  only and is never a runtime dependency.
 
-### Non-Goals
+## Data flow
 
-- No Geo preflight Tool, Geo Skill, Geo Artifact type, place-cluster entity,
-  provider registry, service process, or compatibility adapter.
-- No event inference, place truth, semantic grouping, directory naming, or Human
-  preference inside PreCheck or PreCheck Read.
-- No mutation of old Result packages or versioned external fixtures.
-- No automatic fallback from an unavailable provider to an unauthorized provider,
-  and no global switch that silently changes effect policy.
+```text
+Source Items + metadata + GPX
+            │
+            ▼
+     bundle candidates
+            │  candidate scope only
+            ▼
+ local consistency split ── movement/conflict/missing time ──► smaller units
+            │
+            ▼
+ exact-coordinate request deduplication + compatible Work reuse
+            │
+            ▼
+ frozen mediasense.geo.query request
+            │  exact Human authorization + hard request ceiling
+            ▼
+ provider-neutral observations
+            │
+            ▼
+ per-Source-Item outcome projection in immutable PreCheck Result
+            │
+            ▼
+ Plan reads item facts; optional targeted Geo query is separate Plan work
+```
+
+For example, 30 photos of one table taken in ten seconds still yield 30 Result
+outcomes. If their bundle and coordinates support a stationary capture, PreCheck
+may acquire one observation and project it 30 times. If the same temporal chain
+moves along a street, local coordinate evidence splits it before any Provider is
+called.
 
 ## Decisions
 
-### 1. PreCheck publication is the only Geo acquisition lifecycle
+### 1. Bundle candidates seed Geo units; visual compression groups do not
 
-After coordinate extraction and optional GPX matching, PreCheck derives one ordered
-coordinate batch across every Source Item with an available final coordinate. An
-available GPX coordinate supersedes embedded GPS for the same Source Item; multiple
-identical normalized `(latitude, longitude, datum)` triples become one logical
-query while retaining every Result-local Source Item member. No rounding is part
-of the deduplication method. Visual compression and representative selection do
-not determine Geo scope.
+Bundle candidates preserve same-stem/sidecar associations and local temporal
+adjacency, so they are useful candidate scopes. They are not accepted wholesale.
+Within each bundle, PreCheck first keeps same-asset relationships together where
+their coordinates agree, orders timed assets, and uses a complete-link spatial
+consistency check so a transitive walking chain cannot grow without bound. Missing
+time is shared only within the deterministic same-asset association. Datum or
+coordinate conflict splits the unit.
 
-An empty batch records Geo as `not_applicable` and may publish. A non-empty batch
-must reach one of these boundaries:
+The current implementation uses a 15-metre maximum pairwise diameter and a
+120-second maximum span for non-identical coordinates. These are versioned method
+choices, not product invariants. A stronger local movement model may replace them
+without changing the Result or Geo Tool contracts. Exact equal coordinates may
+still deduplicate after units are formed because they produce the same Provider
+input regardless of media relationship.
 
-| Condition | Run consequence | Result consequence |
+Adaptive compression groups optimize a visual review frontier toward a target
+count. They can join items for reasons that do not establish location equivalence,
+so they are not used directly as Geo acquisition units.
+
+### 2. Coverage and queries are distinct
+
+The coverage set contains every Source Item with a selected final coordinate. The
+query set contains the smaller acquisition-unit representatives after local
+compression and exact-input deduplication. A deterministic medoid chooses an
+actual member coordinate; no synthetic coordinate is invented. The projection
+maps the returned observation Work to every member while each Source Item retains
+its own coordinate and its own Result outcome.
+
+The immutable Result never asks Plan to reconstruct bundle membership, cache
+hits, routing, or request counts in order to know a photo's place outcome.
+
+### 3. PreCheck calls the public Geo Tool
+
+There is one Provider execution boundary. PreCheck constructs one pending
+`reverse_geocode` request with `caller_state` retention and calls
+`mediasense.geo.query` first without authority. The returned request fingerprint
+and effect envelope become the existing PreCheck Run confirmation. After trusted
+Human confirmation, PreCheck converts that authority to the Tool's exact
+authorization and invokes the same request.
+
+The Tool journal records an indeterminate result before execution and a terminal
+result afterward. A lost response is replayed without another Provider call.
+Cancellation prevents later coordinates from starting. The authorized envelope
+caps the entire batch's logical queries, Provider requests, data classes, Provider
+set, retention, and known or unknown billable units.
+
+### 4. Observation identity excludes order and membership
+
+Reusable reverse-geocode Work identity contains normalized coordinate, operation,
+locale, effective Provider/routing profile, and refresh policy. It does not contain
+the previous Work ID, input position, bundle ID, or Source Item membership.
+Provider routing starts from the same request context for every coordinate, so
+batch order cannot silently alter a coordinate's semantics.
+
+Successful legacy observations may be copied into the stable identity without a
+Provider request only when coordinate, legacy profile, refresh policy, and
+language are compatible. Legacy pending chains are superseded rather than
+executed. Old immutable Results are never rewritten.
+
+### 5. Plan may investigate but cannot repair PreCheck
+
+Plan's normal input remains the immutable, Plan-ready Result. If it believes one
+prepared grouping is too broad, the Agent may select a small set of coordinates
+and call `mediasense.geo.query` under a separate exact authorization. The Tool
+returns candidate evidence, not a grouping decision. Plan records only the
+material judgment or request reference it needs.
+
+If a located Source Item lacks a Result outcome, Plan rejects or reopens PreCheck.
+It does not use an ad hoc Geo call to make an incomplete Result appear complete.
+
+### 6. Dataset state declares the Geo journal
+
+The Geo effect journal has its own persistence lifecycle and therefore its own
+Dataset store entry. Manifest version 3 declares `geo: 1`. Supported version 1
+and version 2 manifests migrate atomically; existing private stores and immutable
+Results are not rewritten.
+
+## Failure semantics
+
+| Condition | Owner | Consequence |
 | --- | --- | --- |
-| no compatible configured provider | terminal `failed` with `provider_unavailable` | none |
-| provider exists, trusted authority absent | `paused` with `authorization_required` | none |
-| Human declines | terminal `cancelled` with `authorization_declined` | none |
-| authority matches frozen batch and disclosure | execute only authorized batch | publish after closure |
-| provider no-result | successful attempted observation, explicitly `no_result` | immutable candidate Evidence |
-| localized coordinate failure | completed attempted Work plus qualification | immutable partial/failure Evidence |
-| unexpected exception/invariant violation | propagated to worker failure | none |
+| no final coordinate | PreCheck | no Geo outcome required |
+| no compatible Provider | Geo Tool / PreCheck | Run fails before authorization |
+| authority absent | PreCheck Run | paused; zero Provider requests |
+| authority mismatches request | Geo Tool | authorization required; zero effect |
+| Provider no-result/failure | Geo Tool | explicit per-item missing/failed outcome |
+| transmitted effect becomes uncertain | Geo Tool journal | indeterminate result; no automatic replay |
+| Run cancellation | PreCheck | completed query Work retained; later calls stop |
+| missing projected outcome | Result validator | Result is not Plan-ready |
 
-`blocked` is not used for absent providers or unknown exceptions because neither
-has a real automatic wake-up mechanism. The Human can start a successor Run after
-provider configuration changes.
+## Migration comparison
 
-Alternative rejected: publish a locally complete partial Result. It repeats the
-0.7.1 defect by turning an internal stage boundary into a successful handoff.
+| Capability | Classification | Judgment |
+| --- | --- | --- |
+| same-stem, RAW/JPG/sidecar association | `preserved` | reused as a local candidate scope |
+| temporal shooting-chain compression | `preserved` | retained, then checked for stationary consistency |
+| one representative per legacy bundle | `intentionally_changed` | unsafe for moving or conflicting bundles |
+| per-located-item Result coverage | `regression` in the first MediaSense correction, now repaired | every located item receives an outcome |
+| all exact coordinates become queries | `regression` in the second correction, now repaired | coverage no longer determines request cardinality |
+| adaptive visual groups as Geo units | `not_comparable` | their optimization objective is visual review, not location equivalence |
+| order-dependent reverse-geocode Work chain | `regression`, now repaired | identity is stable per coordinate and policy |
+| public stage-neutral Geo Tool | `preserved` from the earlier MediaSense capability design | PreCheck and Plan can both call it |
 
-### 2. Authorization binds the pending effect set within the frozen batch
+## Risks and controls
 
-The existing Run confirmation checkpoint remains the one attention boundary, but
-its external-effect confirmation becomes non-optional and content-addressed. The
-Run keeps two identities with different purposes: the full frozen-batch identity
-includes reused and pending queries so routing and reuse remain reproducible; the
-external-effect identity includes only queries that can still leave the process.
-The confirmation content includes:
+- A local stationary heuristic can still cross a real address boundary. The
+  conservative complete-link bound limits this; Result outcomes remain candidates,
+  and Plan can request targeted Geo evidence when the distinction matters.
+- Refusing all near-coordinate sharing would regress to GPX interpolation fan-out.
+  Treating every bundle as one unit would reproduce AI Album over-merging. Tests
+  cover both sides.
+- A Provider or language policy change can invalidate cache compatibility. The
+  stable Work descriptor includes the effective policy; the legacy bridge accepts
+  only the explicitly characterized old default and Chinese-language results.
+- Final-coordinate arbitration remains upstream of Geo acquisition. The current
+  GPX producer does not also match an adopted track when embedded GPS is available,
+  so this change detects movement and conflicts among selected final coordinates
+  but does not claim to detect disagreement between embedded GPS and GPX. Adding
+  that comparison requires an explicit coordinate-candidate/arbitration contract;
+  it must not be hidden inside the shared Geo Tool or its request deduplication.
+- The Geo journal is an effect ledger, not a second location-truth store. PreCheck
+  Work remains the reusable observation cache; Result remains the stage handoff.
 
-- every exact normalized coordinate still pending and the parent batch identity;
-- operation and transmitted data classes;
-- configured provider identities and maximum provider-request ceiling;
-- known cost ceiling or explicit `unknown`;
-- each provider's declared data-handling policy or explicit `unknown`; and
-- fixed Result retention for accepted observations.
+## Verification
 
-`resume` with `proceed` requires transport-only trusted Human confirmation whose
-`confirmed_content_identity` equals the external-effect identity. The authority is
-stored with the Run decision and copied into completed Work provenance. A plain
-business-request field, an old decision, credentials, or a changed batch is
-insufficient. `decline` needs no effect authority and terminates the Run. The MCP
-adapter obtains the decision through the connected session's Human-elicitation
-channel and constructs the confirmation context internally; caller-authored JSON
-is not promoted to trusted PreCheck authority. Exact coordinates remain inside
-the PreCheck Run disclosure and never enter a second public Provider Tool call.
+Tests cover same-asset sharing, stationary bursts, moving chains, time and datum
+conflicts, exact deduplication after unit formation, per-item projection,
+order-independent Work identity, legacy cache reuse, no-provider behavior,
+authorization mismatch/decline, cancellation, hard request ceilings, Tool replay,
+MCP elicitation, manifest migration, contract parity, and zero real network use.
 
-Unknown provider policy is not encoded as `none`: it appears as `unknown` inside
-the exact content the Human accepts. Accepted candidate observations always belong
-to the immutable Result; callers do not choose `caller_state` or `none` retention.
-
-Alternative rejected: reuse the public Geo Tool preflight. It would retain the
-second public lifecycle and reintroduce approval ordering before PreCheck owns the
-batch.
-
-### 3. Keep only the Geo kernel PreCheck invokes
-
-Provider-neutral coordinate/result values, provider protocols, AMap and Google
-adapters, datum conversion, normalization, bounded routing/fallback, request
-accounting, and the PreCheck effect guard remain ordinary internal modules.
-`GeoQueryTool`, `GeoOperationJournal`, Plan-specific adapters, public operation
-models that have no PreCheck caller, and the Dataset Geo store are deleted.
-
-Runtime composition constructs providers only from configured credentials and
-injects the resulting batch engine into PreCheck. Credential presence is a fact,
-not authorization. With no configured provider, the engine is absent and
-PreCheck reports `provider_unavailable` before requesting Human authorization.
-
-Alternative rejected: retain the Tool or journal for hypothetical reuse. It fails
-the independent-identity test and creates long-term authority and retention
-semantics with no caller.
-
-### 4. Geo candidate observations become ordinary Result Evidence
-
-Each attempted unique coordinate Work projects one ordinary inline
-`ResultEvidence` with a stable Result-local Evidence reference. Existing
-`represents` relations bind it to every member Source Item, so each located Source
-Item exposes its own outcome through ordinary Source Item expansion. Provider address/POI
-values remain candidate observations with attempt provenance and qualifications;
-they are not entry Evidence, place clusters, events, grouping recommendations, or
-truth claims.
-
-The Result execution boundary continues to reconcile logical queries, actual
-provider requests, provider identities, billable units or `unknown`, and network
-access. Plan-ready publication remains impossible while any Source Item with an
-available final coordinate lacks a reverse-geocode outcome, in addition to the
-existing Result integrity and accounting gates.
-
-Alternative rejected: a Geo Artifact or dedicated place-cluster model. Neither
-owns an independent read/retention lifecycle; the existing Result and Evidence
-structures carry the meaning without divided authority.
-
-### 5. PreCheck Read retains a deterministic diagnostic `geo_summary` operation
-
-`mediasense.precheck.read` exposes a paged `geo_summary` diagnostic operation. It derives its
-entire response from the verified immutable Result and reports:
-
-- GPS and GPX observation-state counts plus combined available, missing, failed,
-  and conflicting Source Item counts;
-- exact normalized-coordinate deduplication rule and unique-coordinate count;
-- per coordinate: member count, compact Result-bound Source Set, acquisition
-  outcome, candidate Evidence refs, provenance, and qualifications; and
-- overall acquisition status: `not_applicable`, `complete`, or `incomplete`.
-
-The Source Set is a compact `geo_coordinate` expression in the existing
-Result-bound Source Set grammar. Exact members are retrieved through the existing
-paged `resolve` operation instead of being embedded without bound in one
-coordinate-group item. The expression repeats the declared GPX-over-GPS selection
-rule rather than persisting a new cluster or Artifact. The projection performs no
-I/O beyond ordinary Result verification, no provider request, and no semantic
-inference. Pagination order is canonical coordinate key. Tests compare the
-projection with exhaustive Result traversal and cover a single high-fanout
-coordinate without exceeding the response byte limit.
-
-Alternative rejected: add a Geo summary Tool or retained summary Artifact. Both
-duplicate the Result authority and lifecycle.
-
-### 6. Plan has no Geo acquisition, effect, or retention state
-
-`PlanWorkTool` accepts only `create`, `update`, `inspect`, and `seal`. `create`
-trusts the Result's `integrity` and `readiness` handoff fields; it does not inspect
-Geo batch scope, deduplication, caching, or acquisition status. Plan reads each
-Source Item's qualified place observation only when needed for interpretation.
-Plan Working State removes Geo
-observations, `geo_evidence` sections, authorization fields, preview rendering,
-fixtures, and tests.
-
-When machine evidence is insufficient, the Agent may ask the Human for a semantic
-decision and record that answer as Human context/judgment, or stop and require a
-successor PreCheck. It never labels Human input as provider or PreCheck evidence.
-
-Existing Plan Working databases are not interpreted or migrated. Runtime uses the
-new clean private schema; an old no-Candidate Work is abandoned and recreated from
-the new Result.
-
-### 7. Remove product `offline`; report actual runtime facts
-
-Runtime and Dataset configuration expose provider credential configuration,
-provider capability availability, and policy disclosure facts. They expose no
-`offline` mode or CLI flag. Provider calls remain impossible until the exact Run
-authorization gate opens, regardless of credentials.
-
-For existing 0.7.1 Dataset workspaces, a one-way public manifest migration removes
-the Geo store declaration while preserving PreCheck directories and immutable
-Result files. It does not read or rewrite private PreCheck/Plan databases. A fresh
-Plan private store is used; old Geo journal bytes, if physically present, remain
-unreferenced historical residue and are never read. New workspaces do not create
-a Geo store.
-
-Alternative rejected: keep `offline` as a test-only product field. Tests inject
-providers or spies directly; product semantics do not need a global mode.
-
-## Risks / Trade-offs
-
-- **[A Dataset with coordinates cannot become Plan-ready without a provider and
-  authorization]** → This is the intended honest boundary. Status names the
-  missing provider before asking for authorization, and successor Runs reuse valid
-  local Work.
-- **[A one-way Dataset manifest migration changes mutable workspace metadata]** →
-  Migrate only the public manifest atomically, never Result bytes or private DBs;
-  verify source identity and supported old shape first.
-- **[Provider policy may be unknown]** → Keep `unknown` in the exact disclosure
-  and require Human confirmation bound to it; never translate it to `none`.
-- **[Geo summary could drift from exhaustive Result semantics]** → Treat it as a
-  PreCheck diagnostic rather than a second Plan-entry gate, share one
-  canonical coordinate parser/precedence rule and test projection equivalence
-  against complete Result traversal. Keep each group bounded by returning a
-  resolvable relationship Source Set rather than embedding every member ref.
-- **[The MCP client may not support Human elicitation]** → Leave the Run paused
-  with `authorization_required` and perform zero Provider requests; never accept a
-  caller-authored authority object as a fallback.
-- **[Removing Plan Geo breaks current callers]** → Zero BC is explicit. Remove
-  schemas, dispatch, Skill guidance, fixtures, and tests together so no false
-  partial compatibility remains.
-- **[Provider effects can be replayed after a crash between request and Work
-  commit]** → Preserve per-coordinate Work boundaries and existing reuse;
-  report indeterminate provider errors honestly. A new public journal/service is
-  not justified by this change.
-
-## Migration Plan
-
-1. Validate this proposal, design, deltas, and tasks before implementation.
-2. Add PreCheck authorization disclosure, provider-first availability handling,
-   required publication gating, Result Evidence projection, and Geo summary.
-3. Wire configured providers into PreCheck and remove `offline` from configuration,
-   Dataset manifests, diagnostics, CLI presentation, and distribution tests.
-4. Make PreCheck publication and Read project incomplete per-item Geo facts as
-   blocked, then delete Plan Geo state, adapter, contract branches, preview, Skill
-   guidance, fixtures, and tests.
-5. Remove Geo Tool dispatch/contract/journal/store and trim the internal kernel to
-   actual PreCheck callers.
-6. Synchronize formal contracts, packaged snapshots, active design docs, Skills,
-   migration ledger, and indexes.
-7. Run contract, unit, integration, real MCP subprocess/listing, network-spy,
-   source-immutability, Honeycomb integration, and OpenSpec validation suites.
-
-Rollback during development is a source revert before release. There is no runtime
-dual path: once shipped, a successor PreCheck Result is required for Plan.
+Read-only evaluation against the paused Hong Kong Run must remain separate from
+execution. The current algorithm yields 225 queries for 1,838 located Source
+Items (down from 1,611 exact-coordinate queries). All 144 historical successes
+remain semantically addressable; 98 are selected by the compressed set, leaving
+127 pending queries and a 254-Provider-request hard ceiling with both current
+adapters. The Run remains paused and no Provider attempt was made.
 
 ## Open Questions
 
-None. Product ownership, Zero BC, provider-policy handling, and the absence of new
-public entities are decided by this change.
+None that block this implementation. Spatial and temporal thresholds are internal
+versioned methods and should be changed only with evaluation evidence, not exposed
+as Plan or product invariants.

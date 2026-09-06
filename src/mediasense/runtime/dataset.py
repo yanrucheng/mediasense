@@ -35,7 +35,7 @@ from .versioning import DATASET_MANIFEST_VERSION, DATASET_STORE_VERSIONS
 
 _MANIFEST_NAME = "dataset.json"
 _FORMAT = "mediasense.dataset"
-_STORES = ("precheck", "plan", "apply")
+_STORES = ("precheck", "plan", "geo", "apply")
 
 
 class DatasetOpenError(RuntimeError):
@@ -630,7 +630,7 @@ def _read_manifest(path: Path, *, migrate: bool = False) -> DatasetManifest:
         raise DatasetOpenError(
             "manifest_invalid", f"Dataset manifest cannot be read: {error}", path=path
         ) from error
-    if migrate and _is_supported_v1_manifest(value):
+    if migrate and _is_supported_legacy_manifest(value):
         migrated = dict(value)
         migrated["format_version"] = DATASET_MANIFEST_VERSION
         migrated["stores"] = dict(DATASET_STORE_VERSIONS)
@@ -640,13 +640,14 @@ def _read_manifest(path: Path, *, migrate: bool = False) -> DatasetManifest:
     return DatasetManifest.from_value(value, path=path)
 
 
-def _is_supported_v1_manifest(value: object) -> bool:
-    return (
-        isinstance(value, Mapping)
-        and value.get("format") == _FORMAT
-        and value.get("format_version") == 1
-        and value.get("stores")
-        == {"apply": 2, "geo": 1, "plan": 2, "precheck": 17}
+def _is_supported_legacy_manifest(value: object) -> bool:
+    if not isinstance(value, Mapping) or value.get("format") != _FORMAT:
+        return False
+    version = value.get("format_version")
+    stores = value.get("stores")
+    return (version, stores) in (
+        (1, {"apply": 2, "geo": 1, "plan": 2, "precheck": 17}),
+        (2, {"apply": 2, "plan": 3, "precheck": 17}),
     )
 
 
@@ -691,6 +692,7 @@ def _verify_component_stores(workspace: Path, manifest: DatasetManifest) -> None
     paths = {
         "precheck": workspace / "precheck" / "work.sqlite3",
         "plan": workspace / "plan" / "work-v3.sqlite3",
+        "geo": workspace / "geo" / "journal.sqlite3",
         "apply": workspace / "apply" / "work.sqlite3",
     }
     for name, database in paths.items():

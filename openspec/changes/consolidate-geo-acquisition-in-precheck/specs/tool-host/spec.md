@@ -3,17 +3,17 @@
 ### Requirement: One composition root constructs the local product
 MediaSense SHALL have one Dataset-bound composition root that validates runtime
 configuration and constructs packaged schemas, stores, configured providers, the
-Dataset opener, and the five Dataset-bound public Tools without requiring a
-client to assemble stage dependencies. Configured map providers SHALL be injected
-only into PreCheck; the root SHALL expose no public Geo Tool or Geo store.
+Dataset opener, and the six Dataset-bound public Tools without requiring a
+client to assemble stage dependencies. The root SHALL construct one shared
+`mediasense.geo.query` instance for direct callers and PreCheck execution.
 
 #### Scenario: Composition has no configured map provider
 - **WHEN** a valid Dataset is opened without a configured map-provider credential
-- **THEN** the composition root constructs all six total public Tools without network access and PreCheck reports provider unavailability only if a non-empty frozen coordinate batch requires it
+- **THEN** the composition root constructs all seven total public Tools without network access and Geo reports unavailability only when a request requires a Provider
 
 #### Scenario: Composition has a configured map provider
 - **WHEN** a valid Dataset is opened with one or more configured map-provider credentials
-- **THEN** provider availability is reported as a fact but no provider request occurs until exact PreCheck Run authority is accepted
+- **THEN** provider availability is reported as a fact but no provider request occurs until exact Geo or PreCheck-mediated authority is accepted
 
 #### Scenario: Two adapters invoke the product
 - **WHEN** the CLI and MCP Host invoke the same Tool operation
@@ -39,7 +39,11 @@ business request.
 
 #### Scenario: PreCheck authorization is absent
 - **WHEN** PreCheck `proceed` lacks trusted confirmation for the pending frozen-batch disclosure
-- **THEN** the Host leaves the Run paused and no exact coordinate is sent through a public effectful Provider Tool call
+- **THEN** the Host leaves the Run paused and the shared Geo Tool sends no Provider request
+
+#### Scenario: MCP requests direct Geo authorization
+- **WHEN** a caller invokes `mediasense.geo.query` without caller-authored authority
+- **THEN** the Host performs zero-effect preflight, elicits trusted Human approval for the exact request envelope, and invokes the Tool only after acceptance
 
 #### Scenario: Required authority is absent
 - **WHEN** another operation requires confirmation or external-effect authority and the Host has no matching trusted context

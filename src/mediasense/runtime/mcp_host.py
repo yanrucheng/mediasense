@@ -61,9 +61,12 @@ def create_mcp_server(host: RuntimeHost | None = None) -> Server[Any]:
                     raise HostRequestError("dataset_ref must be a non-empty string")
                 if not isinstance(request, dict):
                     raise HostRequestError("request must be an object")
-                if params.name == "mediasense.precheck.run" and "authority" in arguments:
+                if params.name in {
+                    "mediasense.precheck.run",
+                    "mediasense.geo.query",
+                } and "authority" in arguments:
                     raise HostRequestError(
-                        "PreCheck authority is supplied only by MCP Human elicitation"
+                        "External-effect authority is supplied only by MCP Human elicitation"
                     )
                 if authority is not None and not isinstance(authority, dict):
                     raise HostRequestError("authority must be an object")
@@ -74,6 +77,18 @@ def create_mcp_server(host: RuntimeHost | None = None) -> Server[Any]:
                         dataset_ref,
                         request,
                     )
+                if params.name == "mediasense.geo.query":
+                    preflight = await anyio.to_thread.run_sync(
+                        lambda: runtime.call_tool(
+                            params.name,
+                            dataset_ref=dataset_ref,
+                            request=request,
+                        )
+                    )
+                    authority = await _elicit_geo_authority(_context, preflight)
+                    if authority is None:
+                        result = preflight
+                        return _tool_result(result)
                 result = await anyio.to_thread.run_sync(
                     lambda: runtime.call_tool(
                         params.name,
@@ -147,7 +162,10 @@ def _mcp_tool(descriptor: ToolDescriptor) -> types.Tool:
             },
             "request": descriptor.input_schema,
         }
-        if descriptor.name != "mediasense.precheck.run":
+        if descriptor.name not in {
+            "mediasense.precheck.run",
+            "mediasense.geo.query",
+        }:
             properties["authority"] = {
                 "type": "object",
                 "description": (
@@ -232,6 +250,73 @@ async def _elicit_precheck_authority(
         "confirmed_content_identity": content_identity,
         "confirmed_at": datetime.now(timezone.utc).isoformat(),
     }
+
+
+async def _elicit_geo_authority(
+    context: Any,
+    preflight: Mapping[str, object],
+) -> Mapping[str, object] | None:
+    if preflight.get("outcome") != "authorization_required":
+        return None
+    fingerprint = preflight.get("request_fingerprint")
+    envelope = preflight.get("required_authorization")
+    if not isinstance(fingerprint, str) or not isinstance(envelope, Mapping):
+        return None
+    session = getattr(context, "session", None)
+    if session is None:
+        return None
+    capabilities = getattr(session, "client_capabilities", None)
+    elicitation = getattr(capabilities, "elicitation", None)
+    if getattr(elicitation, "form", None) is None:
+        return None
+    try:
+        elicited = await session.elicit_form(
+            _geo_authorization_message(envelope),
+            {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {},
+            },
+            related_request_id=getattr(context, "request_id", None),
+        )
+    except NoBackChannelError:
+        _LOGGER.info("MCP client did not provide Human elicitation for Geo authorization")
+        return None
+    if elicited.action != "accept":
+        return None
+    return {
+        "principal_ref": "human:mcp-elicitation",
+        "request_fingerprint": fingerprint,
+        "authorized_at": datetime.now(timezone.utc).isoformat(),
+        "effect_envelope": dict(envelope),
+    }
+
+
+def _geo_authorization_message(envelope: Mapping[str, object]) -> str:
+    providers = envelope.get("allowed_providers")
+    provider_names = (
+        ", ".join(str(item) for item in providers)
+        if isinstance(providers, list)
+        else "unknown"
+    )
+    data_classes = envelope.get("allowed_data_classes")
+    transmitted = (
+        ", ".join(str(item) for item in data_classes)
+        if isinstance(data_classes, list)
+        else "unknown"
+    )
+    return "\n".join(
+        [
+            "Authorize this exact MediaSense Geo request.",
+            f"Logical queries: {envelope.get('max_logical_queries', 'unknown')}.",
+            f"Data sent: {transmitted}. Media files are not sent.",
+            f"Providers: {provider_names}.",
+            f"Maximum provider requests: {envelope.get('max_provider_requests', 'unknown')}.",
+            f"Maximum billable units: {envelope.get('max_billable_units', 'unknown')}.",
+            f"Retention: {envelope.get('retention', 'unknown')}.",
+            "Accept to authorize this request. Decline or dismiss to make no external call.",
+        ]
+    )
 
 
 def _precheck_authorization_message(

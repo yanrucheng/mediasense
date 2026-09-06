@@ -42,10 +42,11 @@
           "store_versions": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["precheck", "plan", "apply"],
+            "required": ["precheck", "plan", "geo", "apply"],
             "properties": {
               "precheck": { "type": "integer", "minimum": 1 },
               "plan": { "type": "integer", "minimum": 1 },
+              "geo": { "type": "integer", "minimum": 1 },
               "apply": { "type": "integer", "minimum": 1 }
             }
           },

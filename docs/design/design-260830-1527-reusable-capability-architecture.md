@@ -564,35 +564,39 @@ than memorized call order.
 
 ## Geo pressure test
 
-The 0.7.1 production flow disproved Geo's independent public identity. Its only
-real product responsibility is reusable source-derived evidence acquisition owned
-by PreCheck. The provider-neutral values and ports under
-`src/mediasense/capabilities/geo/`, plus conversion, transport, provider adapters,
-and bounded routing in `src/mediasense/geo.py`, remain an internal kernel. They do
-not own a public Tool, Skill, journal, Artifact, service, or Dataset store.
+Geo passes the independent-identity test because bounded coordinate lookup is
+useful to more than one stage without owning either stage's business judgment.
+The public `mediasense.geo.query` Tool owns provider-neutral operations, exact
+effect authorization, hard request ceilings, request-scoped routing, and an
+idempotency journal in the Dataset's `geo` store. It does not decide which media
+share an observation, what a place means to an event, or whether a Result is
+Plan-ready.
 
 Its current logical shape is:
 
 ```text
-AdaptiveReverseGeocoder
-├── ReverseGeocodeProvider
-│   ├── AMapReverseGeocoder
-│   └── GoogleMapsReverseGeocoder
+mediasense.geo.query
+├── GeoCapability + request-scoped routing
+├── GeoOperationJournal
+├── AMapReverseGeocoder
+├── GoogleMapsReverseGeocoder
 ├── CoordinateConverter
-│   └── XYConvertCoordinateConverter
 └── JsonTransport
-    └── UrllibJsonTransport
 ```
 
-PreCheck owns the frozen batch, provider availability check, trusted Run
-authorization, Work reuse, effect accounting, and Result projection. Provider
-observations are immutable candidate Evidence, never place truth. Plan only reads
-that Evidence through `mediasense.precheck.read`; if it is insufficient, Plan asks
-the Human for semantic context or requests a successor PreCheck.
+PreCheck owns the high-volume caller policy: it derives conservative acquisition
+units from local asset, bundle, time, coordinate, and trajectory evidence; freezes
+the pending Tool request; obtains Run-scoped Human authorization; calls Geo; and
+projects one outcome to every located Source Item in the immutable Result. The
+observation cache identity is coordinate plus effective Geo semantics, never
+batch position or membership.
 
-The removed public `mediasense.geo.query`, Plan `enrich_geo`, and independent Geo
-journal failed the independent-identity test: deleting them loses no authority or
-lifecycle not already owned by PreCheck. A Geo Skill remains unjustified.
+Plan normally consumes those per-item outcomes. When a material planning judgment
+challenges an over-broad prepared assignment, the Plan Agent may call the same Geo
+Tool for a small selected coordinate set under a new exact authorization. That
+investigation does not mutate the Result or compensate for missing PreCheck
+coverage. A separate Geo Skill remains unnecessary: stage Skills teach when and
+why to call the shared Tool.
 
 ## Additional pressure tests
 

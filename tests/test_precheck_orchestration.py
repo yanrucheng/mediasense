@@ -10,9 +10,22 @@ from threading import Event, Thread
 from PIL import Image
 import pytest
 
+from mediasense.capabilities.geo import (
+    GeoCandidate,
+    GeoCandidateKind,
+    GeoCapability,
+    GeoComponentResult,
+    GeoComponentStatus,
+    GeoOperation,
+    GeoOperationJournal,
+    GeoProviderAttempt,
+    GeoProviderCapabilities,
+    GeoProviderExecution,
+    GeoQueryTool,
+    OrderedGeoRoutingPolicy,
+)
 from mediasense.plan import PlanWorkTool
 from mediasense.geo import (
-    AdaptiveReverseGeocoder,
     GeoCoordinate,
     GeoProviderResult,
     MapDatum,
@@ -186,6 +199,72 @@ class FakeGeocodeProvider:
         )
 
 
+class FakeGeoProviderAdapter:
+    def __init__(self, provider: FakeGeocodeProvider) -> None:
+        self.provider = provider
+        self.capabilities = GeoProviderCapabilities(
+            provider.provider_id,
+            (GeoOperation.REVERSE_GEOCODE,),
+            provider.datum,
+            max_requests_per_operation=2,
+        )
+
+    def execute(
+        self,
+        operation: GeoOperation,
+        coordinate: GeoCoordinate,
+        *,
+        locale: str,
+        radius_meters: float | None = None,
+        max_places: int | None = None,
+    ) -> GeoProviderExecution:
+        del radius_meters, max_places
+        result = self.provider.lookup(coordinate, language=locale)
+        location = result.location or {}
+        candidate = GeoCandidate(
+            GeoCandidateKind.ADDRESS,
+            str(location.get("formatted_address", "unknown")),
+            formatted_address=str(location.get("formatted_address", "unknown")),
+            coordinate=coordinate,
+            components=tuple(
+                sorted(
+                    (str(key), str(value))
+                    for key, value in dict(location.get("components", {})).items()
+                )
+            ),
+            provider_ref=result.provider,
+        )
+        return GeoProviderExecution(
+            GeoComponentResult(
+                operation,
+                GeoComponentStatus.SUCCESS,
+                (),
+                coordinate,
+                (candidate,),
+            ),
+            GeoProviderAttempt(
+                result.provider,
+                operation,
+                GeoComponentStatus.SUCCESS,
+                coordinate,
+                result.provider_coordinate,
+                result.request_count,
+                None,
+            ),
+        )
+
+
+def _geo_tool(tmp_path: Path, provider: FakeGeocodeProvider) -> GeoQueryTool:
+    adapter = FakeGeoProviderAdapter(provider)
+    return GeoQueryTool(
+        GeoCapability(
+            {provider.provider_id: adapter},
+            OrderedGeoRoutingPolicy((provider.provider_id,)),
+        ),
+        GeoOperationJournal(tmp_path / "geo-journal.sqlite3"),
+    )
+
+
 def _prepare_source_bound_run(
     tmp_path: Path,
     *,
@@ -264,12 +343,7 @@ def test_start_then_internal_worker_drives_mixed_source_to_readable_result(
             ffmpeg_version="ffmpeg 8.1",
             embedding_encoder=encoder,
             sensitivity_detector=detector,
-            geocoder=AdaptiveReverseGeocoder(
-                providers={"fake_maps": geo_provider},
-                provider_order=("fake_maps",),
-                initial_provider="fake_maps",
-                initial_language="zh",
-            ),
+            geo_tool=_geo_tool(tmp_path, geo_provider),
         ),
     )
 
@@ -283,7 +357,10 @@ def test_start_then_internal_worker_drives_mixed_source_to_readable_result(
     assert started["state"] == "running"
     assert WorkStore(database).list_run_work(_accounting_run_id) == ()
     advanced = _advance_after_scope(tool, str(started["run_ref"]))
-    if advanced["state"] == "paused" and advanced["reason"]["code"] == "confirmation_required":
+    if (
+        advanced["state"] == "paused"
+        and advanced["reason"]["code"] == "confirmation_required"
+    ):
         tool.run(
             {
                 "action": "resume",
@@ -530,11 +607,8 @@ def test_default_orchestration_makes_no_external_requests(tmp_path: Path) -> Non
     Image.new("RGB", (32, 24), "navy").save(source / "photo.jpg")
 
     class RejectNetwork:
-        def lookup(self, _coordinate):
+        def handle(self, _request):
             raise AssertionError("default PreCheck must not invoke a provider")
-
-        def reset(self) -> None:
-            pass
 
     tool = PrecheckRunTool(
         database,
@@ -546,7 +620,7 @@ def test_default_orchestration_makes_no_external_requests(tmp_path: Path) -> Non
             compression_target=1,
         ),
         execution_dependencies=PrecheckExecutionDependencies(
-            geocoder=RejectNetwork()  # type: ignore[arg-type]
+            geo_tool=RejectNetwork()  # type: ignore[arg-type]
         ),
     )
     started = tool.run(
@@ -568,12 +642,7 @@ def test_geocode_pauses_for_exact_frozen_query_count_before_fake_provider(
     for name, color in (("a.jpg", "red"), ("b.jpg", "blue")):
         Image.new("RGB", (48, 32), color).save(source / name)
     provider = FakeGeocodeProvider()
-    geocoder = AdaptiveReverseGeocoder(
-        providers={provider.provider_id: provider},
-        provider_order=(provider.provider_id,),
-        initial_provider=provider.provider_id,
-        initial_language="zh",
-    )
+    geo_tool = _geo_tool(tmp_path, provider)
     base = PrecheckExecutionConfig()
     auto_budget = base.resolve_resources(
         source_storage="local",
@@ -601,7 +670,7 @@ def test_geocode_pauses_for_exact_frozen_query_count_before_fake_provider(
         execution_dependencies=PrecheckExecutionDependencies(
             metadata_runner=FakeExifTool(include_gps=True),
             exiftool_version="13.30",
-            geocoder=geocoder,
+            geo_tool=geo_tool,
         ),
     )
 
@@ -688,12 +757,7 @@ def test_visual_compression_does_not_reduce_per_source_geocode_coverage(
         execution_dependencies=PrecheckExecutionDependencies(
             metadata_runner=FakeExifTool(gps_coordinates=coordinates),
             exiftool_version="13.30",
-            geocoder=AdaptiveReverseGeocoder(
-                providers={provider.provider_id: provider},
-                provider_order=(provider.provider_id,),
-                initial_provider=provider.provider_id,
-                initial_language="zh",
-            ),
+            geo_tool=_geo_tool(tmp_path, provider),
         ),
     )
 
@@ -709,10 +773,13 @@ def test_visual_compression_does_not_reduce_per_source_geocode_coverage(
     assert paused["state"] == "paused"
     unique_coordinates = set(coordinates.values())
     assert paused["confirmation"]["quantity"] == len(unique_coordinates)
-    assert sum(
-        work.spec.capability == "adaptive-compression-group"
-        for work in WorkStore(database).list_run_work(accounting_run_id)
-    ) == 1
+    assert (
+        sum(
+            work.spec.capability == "adaptive-compression-group"
+            for work in WorkStore(database).list_run_work(accounting_run_id)
+        )
+        == 1
+    )
 
     tool.run(
         {
@@ -779,9 +846,12 @@ def test_visual_compression_does_not_reduce_per_source_geocode_coverage(
         path: f"{latitude:.4f},{longitude:.4f}"
         for path, (latitude, longitude) in coordinates.items()
     }
-    assert reader.read({"operation": "review", "result_ref": result_ref})[
-        "result"
-    ]["readiness"] == "plan_ready"
+    assert (
+        reader.read({"operation": "review", "result_ref": result_ref})["result"][
+            "readiness"
+        ]
+        == "plan_ready"
+    )
     plan = PlanWorkTool(tmp_path / "plan-store", reader).handle(
         {
             "action": "create",
@@ -837,11 +907,7 @@ def test_human_declines_frozen_geo_batch_without_provider_request(
         execution_dependencies=PrecheckExecutionDependencies(
             metadata_runner=FakeExifTool(include_gps=True),
             exiftool_version="13.30",
-            geocoder=AdaptiveReverseGeocoder(
-                providers={"fake_maps": provider},
-                provider_order=("fake_maps",),
-                initial_provider="fake_maps",
-            ),
+            geo_tool=_geo_tool(tmp_path, provider),
         ),
     )
     started = tool.run(

@@ -10,7 +10,7 @@ Organize every in-scope media item so none is silently lost and the Human can la
 ## Tool Host prerequisite
 
 Proceed only when the current Honeycomb session exposes a compatible MediaSense
-`0.7.x` Tool Host and `mediasense.plan.work` is discoverable. A CLI found in
+`0.7.x` Tool Host, `mediasense.plan.work`, and `mediasense.geo.query` are discoverable. A CLI found in
 `PATH` or an MCP table present on disk is not sufficient. If the Host is absent or
 incompatible, stop Plan work and use the `mediasense` product entry Skill's local
 Honeycomb bootstrap; do not duplicate setup, edit user-level Agent configuration,
@@ -95,13 +95,21 @@ Before `update`, show a directional Preview whenever Profile fit, the primary or
 
 When the Human accepts a user-visible direction, preserve that scope precisely. Confirmation of one event, person, restaurant, or group does not silently confirm unrelated media or the complete Candidate.
 
-## Place evidence remains Result-bound
+## Place evidence starts with the Result
 
-Use each Source Item's qualified place Evidence from the immutable Result. Plan
-does not call a map provider, request Geo authorization, inspect acquisition
-internals, or retain provider observations. When machine place evidence is insufficient, ask the
-Human only for semantic context they own, or stop and require a successor
-PreCheck. Record Human input as Human input, never as provider or PreCheck
+Use each Source Item's qualified place outcome from the immutable Result without
+reconstructing PreCheck bundle, acquisition, cache, or Provider decisions. Missing
+per-item coverage is a PreCheck defect and requires a successor Result; Plan must
+not silently repair it.
+
+When the Result is complete but a material grouping judgment challenges an
+over-broad location assignment—for example, one prepared group spans thousands
+of items—Plan may call the stage-neutral `mediasense.geo.query` Tool for a small,
+explicitly selected coordinate set. Treat this as Plan-local investigation: show
+the Tool's exact egress and request ceiling, obtain its own trusted Human
+authorization, and record only the material judgment or request reference needed
+by Plan. Do not mutate the immutable Result or create a second PreCheck lifecycle.
+Human-supplied place meaning remains Human input, never provider or PreCheck
 observation.
 
 ## Build, preview, and freeze

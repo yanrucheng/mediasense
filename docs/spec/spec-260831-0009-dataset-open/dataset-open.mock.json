@@ -10,10 +10,11 @@
     "workspace": "/Volumes/PhotoDisk/.mediasense/datasets/dataset-c2b69fcd2e3a6d4bbfa32f22",
     "selection_tier": "external_volume",
     "created": true,
-    "manifest_version": 2,
+    "manifest_version": 3,
     "store_versions": {
       "precheck": 17,
       "plan": 3,
+      "geo": 1,
       "apply": 2
     },
     "configuration": {

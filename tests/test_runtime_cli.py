@@ -36,7 +36,7 @@ def test_doctor_distinguishes_optional_missing_dependencies(
     assert checks["resources"] == {
         "name": "resources",
         "status": "ok",
-        "message": "6 Tool contracts and 4 Skills are available.",
+        "message": "7 Tool contracts and 4 Skills are available.",
         "required": True,
     }
     assert checks["exiftool"]["status"] == "warning"
@@ -123,7 +123,7 @@ def test_invalid_user_config_blocks_before_dataset_creation(
     assert not workspace.exists()
 
 
-def test_tool_discovery_lists_dataset_and_six_existing_tools(capsys) -> None:
+def test_tool_discovery_lists_dataset_and_seven_tools(capsys) -> None:
     assert run(["tools", "list", "--json"]) == 0
     result = json.loads(capsys.readouterr().out)
     assert [item["name"] for item in result["tools"]] == [
@@ -131,10 +131,11 @@ def test_tool_discovery_lists_dataset_and_six_existing_tools(capsys) -> None:
         "mediasense.precheck.run",
         "mediasense.precheck.read",
         "mediasense.plan.work",
+        "mediasense.geo.query",
         "mediasense.apply.run",
         "mediasense.apply.read",
     ]
-    assert len(tool_descriptors()) == 6
+    assert len(tool_descriptors()) == 7
 
     assert run(["tools", "show", "mediasense.precheck.run", "--json"]) == 0
     detail = json.loads(capsys.readouterr().out)
@@ -217,6 +218,8 @@ def test_packaged_resources_are_complete_and_contracts_match_authorities() -> No
         / "docs/spec/spec-260826-1546-precheck-read/precheck-read.tool.json",
         "mediasense.plan.work": root
         / "docs/spec/spec-260827-1915B-plan-work/plan-work.tool.json",
+        "mediasense.geo.query": root
+        / "docs/spec/spec-260830-2034-geo-query/geo-query.tool.json",
         "mediasense.apply.run": root
         / "docs/spec/spec-260829-0050-apply/apply-run.tool.json",
         "mediasense.apply.read": root

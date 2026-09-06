@@ -48,8 +48,10 @@ audited reuse domain. Workspace creation is atomic and reopening the same Datase
 is idempotent.
 
 The Tool owns Dataset resolution only. PreCheck, Plan, and Apply retain their
-existing stage contracts and effect boundaries. Geo acquisition is PreCheck-owned
-and has no independent Dataset store.
+existing stage contracts and effect boundaries. The stage-neutral Geo Tool owns a
+separately versioned Dataset journal for effect idempotency; PreCheck Result and
+Plan Working State remain authoritative for their own projected facts and
+decisions.
 
 ## Files
 

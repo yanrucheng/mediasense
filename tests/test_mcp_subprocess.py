@@ -20,6 +20,7 @@ EXPECTED_TOOLS = {
     "mediasense.precheck.run",
     "mediasense.precheck.read",
     "mediasense.plan.work",
+    "mediasense.geo.query",
     "mediasense.apply.run",
     "mediasense.apply.read",
 }
@@ -38,9 +39,7 @@ class GeoElicitationRuntimeHost:
     disclosure = {
         "frozen_batch_identity": "sha256:" + "b" * 64,
         "operation": "reverse_geocode",
-        "coordinates": [
-            {"latitude": 22.3193, "longitude": 114.1694, "datum": "WGS84"}
-        ],
+        "coordinates": [{"latitude": 22.3193, "longitude": 114.1694, "datum": "WGS84"}],
         "transmitted_data_classes": ["coordinate", "datum", "locale"],
         "providers": [
             {
@@ -139,15 +138,123 @@ class GeoElicitationRuntimeHost:
         }
 
 
+class DirectGeoRuntimeHost:
+    fingerprint = "sha256:" + "c" * 64
+    envelope = {
+        "allowed_providers": ["fake_maps"],
+        "allowed_data_classes": ["coordinate", "datum", "locale"],
+        "max_logical_queries": 1,
+        "max_provider_requests": 1,
+        "max_billable_units": None,
+        "allow_unknown_billable_units": True,
+        "retention": "none",
+    }
+
+    def __init__(self) -> None:
+        self.authorities: list[object] = []
+
+    def call_tool(
+        self,
+        name: str,
+        *,
+        dataset_ref: str,
+        request: dict[str, object],
+        authority: object = None,
+    ) -> dict[str, object]:
+        assert name == "mediasense.geo.query"
+        assert dataset_ref == "dataset:test"
+        self.authorities.append(authority)
+        if authority is None:
+            return {
+                "tool": "mediasense.geo.query",
+                "request_id": str(request["request_id"]),
+                "outcome": "authorization_required",
+                "operation": "reverse_geocode",
+                "request_fingerprint": self.fingerprint,
+                "components": [],
+                "attempts": [],
+                "effects": {
+                    "logical_queries": 0,
+                    "provider_requests": 0,
+                    "billable_units": 0,
+                    "transmitted_data_classes": [],
+                    "providers_attempted": [],
+                },
+                "continuations": [],
+                "observed_at": "2026-09-06T12:00:00+08:00",
+                "qualifications": [
+                    {
+                        "code": "authorization_required",
+                        "message": "No provider request was sent.",
+                    }
+                ],
+                "route_context": {"preferred_provider": None, "locale": None},
+                "required_authorization": self.envelope,
+            }
+        return {
+            "tool": "mediasense.geo.query",
+            "request_id": str(request["request_id"]),
+            "outcome": "success",
+            "operation": "reverse_geocode",
+            "request_fingerprint": self.fingerprint,
+            "components": [
+                {
+                    "operation": "reverse_geocode",
+                    "status": "success",
+                    "subject_refs": ["source-item:test"],
+                    "coordinate": {
+                        "latitude": 22.3193,
+                        "longitude": 114.1694,
+                        "datum": "WGS84",
+                    },
+                    "candidates": [
+                        {"kind": "address", "name": "Hong Kong", "components": {}}
+                    ],
+                    "qualifications": [],
+                }
+            ],
+            "attempts": [
+                {
+                    "provider": "fake_maps",
+                    "operation": "reverse_geocode",
+                    "status": "success",
+                    "input_coordinate": {
+                        "latitude": 22.3193,
+                        "longitude": 114.1694,
+                        "datum": "WGS84",
+                    },
+                    "provider_coordinate": {
+                        "latitude": 22.3193,
+                        "longitude": 114.1694,
+                        "datum": "WGS84",
+                    },
+                    "provider_requests": 1,
+                    "billable_units": None,
+                }
+            ],
+            "effects": {
+                "logical_queries": 1,
+                "provider_requests": 1,
+                "billable_units": None,
+                "transmitted_data_classes": ["coordinate", "datum", "locale"],
+                "providers_attempted": ["fake_maps"],
+            },
+            "continuations": [],
+            "observed_at": "2026-09-06T12:00:00+08:00",
+            "qualifications": [],
+            "route_context": {"preferred_provider": "fake_maps", "locale": "zh-CN"},
+        }
+
+
 async def _mcp_geo_resume(
     runtime: GeoElicitationRuntimeHost,
     elicitation_callback=None,
 ) -> types.CallToolResult:
-    server_to_client_send, server_to_client_receive = (
-        anyio.create_memory_object_stream(10)
+    server_to_client_send, server_to_client_receive = anyio.create_memory_object_stream(
+        10
     )
-    client_to_server_send, client_to_server_receive = (
-        anyio.create_memory_object_stream(10)
+    client_to_server_send, client_to_server_receive = anyio.create_memory_object_stream(
+        10
     )
     server = create_mcp_server(runtime)  # type: ignore[arg-type]
     result: types.CallToolResult
@@ -172,6 +279,56 @@ async def _mcp_geo_resume(
                         "action": "resume",
                         "run_ref": "precheck-run:test",
                         "decision": "proceed",
+                    },
+                },
+            )
+        group.cancel_scope.cancel()
+    return result
+
+
+async def _mcp_direct_geo(
+    runtime: DirectGeoRuntimeHost,
+    elicitation_callback=None,
+) -> types.CallToolResult:
+    server_to_client_send, server_to_client_receive = anyio.create_memory_object_stream(
+        10
+    )
+    client_to_server_send, client_to_server_receive = anyio.create_memory_object_stream(
+        10
+    )
+    server = create_mcp_server(runtime)  # type: ignore[arg-type]
+    result: types.CallToolResult
+    async with anyio.create_task_group() as group:
+        group.start_soon(
+            server.run,
+            client_to_server_receive,
+            server_to_client_send,
+            server.create_initialization_options(),
+        )
+        async with ClientSession(
+            server_to_client_receive,
+            client_to_server_send,
+            elicitation_callback=elicitation_callback,
+        ) as session:
+            await session.initialize()
+            result = await session.call_tool(
+                "mediasense.geo.query",
+                {
+                    "dataset_ref": "dataset:test",
+                    "request": {
+                        "request_id": "request:direct-geo",
+                        "operation": "reverse_geocode",
+                        "subjects": [
+                            {
+                                "subject_ref": "source-item:test",
+                                "coordinate": {
+                                    "latitude": 22.3193,
+                                    "longitude": 114.1694,
+                                    "datum": "WGS84",
+                                },
+                            }
+                        ],
+                        "locale": "zh-CN",
                     },
                 },
             )
@@ -229,8 +386,9 @@ def test_mcp_geo_resume_uses_session_elicitation_as_trusted_authority() -> None:
         assert accepted.is_error is False
         assert accepted.structured_content is not None
         assert accepted.structured_content["target_state"] == "running"
-        assert accepted_runtime.provider_coordinates == (
-            accepted_runtime.disclosure["coordinates"]
+        assert (
+            accepted_runtime.provider_coordinates
+            == (accepted_runtime.disclosure["coordinates"])
         )
         assert accepted_runtime.authorities == [
             {
@@ -282,11 +440,38 @@ def test_mcp_geo_resume_uses_session_elicitation_as_trusted_authority() -> None:
         assert failed.structured_content is None
         failed_payload = json.loads(failed.content[0].text)
         assert failed_payload["error"]["code"] == "host_operation_failed"
-        assert "elicitation implementation failed" not in (
-            failed_payload["error"]["message"]
+        assert (
+            "elicitation implementation failed"
+            not in (failed_payload["error"]["message"])
         )
         assert failed_runtime.authorities == []
         assert failed_runtime.provider_coordinates == []
+
+    anyio.run(scenario)
+
+
+def test_mcp_direct_geo_uses_session_elicitation_as_trusted_authority() -> None:
+    prompts: list[types.ElicitRequestParams] = []
+
+    async def approve(_context, params):
+        prompts.append(params)
+        return types.ElicitResult(action="accept", content={})
+
+    async def scenario() -> None:
+        runtime = DirectGeoRuntimeHost()
+        result = await _mcp_direct_geo(runtime, approve)
+        assert result.is_error is False
+        assert result.structured_content is not None
+        assert result.structured_content["outcome"] == "success"
+        assert runtime.authorities[0] is None
+        assert runtime.authorities[1] == {
+            "principal_ref": "human:mcp-elicitation",
+            "request_fingerprint": runtime.fingerprint,
+            "authorized_at": runtime.authorities[1]["authorized_at"],
+            "effect_envelope": runtime.envelope,
+        }
+        assert "Maximum provider requests: 1" in prompts[0].message
+        assert "Media files are not sent" in prompts[0].message
 
     anyio.run(scenario)
 
@@ -340,6 +525,10 @@ def test_stdio_mcp_handshake_discovery_and_non_destructive_call(
                 tool for tool in listed.tools if tool.name == "mediasense.precheck.run"
             )
             assert "authority" not in precheck_run.input_schema["properties"]
+            geo_query = next(
+                tool for tool in listed.tools if tool.name == "mediasense.geo.query"
+            )
+            assert "authority" not in geo_query.input_schema["properties"]
             assert precheck_run.input_schema["properties"]["request"]["$id"] == (
                 "urn:mediasense:tool:precheck-run-input"
             )

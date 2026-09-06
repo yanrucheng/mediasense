@@ -5,7 +5,9 @@ The orchestrator SHALL run only capabilities required by the durable Run contrac
 and SHALL derive ordering from producer dependencies. It MUST NOT materialize
 every optional producer merely because one implementation exists. Product-level
 `offline` configuration SHALL NOT select execution semantics; every external
-effect SHALL instead depend on exact Run authority.
+effect SHALL instead depend on exact Run authority. Bundle production SHALL
+precede Geo acquisition so the latter can use the completed local relationship
+evidence before constructing a shared Tool request.
 
 #### Scenario: Local work before external authorization
 - **WHEN** a Run has not received reverse-geocode authority
@@ -27,7 +29,7 @@ Run SHALL NOT publish a Result.
 - **THEN** Run status becomes `completed` and references the exact readable immutable Result
 
 #### Scenario: Geo closure is absent
-- **WHEN** the frozen batch is non-empty and Geo acquisition has not reached an authorized executed outcome for every required coordinate
+- **WHEN** any Source Item with a final coordinate lacks a projected reverse-geocode outcome
 - **THEN** publication does not begin and no `plan_ready` Result exists
 
 #### Scenario: Seal crash window
@@ -54,7 +56,10 @@ exception or invariant violation into `paused`, `blocked`, or authorization stat
 - **WHEN** the Human declines the exact pending disclosure
 - **THEN** the Run becomes terminal `cancelled` with reason `authorization_declined`
 
-#### Scenario: Implementation crashes
-- **WHEN** a valid authorized provider path raises an unexpected exception
-- **THEN** the exception reaches the worker failure boundary and the Run becomes `failed` with an implementation diagnostic rather than an expected domain outcome
+#### Scenario: Provider effect becomes indeterminate
+- **WHEN** execution may have reached a Provider but no terminal response can be proven
+- **THEN** the Geo journal prevents automatic replay and PreCheck preserves an explicit indeterminate outcome
 
+#### Scenario: Implementation crashes before an effect is admitted
+- **WHEN** a valid path raises an unexpected exception before Geo journal admission
+- **THEN** the exception reaches the worker failure boundary and the Run becomes `failed` with an implementation diagnostic rather than an expected domain outcome

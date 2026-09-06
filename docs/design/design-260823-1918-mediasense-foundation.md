@@ -53,7 +53,7 @@ stages are not required to map one-to-one to internal Tool calls.
 
 - Source media is read-only. Derived artifacts are written to a separate workspace.
 - Remote calls, uploads, reverse-geocoding services, and billable model access are disabled by default and reported explicitly.
-- For every Source Item with an available final coordinate, PreCheck produces that item's reverse-geocode outcome before a Result becomes Plan-ready. It may deduplicate identical normalized coordinates internally and bind one authorization to the exact pending query set and effective profile. Visual compression does not reduce Geo coverage. This never authorizes media, rendition, embedding, path, filename, prompt, or general-metadata egress.
+- For every Source Item with an available final coordinate, PreCheck produces that item's reverse-geocode outcome before a Result becomes Plan-ready. It first uses local asset, bundle, time, and trajectory evidence to form conservative acquisition units, then calls the shared Geo Tool and projects observations back to every covered Source Item. Exact-coordinate deduplication remains a final request defense; neither one representative per bundle nor one query per Source Item is a stage invariant. Authorization binds the compressed pending query set and never authorizes media, rendition, embedding, path, filename, prompt, or general-metadata egress.
 - Metadata extraction, decoding, thumbnailing, frame selection, fingerprinting, embedding, indexing, and grouping reuse completed work where valid.
 - Work is observable, bounded in resource use, resumable after interruption, and incrementally invalidated.
 - A disconnected volume is treated as unavailable, not as evidence that its files were deleted.
@@ -66,12 +66,14 @@ Exact implementations—ExifTool, FFmpeg, embedding model, index, clustering alg
 ### `mediasense.plan`: interactive convergence
 
 `plan` starts from one static precheck result. It may use a modern multimodal model
-for semantic interpretation, but it must not inspect every asset or acquire map-
-provider evidence. It progressively selects representative, boundary, outlier,
+for semantic interpretation, but it must not inspect every asset. It progressively selects representative, boundary, outlier,
 and conflict evidence under explicit visual, model, cost, and user-attention
-budgets. If machine place evidence is insufficient, Plan may ask the Human for a
-semantic judgment or require a successor PreCheck; Human input never impersonates
-provider evidence.
+budgets. If a complete PreCheck Result contains a suspiciously broad location
+assignment, Plan may issue a bounded, separately authorized query to the shared
+Geo Tool for selected coordinates. That local investigation neither mutates the
+Result nor repairs missing PreCheck coverage. If upstream coverage itself is
+incomplete, Plan asks the Human for semantic judgment or requires a successor
+PreCheck; Human input never impersonates provider evidence.
 
 It must keep these meanings separate:
 
@@ -88,10 +90,12 @@ The stage ends only when every in-scope asset has an explicit disposition, confl
 
 ## Evidence acquisition and downstream policy
 
-`precheck` owns reusable source-derived evidence acquisition and its immutable
+`precheck` owns media-aware Geo compression and the immutable per-Source-Item
 Result projection; `plan` owns the policy for interpreting and using that evidence.
-Geo provider observations therefore belong to PreCheck. Plan neither repairs a
-missing acquisition nor owns a second Geo lifecycle.
+The stage-neutral `mediasense.geo.query` Tool owns bounded provider access,
+request-scoped routing, effect accounting, and idempotent execution. PreCheck is
+its normal bulk caller; Plan may be a narrow investigative caller. Plan neither
+repairs missing PreCheck coverage nor owns a second Geo lifecycle.
 
 - `precheck` may produce local, source-derived candidate signals, including content-sensitivity observations. Such signals must retain their producer, effective profile, score or quality where available, completion or failure state, and other provenance needed to challenge or regenerate them. They are evidence, not semantic truth, user authorization, or a routing decision.
 - The exact detector, model, labels, thresholds, and implementation remain replaceable. The stage boundary preserves the evidence capability and its traceability, not one historical classifier or taxonomy.
@@ -100,9 +104,9 @@ missing acquisition nor owns a second Geo lifecycle.
 - `precheck` does not choose a local or remote VLM path from sensitivity signals.
   Local evidence acquisition does not relax its source-read-only, local-first, or
   explicit authorization and effect-reporting guarantees. Coordinate-only reverse
-  geocoding may run after PreCheck freezes the exact deduplicated source-coordinate query set and
-  trusted Human confirmation binds its provider-policy disclosure; this does not
-  authorize media, feature, or prompt egress.
+  geocoding may run after PreCheck freezes its compressed acquisition set and
+  trusted Human confirmation binds the shared Geo Tool's exact request and hard
+  effect envelope; this does not authorize media, feature, or prompt egress.
 
 This separation lets evidence collection improve independently from planning policy, while allowing stronger future Agents and providers to replace today's interpretation and routing methods without changing the precheck handoff boundary.
 

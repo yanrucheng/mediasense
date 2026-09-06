@@ -44,7 +44,7 @@ The Tool is authoritative for:
   control actions; and
 - whether automatic publication completed and which immutable `result_ref` was published.
 
-The Tool may create and mutate Working Run state and internal derived artifacts. It may not mutate source media or any published Result. Before expensive local work, the Tool exposes factual source-tree statistics and enforces an exact caller-selected scope; it does not decide whether a named or hidden subtree is semantically wanted. External work remains disabled until its exact pending work is known and the user confirms it through a later paused Run checkpoint. The permitted online exception is coordinate-only reverse geocoding over the normalized, deduplicated set derived from every Source Item with an available final coordinate; visual compression does not narrow that set, and one matching Run decision covers only that frozen pending work.
+The Tool may create and mutate Working Run state and internal derived artifacts. It may not mutate source media or any published Result. Before expensive local work, the Tool exposes factual source-tree statistics and enforces an exact caller-selected scope; it does not decide whether a named or hidden subtree is semantically wanted. External work remains disabled until its exact pending work is known and the user confirms it through a later paused Run checkpoint. The permitted online exception is coordinate-only reverse geocoding over a media-aware acquisition set derived from every Source Item with an available final coordinate. Bundle, time, and trajectory evidence may reduce requests without reducing per-item Result coverage, and one matching Run decision covers only that frozen pending work.
 
 Mutable Work Records, cache keys, checkpoints, leases, SQLite rows, internal
 producer states, artifact paths, and orchestration mechanics are not public. The
@@ -215,10 +215,12 @@ If optional pending work changes, the runtime pauses again. A prior decision
 never authorizes a larger or different work set. No separate authorization
 action or public resource entity is introduced.
 
-The Run executes this fixed batch through a PreCheck-owned engine while reusing
-provider-neutral adapters. There is no public Geo Tool. The Result must report the
-frozen scope, provider route, logical and actual request counts, outcomes, failures,
-and known or unknown billable effects, while proving that media, renditions,
+The Run executes this fixed batch through the stage-neutral
+`mediasense.geo.query` Tool. PreCheck owns media-aware compression, the Run
+checkpoint, compatible observation reuse, and per-Source-Item Result projection;
+the Geo Tool owns Provider routing, hard effect ceilings, and idempotent execution.
+The Result must report logical and actual request counts, outcomes, failures, and
+known or unknown billable effects, while proving that media, renditions,
 embeddings, paths, filenames, prompts, and general metadata were not transmitted.
 
 An accepted pause or cancel response proves only that the request was accepted

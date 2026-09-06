@@ -24,6 +24,6 @@ The clean-install wheel smoke SHALL compare packaged contract paths, Skill paths
 CLI Tool names, and MCP Tool names with explicit expected sets rather than stale
 aggregate counts.
 
-#### Scenario: Removed Geo resources stay absent
-- **WHEN** a wheel is built after removal of the public Geo Tool and addition of a packaged Plan reference
-- **THEN** clean-install verification accepts exactly the current six Tool names, eight contract files, and eleven Skill files while rejecting missing or unexpected paths
+#### Scenario: Shared Geo resources are packaged
+- **WHEN** a wheel is built with the stage-neutral Geo capability
+- **THEN** clean-install verification accepts the Geo Tool contract, exactly seven public Tool names, and the current Skill set while rejecting missing or unexpected paths

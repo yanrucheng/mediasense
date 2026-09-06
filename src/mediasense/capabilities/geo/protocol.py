@@ -12,7 +12,9 @@ from .model import (
     GeoLookupResult,
     GeoOperation,
     GeoProviderAttempt,
+    GeoRequest,
     GeoProviderResult,
+    GeoRouteContext,
     MapDatum,
 )
 
@@ -53,6 +55,20 @@ class GeoProviderExecution:
     attempt: GeoProviderAttempt
 
 
+class GeoProvider(Protocol):
+    capabilities: GeoProviderCapabilities
+
+    def execute(
+        self,
+        operation: GeoOperation,
+        coordinate: GeoCoordinate,
+        *,
+        locale: str,
+        radius_meters: float | None = None,
+        max_places: int | None = None,
+    ) -> GeoProviderExecution: ...
+
+
 class ReverseGeocodeProvider(Protocol):
     provider_id: str
     datum: MapDatum
@@ -73,6 +89,18 @@ class ReverseGeocodeBatchEngine(Protocol):
 
     def observe(self, result: Mapping[str, object]) -> None: ...
 
-    def effect_disclosure(
-        self, logical_query_count: int
-    ) -> tuple[Mapping[str, object], ...]: ...
+
+class GeoRoutingPolicy(Protocol):
+    def routes(
+        self,
+        request: GeoRequest,
+        context: GeoRouteContext,
+        providers: tuple[GeoProviderCapabilities, ...],
+    ) -> tuple[str, ...]: ...
+
+    def observe(
+        self,
+        request: GeoRequest,
+        context: GeoRouteContext,
+        execution: GeoProviderExecution,
+    ) -> GeoRouteContext: ...

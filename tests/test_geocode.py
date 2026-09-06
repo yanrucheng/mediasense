@@ -7,8 +7,22 @@ from pathlib import Path
 
 from jsonschema import Draft202012Validator
 from PIL import Image
+import pytest
 
-from mediasense.capabilities.geo import GeoComponentStatus, GeoOperation
+from mediasense.capabilities.geo import (
+    GeoCandidate,
+    GeoCandidateKind,
+    GeoCapability,
+    GeoComponentResult,
+    GeoComponentStatus,
+    GeoOperation,
+    GeoOperationJournal,
+    GeoProviderAttempt,
+    GeoProviderCapabilities,
+    GeoProviderExecution,
+    GeoQueryTool,
+    OrderedGeoRoutingPolicy,
+)
 from mediasense.geo import (
     AMapReverseGeocoder,
     AdaptiveReverseGeocoder,
@@ -20,6 +34,7 @@ from mediasense.geo import (
 )
 from mediasense.precheck import (
     AccountingStore,
+    BundleCandidateProducer,
     DependencyKind,
     ImageRenditionProducer,
     PrecheckReadTool,
@@ -32,6 +47,7 @@ from mediasense.precheck import (
     WorkSpec,
     WorkStatus,
     WorkStore,
+    upstream_dependency,
 )
 
 
@@ -122,6 +138,77 @@ class FakeCountryProvider:
         )
 
 
+class FakeGeoProviderAdapter:
+    def __init__(self, provider: FakeGoogle | FakeCountryProvider) -> None:
+        self.provider = provider
+        self.capabilities = GeoProviderCapabilities(
+            provider.provider_id,
+            (GeoOperation.REVERSE_GEOCODE,),
+            provider.datum,
+            max_requests_per_operation=2,
+        )
+
+    def execute(
+        self,
+        operation: GeoOperation,
+        coordinate: GeoCoordinate,
+        *,
+        locale: str,
+        radius_meters: float | None = None,
+        max_places: int | None = None,
+    ) -> GeoProviderExecution:
+        del radius_meters, max_places
+        result = self.provider.lookup(coordinate, language=locale)
+        candidates = ()
+        if result.location is not None:
+            candidates = (
+                GeoCandidate(
+                    GeoCandidateKind.ADDRESS,
+                    str(result.location["formatted_address"]),
+                    formatted_address=str(result.location["formatted_address"]),
+                    coordinate=coordinate,
+                    components=tuple(
+                        sorted(
+                            (str(key), str(value))
+                            for key, value in result.location["components"].items()
+                        )
+                    ),
+                    provider_ref=result.provider,
+                ),
+            )
+        status = (
+            GeoComponentStatus.SUCCESS
+            if candidates
+            else GeoComponentStatus.NO_RESULT
+            if result.status == "no_result"
+            else GeoComponentStatus.FAILED
+        )
+        return GeoProviderExecution(
+            GeoComponentResult(operation, status, (), coordinate, candidates),
+            GeoProviderAttempt(
+                result.provider,
+                operation,
+                status,
+                coordinate,
+                result.provider_coordinate,
+                result.request_count,
+                None,
+            ),
+        )
+
+
+def _geo_tool(
+    tmp_path: Path, *providers: FakeGoogle | FakeCountryProvider
+) -> GeoQueryTool:
+    adapters = {
+        provider.provider_id: FakeGeoProviderAdapter(provider) for provider in providers
+    }
+    return GeoQueryTool(
+        GeoCapability(adapters, OrderedGeoRoutingPolicy(tuple(adapters))),
+        GeoOperationJournal(tmp_path / "geo-journal.sqlite3"),
+    )
+
+
 def _closed_run(
     tmp_path: Path, database: Path, accounting: AccountingStore, names: tuple[str, ...]
 ) -> str:
@@ -142,6 +229,7 @@ def _coordinate_work(
     *,
     latitude: float,
     longitude: float,
+    capture_time: str | None = None,
 ):
     work = WorkStore(database)
     spec = WorkSpec(
@@ -169,20 +257,29 @@ def _coordinate_work(
         lease_duration=timedelta(minutes=1),
         work_id=record.work_id,
     )[0]
+    observations = [
+        {
+            "name": "gps_coordinates",
+            "status": "available",
+            "value": {
+                "datum": "WGS84",
+                "latitude": latitude,
+                "longitude": longitude,
+            },
+        }
+    ]
+    if capture_time is not None:
+        observations.append(
+            {
+                "name": "capture_time",
+                "status": "available",
+                "value": capture_time,
+            }
+        )
     return work.succeed_work(
         lease,
         {
-            "observations": [
-                {
-                    "name": "gps_coordinates",
-                    "status": "available",
-                    "value": {
-                        "datum": "WGS84",
-                        "latitude": latitude,
-                        "longitude": longitude,
-                    },
-                }
-            ],
+            "observations": observations,
             "subject": {"relative_path": relative_path},
         },
     )
@@ -197,6 +294,109 @@ def _public_run(tool: PrecheckRunTool, request_id: str) -> str:
         }
     )
     return str(response["run_ref"])
+
+
+def _legacy_geocode_work(
+    database: Path,
+    run_id: str,
+    coordinate: GeoCoordinate,
+    *,
+    previous=None,
+):
+    dependencies = [
+        WorkDependency(
+            DependencyKind.PARAMETER,
+            "normalized_coordinate",
+            json.dumps(
+                coordinate.value(),
+                ensure_ascii=False,
+                separators=(",", ":"),
+                sort_keys=True,
+            ),
+        ),
+        WorkDependency(
+            DependencyKind.PARAMETER,
+            "reverse_geocode_profile",
+            json.dumps(
+                {
+                    "provider_profile": "amap-google-address-poi-v1",
+                    "refresh_token": "reuse-until-explicit-refresh",
+                    "routing_policy": "c90-continuity-bounded-v1",
+                },
+                separators=(",", ":"),
+                sort_keys=True,
+            ),
+        ),
+    ]
+    if previous is not None:
+        dependencies.append(upstream_dependency(previous))
+    store = WorkStore(database)
+    record = store.ensure_work(
+        run_id,
+        WorkSpec(
+            "reverse-geocode-observation",
+            "builtin-adaptive-reverse-geocode-v1",
+            tuple(dependencies),
+        ),
+    )
+    lease = store.claim_ready_work(
+        run_id,
+        "legacy-test",
+        lease_duration=timedelta(minutes=1),
+        work_id=record.work_id,
+    )[0]
+    value = {
+        "input_coordinate": coordinate.value(),
+        "provider_coordinate": coordinate.value(),
+        "provider": "google_maps",
+        "language": "zh-CN",
+        "location": {"formatted_address": "legacy", "components": {}},
+        "pois": [],
+        "observed_at": "2026-05-04T12:00:00+00:00",
+        "logical_query_count": 1,
+        "provider_request_count": 1,
+        "attempts": [],
+    }
+    return store.succeed_work(
+        lease,
+        {
+            "authorization": {
+                "confirmed_at": "2026-05-04T12:00:00+00:00",
+                "confirmed_content_identity": "sha256:" + "a" * 64,
+                "confirmed_logical_queries": 2,
+                "decision": "proceed",
+                "pending_fingerprint": "sha256:" + "a" * 64,
+                "principal_ref": "human:legacy",
+                "run_ref": "precheck-run:legacy",
+            },
+            "observations": [
+                {
+                    "name": "reverse_geocode_candidate",
+                    "status": "available",
+                    "value": {
+                        "address": {
+                            "formatted_address": "legacy",
+                            "components": {},
+                        },
+                        "pois": [],
+                    },
+                    "provenance": {
+                        "method": "adaptive_reverse_geocode_v1",
+                        "provider": "google_maps",
+                        "language": "zh-CN",
+                        "observed_at": "2026-05-04T12:00:00+00:00",
+                        "input_datum": coordinate.datum.value,
+                        "provider_datum": coordinate.datum.value,
+                        "logical_query_count": 1,
+                        "provider_request_count": 1,
+                    },
+                }
+            ],
+            "producer": {"identity": "builtin-adaptive-reverse-geocode-v1"},
+            "query": coordinate.value(),
+            "result": value,
+        },
+    )
 
 
 def _authorize(tool: PrecheckRunTool, run_ref: str) -> dict[str, object]:
@@ -334,9 +534,7 @@ def test_amap_capability_adapter_requests_only_the_selected_operation() -> None:
     )
     coordinate = GeoCoordinate(39.916, 116.397, MapDatum.WGS84)
 
-    address = provider.execute(
-        GeoOperation.REVERSE_GEOCODE, coordinate, locale="en"
-    )
+    address = provider.execute(GeoOperation.REVERSE_GEOCODE, coordinate, locale="en")
     nearby = provider.execute(
         GeoOperation.NEARBY_PLACES,
         coordinate,
@@ -390,9 +588,7 @@ def test_google_capability_adapter_does_not_bundle_unrequested_work() -> None:
     )
     coordinate = GeoCoordinate(35.6580, 139.7013, MapDatum.WGS84)
 
-    address = provider.execute(
-        GeoOperation.REVERSE_GEOCODE, coordinate, locale="ja"
-    )
+    address = provider.execute(GeoOperation.REVERSE_GEOCODE, coordinate, locale="ja")
     assert address.component.status is GeoComponentStatus.SUCCESS
     assert len(transport.gets) == 1
     assert transport.posts == []
@@ -425,9 +621,7 @@ def test_capability_adapters_normalize_provider_failures_without_credentials() -
         converter=IdentityConverter(),
         minimum_interval=0,
     )
-    amap_result = amap.execute(
-        GeoOperation.REVERSE_GEOCODE, coordinate, locale="zh-CN"
-    )
+    amap_result = amap.execute(GeoOperation.REVERSE_GEOCODE, coordinate, locale="zh-CN")
 
     google = GoogleMapsReverseGeocoder(
         "google-secret",
@@ -496,12 +690,7 @@ def test_batch_pauses_before_exact_deduplicated_queries(
     producer = ReverseGeocodeProducer(
         database,
         run_tool,
-        AdaptiveReverseGeocoder(
-            providers={"google_maps": provider},
-            provider_order=("google_maps",),
-            initial_provider="google_maps",
-            initial_language="ja",
-        ),
+        _geo_tool(tmp_path, provider),
     )
     profile = ReverseGeocodeProfile(provider_profile="mock-google-v1")
 
@@ -519,6 +708,11 @@ def test_batch_pauses_before_exact_deduplicated_queries(
     status = run_tool.run({"action": "status", "run_ref": public_run_ref})
     assert status["confirmation"]["quantity"] == 1
     assert status["confirmation"]["unit"] == "logical_queries"
+    disclosure = status["confirmation"]["disclosure"]
+    assert disclosure["source_item_outcomes"] == 2
+    assert disclosure["logical_queries"] == 1
+    assert disclosure["pending_logical_queries"] == 1
+    assert disclosure["cached_logical_queries"] == 0
 
     _authorize(run_tool, public_run_ref)
     completed = producer.produce(
@@ -570,6 +764,170 @@ def test_batch_pauses_before_exact_deduplicated_queries(
     )
 
 
+def test_bundle_is_a_candidate_scope_and_movement_splits_geo_units(
+    tmp_path: Path,
+) -> None:
+    database = tmp_path / "workspace" / "working.sqlite3"
+    accounting = AccountingStore(database)
+    accounting.register_dataset("dataset-a")
+    run_id = _closed_run(tmp_path, database, accounting, ("a.jpg", "b.jpg", "c.jpg"))
+    metadata = [
+        _coordinate_work(
+            database,
+            run_id,
+            name,
+            latitude=latitude,
+            longitude=114.1694,
+            capture_time=capture_time,
+        )
+        for name, latitude, capture_time in (
+            ("a.jpg", 22.319300, "2026-05-04T12:00:00+00:00"),
+            ("b.jpg", 22.319330, "2026-05-04T12:00:05+00:00"),
+            ("c.jpg", 22.320300, "2026-05-04T12:00:10+00:00"),
+        )
+    ]
+    bundles = tuple(
+        BundleCandidateProducer(database).produce(
+            run_id, [record.work_id for record in metadata]
+        )
+    )
+    run_tool = PrecheckRunTool(database)
+    provider = FakeGoogle()
+    producer = ReverseGeocodeProducer(database, run_tool, _geo_tool(tmp_path, provider))
+    batch = producer.freeze(
+        run_id,
+        [record.work_id for record in metadata],
+        bundle_work_ids=[outcome.work.work_id for outcome in bundles],
+    )
+
+    assert len(bundles) == 1
+    assert batch.logical_query_count == 2
+    assert batch.queries[0].source_paths == (Path("a.jpg"), Path("b.jpg"))
+    assert batch.queries[1].source_paths == (Path("c.jpg"),)
+
+    public_run_ref = _public_run(run_tool, "request:bundle-geo")
+    pending = producer.produce(
+        public_run_ref,
+        run_id,
+        [record.work_id for record in metadata],
+        bundle_work_ids=[outcome.work.work_id for outcome in bundles],
+    )
+    assert pending.status == "confirmation_required"
+    assert pending.batch.pending_query_count == 2
+    _authorize(run_tool, public_run_ref)
+    completed = producer.produce(
+        public_run_ref,
+        run_id,
+        [record.work_id for record in metadata],
+        bundle_work_ids=[outcome.work.work_id for outcome in bundles],
+    )
+    mapped = completed.work_by_source()
+    assert completed.status == "completed"
+    assert len(provider.calls) == 2
+    assert set(mapped) == {Path("a.jpg"), Path("b.jpg"), Path("c.jpg")}
+    assert mapped[Path("a.jpg")] == mapped[Path("b.jpg")]
+    assert mapped[Path("a.jpg")] != mapped[Path("c.jpg")]
+    renditions = [
+        ImageRenditionProducer(database).produce(run_id, Path(name))
+        for name in ("a.jpg", "b.jpg", "c.jpg")
+    ]
+    sealed = ResultStore(database).seal(
+        ResultStore(database).build_minimal(
+            run_id,
+            [outcome.work.work_id for outcome in renditions],
+            metadata_work_ids=[record.work_id for record in metadata],
+            reverse_geocode_work_by_source=mapped,
+        )
+    )
+    reviewed = PrecheckReadTool(database).read(
+        {"result_ref": sealed.result_ref, "operation": "review"}
+    )
+    assert reviewed["result"]["readiness"] == "plan_ready"
+
+
+def test_nearby_coordinates_share_only_inside_a_media_bundle(tmp_path: Path) -> None:
+    database = tmp_path / "workspace" / "working.sqlite3"
+    accounting = AccountingStore(database)
+    accounting.register_dataset("dataset-a")
+    run_id = _closed_run(tmp_path, database, accounting, ("a.jpg", "a.jpeg", "b.jpg"))
+    metadata = [
+        _coordinate_work(
+            database,
+            run_id,
+            name,
+            latitude=latitude,
+            longitude=114.1694,
+        )
+        for name, latitude in (
+            ("a.jpg", 22.319300),
+            ("a.jpeg", 22.319330),
+            ("b.jpg", 22.319335),
+        )
+    ]
+    bundles = tuple(
+        BundleCandidateProducer(database).produce(
+            run_id, [record.work_id for record in metadata]
+        )
+    )
+    run_tool = PrecheckRunTool(database)
+    producer = ReverseGeocodeProducer(database, run_tool)
+
+    bundled = producer.freeze(
+        run_id,
+        [record.work_id for record in metadata],
+        bundle_work_ids=[outcome.work.work_id for outcome in bundles],
+    )
+    unbundled = producer.freeze(
+        run_id,
+        [record.work_id for record in metadata],
+    )
+
+    assert len(bundles) == 2
+    assert bundled.logical_query_count == 2
+    assert unbundled.logical_query_count == 3
+    assert any(
+        set(query.source_paths) == {Path("a.jpg"), Path("a.jpeg")}
+        for query in bundled.queries
+    )
+
+
+def test_same_asset_candidate_splits_when_time_and_coordinates_conflict(
+    tmp_path: Path,
+) -> None:
+    database = tmp_path / "workspace" / "working.sqlite3"
+    accounting = AccountingStore(database)
+    accounting.register_dataset("dataset-a")
+    run_id = _closed_run(tmp_path, database, accounting, ("a.jpg", "a.jpeg"))
+    metadata = [
+        _coordinate_work(
+            database,
+            run_id,
+            name,
+            latitude=latitude,
+            longitude=114.1694,
+            capture_time=capture_time,
+        )
+        for name, latitude, capture_time in (
+            ("a.jpg", 22.319300, "2026-05-04T12:00:00+00:00"),
+            ("a.jpeg", 22.319330, "2026-05-04T12:05:00+00:00"),
+        )
+    ]
+    bundles = tuple(
+        BundleCandidateProducer(database).produce(
+            run_id, [record.work_id for record in metadata]
+        )
+    )
+
+    batch = ReverseGeocodeProducer(database, PrecheckRunTool(database)).freeze(
+        run_id,
+        [record.work_id for record in metadata],
+        bundle_work_ids=[outcome.work.work_id for outcome in bundles],
+    )
+
+    assert len(bundles) == 1
+    assert batch.logical_query_count == 2
+
+
 def test_provider_no_result_remains_an_executed_observation() -> None:
     provider = FakeGoogle(status="no_result")
     geocoder = AdaptiveReverseGeocoder(
@@ -586,7 +944,7 @@ def test_provider_no_result_remains_an_executed_observation() -> None:
     assert len(provider.calls) == 1
 
 
-def test_reused_query_restores_route_and_sequence_is_a_work_dependency(
+def test_reused_query_identity_does_not_depend_on_batch_order(
     tmp_path: Path,
 ) -> None:
     database = tmp_path / "workspace" / "working.sqlite3"
@@ -602,14 +960,7 @@ def test_reused_query_restores_route_and_sequence_is_a_work_dependency(
     first_amap = FakeCountryProvider("amap", "中国", "CN", MapDatum.GCJ02)
     profile = ReverseGeocodeProfile(provider_profile="route-test-v1")
     first_producer = ReverseGeocodeProducer(
-        database,
-        run_tool,
-        AdaptiveReverseGeocoder(
-            providers={"google_maps": first_google, "amap": first_amap},
-            provider_order=("amap", "google_maps"),
-            initial_provider="google_maps",
-            initial_language="zh",
-        ),
+        database, run_tool, _geo_tool(tmp_path / "first", first_google, first_amap)
     )
     assert (
         first_producer.produce(
@@ -624,7 +975,7 @@ def test_reused_query_restores_route_and_sequence_is_a_work_dependency(
     assert len(first_completed.outcomes) == 1
     first_work_id = first_completed.outcomes[0].work.work_id
     assert len(first_google.calls) == 1
-    assert len(first_amap.calls) == 1
+    assert first_amap.calls == []
 
     second_run = _closed_run(tmp_path, database, accounting, ("a.jpg", "b.jpg"))
     second_beijing = _coordinate_work(
@@ -639,12 +990,7 @@ def test_reused_query_restores_route_and_sequence_is_a_work_dependency(
     second_producer = ReverseGeocodeProducer(
         database,
         run_tool,
-        AdaptiveReverseGeocoder(
-            providers={"google_maps": second_google, "amap": second_amap},
-            provider_order=("amap", "google_maps"),
-            initial_provider="google_maps",
-            initial_language="zh",
-        ),
+        _geo_tool(tmp_path / "second", second_google, second_amap),
     )
 
     pending = second_producer.produce(
@@ -666,7 +1012,7 @@ def test_reused_query_restores_route_and_sequence_is_a_work_dependency(
     assert disclosure["coordinates"] == [
         GeoCoordinate(31.2304, 121.4737, MapDatum.WGS84).value()
     ]
-    assert disclosure["max_provider_requests"] == 6
+    assert disclosure["max_provider_requests"] == 4
     assert pending.batch.pending_fingerprint != pending.batch.batch_fingerprint
     _authorize(run_tool, second_public_ref)
     completed = second_producer.produce(
@@ -676,16 +1022,24 @@ def test_reused_query_restores_route_and_sequence_is_a_work_dependency(
         profile=profile,
     )
 
-    assert completed.outcomes[0].reused is True
-    assert completed.outcomes[0].work.work_id == first_work_id
-    assert second_google.calls == []
-    assert second_amap.calls == [
+    reused_outcome = next(
+        outcome
+        for outcome in completed.outcomes
+        if outcome.work.work_id == first_work_id
+    )
+    assert reused_outcome.reused is True
+    assert second_google.calls == [
         (GeoCoordinate(31.2304, 121.4737, MapDatum.WGS84), "zh")
     ]
-    chained = completed.outcomes[1].work
-    assert any(
+    assert second_amap.calls == []
+    shanghai_outcome = next(
+        outcome
+        for outcome in completed.outcomes
+        if outcome.query.coordinate.latitude == 31.2304
+    )
+    chained = shanghai_outcome.work
+    assert not any(
         dependency.kind is DependencyKind.UPSTREAM_WORK
-        and dependency.key == first_work_id
         for dependency in chained.spec.dependencies
     )
     standalone = second_producer.freeze(
@@ -693,7 +1047,66 @@ def test_reused_query_restores_route_and_sequence_is_a_work_dependency(
         [shanghai.work_id],
         profile=profile,
     )
-    assert standalone.work[0].work_id != chained.work_id
+    assert standalone.work[0].work_id == chained.work_id
+
+
+def test_semantically_compatible_legacy_chain_observations_are_reused(
+    tmp_path: Path,
+) -> None:
+    database = tmp_path / "workspace" / "working.sqlite3"
+    accounting = AccountingStore(database)
+    accounting.register_dataset("dataset-a")
+    run_id = _closed_run(tmp_path, database, accounting, ("a.jpg", "b.jpg"))
+    coordinates = (
+        GeoCoordinate(22.3193, 114.1694),
+        GeoCoordinate(22.2819, 114.1589),
+    )
+    metadata = [
+        _coordinate_work(
+            database,
+            run_id,
+            name,
+            latitude=coordinate.latitude,
+            longitude=coordinate.longitude,
+        )
+        for name, coordinate in zip(("a.jpg", "b.jpg"), coordinates, strict=True)
+    ]
+    first_legacy = _legacy_geocode_work(database, run_id, coordinates[0])
+    second_legacy = _legacy_geocode_work(
+        database,
+        run_id,
+        coordinates[1],
+        previous=first_legacy,
+    )
+    run_tool = PrecheckRunTool(database)
+    public_run_ref = _public_run(run_tool, "request:legacy-cache")
+
+    outcome = ReverseGeocodeProducer(database, run_tool).produce(
+        public_run_ref,
+        run_id,
+        [record.work_id for record in metadata],
+    )
+
+    assert outcome.status == "completed"
+    assert outcome.batch.pending_query_count == 0
+    assert outcome.actual_provider_requests == 0
+    assert all(item.reused for item in outcome.outcomes)
+    assert all(
+        item.work.spec.producer_identity == "builtin-geo-query-reverse-geocode-v2"
+        for item in outcome.outcomes
+    )
+    assert all(
+        not any(
+            dependency.kind is DependencyKind.UPSTREAM_WORK
+            for dependency in item.work.spec.dependencies
+        )
+        for item in outcome.outcomes
+    )
+    work = WorkStore(database)
+    for legacy in (first_legacy, second_legacy):
+        assert work.get_work(legacy.work_id).status is WorkStatus.SUCCEEDED
+        with pytest.raises(KeyError, match="not attached to this run"):
+            work.get_run_work(run_id, legacy.work_id)
 
 
 def test_missing_authority_and_decline_make_no_calls(
@@ -712,12 +1125,7 @@ def test_missing_authority_and_decline_make_no_calls(
     producer = ReverseGeocodeProducer(
         database,
         run_tool,
-        AdaptiveReverseGeocoder(
-            providers={"google_maps": provider},
-            provider_order=("google_maps",),
-            initial_provider="google_maps",
-            initial_language="ja",
-        ),
+        _geo_tool(tmp_path, provider),
     )
 
     pending = producer.produce(public_run_ref, run_id, [metadata.work_id])
@@ -755,12 +1163,7 @@ def test_changed_pending_set_requires_new_confirmation(tmp_path: Path) -> None:
     producer = ReverseGeocodeProducer(
         database,
         run_tool,
-        AdaptiveReverseGeocoder(
-            providers={"google_maps": provider},
-            provider_order=("google_maps",),
-            initial_provider="google_maps",
-            initial_language="ja",
-        ),
+        _geo_tool(tmp_path, provider),
     )
     profile = ReverseGeocodeProfile(provider_profile="mock-google-v1")
     first_pending = producer.produce(
@@ -821,12 +1224,7 @@ def test_cancellation_stops_new_external_queries_without_discarding_finished_wor
     producer = ReverseGeocodeProducer(
         database,
         run_tool,
-        AdaptiveReverseGeocoder(
-            providers={"google_maps": provider},
-            provider_order=("google_maps",),
-            initial_provider="google_maps",
-            initial_language="ja",
-        ),
+        _geo_tool(tmp_path, provider),
     )
     profile = ReverseGeocodeProfile(provider_profile="mock-google-v1")
     producer.produce(
@@ -845,8 +1243,9 @@ def test_cancellation_stops_new_external_queries_without_discarding_finished_wor
     )
 
     assert interrupted.status == "partial"
-    assert len(interrupted.outcomes) == 1
+    assert len(interrupted.outcomes) == 2
     assert interrupted.outcomes[0].work.status is WorkStatus.SUCCEEDED
+    assert interrupted.outcomes[1].work.status is WorkStatus.RETRYABLE_FAILURE
     assert len(provider.calls) == 1
     status = run_tool.run({"action": "status", "run_ref": public_run_ref})
     assert status["state"] == "cancelled"
@@ -876,12 +1275,7 @@ def test_sealed_result_exposes_candidates_and_external_effect_proof(
     producer = ReverseGeocodeProducer(
         database,
         run_tool,
-        AdaptiveReverseGeocoder(
-            providers={"google_maps": provider},
-            provider_order=("google_maps",),
-            initial_provider="google_maps",
-            initial_language="ja",
-        ),
+        _geo_tool(tmp_path, provider),
     )
     profile = ReverseGeocodeProfile(provider_profile="mock-google-v1")
     producer.produce(
@@ -979,15 +1373,13 @@ def test_sealed_result_exposes_candidates_and_external_effect_proof(
     assert boundary["provider_requests"] == 2
     assert boundary["billable_calls"] == "unknown"
 
-    summary = reader.read(
-        {"result_ref": sealed.result_ref, "operation": "geo_summary"}
-    )
+    summary = reader.read({"result_ref": sealed.result_ref, "operation": "geo_summary"})
     validator.validate(summary)
     assert summary["acquisition_status"] == "complete"
     assert summary["unique_coordinate_count"] == 1
     assert summary["coordinate_groups"][0]["member_count"] == 2
     assert summary["coordinate_groups"][0]["reverse_geocode"] == "success"
-    assert len(summary["coordinate_groups"][0]["candidate_evidence_refs"]) == 1
+    assert len(summary["coordinate_groups"][0]["candidate_evidence_refs"]) == 2
     assert summary["coordinate_groups"][0]["source_set"]["kind"] == "geo_coordinate"
     resolved_members = reader.read(
         {
@@ -997,6 +1389,6 @@ def test_sealed_result_exposes_candidates_and_external_effect_proof(
         }
     )
     validator.validate(resolved_members)
-    assert set(
-        item["source_item_ref"] for item in resolved_members["members"]
-    ) == {item["source_item_ref"] for item in accounts["members"]}
+    assert set(item["source_item_ref"] for item in resolved_members["members"]) == {
+        item["source_item_ref"] for item in accounts["members"]
+    }
