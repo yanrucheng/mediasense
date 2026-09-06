@@ -52,6 +52,7 @@ from mediasense.precheck import (
     WorkStore,
     upstream_dependency,
 )
+from mediasense.precheck._result_assembly import _external_effect_boundary
 
 
 class IdentityConverter:
@@ -67,13 +68,15 @@ class FakeTransport:
     posts: list[tuple[str, dict[str, object], dict[str, str] | None, float]] = field(
         default_factory=list
     )
-    get_response: dict[str, object] = field(default_factory=dict)
+    get_response: dict[str, object] | Exception = field(default_factory=dict)
     post_response: dict[str, object] | Exception = field(default_factory=dict)
 
     def get_json(self, url, *, params, headers, timeout):
         self.gets.append(
             (url, dict(params), None if headers is None else dict(headers), timeout)
         )
+        if isinstance(self.get_response, Exception):
+            raise self.get_response
         return self.get_response
 
     def post_json(self, url, *, payload, headers, timeout):
@@ -673,6 +676,39 @@ def test_amap_expanded_resolve_returns_address_and_poi_with_one_request() -> Non
     assert len(transport.gets) == 1
     assert transport.gets[0][1]["extensions"] == "all"
     assert transport.gets[0][1]["radius"] == 200
+
+
+def test_amap_expanded_resolve_failure_records_the_combined_operation() -> None:
+    transport = FakeTransport(
+        get_response=GeoTransientError("AMap timeout", request_count=1)
+    )
+    provider = AMapReverseGeocoder(
+        "secret",
+        transport=transport,
+        converter=IdentityConverter(),
+        minimum_interval=0,
+    )
+
+    result = provider.execute(
+        GeoOperation.RESOLVE_PLACE,
+        GeoCoordinate(39.916, 116.397, MapDatum.WGS84),
+        locale="zh",
+        radius_meters=500,
+        max_places=30,
+    )
+
+    assert [component.operation for component in result.components] == [
+        GeoOperation.REVERSE_GEOCODE,
+        GeoOperation.NEARBY_PLACES,
+    ]
+    assert all(
+        component.status is GeoComponentStatus.INDETERMINATE
+        for component in result.components
+    )
+    assert len(result.attempts) == 1
+    assert result.attempts[0].operation is GeoOperation.RESOLVE_PLACE
+    assert result.attempts[0].provider_requests == 1
+    assert len(transport.gets) == 1
 
 
 def test_google_capability_adapter_does_not_bundle_unrequested_work() -> None:
@@ -1296,6 +1332,137 @@ def test_precheck_preserves_partial_when_nearby_lookup_fails(
         "nearby_places:google_maps_error"
     )
     assert completed.outcomes[0].work.output["result"]["status"] == "partial"
+
+
+def test_precheck_preserves_cross_provider_provenance_in_result_audit(
+    tmp_path: Path,
+) -> None:
+    database = tmp_path / "workspace" / "working.sqlite3"
+    accounting = AccountingStore(database)
+    accounting.register_dataset("dataset-a")
+    run_id = _closed_run(tmp_path, database, accounting, ("a.jpg",))
+    metadata = _coordinate_work(
+        database, run_id, "a.jpg", latitude=22.293, longitude=114.169
+    )
+    google_transport = FakeTransport(
+        get_response={
+            "status": "OK",
+            "results": [
+                {
+                    "formatted_address": "Victoria Harbour, Hong Kong",
+                    "address_components": [],
+                }
+            ],
+        },
+        post_response={"error": {"message": "Places quota exceeded"}},
+    )
+    amap_transport = FakeTransport(
+        get_response={
+            "status": "1",
+            "regeocode": {
+                "formatted_address": "香港维多利亚港",
+                "addressComponent": {"country": "中国", "city": "香港"},
+                "pois": [
+                    {
+                        "name": "维多利亚港",
+                        "location": "114.169000,22.293000",
+                        "distance": "50",
+                        "type": "风景名胜",
+                        "address": "香港",
+                    }
+                ],
+            },
+        }
+    )
+    google = GoogleMapsReverseGeocoder(
+        "google-secret",
+        transport=google_transport,
+        converter=IdentityConverter(),
+        minimum_interval=0,
+    )
+    amap = AMapReverseGeocoder(
+        "amap-secret",
+        transport=amap_transport,
+        converter=IdentityConverter(),
+        minimum_interval=0,
+    )
+    geo_tool = GeoQueryTool(
+        GeoCapability(
+            {google.provider_id: google, amap.provider_id: amap},
+            OrderedGeoRoutingPolicy((google.provider_id, amap.provider_id)),
+        ),
+        GeoOperationJournal(tmp_path / "geo-journal.sqlite3"),
+    )
+    run_tool = PrecheckRunTool(database)
+    public_run_ref = _public_run(run_tool, "request:cross-provider-place")
+    producer = ReverseGeocodeProducer(database, run_tool, geo_tool)
+
+    producer.produce(public_run_ref, run_id, [metadata.work_id])
+    _authorize(run_tool, public_run_ref)
+    completed = producer.produce(public_run_ref, run_id, [metadata.work_id])
+
+    assert completed.actual_provider_requests == 3
+    work_result = completed.outcomes[0].work.output["result"]
+    assert work_result["provider"] == "google_maps"
+    assert work_result["provider_coordinate"]["datum"] == "WGS84"
+    assert work_result["providers"] == ["amap", "google_maps"]
+    assert {attempt["provider"] for attempt in work_result["attempts"]} == {
+        "amap",
+        "google_maps",
+    }
+    candidate = next(
+        observation
+        for observation in completed.outcomes[0].observations
+        if observation["name"] == "reverse_geocode_candidate"
+    )
+    assert candidate["value"]["address"]["formatted_address"] == (
+        "Victoria Harbour, Hong Kong"
+    )
+    assert candidate["value"]["pois"][0]["name"] == "维多利亚港"
+
+    rendition = ImageRenditionProducer(database).produce(run_id, Path("a.jpg"))
+    result_store = ResultStore(database)
+    sealed = result_store.seal(
+        result_store.build_minimal(
+            run_id,
+            [rendition.work.work_id],
+            metadata_work_ids=[metadata.work_id],
+            reverse_geocode_work_by_source=completed.work_by_source(),
+        )
+    )
+    reviewed = PrecheckReadTool(database).read(
+        {"result_ref": sealed.result_ref, "operation": "review"}
+    )
+    assert reviewed["result"]["execution_boundary"]["providers"] == [
+        "amap",
+        "google_maps",
+    ]
+
+
+def test_result_audit_accepts_legacy_single_provider_work() -> None:
+    boundary = _external_effect_boundary(
+        [
+            {
+                "work_id": "work:legacy-geocode",
+                "output_json": json.dumps(
+                    {
+                        "result": {
+                            "provider": "google_maps",
+                            "provider_request_count": 1,
+                        },
+                        "authorization": {
+                            "decision": "proceed",
+                            "run_ref": "precheck-run:legacy",
+                            "pending_fingerprint": "sha256:legacy",
+                        },
+                    }
+                ),
+            }
+        ]
+    )
+
+    assert boundary is not None
+    assert boundary["providers"] == ["google_maps"]
 
 
 def test_precheck_distinguishes_empty_poi_result_from_unexecuted_lookup(

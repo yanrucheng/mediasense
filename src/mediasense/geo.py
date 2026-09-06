@@ -254,7 +254,7 @@ class AMapReverseGeocoder:
                 return failed
             return GeoProviderExecution(
                 failed.component,
-                failed.attempt,
+                replace(failed.attempt, operation=GeoOperation.RESOLVE_PLACE),
                 (
                     GeoComponentResult(
                         GeoOperation.NEARBY_PLACES,

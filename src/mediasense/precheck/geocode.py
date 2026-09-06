@@ -1111,11 +1111,19 @@ def _tool_observations(
             ),
             "unavailable",
         )
+    providers = sorted(
+        {
+            str(item["provider"])
+            for item in attempts
+            if isinstance(item.get("provider"), str) and item["provider"]
+        }
+    )
     provider_coordinate = next(
         (
             dict(item["provider_coordinate"])
             for item in reversed(attempts)
-            if isinstance(item.get("provider_coordinate"), Mapping)
+            if item.get("provider") == provider
+            and isinstance(item.get("provider_coordinate"), Mapping)
         ),
         query.coordinate.value(),
     )
@@ -1145,6 +1153,7 @@ def _tool_observations(
             "language": "zh",
             "producer": _PRODUCER,
             "provider": provider,
+            "providers": providers,
             "provider_coordinate": provider_coordinate,
             "provider_request_count": provider_request_count,
             "query_profile": json.loads(profile.descriptor()),
@@ -1217,6 +1226,7 @@ def _tool_observations(
         "input_coordinate": query.coordinate.value(),
         "provider_coordinate": provider_coordinate,
         "provider": provider,
+        "providers": providers,
         "language": "zh",
         "location": None
         if address_candidate is None

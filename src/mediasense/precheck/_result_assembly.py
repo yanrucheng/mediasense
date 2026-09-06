@@ -837,9 +837,20 @@ def _external_effect_boundary(
             or authorization.get("decision") != "proceed"
         ):
             raise ResultSealError("reverse geocode Work was not explicitly authorized")
-        provider = result.get("provider")
-        if isinstance(provider, str) and provider:
-            providers.add(provider)
+        result_providers = result.get("providers")
+        if result_providers is None:
+            provider = result.get("provider")
+            if isinstance(provider, str) and provider:
+                providers.add(provider)
+        else:
+            if not isinstance(result_providers, list) or any(
+                not isinstance(provider, str) or not provider
+                for provider in result_providers
+            ):
+                raise ResultSealError(
+                    "reverse geocode Work has invalid provider provenance"
+                )
+            providers.update(result_providers)
         provider_requests += request_count
         authorizations[(run_ref, fingerprint)] = dict(authorization)
     return {
