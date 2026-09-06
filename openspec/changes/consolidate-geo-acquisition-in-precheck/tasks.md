@@ -64,3 +64,23 @@
   - Read-only production-copy analysis retained 225 logical queries, reused 98
     compatible complete observations, left 127 pending, and disclosed a
     381-Provider-request hard ceiling without touching the paused Run.
+
+## 8. Provenance and installed-release follow-up
+
+- [x] 8.1 Preserve every Provider used by a composed place observation in the
+  PreCheck Work result and Result-level external-effect boundary while retaining
+  compatibility with successful Work that only records the legacy single
+  `provider` field.
+- [x] 8.2 Keep the primary Provider and its transformed coordinate aligned when
+  address and nearby-place components come from different Providers.
+- [x] 8.3 Record a failed AMap `extensions=all` effect as one `resolve_place`
+  attempt while retaining separate address and nearby-place component outcomes.
+- [x] 8.4 Release the compatible repair as `0.7.2`, force-replace the user-level
+  CLI, transactionally upgrade the four Honeycomb Skills, and verify a fresh
+  installed MCP stdio process rather than inferring readiness from files.
+  - Focused Geo/PreCheck suite: 85 passed.
+  - Full suite: 627 passed, 16 deselected.
+  - Ruff and strict OpenSpec validation passed.
+  - A clean `0.7.2` wheel passed the offline distribution smoke.
+  - The installed CLI and a fresh installed MCP process both reported `0.7.2`
+    and all seven Tool contracts, including `mediasense.geo.query`.

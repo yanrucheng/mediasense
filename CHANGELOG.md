@@ -6,6 +6,22 @@ Versioning, with documented breaking changes permitted in minor releases before
 
 ## [Unreleased]
 
+## [0.7.2] - 2026-09-06
+
+### Added
+
+- Added the shared, stage-neutral `mediasense.geo.query` Tool for PreCheck bulk
+  acquisition and bounded Plan investigation.
+
+### Fixed
+
+- Restored media-aware PreCheck Geo compression with complete per-Source-Item
+  address and nearby-place Evidence.
+- Preserved every Provider involved in a composed place observation and kept
+  the primary Provider aligned with its transformed coordinate.
+- Recorded failed AMap address-and-nearby requests as `resolve_place`, matching
+  the single `extensions=all` Provider effect.
+
 ## [0.7.1] - 2026-09-04
 
 ### Fixed

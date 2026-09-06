@@ -186,7 +186,7 @@ assets and do not activate the product for Agents working on the implementation.
 MCP transports structured discovery and calls but does not own business semantics
 or state. The CLI supplies diagnostics and entry points. The `mediasense` Skill
 owns product setup guidance and stage routing; the three stage Skills guide their
-own Agent interaction. The six MediaSense Tools own their bounded business
+own Agent interaction. The seven MediaSense Tools own their bounded business
 operations and observable outcomes. A client loads project configuration only
 under its own trust policy, and configuration presence is not proof that an
 already-running session has discovered the Tools.

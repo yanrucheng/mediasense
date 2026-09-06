@@ -28,7 +28,7 @@ platform application-data directory; it is never an Agent configuration root.
 
 - A MediaSense **Tool** is a concrete business capability:
   `mediasense.dataset.open`, `mediasense.precheck.run`,
-  `mediasense.precheck.read`, `mediasense.plan.work`,
+  `mediasense.precheck.read`, `mediasense.plan.work`, `mediasense.geo.query`,
   `mediasense.apply.run`, or `mediasense.apply.read`.
 - The **CLI** is the installed local executable. It provides diagnostics, Human
   control surfaces, and runtime entry points.
@@ -105,7 +105,7 @@ remaining setup guidance and installs the complete release-matched Skill set:
 6. Start a new Agent session from the trusted Honeycomb. Codex only loads project
    `.codex/` configuration for trusted projects, and an already-running session
    normally does not acquire a newly added MCP server.
-7. Discover Tools in the new session and verify all six exact names listed
+7. Discover Tools in the new session and verify all seven exact names listed
    above. File presence or CLI availability alone is not acceptance evidence.
 8. Only then route the request: begin PreCheck for a source that needs preparation,
    enter Plan for an exact Plan-ready `result_ref`, or enter Apply for an exact
