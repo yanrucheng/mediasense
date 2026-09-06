@@ -53,7 +53,7 @@ stages are not required to map one-to-one to internal Tool calls.
 
 - Source media is read-only. Derived artifacts are written to a separate workspace.
 - Remote calls, uploads, reverse-geocoding services, and billable model access are disabled by default and reported explicitly.
-- For every Source Item with an available final coordinate, PreCheck produces that item's reverse-geocode outcome before a Result becomes Plan-ready. It first uses local asset, bundle, time, and trajectory evidence to form conservative acquisition units, then calls the shared Geo Tool and projects observations back to every covered Source Item. Exact-coordinate deduplication remains a final request defense; neither one representative per bundle nor one query per Source Item is a stage invariant. Authorization binds the compressed pending query set and never authorizes media, rendition, embedding, path, filename, prompt, or general-metadata egress.
+- For every Source Item with an available final coordinate, PreCheck produces that item's address and nearby-place outcomes before a Result becomes Plan-ready. It first uses local asset, bundle, time, and trajectory evidence to form conservative acquisition units, then calls the shared Geo Tool and projects observations back to every covered Source Item. Exact-coordinate deduplication remains a final request defense; neither one representative per bundle nor one query per Source Item is a stage invariant. Authorization binds the compressed pending query set and never authorizes media, rendition, embedding, path, filename, prompt, or general-metadata egress.
 - Metadata extraction, decoding, thumbnailing, frame selection, fingerprinting, embedding, indexing, and grouping reuse completed work where valid.
 - Work is observable, bounded in resource use, resumable after interruption, and incrementally invalidated.
 - A disconnected volume is treated as unavailable, not as evidence that its files were deleted.
@@ -103,8 +103,8 @@ repairs missing PreCheck coverage nor owns a second Geo lifecycle.
 - VLM providers expose their locality and data-egress effects; `plan` selects and invokes them under the applicable user policy and authorization. A provider must not silently change locality or fall back from local to remote execution.
 - `precheck` does not choose a local or remote VLM path from sensitivity signals.
   Local evidence acquisition does not relax its source-read-only, local-first, or
-  explicit authorization and effect-reporting guarantees. Coordinate-only reverse
-  geocoding may run after PreCheck freezes its compressed acquisition set and
+  explicit authorization and effect-reporting guarantees. Coordinate-only address
+  and nearby-place acquisition may run after PreCheck freezes its compressed set and
   trusted Human confirmation binds the shared Geo Tool's exact request and hard
   effect envelope; this does not authorize media, feature, or prompt egress.
 

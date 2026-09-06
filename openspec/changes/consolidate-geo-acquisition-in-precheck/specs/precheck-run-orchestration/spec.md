@@ -29,7 +29,7 @@ Run SHALL NOT publish a Result.
 - **THEN** Run status becomes `completed` and references the exact readable immutable Result
 
 #### Scenario: Geo closure is absent
-- **WHEN** any Source Item with a final coordinate lacks a projected reverse-geocode outcome
+- **WHEN** any Source Item with a final coordinate lacks a projected address-and-nearby-place outcome
 - **THEN** publication does not begin and no `plan_ready` Result exists
 
 #### Scenario: Seal crash window

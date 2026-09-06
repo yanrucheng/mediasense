@@ -42,9 +42,19 @@ def test_request_fingerprint_binds_operation_subjects_and_options() -> None:
         radius_meters=500,
         max_places=10,
     )
+    progressive = GeoRequest(GeoOperation.RESOLVE_PLACE, (subject,), "zh-CN")
+    expanded = GeoRequest(
+        GeoOperation.RESOLVE_PLACE,
+        (subject,),
+        "zh-CN",
+        radius_meters=500,
+        max_places=10,
+    )
 
     assert address.fingerprint() == address.fingerprint()
     assert address.fingerprint() != nearby.fingerprint()
+    assert progressive.fingerprint() != expanded.fingerprint()
+    assert expanded.radius_meters == 500.0
     assert address.logical_query_count == 1
 
 
@@ -90,13 +100,30 @@ def test_nearby_places_requires_bounded_radius_and_result_count() -> None:
     with pytest.raises(ValueError, match="requires radius_meters and max_places"):
         GeoRequest(GeoOperation.NEARBY_PLACES, (subject,), "zh-CN")
 
-    with pytest.raises(ValueError, match="apply only to nearby_places"):
+    with pytest.raises(ValueError, match="apply only to resolve_place or nearby_places"):
         GeoRequest(
             GeoOperation.REVERSE_GEOCODE,
             (subject,),
             "zh-CN",
             radius_meters=500,
         )
+
+    with pytest.raises(ValueError, match="requires radius_meters and max_places"):
+        GeoRequest(
+            GeoOperation.RESOLVE_PLACE,
+            (subject,),
+            "zh-CN",
+            radius_meters=500,
+        )
+
+    expanded = GeoRequest(
+        GeoOperation.RESOLVE_PLACE,
+        (subject,),
+        "zh-CN",
+        radius_meters=500,
+        max_places=10,
+    )
+    assert expanded.expands_nearby is True
 
 
 def test_effect_envelope_rejects_forbidden_egress_and_invalid_ceilings() -> None:
@@ -230,6 +257,54 @@ class _FakeProvider:
         max_places: int | None = None,
     ) -> GeoProviderExecution:
         self.calls += 1
+        if operation is GeoOperation.RESOLVE_PLACE:
+            address = GeoCandidate(
+                GeoCandidateKind.ADDRESS, "candidate", coordinate=coordinate
+            )
+            place = GeoCandidate(
+                GeoCandidateKind.PLACE,
+                "nearby candidate",
+                coordinate=coordinate,
+                distance_meters=25,
+            )
+            return GeoProviderExecution(
+                GeoComponentResult(
+                    GeoOperation.REVERSE_GEOCODE,
+                    self.status,
+                    ("provider",),
+                    coordinate,
+                    (address,) if self.status is GeoComponentStatus.SUCCESS else (),
+                ),
+                GeoProviderAttempt(
+                    self.capabilities.provider_id,
+                    GeoOperation.REVERSE_GEOCODE,
+                    self.status,
+                    coordinate,
+                    coordinate,
+                    1,
+                    None,
+                ),
+                (
+                    GeoComponentResult(
+                        GeoOperation.NEARBY_PLACES,
+                        self.status,
+                        ("provider",),
+                        coordinate,
+                        (place,) if self.status is GeoComponentStatus.SUCCESS else (),
+                    ),
+                ),
+                (
+                    GeoProviderAttempt(
+                        self.capabilities.provider_id,
+                        GeoOperation.NEARBY_PLACES,
+                        self.status,
+                        coordinate,
+                        coordinate,
+                        1,
+                        None,
+                    ),
+                ),
+            )
         candidates = (
             (
                 GeoCandidate(
@@ -357,6 +432,95 @@ def test_capability_executes_with_exact_authority_and_offers_bounded_continuatio
             True,
         ),
     )
+
+
+def test_bounded_resolve_executes_address_and_nearby_under_one_authority() -> None:
+    from mediasense.capabilities.geo import GeoCapability
+
+    provider = _FakeProvider(
+        GeoProviderCapabilities(
+            "provider-a",
+            (
+                GeoOperation.RESOLVE_PLACE,
+                GeoOperation.REVERSE_GEOCODE,
+                GeoOperation.NEARBY_PLACES,
+            ),
+            MapDatum.WGS84,
+            operation_request_ceilings=((GeoOperation.RESOLVE_PLACE, 2),),
+        )
+    )
+    capability = GeoCapability(
+        {"provider-a": provider}, OrderedGeoRoutingPolicy(("provider-a",))
+    )
+    request = GeoRequest(
+        GeoOperation.RESOLVE_PLACE,
+        (GeoSubject("source-item:one", GeoCoordinate(31.1434, 121.6579)),),
+        "zh-CN",
+        radius_meters=500,
+        max_places=10,
+    )
+    envelope = capability.proposed_envelope(request)
+    authorization = GeoAuthorization(
+        "human:one",
+        request.fingerprint(),
+        datetime.now(timezone.utc),
+        envelope,
+    )
+
+    result = capability.invoke(request, authorization=authorization)
+
+    assert envelope.max_provider_requests == 2
+    assert result.outcome is GeoOutcome.SUCCESS
+    assert [component.operation for component in result.components] == [
+        GeoOperation.REVERSE_GEOCODE,
+        GeoOperation.NEARBY_PLACES,
+    ]
+    assert result.effects.provider_requests == 2
+    assert result.continuations == ()
+
+
+def test_bounded_resolve_rejects_authority_that_cannot_cover_both_effects() -> None:
+    from mediasense.capabilities.geo import GeoCapability
+
+    provider = _FakeProvider(
+        GeoProviderCapabilities(
+            "provider-a",
+            (
+                GeoOperation.RESOLVE_PLACE,
+                GeoOperation.REVERSE_GEOCODE,
+                GeoOperation.NEARBY_PLACES,
+            ),
+            MapDatum.WGS84,
+            operation_request_ceilings=((GeoOperation.RESOLVE_PLACE, 2),),
+        )
+    )
+    capability = GeoCapability(
+        {"provider-a": provider}, OrderedGeoRoutingPolicy(("provider-a",))
+    )
+    request = GeoRequest(
+        GeoOperation.RESOLVE_PLACE,
+        (GeoSubject("source-item:one", GeoCoordinate(31.1434, 121.6579)),),
+        "zh-CN",
+        radius_meters=500,
+        max_places=10,
+    )
+    authorization = GeoAuthorization(
+        "human:one",
+        request.fingerprint(),
+        datetime.now(timezone.utc),
+        GeoEffectEnvelope(
+            ("provider-a",),
+            max_logical_queries=1,
+            max_provider_requests=1,
+            allow_unknown_billable_units=True,
+        ),
+    )
+
+    result = capability.invoke(request, authorization=authorization)
+
+    assert result.outcome is GeoOutcome.AUTHORIZATION_REQUIRED
+    assert result.effects.provider_requests == 0
+    assert provider.calls == 0
 
 
 def test_capability_fallback_is_bounded_by_authorized_providers() -> None:

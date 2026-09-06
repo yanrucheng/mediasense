@@ -158,6 +158,12 @@ and I/O ceilings.
   outcomes, while the subsequent all-coordinate correction bypassed bundle
   compression and made Work identity depend on prior batch position. Both are
   repaired by separating coverage, acquisition units, and projection.
+- `regression`: the first shared-Tool integration requested only
+  `reverse_geocode`, so AMap used `extensions=base`, Google never called its
+  nearby endpoint, and PreCheck projected empty POI evidence. Bounded
+  `resolve_place` repairs this while retaining the Tool's progressive default for
+  Plan; AMap again supplies address and POI in one request and Google accounts for
+  its two requests separately.
 - `not_comparable`: adaptive visual compression groups are not classified as a
   Geo-equivalence mechanism because their purpose is bounded visual review. Plan's
   separately authorized, targeted Geo investigation also has no AI Album stage

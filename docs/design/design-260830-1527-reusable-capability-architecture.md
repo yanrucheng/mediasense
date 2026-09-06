@@ -586,10 +586,13 @@ mediasense.geo.query
 
 PreCheck owns the high-volume caller policy: it derives conservative acquisition
 units from local asset, bundle, time, coordinate, and trajectory evidence; freezes
-the pending Tool request; obtains Run-scoped Human authorization; calls Geo; and
-projects one outcome to every located Source Item in the immutable Result. The
-observation cache identity is coordinate plus effective Geo semantics, never
-batch position or membership.
+the pending bounded `resolve_place` request; obtains Run-scoped Human
+authorization; calls Geo for address and nearby-place components; and projects one
+qualified place outcome to every located Source Item in the immutable Result. The
+observation cache identity is coordinate plus effective Geo semantics and nearby
+bounds, never batch position or membership. Provider adapters may coalesce those
+components when one external response supplies both, but the Tool preserves their
+distinct outcome states and actual request accounting.
 
 Plan normally consumes those per-item outcomes. When a material planning judgment
 challenges an over-broad prepared assignment, the Plan Agent may call the same Geo

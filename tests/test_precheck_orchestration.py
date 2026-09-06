@@ -194,7 +194,14 @@ class FakeGeocodeProvider:
                 ),
                 "components": {"country": "China", "country_code": "HK"},
             },
-            pois=(),
+            pois=(
+                {
+                    "name": "Nearby fixture place",
+                    "address": "Fixture address",
+                    "latitude": coordinate.latitude,
+                    "longitude": coordinate.longitude,
+                },
+            ),
             request_count=2,
         )
 
@@ -204,9 +211,14 @@ class FakeGeoProviderAdapter:
         self.provider = provider
         self.capabilities = GeoProviderCapabilities(
             provider.provider_id,
-            (GeoOperation.REVERSE_GEOCODE,),
+            (
+                GeoOperation.RESOLVE_PLACE,
+                GeoOperation.REVERSE_GEOCODE,
+                GeoOperation.NEARBY_PLACES,
+            ),
             provider.datum,
             max_requests_per_operation=2,
+            operation_request_ceilings=((GeoOperation.RESOLVE_PLACE, 2),),
         )
 
     def execute(
@@ -221,7 +233,7 @@ class FakeGeoProviderAdapter:
         del radius_meters, max_places
         result = self.provider.lookup(coordinate, language=locale)
         location = result.location or {}
-        candidate = GeoCandidate(
+        address = GeoCandidate(
             GeoCandidateKind.ADDRESS,
             str(location.get("formatted_address", "unknown")),
             formatted_address=str(location.get("formatted_address", "unknown")),
@@ -234,23 +246,55 @@ class FakeGeoProviderAdapter:
             ),
             provider_ref=result.provider,
         )
+        address_component = GeoComponentResult(
+            GeoOperation.REVERSE_GEOCODE,
+            GeoComponentStatus.SUCCESS,
+            (),
+            coordinate,
+            (address,),
+        )
+        reverse_attempt = GeoProviderAttempt(
+            result.provider,
+            GeoOperation.REVERSE_GEOCODE,
+            GeoComponentStatus.SUCCESS,
+            coordinate,
+            result.provider_coordinate,
+            1,
+            None,
+        )
+        if operation is not GeoOperation.RESOLVE_PLACE:
+            return GeoProviderExecution(address_component, reverse_attempt)
+        places = tuple(
+            GeoCandidate(
+                GeoCandidateKind.PLACE,
+                str(item["name"]),
+                formatted_address=str(item.get("address", "")),
+                coordinate=coordinate,
+                provider_ref=result.provider,
+            )
+            for item in result.pois
+        )
+        nearby_component = GeoComponentResult(
+            GeoOperation.NEARBY_PLACES,
+            GeoComponentStatus.SUCCESS,
+            (),
+            coordinate,
+            places,
+        )
+        nearby_attempt = GeoProviderAttempt(
+            result.provider,
+            GeoOperation.NEARBY_PLACES,
+            GeoComponentStatus.SUCCESS,
+            coordinate,
+            result.provider_coordinate,
+            1,
+            None,
+        )
         return GeoProviderExecution(
-            GeoComponentResult(
-                operation,
-                GeoComponentStatus.SUCCESS,
-                (),
-                coordinate,
-                (candidate,),
-            ),
-            GeoProviderAttempt(
-                result.provider,
-                operation,
-                GeoComponentStatus.SUCCESS,
-                coordinate,
-                result.provider_coordinate,
-                result.request_count,
-                None,
-            ),
+            address_component,
+            reverse_attempt,
+            (nearby_component,),
+            (nearby_attempt,),
         )
 
 
@@ -840,6 +884,11 @@ def test_visual_compression_does_not_reduce_per_source_geocode_coverage(
         )
         assert "logical_query_count" not in candidate["provenance"]
         assert "provider_request_count" not in candidate["provenance"]
+        assert candidate["value"]["pois"][0]["name"] == "Nearby fixture place"
+        assert candidate["value"]["component_outcomes"] == {
+            "reverse_geocode": "success",
+            "nearby_places": "success",
+        }
         locations[path] = candidate["value"]["address"]["formatted_address"]
 
     assert locations == {

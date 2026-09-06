@@ -215,6 +215,10 @@ class PrecheckExecutionConfig:
             },
             "reverse_geocode_profile": {
                 "max_attempts": self.reverse_geocode_profile.max_attempts,
+                "max_places": self.reverse_geocode_profile.max_places,
+                "nearby_radius_meters": (
+                    self.reverse_geocode_profile.nearby_radius_meters
+                ),
                 "provider_profile": self.reverse_geocode_profile.provider_profile,
                 "refresh_token": self.reverse_geocode_profile.refresh_token,
                 "retry_delay_seconds": self.reverse_geocode_profile.retry_delay_seconds,
@@ -331,8 +335,12 @@ class PrecheckExecutionConfig:
             ),
             reverse_geocode_profile=ReverseGeocodeProfile(
                 provider_profile=(
-                    "geo-query-reverse-geocode-v1"
-                    if geocode_value["provider_profile"] == "amap-google-address-poi-v1"
+                    "geo-query-address-poi-v2"
+                    if geocode_value["provider_profile"]
+                    in {
+                        "amap-google-address-poi-v1",
+                        "geo-query-reverse-geocode-v1",
+                    }
                     else str(geocode_value["provider_profile"])
                 ),
                 routing_policy=(
@@ -341,6 +349,10 @@ class PrecheckExecutionConfig:
                     else str(geocode_value["routing_policy"])
                 ),
                 refresh_token=str(geocode_value["refresh_token"]),
+                nearby_radius_meters=float(
+                    geocode_value.get("nearby_radius_meters", 500.0)
+                ),
+                max_places=int(geocode_value.get("max_places", 30)),
                 max_attempts=int(geocode_value["max_attempts"]),
                 retry_delay_seconds=float(geocode_value["retry_delay_seconds"]),
             ),

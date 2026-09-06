@@ -23,8 +23,9 @@ renditions, embeddings, paths, filenames, prompts, or general metadata.
 
 ### Requirement: Coverage and acquisition cardinality remain separate
 Every Source Item with an available final coordinate SHALL receive its own
-reverse-geocode outcome before a Result is Plan-ready. PreCheck SHALL NOT infer
-that each covered Source Item requires a distinct logical query.
+place outcome containing separate address and nearby-place component outcomes
+before a Result is Plan-ready. PreCheck SHALL NOT infer that each covered Source
+Item requires a distinct logical query.
 
 #### Scenario: One observation covers a stationary burst
 - **WHEN** bundle, temporal, and coordinate evidence supports one stationary acquisition unit containing multiple located Source Items
@@ -35,8 +36,34 @@ that each covered Source Item requires a distinct logical query.
 - **THEN** Geo coverage still includes every located Source Item and does not use the visual target count as its query contract
 
 #### Scenario: A located Source Item has no outcome
-- **WHEN** Result assembly finds any Source Item with a final coordinate but no reverse-geocode outcome
+- **WHEN** Result assembly finds any Source Item with a final coordinate but no address-and-nearby-place outcome
 - **THEN** the Result is blocked from Plan-ready handoff
+
+### Requirement: PreCheck obtains complete bounded place evidence
+PreCheck SHALL submit a bounded `resolve_place` request whose exact identity and
+authorization envelope cover both address and nearby-place acquisition. Each
+component SHALL preserve its own `success`, `no_result`, `failed`,
+`indeterminate`, or `not_requested` status.
+
+#### Scenario: AMap returns address and POI together
+- **WHEN** AMap satisfies a bounded place resolution from one `extensions=all` response
+- **THEN** the Tool emits address and nearby-place components and counts one Provider request
+
+#### Scenario: Google returns address and POI separately
+- **WHEN** Google satisfies a bounded place resolution through reverse-geocode and nearby-place endpoints
+- **THEN** the Tool emits both components and counts the two Provider requests separately
+
+#### Scenario: Nearby lookup has no candidate
+- **WHEN** address acquisition succeeds and the executed nearby-place request returns no candidate
+- **THEN** the Source Item retains the address and an explicit nearby-place `no_result`, not `not_requested`
+
+#### Scenario: Nearby lookup fails after address succeeds
+- **WHEN** bounded fallback cannot complete nearby-place acquisition after address success
+- **THEN** the outcome is partial, preserves the address, and carries the nearby failure qualification
+
+#### Scenario: A Provider effect is indeterminate
+- **WHEN** an admitted address or nearby-place effect has no known terminal result
+- **THEN** the journal preserves `indeterminate` and replay does not issue that effect again
 
 ### Requirement: Bundle evidence is candidate scope rather than inherited truth
 PreCheck SHALL use existing asset association, bundle membership, capture time,
@@ -66,9 +93,11 @@ unconditional location surrogate.
 ### Requirement: Query scope is frozen after compression
 After acquisition-unit formation, PreCheck SHALL choose a deterministic actual
 member coordinate for each unit, deduplicate exact equal Provider inputs, exclude
-already reusable observations, and freeze the remaining Geo Tool request before
-requesting authorization. Approximate spatial matching SHALL remain an internal,
-versioned PreCheck method and SHALL NOT become a cross-stage invariant.
+already reusable complete address-and-nearby observations, and freeze the
+remaining bounded Geo Tool request before requesting authorization. Nearby radius
+and result count SHALL be part of the frozen identity. Approximate spatial matching
+SHALL remain an internal, versioned PreCheck method and SHALL NOT become a
+cross-stage invariant.
 
 #### Scenario: Duplicate coordinates remain after unit formation
 - **WHEN** multiple acquisition units select the same normalized coordinate
@@ -111,25 +140,26 @@ outcome rather than an omitted Source Item.
 - **THEN** the mapped Source Items retain an explicit missing or failed outcome
 
 ### Requirement: Reuse includes routing semantics but excludes credentials
-Reverse-geocode observation identity SHALL depend on normalized coordinate,
-operation, locale, effective Provider/routing semantics, and refresh policy. It
-SHALL NOT depend on previous Work, query position, bundle identity, or Source Item
-membership.
+Place-observation identity SHALL depend on normalized coordinate, address and
+nearby-place operation scope, nearby bounds, locale, effective Provider/routing
+semantics, and refresh policy. It SHALL NOT depend on previous Work, query
+position, bundle identity, or Source Item membership.
 
 #### Scenario: A coordinate is inserted before cached coordinates
 - **WHEN** a successor Run adds or reorders coordinates while the effective observation semantics remain unchanged
 - **THEN** compatible successful observations retain their reusable identities
 
 #### Scenario: Compatible 0.7.1 observation exists
-- **WHEN** an old successful observation matches coordinate, characterized profile, refresh policy, and language semantics
+- **WHEN** an old successful observation demonstrably contains the characterized address-and-POI semantics and matches coordinate, profile, refresh policy, and language
 - **THEN** PreCheck migrates it locally into the stable identity without a Provider request
 
 ## ADDED Requirements
 
 ### Requirement: Per-item place evidence excludes acquisition mechanics
-The immutable Result SHALL expose one qualified reverse-geocode outcome on every
-located Source Item. It SHALL NOT require Plan to know bundle formation, unit
-membership, cache hits, routing state, request identity, or retry mechanics.
+The immutable Result SHALL expose one qualified place outcome, including address
+and nearby-place component outcomes, on every located Source Item. It SHALL NOT
+require Plan to know bundle formation, unit membership, cache hits, routing state,
+request identity, or retry mechanics.
 
 #### Scenario: Provider returns no result or failure
 - **WHEN** the authorized Tool completes a coordinate with no candidate or a localized failure

@@ -214,15 +214,22 @@ def _error(
 
 
 def _indeterminate_result(request: GeoRequest) -> GeoCapabilityResult:
+    operations = (
+        (GeoOperation.REVERSE_GEOCODE, GeoOperation.NEARBY_PLACES)
+        if request.expands_nearby
+        else (
+            GeoOperation.REVERSE_GEOCODE
+            if request.operation is GeoOperation.RESOLVE_PLACE
+            else request.operation,
+        )
+    )
     return GeoCapabilityResult(
         operation=request.operation,
         outcome=GeoOutcome.INDETERMINATE,
         request_fingerprint=request.fingerprint(),
         components=tuple(
             GeoComponentResult(
-                GeoOperation.REVERSE_GEOCODE
-                if request.operation is GeoOperation.RESOLVE_PLACE
-                else request.operation,
+                operation,
                 GeoComponentStatus.INDETERMINATE,
                 (subject.subject_ref,),
                 subject.coordinate,
@@ -234,6 +241,7 @@ def _indeterminate_result(request: GeoRequest) -> GeoCapabilityResult:
                 ),
             )
             for subject in request.subjects
+            for operation in operations
         ),
         attempts=(),
         effects=GeoEffects(

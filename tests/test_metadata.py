@@ -128,7 +128,7 @@ def test_result_is_not_plan_ready_when_a_located_source_lacks_geocode_outcome(
         for qualification in draft.qualifications
     )
     with pytest.raises(
-        ResultSealError, match="located Source Item lacks a reverse-geocode outcome"
+        ResultSealError, match="located Source Item lacks a complete place outcome"
     ):
         ResultStore(database).seal(replace(draft, readiness="plan_ready"))
 

@@ -32,12 +32,29 @@ handoff state.
 
 | Operation | Purpose | Does not decide |
 | --- | --- | --- |
-| `resolve_place` | Obtain the least expansive useful place candidate and applicable continuations | Final location, album name, grouping, or evidence sufficiency |
+| `resolve_place` | Obtain the least expansive useful place candidate and applicable continuations; when both nearby bounds are supplied, obtain address and bounded nearby-place components in the same authorized request | Final location, album name, grouping, or evidence sufficiency |
 | `reverse_geocode` | Inspect normalized address and administrative components | Whether the address is the intended venue |
 | `nearby_places` | Inspect bounded nearby-place candidates | Which candidate is correct or worth using |
 
 Lower-level operations remain provider-neutral. They do not expose raw HTTP,
 coordinate-conversion algorithms, AMap fields, or Google fields.
+
+An unbounded `resolve_place` keeps the progressive default and returns a separately
+authorizable nearby-place continuation. Supplying both `radius_meters` and
+`max_places` explicitly expands that same operation: the request fingerprint and
+effect envelope then cover both address and nearby-place acquisition. A Provider
+may satisfy both components with one external request when its API returns them
+together; separate Provider requests remain separately counted. The supplied
+radius and result count are hard upper bounds. A versioned Provider profile may
+use a narrower effective radius or result count, but never exceed the authorized
+bounds.
+
+For the current adapters, one expanded coordinate costs at most one AMap request
+or two Google requests. If both Providers are authorized for fallback, the
+request-wide hard ceiling therefore reserves at most three Provider requests per
+logical coordinate; actual effects report only requests that were sent. A single
+Provider request that supplies both components is recorded as a `resolve_place`
+attempt, while the returned evidence remains two separately statused components.
 
 ## Authorization and effects
 

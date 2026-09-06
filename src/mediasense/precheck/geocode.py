@@ -44,7 +44,8 @@ _ACQUISITION_POLICY = "bundle-stationary-complete-link-v1"
 _MAX_SHARED_DIAMETER_METERS = 15.0
 _MAX_SHARED_SPAN_SECONDS = 120.0
 _LEGACY_PRODUCER = "builtin-adaptive-reverse-geocode-v1"
-_PRODUCER = "builtin-geo-query-reverse-geocode-v2"
+_REVERSE_ONLY_PRODUCER = "builtin-geo-query-reverse-geocode-v2"
+_PRODUCER = "builtin-geo-query-address-poi-v3"
 _LEGACY_PROFILE = {
     "provider_profile": "amap-google-address-poi-v1",
     "refresh_token": "reuse-until-explicit-refresh",
@@ -54,9 +55,11 @@ _LEGACY_PROFILE = {
 
 @dataclass(frozen=True, slots=True)
 class ReverseGeocodeProfile:
-    provider_profile: str = "geo-query-reverse-geocode-v1"
+    provider_profile: str = "geo-query-address-poi-v2"
     routing_policy: str = "ordered-per-coordinate-v1"
     refresh_token: str = "reuse-until-explicit-refresh"
+    nearby_radius_meters: float = 500.0
+    max_places: int = 30
     max_attempts: int = 3
     retry_delay_seconds: float = 3
 
@@ -66,6 +69,8 @@ class ReverseGeocodeProfile:
                 raise ValueError(f"reverse-geocode {name} must be non-empty")
         if self.max_attempts < 1 or self.retry_delay_seconds < 0:
             raise ValueError("reverse-geocode retry policy is invalid")
+        if self.nearby_radius_meters <= 0 or self.max_places < 1:
+            raise ValueError("reverse-geocode nearby-place bounds are invalid")
 
     def descriptor(self) -> str:
         return _json(
@@ -73,6 +78,8 @@ class ReverseGeocodeProfile:
                 "provider_profile": self.provider_profile,
                 "refresh_token": self.refresh_token,
                 "routing_policy": self.routing_policy,
+                "nearby_radius_meters": self.nearby_radius_meters,
+                "max_places": self.max_places,
             }
         )
 
@@ -147,7 +154,7 @@ class ReverseGeocodeBatchOutcome:
 
 
 class ReverseGeocodeProducer:
-    """Freeze, authorize, execute, and reuse source-coordinate queries."""
+    """Freeze, authorize, execute, and reuse complete source place queries."""
 
     def __init__(
         self,
@@ -263,10 +270,13 @@ class ReverseGeocodeProducer:
             if preflight.get("request_fingerprint") != batch.pending_fingerprint:
                 raise RuntimeError("Geo Tool changed the frozen request identity")
             if preflight.get("outcome") == "authorization_required":
-                disclosure = self._disclosure(preflight, batch=batch)
+                disclosure = self._disclosure(preflight, batch=batch, profile=profile)
                 status = self.run_tool.require_confirmation(
                     public_run_ref,
-                    summary="Reverse-geocode the compressed PreCheck acquisition set.",
+                    summary=(
+                        "Resolve address and nearby-place evidence for the "
+                        "compressed PreCheck acquisition set."
+                    ),
                     quantity=batch.pending_query_count,
                     unit="logical_queries",
                     skip_allowed=False,
@@ -388,6 +398,7 @@ class ReverseGeocodeProducer:
         preflight: Mapping[str, object],
         *,
         batch: FrozenGeocodeBatch,
+        profile: ReverseGeocodeProfile,
     ) -> dict[str, object]:
         envelope = preflight.get("required_authorization")
         if not isinstance(envelope, Mapping):
@@ -401,7 +412,9 @@ class ReverseGeocodeProducer:
         return {
             "frozen_batch_identity": batch.batch_fingerprint,
             "geo_request_fingerprint": batch.pending_fingerprint,
-            "operation": "reverse_geocode",
+            "operation": "resolve_place",
+            "nearby_radius_meters": profile.nearby_radius_meters,
+            "max_places": profile.max_places,
             "coordinates": [
                 query.coordinate.value() for query in batch.pending_queries
             ],
@@ -468,16 +481,19 @@ class ReverseGeocodeProducer:
         attempts = response.get("attempts")
         if not isinstance(components, Sequence) or not isinstance(attempts, Sequence):
             raise RuntimeError("Geo Tool returned an invalid result")
-        by_subject: dict[str, Mapping[str, object]] = {}
+        by_subject: dict[str, dict[str, Mapping[str, object]]] = {}
         for component in components:
             if not isinstance(component, Mapping):
                 continue
             refs = component.get("subject_refs")
+            operation = component.get("operation")
+            if not isinstance(operation, str):
+                continue
             if not isinstance(refs, Sequence) or isinstance(refs, str):
                 continue
             for subject_ref in refs:
                 if isinstance(subject_ref, str):
-                    by_subject[subject_ref] = component
+                    by_subject.setdefault(subject_ref, {})[operation] = component
         observed_at = response.get("observed_at")
         completed: list[tuple[WorkLease, object]] = []
         not_requested: list[WorkLease] = []
@@ -485,17 +501,26 @@ class ReverseGeocodeProducer:
             lease = leases.get(record.work_id)
             if lease is None:
                 continue
-            component = by_subject.get(record.work_id)
-            if component is None:
+            subject_components = by_subject.get(record.work_id)
+            if subject_components is None or not {
+                GeoOperation.REVERSE_GEOCODE.value,
+                GeoOperation.NEARBY_PLACES.value,
+            } <= set(subject_components):
                 self.work.fail_work(
                     lease,
                     error_code="geo_tool_result_incomplete",
-                    message="Geo Tool returned no component for the acquisition unit.",
+                    message=(
+                        "Geo Tool did not return both address and nearby-place "
+                        "components for the acquisition unit."
+                    ),
                     retryable=True,
                     retry_delay=timedelta(seconds=profile.retry_delay_seconds),
                 )
                 continue
-            if component.get("status") == "not_requested":
+            if all(
+                component.get("status") == "not_requested"
+                for component in subject_components.values()
+            ):
                 not_requested.append(lease)
                 continue
             matching_attempts = tuple(
@@ -505,7 +530,7 @@ class ReverseGeocodeProducer:
                 and attempt.get("input_coordinate") == query.coordinate.value()
             )
             observations, result_value = _tool_observations(
-                component,
+                subject_components,
                 matching_attempts,
                 query,
                 profile,
@@ -560,7 +585,7 @@ class ReverseGeocodeProducer:
         )
         if not leases:
             return self.work.get_work(target.work_id)
-        migrated = dict(legacy)
+        migrated = _upgrade_legacy_observation(legacy)
         migrated["producer"] = {
             "identity": _PRODUCER,
             "profile": profile.descriptor(),
@@ -577,7 +602,8 @@ class ReverseGeocodeProducer:
                 run_id, capability="reverse-geocode-observation"
             )
             if record.work_id not in selected_work_ids
-            and record.spec.producer_identity == _LEGACY_PRODUCER
+            and record.spec.producer_identity
+            in {_LEGACY_PRODUCER, _REVERSE_ONLY_PRODUCER}
             and record.status is not WorkStatus.RUNNING
         )
         self.work.detach_run_work(run_id, superseded)
@@ -909,7 +935,7 @@ def _spec(
             WorkDependency(
                 DependencyKind.PARAMETER,
                 "operation",
-                GeoOperation.REVERSE_GEOCODE.value,
+                GeoOperation.RESOLVE_PLACE.value,
             ),
             WorkDependency(DependencyKind.PARAMETER, "locale", "zh"),
         ),
@@ -920,13 +946,14 @@ def _geo_request_value(
     pending: Sequence[tuple[FrozenGeocodeQuery, WorkRecord]],
     profile: ReverseGeocodeProfile,
 ) -> GeoRequest:
-    del profile
     return GeoRequest(
-        operation=GeoOperation.REVERSE_GEOCODE,
+        operation=GeoOperation.RESOLVE_PLACE,
         subjects=tuple(
             GeoSubject(record.work_id, query.coordinate) for query, record in pending
         ),
         locale="zh",
+        radius_meters=profile.nearby_radius_meters,
+        max_places=profile.max_places,
         retention=GeoRetention.CALLER_STATE,
         route_context=GeoRouteContext(locale="zh"),
     )
@@ -968,6 +995,14 @@ def _request_value(request: Mapping[str, object]) -> GeoRequest:
         GeoOperation(str(request["operation"])),
         tuple(parsed_subjects),
         str(request["locale"]),
+        radius_meters=(
+            None
+            if request.get("radius_meters") is None
+            else float(request["radius_meters"])
+        ),
+        max_places=(
+            None if request.get("max_places") is None else int(request["max_places"])
+        ),
         retention=GeoRetention(str(request["retention"])),
         route_context=GeoRouteContext(locale="zh"),
     )
@@ -1019,34 +1054,46 @@ def _geo_authorization(
 
 
 def _tool_observations(
-    component: Mapping[str, object],
+    components: Mapping[str, Mapping[str, object]],
     attempts: Sequence[Mapping[str, object]],
     query: FrozenGeocodeQuery,
     profile: ReverseGeocodeProfile,
     *,
     observed_at: object,
 ) -> tuple[tuple[dict[str, object], ...], dict[str, object]]:
-    component_status = str(component.get("status"))
+    address_component = components[GeoOperation.REVERSE_GEOCODE.value]
+    nearby_component = components[GeoOperation.NEARBY_PLACES.value]
+    component_outcomes = {
+        GeoOperation.REVERSE_GEOCODE.value: str(address_component.get("status")),
+        GeoOperation.NEARBY_PLACES.value: str(nearby_component.get("status")),
+    }
+    component_statuses = set(component_outcomes.values())
+    if component_statuses == {"success"}:
+        result_status = "success"
+    elif component_statuses == {"no_result"}:
+        result_status = "no_result"
+    elif "indeterminate" in component_statuses:
+        result_status = "indeterminate"
+    elif component_statuses.intersection({"success", "no_result"}):
+        result_status = "partial"
+    else:
+        result_status = "failed"
     status = {
         "success": "available",
+        "partial": "available",
         "no_result": "missing",
         "failed": "failed",
         "indeterminate": "failed",
-    }.get(component_status, "failed")
-    candidates_value = component.get("candidates")
-    candidates = tuple(
-        item
-        for item in (
-            candidates_value
-            if isinstance(candidates_value, Sequence)
-            and not isinstance(candidates_value, str)
-            else ()
-        )
-        if isinstance(item, Mapping)
-    )
+    }[result_status]
+    address_candidates = _component_candidates(address_component)
+    nearby_candidates = _component_candidates(nearby_component)
     address_candidate = next(
-        (item for item in candidates if item.get("kind") == "address"), None
+        (item for item in address_candidates if item.get("kind") == "address"), None
     )
+    place_candidates = tuple(
+        item for item in nearby_candidates if item.get("kind") == "place"
+    )
+    candidates = (*address_candidates, *nearby_candidates)
     provider = next(
         (
             str(item["provider_ref"])
@@ -1087,6 +1134,7 @@ def _tool_observations(
         ),
         "logical_query_count": 1,
         "provider_request_count": provider_request_count,
+        "component_outcomes": component_outcomes,
     }
     attempt_observation: dict[str, object] = {
         "name": "reverse_geocode_attempt",
@@ -1112,43 +1160,57 @@ def _tool_observations(
             "observation": "provider_candidate",
         },
     }
-    if status == "available":
-        address = None
-        if address_candidate is not None:
-            address = {
-                "formatted_address": address_candidate.get("formatted_address")
-                or address_candidate.get("name"),
-                "components": dict(address_candidate.get("components", {})),
-            }
-        candidate["value"] = {
-            "address": address,
-            "pois": [dict(item) for item in candidates if item.get("kind") == "place"],
+    address = None
+    if address_candidate is not None:
+        address = {
+            "formatted_address": address_candidate.get("formatted_address")
+            or address_candidate.get("name"),
+            "components": dict(address_candidate.get("components", {})),
         }
-    qualifications_value = component.get("qualifications")
-    qualifications = [
-        {
-            "code": str(item.get("code", "geo_query_failed")),
-            "effect": "limits_interpretation",
-            "message": str(
-                item.get("message", "Geo query did not return a candidate.")
-            ),
-        }
-        for item in (
-            qualifications_value
-            if isinstance(qualifications_value, Sequence)
-            and not isinstance(qualifications_value, str)
-            else ()
+    candidate["value"] = {
+        "address": address,
+        "pois": [dict(item) for item in place_candidates],
+        "component_outcomes": component_outcomes,
+    }
+    qualifications: list[dict[str, str]] = []
+    for operation, component in (
+        (GeoOperation.REVERSE_GEOCODE.value, address_component),
+        (GeoOperation.NEARBY_PLACES.value, nearby_component),
+    ):
+        qualifications_value = component.get("qualifications")
+        component_qualifications = tuple(
+            item
+            for item in (
+                qualifications_value
+                if isinstance(qualifications_value, Sequence)
+                and not isinstance(qualifications_value, str)
+                else ()
+            )
+            if isinstance(item, Mapping)
         )
-        if isinstance(item, Mapping)
-    ]
-    if component_status == "indeterminate" and not qualifications:
-        qualifications.append(
-            {
-                "code": "execution_indeterminate",
-                "effect": "limits_interpretation",
-                "message": "The provider effect may have occurred; it was not retried.",
-            }
-        )
+        for item in component_qualifications:
+            qualifications.append(
+                {
+                    "code": f"{operation}:{item.get('code', 'geo_query_failed')}",
+                    "effect": "limits_interpretation",
+                    "message": str(
+                        item.get("message", "Geo query did not return a candidate.")
+                    ),
+                }
+            )
+        component_status = component_outcomes[operation]
+        if component_status in {"failed", "indeterminate", "not_requested"} and not component_qualifications:
+            qualifications.append(
+                {
+                    "code": f"{operation}:{component_status}",
+                    "effect": "limits_interpretation",
+                    "message": (
+                        "The provider effect may have occurred; it was not retried."
+                        if component_status == "indeterminate"
+                        else f"The {operation} component was {component_status}."
+                    ),
+                }
+            )
     if qualifications:
         candidate["qualifications"] = qualifications
     result_value = {
@@ -1160,12 +1222,14 @@ def _tool_observations(
         if address_candidate is None
         else candidate.get("value", {}).get("address"),
         "pois": candidate.get("value", {}).get("pois", []),
+        "component_outcomes": component_outcomes,
+        "status": result_status,
         "observed_at": observed_at_value,
         "logical_query_count": 1,
         "provider_request_count": provider_request_count,
         "attempts": [dict(item) for item in attempts],
     }
-    if status == "failed":
+    if result_status in {"failed", "indeterminate"}:
         result_value["error"] = {
             "code": qualifications[0]["code"] if qualifications else "geo_query_failed",
             "message": (
@@ -1175,13 +1239,28 @@ def _tool_observations(
     return (attempt_observation, candidate), result_value
 
 
+def _component_candidates(
+    component: Mapping[str, object],
+) -> tuple[Mapping[str, object], ...]:
+    value = component.get("candidates")
+    return tuple(
+        item
+        for item in (
+            value
+            if isinstance(value, Sequence) and not isinstance(value, str)
+            else ()
+        )
+        if isinstance(item, Mapping)
+    )
+
+
 def _legacy_observation(
     database_path: Path,
     query: FrozenGeocodeQuery,
     profile: ReverseGeocodeProfile,
 ) -> Mapping[str, object] | None:
     if (
-        profile.provider_profile != "geo-query-reverse-geocode-v1"
+        profile.provider_profile != "geo-query-address-poi-v2"
         or profile.routing_policy != "ordered-per-coordinate-v1"
         or profile.refresh_token != _LEGACY_PROFILE["refresh_token"]
     ):
@@ -1234,8 +1313,98 @@ def _legacy_observation(
                 continue
         except TypeError:
             continue
+        if not _has_legacy_address_poi_semantics(output):
+            continue
         return output
     return None
+
+
+def _has_legacy_address_poi_semantics(output: Mapping[str, object]) -> bool:
+    result = output.get("result")
+    observations = output.get("observations")
+    if not isinstance(result, Mapping) or not isinstance(observations, Sequence):
+        return False
+    candidate = next(
+        (
+            item
+            for item in observations
+            if isinstance(item, Mapping)
+            and item.get("name") == "reverse_geocode_candidate"
+        ),
+        None,
+    )
+    if not isinstance(candidate, Mapping):
+        return False
+    if candidate.get("status") not in {"available", "missing"}:
+        return False
+    if candidate.get("qualifications") or result.get("error"):
+        return False
+    value = candidate.get("value")
+    if candidate.get("status") == "available" and (
+        not isinstance(value, Mapping)
+        or "address" not in value
+        or not isinstance(value.get("pois"), Sequence)
+        or isinstance(value.get("pois"), str)
+    ):
+        return False
+    provider = result.get("provider")
+    requests = result.get("provider_request_count")
+    if not isinstance(requests, int):
+        return False
+    if provider == "amap":
+        return requests >= 1
+    if provider == "google_maps":
+        return requests >= 2
+    return False
+
+
+def _upgrade_legacy_observation(
+    output: Mapping[str, object],
+) -> dict[str, object]:
+    migrated = dict(output)
+    result = dict(output["result"])
+    observations = [
+        dict(item) for item in output["observations"] if isinstance(item, Mapping)
+    ]
+    candidate = next(
+        item for item in observations if item.get("name") == "reverse_geocode_candidate"
+    )
+    value = dict(candidate.get("value", {}))
+    address = value.get("address")
+    pois = value.get("pois", [])
+    if candidate.get("status") == "missing":
+        component_outcomes = {
+            GeoOperation.REVERSE_GEOCODE.value: "no_result",
+            GeoOperation.NEARBY_PLACES.value: "no_result",
+        }
+        result_status = "no_result"
+    else:
+        component_outcomes = {
+            GeoOperation.REVERSE_GEOCODE.value: (
+                "success" if address is not None else "no_result"
+            ),
+            GeoOperation.NEARBY_PLACES.value: (
+                "success" if pois else "no_result"
+            ),
+        }
+        result_status = (
+            "success"
+            if set(component_outcomes.values()) == {"success"}
+            else "partial"
+        )
+    value["component_outcomes"] = component_outcomes
+    candidate["value"] = value
+    provenance = candidate.get("provenance")
+    if isinstance(provenance, Mapping):
+        candidate["provenance"] = {
+            **dict(provenance),
+            "component_outcomes": component_outcomes,
+        }
+    result["component_outcomes"] = component_outcomes
+    result["status"] = result_status
+    migrated["observations"] = observations
+    migrated["result"] = result
+    return migrated
 
 
 def _reused_output(

@@ -1,5 +1,24 @@
 ## MODIFIED Requirements
 
+### Requirement: Bounded resolve may acquire address and nearby-place evidence
+An unbounded `resolve_place` request SHALL retain the least-expansive
+address-first behavior and MAY return a separately authorized continuation. A
+`resolve_place` request carrying both `radius_meters` and `max_places` SHALL bind
+and execute both `reverse_geocode` and `nearby_places` components under one exact
+request identity and effect envelope. Supplying only one bound SHALL be invalid.
+
+#### Scenario: AMap coalesces compatible components
+- **WHEN** AMap can return address and nearby places from one bounded regeo request
+- **THEN** both component outcomes are returned while one Provider request is counted
+
+#### Scenario: Google requires separate endpoints
+- **WHEN** Google resolves the same bounded request through reverse and nearby endpoints
+- **THEN** both Provider requests count against the request-wide hard ceiling
+
+#### Scenario: Default Plan lookup remains progressive
+- **WHEN** a caller submits `resolve_place` without nearby bounds
+- **THEN** the Tool preserves the address-first result and separately authorized nearby continuation
+
 ### Requirement: Every external effect is bound to exact authority
 Every Geo Provider effect SHALL require trusted authority for the exact canonical
 request fingerprint and a machine-enforced envelope covering Provider identities,

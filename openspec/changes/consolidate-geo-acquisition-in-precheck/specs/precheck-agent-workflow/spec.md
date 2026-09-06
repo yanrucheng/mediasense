@@ -2,17 +2,17 @@
 
 ### Requirement: PreCheck remains local-first with one bounded online exception
 The Skill SHALL state that external work is disabled until exact Run authority is
-present and SHALL recognize only the trusted confirmation contract for reverse
-geocoding a normalized, deduplicated coordinate set covering every Source Item
-with an available final coordinate.
+present and SHALL recognize only the trusted confirmation contract for bounded
+address-and-nearby-place acquisition over a normalized, deduplicated coordinate
+set covering every Source Item with an available final coordinate.
 It SHALL NOT describe the product as having an `offline` mode or describe required
 Geo acquisition as optional when the frozen batch is non-empty.
 
-#### Scenario: Frozen reverse-geocode set needs authorization
-- **WHEN** the Tool pauses with a frozen reverse-geocode disclosure
+#### Scenario: Frozen place-acquisition set needs authorization
+- **WHEN** the Tool pauses with a frozen address-and-nearby-place disclosure
 - **THEN** the Agent presents the exact coordinates and logical-query count, transmitted data classes, provider/request/cost ceilings, Result retention, and each known or unknown provider policy before obtaining trusted Human confirmation bound to the disclosure identity
 
-#### Scenario: Human declines reverse geocoding
+#### Scenario: Human declines place acquisition
 - **WHEN** the Human declines the frozen disclosure
 - **THEN** the Agent submits `decline`, reports terminal non-success with zero provider requests, and does not hand a Result to Plan
 
@@ -41,4 +41,3 @@ that readiness was established, but they are not additional Plan-entry gates.
 #### Scenario: Result is ready for Plan
 - **WHEN** the Human proceeds with a valid Plan-ready Result
 - **THEN** the Agent hands Plan the exact `result_ref` and directs all later PreCheck fact and Evidence access through `mediasense.precheck.read`
-

@@ -8,10 +8,10 @@ from .model import GeoOperation, GeoRequest, GeoRouteContext
 from .protocol import GeoProviderCapabilities, GeoProviderExecution
 
 
-def provider_operation(operation: GeoOperation) -> GeoOperation:
-    if operation is GeoOperation.RESOLVE_PLACE:
+def provider_operation(request: GeoRequest) -> GeoOperation:
+    if request.operation is GeoOperation.RESOLVE_PLACE and not request.expands_nearby:
         return GeoOperation.REVERSE_GEOCODE
-    return operation
+    return request.operation
 
 
 @dataclass(frozen=True, slots=True)
@@ -32,7 +32,7 @@ class OrderedGeoRoutingPolicy:
         context: GeoRouteContext,
         providers: tuple[GeoProviderCapabilities, ...],
     ) -> tuple[str, ...]:
-        operation = provider_operation(request.operation)
+        operation = provider_operation(request)
         available = {
             provider.provider_id
             for provider in providers

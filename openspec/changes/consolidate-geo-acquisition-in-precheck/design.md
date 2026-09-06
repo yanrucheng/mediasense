@@ -53,10 +53,10 @@ Source Items + metadata + GPX
  exact-coordinate request deduplication + compatible Work reuse
             │
             ▼
- frozen mediasense.geo.query request
+ frozen bounded resolve_place request
             │  exact Human authorization + hard request ceiling
             ▼
- provider-neutral observations
+ address + nearby-place observations
             │
             ▼
  per-Source-Item outcome projection in immutable PreCheck Result
@@ -108,12 +108,21 @@ hits, routing, or request counts in order to know a photo's place outcome.
 
 ### 3. PreCheck calls the public Geo Tool
 
-There is one Provider execution boundary. PreCheck constructs one pending
-`reverse_geocode` request with `caller_state` retention and calls
+There is one Provider execution boundary. PreCheck constructs one pending,
+bounded `resolve_place` request with `caller_state` retention and calls
 `mediasense.geo.query` first without authority. The returned request fingerprint
 and effect envelope become the existing PreCheck Run confirmation. After trusted
 Human confirmation, PreCheck converts that authority to the Tool's exact
 authorization and invokes the same request.
+
+The bounds expand `resolve_place` to request distinct `reverse_geocode` and
+`nearby_places` components under that one identity. Unbounded `resolve_place`
+retains the Plan-oriented address-first behavior and separately authorized
+continuation. AMap may satisfy both expanded components from one `extensions=all`
+request; Google records its reverse and nearby requests separately.
+The current PreCheck profile sets upper bounds of 500 metres and 30 candidates;
+the AMap and Google adapters retain their narrower characterized provider limits.
+These bounds and adapter methods are versioned policy, not product invariants.
 
 The Tool journal records an indeterminate result before execution and a terminal
 result afterward. A lost response is replayed without another Provider call.
@@ -123,9 +132,10 @@ set, retention, and known or unknown billable units.
 
 ### 4. Observation identity excludes order and membership
 
-Reusable reverse-geocode Work identity contains normalized coordinate, operation,
-locale, effective Provider/routing profile, and refresh policy. It does not contain
-the previous Work ID, input position, bundle ID, or Source Item membership.
+Reusable place-observation Work identity contains normalized coordinate, operation,
+nearby bounds, locale, effective Provider/routing profile, and refresh policy. It
+does not contain the previous Work ID, input position, bundle ID, or Source Item
+membership.
 Provider routing starts from the same request context for every coordinate, so
 batch order cannot silently alter a coordinate's semantics.
 
@@ -160,7 +170,10 @@ Results are not rewritten.
 | no compatible Provider | Geo Tool / PreCheck | Run fails before authorization |
 | authority absent | PreCheck Run | paused; zero Provider requests |
 | authority mismatches request | Geo Tool | authorization required; zero effect |
-| Provider no-result/failure | Geo Tool | explicit per-item missing/failed outcome |
+| address and nearby place succeed | Geo Tool / PreCheck | one complete observation projected per covered Source Item |
+| nearby place returns no result | Geo Tool / PreCheck | explicit executed `no_result`; never confused with `not_requested` |
+| address succeeds but nearby place fails | Geo Tool / PreCheck | explicit partial outcome and qualification after bounded fallback |
+| Provider no-result/failure | Geo Tool | explicit per-component and per-item missing/failed outcome |
 | transmitted effect becomes uncertain | Geo Tool journal | indeterminate result; no automatic replay |
 | Run cancellation | PreCheck | completed query Work retained; later calls stop |
 | missing projected outcome | Result validator | Result is not Plan-ready |
@@ -176,6 +189,7 @@ Results are not rewritten.
 | all exact coordinates become queries | `regression` in the second correction, now repaired | coverage no longer determines request cardinality |
 | adaptive visual groups as Geo units | `not_comparable` | their optimization objective is visual review, not location equivalence |
 | order-dependent reverse-geocode Work chain | `regression`, now repaired | identity is stable per coordinate and policy |
+| address without historical nearby-place evidence | `regression`, now repaired | bounded PreCheck resolution restores both components without changing Plan's default progressive call |
 | public stage-neutral Geo Tool | `preserved` from the earlier MediaSense capability design | PreCheck and Plan can both call it |
 
 ## Risks and controls
@@ -204,14 +218,17 @@ Tests cover same-asset sharing, stationary bursts, moving chains, time and datum
 conflicts, exact deduplication after unit formation, per-item projection,
 order-independent Work identity, legacy cache reuse, no-provider behavior,
 authorization mismatch/decline, cancellation, hard request ceilings, Tool replay,
-MCP elicitation, manifest migration, contract parity, and zero real network use.
+MCP elicitation, AMap one-request address/POI resolution, Google two-request
+resolution, component-level partial/no-result semantics, manifest migration,
+contract parity, and zero real network use.
 
 Read-only evaluation against the paused Hong Kong Run must remain separate from
 execution. The current algorithm yields 225 queries for 1,838 located Source
 Items (down from 1,611 exact-coordinate queries). All 144 historical successes
 remain semantically addressable; 98 are selected by the compressed set, leaving
-127 pending queries and a 254-Provider-request hard ceiling with both current
-adapters. The Run remains paused and no Provider attempt was made.
+127 pending queries and a 381-Provider-request hard ceiling for complete
+address-and-POI acquisition with both current adapters. The Run remains paused
+and no Provider attempt was made.
 
 ## Open Questions
 

@@ -1,9 +1,9 @@
-"""Shared reverse-geocoding primitives used by PreCheck and one-off lookups."""
+"""Shared address and nearby-place primitives used by stage-neutral Geo queries."""
 
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 import json
 import socket
@@ -172,8 +172,13 @@ class AMapReverseGeocoder:
     data_handling = "unknown"
     capabilities = GeoProviderCapabilities(
         provider_id,
-        (GeoOperation.REVERSE_GEOCODE, GeoOperation.NEARBY_PLACES),
+        (
+            GeoOperation.RESOLVE_PLACE,
+            GeoOperation.REVERSE_GEOCODE,
+            GeoOperation.NEARBY_PLACES,
+        ),
         datum,
+        operation_request_ceilings=((GeoOperation.RESOLVE_PLACE, 1),),
     )
 
     def __init__(
@@ -224,16 +229,57 @@ class AMapReverseGeocoder:
             result = self._lookup(
                 coordinate,
                 language=locale,
-                include_nearby=operation is GeoOperation.NEARBY_PLACES,
-                radius_meters=radius_meters or self.radius_meters,
+                include_nearby=operation
+                in {GeoOperation.RESOLVE_PLACE, GeoOperation.NEARBY_PLACES},
+                radius_meters=(
+                    min(radius_meters, self.radius_meters)
+                    if operation is GeoOperation.RESOLVE_PLACE
+                    and radius_meters is not None
+                    else radius_meters or self.radius_meters
+                ),
             )
         except GeoLookupError as error:
-            return _provider_error_execution(
+            failed = _provider_error_execution(
                 self.provider_id,
-                operation,
+                (
+                    GeoOperation.REVERSE_GEOCODE
+                    if operation is GeoOperation.RESOLVE_PLACE
+                    else operation
+                ),
                 coordinate,
                 converted,
                 error,
+            )
+            if operation is not GeoOperation.RESOLVE_PLACE:
+                return failed
+            return GeoProviderExecution(
+                failed.component,
+                failed.attempt,
+                (
+                    GeoComponentResult(
+                        GeoOperation.NEARBY_PLACES,
+                        failed.component.status,
+                        (),
+                        coordinate,
+                        qualifications=failed.component.qualifications,
+                    ),
+                ),
+            )
+        if operation is GeoOperation.RESOLVE_PLACE:
+            address = _provider_execution(
+                result,
+                GeoOperation.REVERSE_GEOCODE,
+                max_places=None,
+            )
+            nearby = _provider_execution(
+                result,
+                GeoOperation.NEARBY_PLACES,
+                max_places=max_places,
+            )
+            return GeoProviderExecution(
+                address.component,
+                replace(address.attempt, operation=GeoOperation.RESOLVE_PLACE),
+                (nearby.component,),
             )
         return _provider_execution(
             result,
@@ -316,8 +362,13 @@ class GoogleMapsReverseGeocoder:
     data_handling = "unknown"
     capabilities = GeoProviderCapabilities(
         provider_id,
-        (GeoOperation.REVERSE_GEOCODE, GeoOperation.NEARBY_PLACES),
+        (
+            GeoOperation.RESOLVE_PLACE,
+            GeoOperation.REVERSE_GEOCODE,
+            GeoOperation.NEARBY_PLACES,
+        ),
         datum,
+        operation_request_ceilings=((GeoOperation.RESOLVE_PLACE, 2),),
     )
 
     def __init__(
@@ -418,6 +469,50 @@ class GoogleMapsReverseGeocoder:
         operation = GeoOperation(operation)
         if operation not in self.capabilities.operations:
             raise ValueError(f"Google Maps does not support {operation.value}")
+        if operation is GeoOperation.RESOLVE_PLACE:
+            reverse = self.execute(
+                GeoOperation.REVERSE_GEOCODE,
+                coordinate,
+                locale=locale,
+            )
+            if reverse.component.status is GeoComponentStatus.INDETERMINATE:
+                return GeoProviderExecution(
+                    reverse.component,
+                    reverse.attempt,
+                    (
+                        GeoComponentResult(
+                            GeoOperation.NEARBY_PLACES,
+                            GeoComponentStatus.NOT_REQUESTED,
+                            (),
+                            coordinate,
+                            qualifications=(
+                                {
+                                    "code": "stopped_after_indeterminate_effect",
+                                    "message": (
+                                        "Nearby-place lookup was not admitted after "
+                                        "an indeterminate reverse-geocode effect."
+                                    ),
+                                },
+                            ),
+                        ),
+                    ),
+                )
+            nearby = self.execute(
+                GeoOperation.NEARBY_PLACES,
+                coordinate,
+                locale=locale,
+                radius_meters=min(
+                    radius_meters or self.nearby_radius_meters,
+                    self.nearby_radius_meters,
+                ),
+                max_places=min(max_places or self.max_pois, self.max_pois),
+            )
+            return GeoProviderExecution(
+                reverse.component,
+                reverse.attempt,
+                (nearby.component,),
+                (nearby.attempt,),
+            )
         converted = self._converter.convert(coordinate, self.datum)
         normalized_language = _google_language(locale)
         try:
@@ -1165,6 +1260,7 @@ def _place_candidates(
                 coordinate=coordinate,
                 distance_meters=distance if distance >= 0 else None,
                 components=components,
+                provider_ref=result.provider,
             )
         )
     return tuple(candidates)

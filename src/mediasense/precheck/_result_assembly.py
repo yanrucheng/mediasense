@@ -30,6 +30,7 @@ from ._result_types import (
 from ._result_work_projection import (
     _connect,
     _has_available_coordinate,
+    _has_complete_place_outcome,
     _load_compression_groups,
     _load_mapped_observation_work,
     _load_source_artifact_work,
@@ -665,10 +666,7 @@ def build_minimal_result(
         for source in sources
         if source.scope == "source_media"
         and _has_available_coordinate(source.observations)
-        and not any(
-            observation.get("name") == "reverse_geocode_candidate"
-            for observation in source.observations
-        )
+        and not _has_complete_place_outcome(source.observations)
     )
     readiness = (
         "plan_ready"
@@ -698,7 +696,7 @@ def build_minimal_result(
             code = "reverse_geocode_incomplete"
             message = (
                 f"{len(unresolved_geo_source_media)} Source Item(s) have coordinates "
-                "but no reverse-geocode outcome."
+                "but no complete address-and-nearby-place outcome."
             )
         else:
             code = "no_entry_evidence"
@@ -717,7 +715,7 @@ def build_minimal_result(
                 "code": "external_reverse_geocode_candidates",
                 "effect": "limits_interpretation",
                 "message": (
-                    "Reverse-geocode candidate Evidence used "
+                    "Address and nearby-place candidate Evidence used "
                     f"{external_boundary['logical_external_queries']} logical "
                     "queries and observed "
                     f"{external_boundary['provider_requests']} provider requests; "

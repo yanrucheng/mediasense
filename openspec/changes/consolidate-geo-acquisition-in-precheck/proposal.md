@@ -25,8 +25,8 @@ challenges prepared evidence.
   support, or excessive span splits the scope. Adaptive visual compression does
   not directly define Geo equivalence.
 - Keep all Source Items with a final coordinate in the coverage set and project a
-  separate reverse-geocode outcome to each item, even when several items reuse one
-  external observation.
+  separate address-and-nearby-place outcome to each item, even when several items
+  reuse one external observation.
 - Keep exact-coordinate deduplication as the last request-layer defense. Spatial
   tolerances remain a versioned, replaceable PreCheck method rather than a public
   product invariant.
@@ -36,6 +36,11 @@ challenges prepared evidence.
 - Bind PreCheck confirmation to the shared Geo Tool's exact pending request and
   effect envelope. The Tool enforces the batch-level provider-request ceiling and
   journals admitted effects before network execution.
+- Extend the existing `resolve_place` operation with an explicitly bounded mode.
+  Unbounded calls retain the progressive address-first continuation used by Plan;
+  bounded calls request address and nearby-place components together. AMap may
+  satisfy both with one regeo request, while Google records its reverse and nearby
+  requests separately.
 - Keep Plan's ordinary contract focused on per-item Result facts. When a material
   Plan judgment needs narrower place evidence, the Agent may issue a separate,
   explicitly authorized `mediasense.geo.query`; it does not mutate the Result or
@@ -73,8 +78,8 @@ challenges prepared evidence.
 - Input reordering no longer changes observation Work identity or later query
   routing. All 144 historical successful observations pass the explicit
   coordinate/profile/language compatibility check; 98 of them are selected by
-  the current compressed query set, leaving 127 pending queries and a 254-request
-  hard ceiling with both current adapters.
+  the current compressed query set, leaving 127 pending queries and a 381-request
+  hard ceiling for the complete address-and-POI effect with both current adapters.
 - The Dataset manifest advances to version 3 and declares the Geo journal at
   version 1; supported version 1 and version 2 manifests migrate atomically.
 - Tests and documentation distinguish Source Item outcomes, logical queries,

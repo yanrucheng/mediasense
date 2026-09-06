@@ -28,11 +28,13 @@
       },
       "radius_meters": {
         "type": "number",
-        "exclusiveMinimum": 0
+        "exclusiveMinimum": 0,
+        "description": "Required for nearby_places; with max_places, expands resolve_place to include bounded nearby-place evidence."
       },
       "max_places": {
         "type": "integer",
-        "minimum": 1
+        "minimum": 1,
+        "description": "Required for nearby_places; with radius_meters, expands resolve_place to include bounded nearby-place evidence."
       },
       "retention": {
         "enum": ["none", "caller_state"],
@@ -46,13 +48,19 @@
           "properties": { "operation": { "const": "nearby_places" } },
           "required": ["operation"]
         },
-        "then": { "required": ["radius_meters", "max_places"] },
-        "else": {
-          "not": {
-            "anyOf": [
-              { "required": ["radius_meters"] },
-              { "required": ["max_places"] }
-            ]
+        "then": { "required": ["radius_meters", "max_places"] }
+      },
+      {
+        "if": {
+          "anyOf": [
+            { "required": ["radius_meters"] },
+            { "required": ["max_places"] }
+          ]
+        },
+        "then": {
+          "required": ["radius_meters", "max_places"],
+          "properties": {
+            "operation": { "enum": ["resolve_place", "nearby_places"] }
           }
         }
       }
@@ -160,7 +168,7 @@
         "required": ["provider", "operation", "status", "input_coordinate", "provider_coordinate", "provider_requests", "billable_units"],
         "properties": {
           "provider": { "type": "string", "minLength": 1 },
-          "operation": { "enum": ["reverse_geocode", "nearby_places"] },
+          "operation": { "enum": ["resolve_place", "reverse_geocode", "nearby_places"] },
           "status": { "enum": ["success", "no_result", "failed", "indeterminate"] },
           "input_coordinate": { "$ref": "#/$defs/coordinate" },
           "provider_coordinate": { "$ref": "#/$defs/coordinate" },

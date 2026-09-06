@@ -53,8 +53,9 @@ class GeoCapability:
         routes = self._routes(request, request.route_context)
         if not routes:
             raise ValueError("no configured provider supports the requested operation")
+        operation = provider_operation(request)
         max_requests = request.logical_query_count * sum(
-            self.providers[item].capabilities.max_requests_per_operation
+            self.providers[item].capabilities.request_ceiling(operation)
             for item in routes
         )
         billable_ceilings = [
@@ -101,7 +102,8 @@ class GeoCapability:
         billable_units = 0
         billable_known = True
         groups = _coordinate_groups(request)
-        provider_op = provider_operation(request.operation)
+        provider_op = provider_operation(request)
+        component_operations = _component_operations(request)
         was_cancelled = False
 
         for index, (coordinate, subject_refs) in enumerate(groups):
@@ -109,7 +111,7 @@ class GeoCapability:
                 was_cancelled = True
                 components.extend(
                     _unattempted_components(
-                        provider_op,
+                        component_operations,
                         groups[index:],
                         "cancelled_before_provider_request",
                         "Cancellation prevented a new provider request.",
@@ -125,11 +127,12 @@ class GeoCapability:
             routes = tuple(
                 item for item in self._routes(request, query_context) if item in allowed
             )
-            selected: GeoComponentResult | None = None
-            last: GeoComponentResult | None = None
+            selected: dict[GeoOperation, GeoComponentResult] = {}
+            last: dict[GeoOperation, GeoComponentResult] = {}
+            indeterminate = False
             for provider_id in routes:
                 provider = self.providers[provider_id]
-                ceiling = provider.capabilities.max_requests_per_operation
+                ceiling = provider.capabilities.request_ceiling(provider_op)
                 if (
                     request_count + ceiling
                     > authorization.envelope.max_provider_requests
@@ -154,47 +157,96 @@ class GeoCapability:
                     radius_meters=request.radius_meters,
                     max_places=request.max_places,
                 )
-                if execution.attempt.provider != provider_id:
+                execution_attempts = execution.attempts
+                if any(
+                    attempt.provider != provider_id for attempt in execution_attempts
+                ):
                     raise ValueError("provider attempt identity does not match adapter")
-                if execution.attempt.provider_requests > ceiling:
+                execution_request_count = sum(
+                    attempt.provider_requests for attempt in execution_attempts
+                )
+                if execution_request_count > ceiling:
                     raise ValueError("provider exceeded its declared request ceiling")
                 if (
                     billable_ceiling is not None
-                    and execution.attempt.billable_units is None
+                    and any(
+                        attempt.billable_units is None
+                        for attempt in execution_attempts
+                    )
                 ):
                     raise ValueError(
                         "provider did not report declared billable-unit accounting"
                     )
+                execution_billable_units = sum(
+                    attempt.billable_units or 0 for attempt in execution_attempts
+                )
                 if (
                     billable_ceiling is not None
-                    and execution.attempt.billable_units is not None
-                    and execution.attempt.billable_units > billable_ceiling
+                    and execution_billable_units > billable_ceiling
                 ):
                     raise ValueError("provider exceeded its billable-unit ceiling")
-                attempts.append(execution.attempt)
-                request_count += execution.attempt.provider_requests
-                if execution.attempt.billable_units is None:
+                attempts.extend(execution_attempts)
+                request_count += execution_request_count
+                if any(
+                    attempt.billable_units is None for attempt in execution_attempts
+                ):
                     billable_known = False
                 else:
-                    billable_units += execution.attempt.billable_units
+                    billable_units += execution_billable_units
                 current_context = self.routing.observe(
                     request, query_context, execution
                 )
-                last = replace(
-                    execution.component,
-                    subject_refs=subject_refs,
-                    coordinate=coordinate,
-                )
-                if last.status is GeoComponentStatus.SUCCESS:
-                    selected = last
+                returned = {
+                    component.operation: replace(
+                        component,
+                        subject_refs=subject_refs,
+                        coordinate=coordinate,
+                    )
+                    for component in execution.components
+                }
+                if len(returned) != len(execution.components):
+                    raise ValueError("provider returned duplicate Geo components")
+                unexpected = set(returned) - set(component_operations)
+                if unexpected:
+                    raise ValueError("provider returned an unexpected Geo component")
+                for operation in component_operations:
+                    component = returned.get(operation)
+                    if component is None:
+                        component = GeoComponentResult(
+                            operation,
+                            GeoComponentStatus.FAILED,
+                            subject_refs,
+                            coordinate,
+                            qualifications=(
+                                {
+                                    "code": "provider_result_incomplete",
+                                    "message": (
+                                        "Provider omitted a required Geo component."
+                                    ),
+                                },
+                            ),
+                        )
+                    if component.status is GeoComponentStatus.SUCCESS:
+                        selected.setdefault(operation, component)
+                    if component.status is GeoComponentStatus.INDETERMINATE:
+                        selected.pop(operation, None)
+                        last[operation] = component
+                        indeterminate = True
+                    else:
+                        previous = last.get(operation)
+                        if previous is None or _component_rank(
+                            component
+                        ) >= _component_rank(previous):
+                            last[operation] = component
+                if indeterminate:
                     break
-                if last.status is GeoComponentStatus.INDETERMINATE:
+                if all(operation in selected for operation in component_operations):
                     break
-            components.append(
-                selected
-                or last
+            coordinate_components = tuple(
+                selected.get(operation)
+                or last.get(operation)
                 or GeoComponentResult(
-                    provider_op,
+                    operation,
                     GeoComponentStatus.FAILED,
                     subject_refs,
                     coordinate,
@@ -205,11 +257,16 @@ class GeoCapability:
                         },
                     ),
                 )
+                for operation in component_operations
             )
-            if components[-1].status is GeoComponentStatus.INDETERMINATE:
+            components.extend(coordinate_components)
+            if any(
+                component.status is GeoComponentStatus.INDETERMINATE
+                for component in coordinate_components
+            ):
                 components.extend(
                     _unattempted_components(
-                        provider_op,
+                        component_operations,
                         groups[index + 1 :],
                         "stopped_after_indeterminate_effect",
                         "No new request was admitted after an indeterminate effect.",
@@ -338,8 +395,9 @@ class GeoCapability:
         permitted = supported.intersection(envelope.allowed_providers)
         if not permitted:
             return "authorization permits no compatible provider"
+        operation = provider_operation(request)
         minimum_requests = request.logical_query_count * min(
-            self.providers[item].capabilities.max_requests_per_operation
+            self.providers[item].capabilities.request_ceiling(operation)
             for item in permitted
         )
         if envelope.max_provider_requests < minimum_requests:
@@ -404,21 +462,37 @@ def _coordinate_groups(
     )
 
 
+def _component_operations(request: GeoRequest) -> tuple[GeoOperation, ...]:
+    if request.expands_nearby:
+        return (GeoOperation.REVERSE_GEOCODE, GeoOperation.NEARBY_PLACES)
+    return (provider_operation(request),)
+
+
+def _component_rank(component: GeoComponentResult) -> int:
+    return {
+        GeoComponentStatus.NOT_REQUESTED: 0,
+        GeoComponentStatus.FAILED: 1,
+        GeoComponentStatus.NO_RESULT: 2,
+        GeoComponentStatus.SUCCESS: 3,
+        GeoComponentStatus.INDETERMINATE: 4,
+    }[component.status]
+
+
 def _overall_outcome(components: tuple[GeoComponentResult, ...]) -> GeoOutcome:
     statuses = {component.status for component in components}
     if statuses == {GeoComponentStatus.SUCCESS}:
         return GeoOutcome.SUCCESS
+    if GeoComponentStatus.INDETERMINATE in statuses:
+        return GeoOutcome.INDETERMINATE
     if GeoComponentStatus.SUCCESS in statuses:
         return GeoOutcome.PARTIAL
     if statuses == {GeoComponentStatus.NO_RESULT}:
         return GeoOutcome.NO_RESULT
-    if GeoComponentStatus.INDETERMINATE in statuses:
-        return GeoOutcome.INDETERMINATE
     return GeoOutcome.FAILED
 
 
 def _unattempted_components(
-    operation: GeoOperation,
+    operations: tuple[GeoOperation, ...],
     groups: tuple[tuple[GeoCoordinate, tuple[str, ...]], ...],
     code: str,
     message: str,
@@ -432,13 +506,14 @@ def _unattempted_components(
             qualifications=({"code": code, "message": message},),
         )
         for coordinate, subject_refs in groups
+        for operation in operations
     )
 
 
 def _continuations(
     request: GeoRequest, components: tuple[GeoComponentResult, ...]
 ) -> tuple[GeoContinuation, ...]:
-    if request.operation is not GeoOperation.RESOLVE_PLACE:
+    if request.operation is not GeoOperation.RESOLVE_PLACE or request.expands_nearby:
         return ()
     if not any(
         component.status in {GeoComponentStatus.SUCCESS, GeoComponentStatus.NO_RESULT}

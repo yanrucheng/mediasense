@@ -285,6 +285,13 @@ details.
 evidence that qualifies them. It may use address or nearby-place observations only
 within the authorized envelope.
 
+Without nearby bounds it remains deliberately progressive: it acquires the least
+expansive address evidence and offers `nearby_places` as a separately authorized
+continuation. When both `radius_meters` and `max_places` are supplied, the same
+operation explicitly requests address and bounded nearby-place components under
+one fingerprint and envelope. This lets a high-volume caller such as PreCheck
+freeze the complete intended effect while preserving the smaller Plan default.
+
 It does not return a final Plan location judgment. A result may state that no
 additional capability-level evidence is currently available, but only the calling
 Agent decides whether the evidence is sufficient for its task.
@@ -361,7 +368,7 @@ A result distinguishes:
 
 - `success`: all requested evidence components completed;
 - `partial`: at least one requested component produced usable evidence and another
-  did not complete;
+  returned no candidate, failed, or did not complete;
 - `no_result`: the completed request produced no matching observation;
 - `authorization_required`: authority is absent or does not match; an
   `authorization_mismatch` qualification distinguishes the latter;
@@ -370,9 +377,9 @@ A result distinguishes:
 - `indeterminate`: completion or external effect cannot be established safely.
 
 Each requested evidence component separately reports `success`, `no_result`,
-`failed`, or `not_requested`. This prevents an address success from concealing a
-nearby-place failure and prevents an unrequested lookup from appearing to have
-returned no results.
+`failed`, `indeterminate`, or `not_requested`. This prevents an address success
+from concealing a nearby-place failure and prevents an unrequested lookup from
+appearing to have returned no results.
 
 Every result includes, when material:
 

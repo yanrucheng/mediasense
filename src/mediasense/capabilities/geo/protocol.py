@@ -26,6 +26,7 @@ class GeoProviderCapabilities:
     input_datum: MapDatum
     max_requests_per_operation: int = 1
     max_billable_units_per_operation: int | None = None
+    operation_request_ceilings: tuple[tuple[GeoOperation, int], ...] = ()
 
     def __post_init__(self) -> None:
         if not self.provider_id or self.provider_id.isspace():
@@ -47,12 +48,44 @@ class GeoProviderCapabilities:
             and self.max_billable_units_per_operation < 0
         ):
             raise ValueError("max_billable_units_per_operation cannot be negative")
+        ceilings = tuple(
+            (GeoOperation(operation), int(limit))
+            for operation, limit in self.operation_request_ceilings
+        )
+        if len({operation for operation, _limit in ceilings}) != len(ceilings):
+            raise ValueError("operation request ceilings must be unique")
+        if any(operation not in self.operations for operation, _limit in ceilings):
+            raise ValueError("operation request ceiling requires provider support")
+        if any(limit < 1 for _operation, limit in ceilings):
+            raise ValueError("operation request ceilings must be positive")
+        object.__setattr__(self, "operation_request_ceilings", ceilings)
+
+    def request_ceiling(self, operation: GeoOperation) -> int:
+        selected = GeoOperation(operation)
+        return next(
+            (
+                limit
+                for candidate, limit in self.operation_request_ceilings
+                if candidate == selected
+            ),
+            self.max_requests_per_operation,
+        )
 
 
 @dataclass(frozen=True, slots=True)
 class GeoProviderExecution:
     component: GeoComponentResult
     attempt: GeoProviderAttempt
+    additional_components: tuple[GeoComponentResult, ...] = ()
+    additional_attempts: tuple[GeoProviderAttempt, ...] = ()
+
+    @property
+    def components(self) -> tuple[GeoComponentResult, ...]:
+        return (self.component, *self.additional_components)
+
+    @property
+    def attempts(self) -> tuple[GeoProviderAttempt, ...]:
+        return (self.attempt, *self.additional_attempts)
 
 
 class GeoProvider(Protocol):

@@ -74,6 +74,17 @@ def _mapped_result_observations(
     for item in observations:
         if item.get("name") != "reverse_geocode_candidate":
             continue
+        value = item.get("value")
+        component_outcomes = (
+            value.get("component_outcomes") if isinstance(value, dict) else None
+        )
+        if not isinstance(component_outcomes, dict) or set(component_outcomes) != {
+            "reverse_geocode",
+            "nearby_places",
+        }:
+            raise ResultSealError(
+                f"{label} Work lacks complete address-and-nearby-place outcomes"
+            )
         observation = {
             key: item[key]
             for key in (
@@ -130,6 +141,24 @@ def _has_available_coordinate(
         and isinstance(observation.get("value"), Mapping)
         for observation in observations
     )
+
+
+def _has_complete_place_outcome(
+    observations: Iterable[Mapping[str, object]],
+) -> bool:
+    for observation in observations:
+        if observation.get("name") != "reverse_geocode_candidate":
+            continue
+        value = observation.get("value")
+        component_outcomes = (
+            value.get("component_outcomes") if isinstance(value, Mapping) else None
+        )
+        if isinstance(component_outcomes, Mapping) and set(component_outcomes) == {
+            "reverse_geocode",
+            "nearby_places",
+        }:
+            return True
+    return False
 
 
 def _metadata_result_observations(

@@ -243,6 +243,8 @@ class GeoRequest:
     def __post_init__(self) -> None:
         object.__setattr__(self, "operation", GeoOperation(self.operation))
         object.__setattr__(self, "retention", GeoRetention(self.retention))
+        if self.radius_meters is not None:
+            object.__setattr__(self, "radius_meters", float(self.radius_meters))
         if not self.subjects:
             raise ValueError("subjects must be non-empty")
         if not self.locale or self.locale.isspace():
@@ -251,11 +253,29 @@ class GeoRequest:
             raise ValueError("radius_meters must be positive")
         if self.max_places is not None and self.max_places < 1:
             raise ValueError("max_places must be positive")
-        if self.operation is GeoOperation.NEARBY_PLACES:
+        has_nearby_bounds = (
+            self.radius_meters is not None or self.max_places is not None
+        )
+        if self.operation is GeoOperation.NEARBY_PLACES or (
+            self.operation is GeoOperation.RESOLVE_PLACE and has_nearby_bounds
+        ):
             if self.radius_meters is None or self.max_places is None:
-                raise ValueError("nearby_places requires radius_meters and max_places")
-        elif self.radius_meters is not None or self.max_places is not None:
-            raise ValueError("radius_meters and max_places apply only to nearby_places")
+                raise ValueError(
+                    "bounded place resolution requires radius_meters and max_places"
+                )
+        elif has_nearby_bounds:
+            raise ValueError(
+                "radius_meters and max_places apply only to resolve_place or "
+                "nearby_places"
+            )
+
+    @property
+    def expands_nearby(self) -> bool:
+        return (
+            self.operation is GeoOperation.RESOLVE_PLACE
+            and self.radius_meters is not None
+            and self.max_places is not None
+        )
 
     @property
     def logical_query_count(self) -> int:

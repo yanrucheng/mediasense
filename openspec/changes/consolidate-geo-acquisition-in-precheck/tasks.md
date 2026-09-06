@@ -42,3 +42,25 @@
   - Ruff and strict OpenSpec validation passed.
   - A clean 0.7.1 wheel installed and passed the distribution smoke.
   - Read-only production analysis preserved the paused Run and made no Provider request.
+
+## 7. Address and nearby-place regression repair
+
+- [x] 7.1 Extend the existing `resolve_place` request with an explicitly bounded
+  address-and-nearby mode while preserving the unbounded Plan-oriented
+  continuation behavior.
+- [x] 7.2 Make AMap satisfy both components with one `extensions=all` request and
+  make Google account separately for reverse and nearby requests.
+- [x] 7.3 Persist separate component outcomes and qualifications in the existing
+  PreCheck place observation and project them to every covered Source Item.
+- [x] 7.4 Include nearby bounds in Work/request identity and reuse only legacy
+  `amap-google-address-poi-v1` observations that prove complete compatible
+  semantics.
+- [x] 7.5 Pass focused and full tests, Ruff, strict OpenSpec validation, clean
+  wheel verification, and final worktree audits without a live Provider request.
+  - Focused Geo/PreCheck suite: 82 passed.
+  - Full suite: 624 passed, 16 deselected.
+  - Ruff and strict OpenSpec validation passed.
+  - A clean 0.7.1 wheel installed and passed the offline distribution smoke.
+  - Read-only production-copy analysis retained 225 logical queries, reused 98
+    compatible complete observations, left 127 pending, and disclosed a
+    381-Provider-request hard ceiling without touching the paused Run.

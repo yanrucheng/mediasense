@@ -10,6 +10,7 @@ from PIL import Image
 import pytest
 
 from mediasense.capabilities.geo import (
+    GeoAuthorization,
     GeoCandidate,
     GeoCandidateKind,
     GeoCapability,
@@ -21,6 +22,8 @@ from mediasense.capabilities.geo import (
     GeoProviderCapabilities,
     GeoProviderExecution,
     GeoQueryTool,
+    GeoRequest,
+    GeoSubject,
     OrderedGeoRoutingPolicy,
 )
 from mediasense.geo import (
@@ -105,7 +108,18 @@ class FakeGoogle:
                     "components": {"country": "Japan", "country_code": "JP"},
                 }
             ),
-            pois=(),
+            pois=(
+                ()
+                if self.status == "no_result"
+                else (
+                    {
+                        "name": "Nearby fixture place",
+                        "address": "Fixture address",
+                        "latitude": coordinate.latitude,
+                        "longitude": coordinate.longitude,
+                    },
+                )
+            ),
             request_count=2,
         )
 
@@ -133,7 +147,14 @@ class FakeCountryProvider:
                     "country_code": self.country_code,
                 },
             },
-            pois=(),
+            pois=(
+                {
+                    "name": f"{self.country} place",
+                    "address": self.country,
+                    "latitude": coordinate.latitude,
+                    "longitude": coordinate.longitude,
+                },
+            ),
             request_count=1,
         )
 
@@ -143,9 +164,14 @@ class FakeGeoProviderAdapter:
         self.provider = provider
         self.capabilities = GeoProviderCapabilities(
             provider.provider_id,
-            (GeoOperation.REVERSE_GEOCODE,),
+            (
+                GeoOperation.RESOLVE_PLACE,
+                GeoOperation.REVERSE_GEOCODE,
+                GeoOperation.NEARBY_PLACES,
+            ),
             provider.datum,
             max_requests_per_operation=2,
+            operation_request_ceilings=((GeoOperation.RESOLVE_PLACE, 2),),
         )
 
     def execute(
@@ -159,9 +185,9 @@ class FakeGeoProviderAdapter:
     ) -> GeoProviderExecution:
         del radius_meters, max_places
         result = self.provider.lookup(coordinate, language=locale)
-        candidates = ()
+        address_candidates = ()
         if result.location is not None:
-            candidates = (
+            address_candidates = (
                 GeoCandidate(
                     GeoCandidateKind.ADDRESS,
                     str(result.location["formatted_address"]),
@@ -178,22 +204,69 @@ class FakeGeoProviderAdapter:
             )
         status = (
             GeoComponentStatus.SUCCESS
-            if candidates
+            if address_candidates
             else GeoComponentStatus.NO_RESULT
             if result.status == "no_result"
             else GeoComponentStatus.FAILED
         )
+        address = GeoComponentResult(
+            GeoOperation.REVERSE_GEOCODE,
+            status,
+            (),
+            coordinate,
+            address_candidates,
+        )
+        reverse_attempt = GeoProviderAttempt(
+            result.provider,
+            GeoOperation.REVERSE_GEOCODE,
+            status,
+            coordinate,
+            result.provider_coordinate,
+            1,
+            None,
+        )
+        if operation is not GeoOperation.RESOLVE_PLACE:
+            return GeoProviderExecution(address, reverse_attempt)
+        places = tuple(
+            GeoCandidate(
+                GeoCandidateKind.PLACE,
+                str(item["name"]),
+                formatted_address=str(item.get("address", "")),
+                coordinate=coordinate,
+                provider_ref=result.provider,
+            )
+            for item in result.pois
+        )
+        nearby_status = (
+            GeoComponentStatus.SUCCESS if places else GeoComponentStatus.NO_RESULT
+        )
+        nearby = GeoComponentResult(
+            GeoOperation.NEARBY_PLACES,
+            nearby_status,
+            (),
+            coordinate,
+            places,
+        )
+        nearby_attempts = (
+            (
+                GeoProviderAttempt(
+                    result.provider,
+                    GeoOperation.NEARBY_PLACES,
+                    nearby_status,
+                    coordinate,
+                    result.provider_coordinate,
+                    1,
+                    None,
+                ),
+            )
+            if result.request_count > 1
+            else ()
+        )
         return GeoProviderExecution(
-            GeoComponentResult(operation, status, (), coordinate, candidates),
-            GeoProviderAttempt(
-                result.provider,
-                operation,
-                status,
-                coordinate,
-                result.provider_coordinate,
-                result.request_count,
-                None,
-            ),
+            address,
+            reverse_attempt,
+            (nearby,),
+            nearby_attempts,
         )
 
 
@@ -302,6 +375,7 @@ def _legacy_geocode_work(
     coordinate: GeoCoordinate,
     *,
     previous=None,
+    provider_request_count: int = 2,
 ):
     dependencies = [
         WorkDependency(
@@ -354,7 +428,7 @@ def _legacy_geocode_work(
         "pois": [],
         "observed_at": "2026-05-04T12:00:00+00:00",
         "logical_query_count": 1,
-        "provider_request_count": 1,
+        "provider_request_count": provider_request_count,
         "attempts": [],
     }
     return store.succeed_work(
@@ -552,6 +626,55 @@ def test_amap_capability_adapter_requests_only_the_selected_operation() -> None:
     assert transport.gets[1][1]["radius"] == 100
 
 
+def test_amap_expanded_resolve_returns_address_and_poi_with_one_request() -> None:
+    transport = FakeTransport(
+        get_response={
+            "status": "1",
+            "regeocode": {
+                "formatted_address": "北京市东城区",
+                "addressComponent": {"country": "中国", "city": "北京市"},
+                "pois": [
+                    {
+                        "name": "故宫",
+                        "location": "116.397000,39.916000",
+                        "distance": "50",
+                        "type": "风景名胜;公园广场",
+                        "address": "景山前街",
+                    }
+                ],
+            },
+        }
+    )
+    provider = AMapReverseGeocoder(
+        "secret",
+        transport=transport,
+        converter=IdentityConverter(),
+        minimum_interval=0,
+    )
+
+    result = provider.execute(
+        GeoOperation.RESOLVE_PLACE,
+        GeoCoordinate(39.916, 116.397, MapDatum.WGS84),
+        locale="zh",
+        radius_meters=500,
+        max_places=30,
+    )
+
+    assert [component.operation for component in result.components] == [
+        GeoOperation.REVERSE_GEOCODE,
+        GeoOperation.NEARBY_PLACES,
+    ]
+    assert all(
+        component.status is GeoComponentStatus.SUCCESS
+        for component in result.components
+    )
+    assert sum(attempt.provider_requests for attempt in result.attempts) == 1
+    assert result.attempts[0].operation is GeoOperation.RESOLVE_PLACE
+    assert len(transport.gets) == 1
+    assert transport.gets[0][1]["extensions"] == "all"
+    assert transport.gets[0][1]["radius"] == 200
+
+
 def test_google_capability_adapter_does_not_bundle_unrequested_work() -> None:
     transport = FakeTransport(
         get_response={
@@ -605,6 +728,242 @@ def test_google_capability_adapter_does_not_bundle_unrequested_work() -> None:
     assert len(transport.gets) == 1
     assert len(transport.posts) == 1
     assert transport.posts[0][1]["locationRestriction"]["circle"]["radius"] == 250
+
+
+def test_google_expanded_resolve_returns_address_and_poi_with_two_requests() -> None:
+    transport = FakeTransport(
+        get_response={
+            "status": "OK",
+            "results": [
+                {
+                    "formatted_address": "Shibuya, Tokyo, Japan",
+                    "address_components": [],
+                }
+            ],
+        },
+        post_response={
+            "places": [
+                {
+                    "displayName": {"text": "Shibuya Station"},
+                    "formattedAddress": "Shibuya",
+                    "location": {"latitude": 35.6581, "longitude": 139.7014},
+                    "types": ["train_station"],
+                }
+            ]
+        },
+    )
+    provider = GoogleMapsReverseGeocoder(
+        "secret",
+        transport=transport,
+        converter=IdentityConverter(),
+        minimum_interval=0,
+    )
+
+    result = provider.execute(
+        GeoOperation.RESOLVE_PLACE,
+        GeoCoordinate(35.6580, 139.7013, MapDatum.WGS84),
+        locale="ja",
+        radius_meters=500,
+        max_places=30,
+    )
+
+    assert [component.operation for component in result.components] == [
+        GeoOperation.REVERSE_GEOCODE,
+        GeoOperation.NEARBY_PLACES,
+    ]
+    assert all(
+        component.status is GeoComponentStatus.SUCCESS
+        for component in result.components
+    )
+    assert sum(attempt.provider_requests for attempt in result.attempts) == 2
+    assert len(transport.gets) == 1
+    assert len(transport.posts) == 1
+    assert transport.posts[0][1]["maxResultCount"] == 10
+
+
+def test_expanded_resolve_discloses_amap_plus_google_three_request_ceiling() -> None:
+    amap = AMapReverseGeocoder(
+        "amap-secret",
+        transport=FakeTransport(),
+        converter=IdentityConverter(),
+        minimum_interval=0,
+    )
+    google = GoogleMapsReverseGeocoder(
+        "google-secret",
+        transport=FakeTransport(),
+        converter=IdentityConverter(),
+        minimum_interval=0,
+    )
+    capability = GeoCapability(
+        {"amap": amap, "google_maps": google},
+        OrderedGeoRoutingPolicy(("amap", "google_maps")),
+    )
+    request = GeoRequest(
+        GeoOperation.RESOLVE_PLACE,
+        (GeoSubject("source-item:one", GeoCoordinate(22.3, 114.1)),),
+        "zh",
+        radius_meters=500,
+        max_places=30,
+    )
+
+    assert capability.proposed_envelope(request).max_provider_requests == 3
+
+
+def test_expanded_resolve_fallback_cannot_exceed_three_request_ceiling() -> None:
+    amap_transport = FakeTransport(
+        get_response={"status": "0", "infocode": "10001", "info": "denied"}
+    )
+    google_transport = FakeTransport(
+        get_response={
+            "status": "OK",
+            "results": [
+                {
+                    "formatted_address": "Hong Kong",
+                    "address_components": [],
+                }
+            ],
+        },
+        post_response={
+            "places": [
+                {
+                    "displayName": {"text": "Victoria Harbour"},
+                    "formattedAddress": "Hong Kong",
+                    "location": {"latitude": 22.293, "longitude": 114.169},
+                    "types": ["tourist_attraction"],
+                }
+            ]
+        },
+    )
+    amap = AMapReverseGeocoder(
+        "amap-secret",
+        transport=amap_transport,
+        converter=IdentityConverter(),
+        minimum_interval=0,
+    )
+    google = GoogleMapsReverseGeocoder(
+        "google-secret",
+        transport=google_transport,
+        converter=IdentityConverter(),
+        minimum_interval=0,
+    )
+    capability = GeoCapability(
+        {"amap": amap, "google_maps": google},
+        OrderedGeoRoutingPolicy(("amap", "google_maps")),
+    )
+    request = GeoRequest(
+        GeoOperation.RESOLVE_PLACE,
+        (GeoSubject("source-item:one", GeoCoordinate(22.3, 114.1)),),
+        "zh",
+        radius_meters=500,
+        max_places=30,
+    )
+    authorization = GeoAuthorization(
+        "human:test",
+        request.fingerprint(),
+        datetime.now(timezone.utc),
+        capability.proposed_envelope(request),
+    )
+
+    result = capability.invoke(request, authorization=authorization)
+
+    assert result.outcome.value == "success"
+    assert result.effects.provider_requests == 3
+    assert len(amap_transport.gets) == 1
+    assert len(google_transport.gets) == 1
+    assert len(google_transport.posts) == 1
+
+
+def test_google_expanded_resolve_preserves_address_when_poi_is_indeterminate() -> None:
+    transport = FakeTransport(
+        get_response={
+            "status": "OK",
+            "results": [
+                {
+                    "formatted_address": "Shibuya, Tokyo, Japan",
+                    "address_components": [],
+                }
+            ],
+        },
+        post_response=GeoTransientError("nearby timeout", request_count=1),
+    )
+    provider = GoogleMapsReverseGeocoder(
+        "secret",
+        transport=transport,
+        converter=IdentityConverter(),
+        minimum_interval=0,
+    )
+
+    result = provider.execute(
+        GeoOperation.RESOLVE_PLACE,
+        GeoCoordinate(35.6580, 139.7013, MapDatum.WGS84),
+        locale="ja",
+        radius_meters=500,
+        max_places=30,
+    )
+
+    assert [component.status for component in result.components] == [
+        GeoComponentStatus.SUCCESS,
+        GeoComponentStatus.INDETERMINATE,
+    ]
+    assert sum(attempt.provider_requests for attempt in result.attempts) == 2
+
+
+def test_expanded_resolve_journal_does_not_replay_indeterminate_poi_effect(
+    tmp_path: Path,
+) -> None:
+    transport = FakeTransport(
+        get_response={
+            "status": "OK",
+            "results": [
+                {
+                    "formatted_address": "Shibuya, Tokyo, Japan",
+                    "address_components": [],
+                }
+            ],
+        },
+        post_response=GeoTransientError("nearby timeout", request_count=1),
+    )
+    provider = GoogleMapsReverseGeocoder(
+        "secret",
+        transport=transport,
+        converter=IdentityConverter(),
+        minimum_interval=0,
+    )
+    capability = GeoCapability(
+        {provider.provider_id: provider},
+        OrderedGeoRoutingPolicy((provider.provider_id,)),
+    )
+    tool = GeoQueryTool(
+        capability,
+        GeoOperationJournal(tmp_path / "geo-journal.sqlite3"),
+    )
+    value = GeoRequest(
+        GeoOperation.RESOLVE_PLACE,
+        (GeoSubject("source-item:one", GeoCoordinate(35.658, 139.7013)),),
+        "ja",
+        radius_meters=500.0,
+        max_places=30,
+    )
+    request = {"request_id": "request:indeterminate-place", **value.value()}
+    authorization = GeoAuthorization(
+        "human:test",
+        value.fingerprint(),
+        datetime.now(timezone.utc),
+        capability.proposed_envelope(value),
+    )
+
+    first = tool.handle(request, authorization=authorization)
+    replay = tool.handle(request, authorization=authorization)
+
+    assert first == replay
+    assert first["outcome"] == "indeterminate"
+    assert [component["status"] for component in first["components"]] == [
+        "success",
+        "indeterminate",
+    ]
+    assert first["effects"]["provider_requests"] == 2
+    assert len(transport.gets) == 1
+    assert len(transport.posts) == 1
 
 
 def test_capability_adapters_normalize_provider_failures_without_credentials() -> None:
@@ -671,6 +1030,38 @@ def test_geo_profile_has_no_optional_activation_switch() -> None:
     assert "enabled" not in ReverseGeocodeProfile.__dataclass_fields__
 
 
+def test_complete_place_bounds_participate_in_precheck_work_identity(
+    tmp_path: Path,
+) -> None:
+    database = tmp_path / "workspace" / "working.sqlite3"
+    accounting = AccountingStore(database)
+    accounting.register_dataset("dataset-a")
+    run_id = _closed_run(tmp_path, database, accounting, ("a.jpg",))
+    metadata = _coordinate_work(
+        database, run_id, "a.jpg", latitude=35.658, longitude=139.7013
+    )
+    producer = ReverseGeocodeProducer(database, PrecheckRunTool(database))
+
+    first = producer.freeze(run_id, [metadata.work_id])
+    changed = producer.freeze(
+        run_id,
+        [metadata.work_id],
+        profile=ReverseGeocodeProfile(max_places=20),
+    )
+
+    assert first.work[0].work_id != changed.work[0].work_id
+    first_dependencies = {
+        dependency.key: dependency.value
+        for dependency in first.work[0].spec.dependencies
+        if dependency.kind is DependencyKind.PARAMETER
+    }
+    assert first_dependencies["operation"] == "resolve_place"
+    assert '"nearby_radius_meters":500.0' in first_dependencies[
+        "reverse_geocode_profile"
+    ]
+    assert '"max_places":30' in first_dependencies["reverse_geocode_profile"]
+
+
 def test_batch_pauses_before_exact_deduplicated_queries(
     tmp_path: Path,
 ) -> None:
@@ -713,6 +1104,10 @@ def test_batch_pauses_before_exact_deduplicated_queries(
     assert disclosure["logical_queries"] == 1
     assert disclosure["pending_logical_queries"] == 1
     assert disclosure["cached_logical_queries"] == 0
+    assert disclosure["operation"] == "resolve_place"
+    assert disclosure["nearby_radius_meters"] == 500
+    assert disclosure["max_places"] == 30
+    assert disclosure["max_provider_requests"] == 2
 
     _authorize(run_tool, public_run_ref)
     completed = producer.produce(
@@ -725,6 +1120,16 @@ def test_batch_pauses_before_exact_deduplicated_queries(
     assert completed.actual_provider_requests == 2
     assert len(provider.calls) == 1
     assert len(set(completed.work_by_source().values())) == 1
+    candidate = next(
+        observation
+        for observation in completed.outcomes[0].observations
+        if observation["name"] == "reverse_geocode_candidate"
+    )
+    assert candidate["value"]["pois"][0]["name"] == "Nearby fixture place"
+    assert candidate["value"]["component_outcomes"] == {
+        "reverse_geocode": "success",
+        "nearby_places": "success",
+    }
 
     reused = producer.produce(
         public_run_ref,
@@ -762,6 +1167,188 @@ def test_batch_pauses_before_exact_deduplicated_queries(
         run_tool.run({"action": "status", "run_ref": second_public_ref})["state"]
         == "running"
     )
+
+
+def test_precheck_amap_acquires_address_and_poi_with_one_provider_request(
+    tmp_path: Path,
+) -> None:
+    database = tmp_path / "workspace" / "working.sqlite3"
+    accounting = AccountingStore(database)
+    accounting.register_dataset("dataset-a")
+    run_id = _closed_run(tmp_path, database, accounting, ("a.jpg",))
+    metadata = _coordinate_work(
+        database, run_id, "a.jpg", latitude=39.916, longitude=116.397
+    )
+    transport = FakeTransport(
+        get_response={
+            "status": "1",
+            "regeocode": {
+                "formatted_address": "北京市东城区",
+                "addressComponent": {"country": "中国", "city": "北京市"},
+                "pois": [
+                    {
+                        "name": "故宫",
+                        "location": "116.397000,39.916000",
+                        "distance": "50",
+                        "type": "风景名胜;公园广场",
+                        "address": "景山前街",
+                    }
+                ],
+            },
+        }
+    )
+    provider = AMapReverseGeocoder(
+        "secret",
+        transport=transport,
+        converter=IdentityConverter(),
+        minimum_interval=0,
+    )
+    geo_tool = GeoQueryTool(
+        GeoCapability(
+            {provider.provider_id: provider},
+            OrderedGeoRoutingPolicy((provider.provider_id,)),
+        ),
+        GeoOperationJournal(tmp_path / "geo-journal.sqlite3"),
+    )
+    run_tool = PrecheckRunTool(database)
+    public_run_ref = _public_run(run_tool, "request:amap-place")
+    producer = ReverseGeocodeProducer(database, run_tool, geo_tool)
+
+    pending = producer.produce(public_run_ref, run_id, [metadata.work_id])
+    assert pending.status == "confirmation_required"
+    status = run_tool.run({"action": "status", "run_ref": public_run_ref})
+    assert status["confirmation"]["disclosure"]["max_provider_requests"] == 1
+    _authorize(run_tool, public_run_ref)
+    completed = producer.produce(public_run_ref, run_id, [metadata.work_id])
+
+    assert completed.actual_provider_requests == 1
+    assert len(transport.gets) == 1
+    candidate = next(
+        observation
+        for observation in completed.outcomes[0].observations
+        if observation["name"] == "reverse_geocode_candidate"
+    )
+    assert candidate["value"]["address"]["formatted_address"] == "北京市东城区"
+    assert candidate["value"]["pois"][0]["name"] == "故宫"
+
+
+def test_precheck_preserves_partial_when_nearby_lookup_fails(
+    tmp_path: Path,
+) -> None:
+    database = tmp_path / "workspace" / "working.sqlite3"
+    accounting = AccountingStore(database)
+    accounting.register_dataset("dataset-a")
+    run_id = _closed_run(tmp_path, database, accounting, ("a.jpg",))
+    metadata = _coordinate_work(
+        database, run_id, "a.jpg", latitude=35.658, longitude=139.7013
+    )
+    transport = FakeTransport(
+        get_response={
+            "status": "OK",
+            "results": [
+                {
+                    "formatted_address": "Shibuya, Tokyo, Japan",
+                    "address_components": [],
+                }
+            ],
+        },
+        post_response={"error": {"message": "Places quota exceeded"}},
+    )
+    provider = GoogleMapsReverseGeocoder(
+        "secret",
+        transport=transport,
+        converter=IdentityConverter(),
+        minimum_interval=0,
+    )
+    geo_tool = GeoQueryTool(
+        GeoCapability(
+            {provider.provider_id: provider},
+            OrderedGeoRoutingPolicy((provider.provider_id,)),
+        ),
+        GeoOperationJournal(tmp_path / "geo-journal.sqlite3"),
+    )
+    run_tool = PrecheckRunTool(database)
+    public_run_ref = _public_run(run_tool, "request:partial-place")
+    producer = ReverseGeocodeProducer(database, run_tool, geo_tool)
+
+    pending = producer.produce(public_run_ref, run_id, [metadata.work_id])
+    assert pending.status == "confirmation_required"
+    _authorize(run_tool, public_run_ref)
+    completed = producer.produce(public_run_ref, run_id, [metadata.work_id])
+
+    assert completed.status == "completed"
+    assert completed.actual_provider_requests == 2
+    candidate = next(
+        observation
+        for observation in completed.outcomes[0].observations
+        if observation["name"] == "reverse_geocode_candidate"
+    )
+    assert candidate["status"] == "available"
+    assert candidate["value"]["address"]["formatted_address"] == (
+        "Shibuya, Tokyo, Japan"
+    )
+    assert candidate["value"]["component_outcomes"] == {
+        "reverse_geocode": "success",
+        "nearby_places": "failed",
+    }
+    assert candidate["value"]["pois"] == []
+    assert candidate["qualifications"][0]["code"] == (
+        "nearby_places:google_maps_error"
+    )
+    assert completed.outcomes[0].work.output["result"]["status"] == "partial"
+
+
+def test_precheck_distinguishes_empty_poi_result_from_unexecuted_lookup(
+    tmp_path: Path,
+) -> None:
+    database = tmp_path / "workspace" / "working.sqlite3"
+    accounting = AccountingStore(database)
+    accounting.register_dataset("dataset-a")
+    run_id = _closed_run(tmp_path, database, accounting, ("a.jpg",))
+    metadata = _coordinate_work(
+        database, run_id, "a.jpg", latitude=35.658, longitude=139.7013
+    )
+    transport = FakeTransport(
+        get_response={
+            "status": "OK",
+            "results": [
+                {
+                    "formatted_address": "Shibuya, Tokyo, Japan",
+                    "address_components": [],
+                }
+            ],
+        },
+        post_response={},
+    )
+    provider = GoogleMapsReverseGeocoder(
+        "secret",
+        transport=transport,
+        converter=IdentityConverter(),
+        minimum_interval=0,
+    )
+    geo_tool = GeoQueryTool(
+        GeoCapability(
+            {provider.provider_id: provider},
+            OrderedGeoRoutingPolicy((provider.provider_id,)),
+        ),
+        GeoOperationJournal(tmp_path / "geo-journal.sqlite3"),
+    )
+    run_tool = PrecheckRunTool(database)
+    public_run_ref = _public_run(run_tool, "request:no-nearby-place")
+    producer = ReverseGeocodeProducer(database, run_tool, geo_tool)
+
+    producer.produce(public_run_ref, run_id, [metadata.work_id])
+    _authorize(run_tool, public_run_ref)
+    completed = producer.produce(public_run_ref, run_id, [metadata.work_id])
+    candidate = next(
+        observation
+        for observation in completed.outcomes[0].observations
+        if observation["name"] == "reverse_geocode_candidate"
+    )
+
+    assert candidate["value"]["component_outcomes"]["nearby_places"] == "no_result"
+    assert candidate["value"]["pois"] == []
+    assert completed.actual_provider_requests == 2
 
 
 def test_bundle_is_a_candidate_scope_and_movement_splits_geo_units(
@@ -1092,7 +1679,7 @@ def test_semantically_compatible_legacy_chain_observations_are_reused(
     assert outcome.actual_provider_requests == 0
     assert all(item.reused for item in outcome.outcomes)
     assert all(
-        item.work.spec.producer_identity == "builtin-geo-query-reverse-geocode-v2"
+        item.work.spec.producer_identity == "builtin-geo-query-address-poi-v3"
         for item in outcome.outcomes
     )
     assert all(
@@ -1102,11 +1689,51 @@ def test_semantically_compatible_legacy_chain_observations_are_reused(
         )
         for item in outcome.outcomes
     )
+    assert all(
+        next(
+            observation
+            for observation in item.observations
+            if observation["name"] == "reverse_geocode_candidate"
+        )["value"]["component_outcomes"]
+        == {"reverse_geocode": "success", "nearby_places": "no_result"}
+        for item in outcome.outcomes
+    )
     work = WorkStore(database)
     for legacy in (first_legacy, second_legacy):
         assert work.get_work(legacy.work_id).status is WorkStatus.SUCCEEDED
         with pytest.raises(KeyError, match="not attached to this run"):
             work.get_run_work(run_id, legacy.work_id)
+
+
+def test_reverse_only_legacy_observation_is_not_reused_as_address_and_poi(
+    tmp_path: Path,
+) -> None:
+    database = tmp_path / "workspace" / "working.sqlite3"
+    accounting = AccountingStore(database)
+    accounting.register_dataset("dataset-a")
+    run_id = _closed_run(tmp_path, database, accounting, ("a.jpg",))
+    coordinate = GeoCoordinate(22.3193, 114.1694)
+    metadata = _coordinate_work(
+        database,
+        run_id,
+        "a.jpg",
+        latitude=coordinate.latitude,
+        longitude=coordinate.longitude,
+    )
+    _legacy_geocode_work(
+        database,
+        run_id,
+        coordinate,
+        provider_request_count=1,
+    )
+
+    batch = ReverseGeocodeProducer(database, PrecheckRunTool(database)).freeze(
+        run_id,
+        [metadata.work_id],
+    )
+
+    assert batch.pending_query_count == 1
+    assert batch.work[0].spec.producer_identity == "builtin-geo-query-address-poi-v3"
 
 
 def test_missing_authority_and_decline_make_no_calls(
@@ -1356,6 +1983,11 @@ def test_sealed_result_exposes_candidates_and_external_effect_proof(
         assert "logical_query_count" not in candidate["provenance"]
         assert "provider_request_count" not in candidate["provenance"]
         assert candidate["value"]["address"]["formatted_address"] == ("Tokyo, Japan")
+        assert candidate["value"]["pois"][0]["name"] == "Nearby fixture place"
+        assert candidate["value"]["component_outcomes"] == {
+            "reverse_geocode": "success",
+            "nearby_places": "success",
+        }
 
     result_response = reader.read(
         {"result_ref": sealed.result_ref, "operation": "review"}

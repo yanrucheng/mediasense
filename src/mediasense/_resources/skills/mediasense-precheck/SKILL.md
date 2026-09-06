@@ -1,6 +1,6 @@
 ---
 name: mediasense-precheck
-description: "Prepares or re-prepares a MediaSense Dataset through PreCheck: run initial compression, explain costs, diagnose unsatisfactory evidence, recover long Runs, handle bounded reverse-geocode confirmation, interpret Results, and hand one exact result_ref to Plan. Use before Plan or when Plan needs new upstream evidence; not for Plan grouping or naming, or Apply filesystem execution."
+description: "Prepares or re-prepares a MediaSense Dataset through PreCheck: run initial compression, explain costs, diagnose unsatisfactory evidence, recover long Runs, handle bounded address-and-nearby-place confirmation, interpret Results, and hand one exact result_ref to Plan. Use before Plan or when Plan needs new upstream evidence; not for Plan grouping or naming, or Apply filesystem execution."
 ---
 
 # MediaSense PreCheck
@@ -175,11 +175,13 @@ deduplication is a final request defense, not a substitute for this media-aware
 step.
 
 Every Source Item with an available final coordinate must receive its own
-reverse-geocode outcome before a Result is Plan-ready. That does not require one
-Provider call per Source Item. A non-empty compressed query set is a required
-Result closure gate. When the Run pauses, proceed only if the returned
-confirmation identifies the exact `mediasense.geo.query` request fingerprint and
-effect envelope; otherwise stop and surface the ambiguity.
+qualified address-and-nearby-place outcome before a Result is Plan-ready. That does
+not require one
+Provider call per Source Item or per component. A non-empty
+compressed query set is a required Result closure gate. When the Run pauses,
+proceed only if the returned confirmation identifies the exact bounded
+`mediasense.geo.query` request fingerprint and effect envelope; otherwise stop and
+surface the ambiguity.
 
 1. Show the exact Tool-reported number of logical queries and the coordinate-only
    scope.
@@ -239,8 +241,9 @@ failures, and externally observable cost. Follow each card's
 `resolvable_source_set` when exact members are needed.
 
 Before handoff, rely on Result `readiness` as the stage contract. Every Source Item
-with an available final coordinate must expose its own reverse-geocode outcome;
-visual compression must not reduce that coverage. Use `geo_summary` only when
+with an available final coordinate must expose its own address and nearby-place
+component outcomes; visual compression must not reduce that coverage. Use
+`geo_summary` only when
 diagnosing PreCheck acquisition, deduplication, provider outcomes, or historical
 Results. Each coordinate group contains a compact `geo_coordinate` Source Set;
 pass it unchanged to paged `resolve` when exact members are needed instead of
