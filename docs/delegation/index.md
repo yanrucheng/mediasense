@@ -4,7 +4,7 @@ title: "Task Delegation Packages"
 type: index
 status: active
 created: 2026-08-28
-updated: 2026-08-31
+updated: 2026-09-06
 timezone: "Asia/Shanghai"
 parent: "index-docs"
 depends-on: []
@@ -15,6 +15,7 @@ superseded-by: ""
 
 | ID | Title | Status | Created | Summary |
 | --- | --- | --- | --- | --- |
+| [td-260906-1032-mediasense-dotfiles-env](td-260906-1032-mediasense-dotfiles-env/index.md) | MediaSense Credential Delivery through DotFiles | active | 2026-09-06 | Records selection and verified implementation of a DotFiles-produced two-key MediaSense profile with child-only Honeycomb MCP delivery and no second secret authority. |
 | [td-260831-1739-git-lg-cmux-filter](td-260831-1739-git-lg-cmux-filter/index.md) | Filter cmux Recovery Refs from git lg | active | 2026-08-31 | Delegates the canonical high-density `git lg` cmux-ref filter and current-device convergence to DotFiles through an explicit interactive review. |
 | [td-260830-2227-mediasense-distribution](td-260830-2227-mediasense-distribution/index.md) | MediaSense Installation, Tool Hosting, and Versioning | active | 2026-08-30 | Retains the original distribution work and explicit corrections for Dataset identity and Honeycomb-local Agent integration; overall acceptance and closure remain pending. |
 | [td-260830-1325-precheck-skill](td-260830-1325-precheck-skill/index.md) | MediaSense PreCheck Skill Completion | active | 2026-08-30 | Opens a dedicated interactive Agent workline to design, implement, and behaviorally validate the missing user-facing `mediasense-precheck` Skill. |
