@@ -53,7 +53,7 @@ The ordinary fixture verifier validates all listed checksums and expected struct
 3. Reuse and invalidation operate on the smallest semantically complete dependency set. No application-wide implementation version or Dataset-wide snapshot invalidates unrelated work.
 4. The first implementation is one local runtime with one internal structured store and one artifact store. The boundaries in this document are responsibility boundaries, not separate services.
 5. SQLite is the initial structured authority for working state and sealed projections. Its schema, indexes, journal mode, and migration mechanics are internal and never enter the cross-stage contract.
-6. PreCheck is source-read-only, local-first, and cost-bounded. External Evidence producers are disabled by default. Coordinate-only reverse geocoding may run only after compression freezes the normalized, deduplicated representative-coordinate batch and the user authorizes that exact Run batch; one decision covers the batch rather than each coordinate. No media, rendition, embedding, path, filename, prompt, or general metadata may cross that boundary. Stage ownership is determined by meaning, not by whether an algorithm happens to be local or remote.
+6. PreCheck is source-read-only, local-first, and cost-bounded. External Evidence producers are disabled by default. Coordinate-only reverse geocoding may run only after PreCheck freezes the normalized, deduplicated all-source coordinate batch and the user authorizes that exact Run batch; one decision covers the batch rather than each coordinate. Every Source Item with an available final coordinate receives an outcome, while identical coordinates may share one query internally. No media, rendition, embedding, path, filename, prompt, or general metadata may cross that boundary. Stage ownership is determined by meaning, not by whether an algorithm happens to be local or remote.
 7. Multiple compression profiles may reuse the same valid lower-level work while producing different Evidence graphs and immutable Results.
 8. There is no general plugin system. Narrow internal strategies are introduced only where multiple implementations or real replacement pressure exist.
 9. The target architecture is designed as a whole and delivered through independently testable slices.
@@ -103,7 +103,7 @@ normal-frontier representation remains `unresolved` and blocks `plan_ready`.
 ## Non-goals
 
 - Deciding the user's final organization, names, hierarchy, or semantic interpretation.
-- Sending media bytes, general metadata, embeddings, or prompts to remote providers, or sending coordinates outside the explicitly enabled, post-compression reverse-geocode path whose exact logical query set the user confirmed.
+- Sending media bytes, general metadata, embeddings, or prompts to remote providers, or sending coordinates outside the explicitly enabled reverse-geocode path whose exact all-source logical query set the user confirmed.
 - Applying filesystem moves, copies, links, or an organization tree to source media.
 - Preserving AI Album cache filenames, cache bitmap semantics, directory layout, thresholds, or model choices.
 - Building a distributed scheduler, cloud artifact service, dynamic plugin registry, or third-party plugin protocol without demonstrated need.
@@ -604,7 +604,7 @@ Sealing is a validation and publication boundary, not a directory rename.
 5. `derived_from` matches actual production inputs and is not substituted for representation.
 6. Every retained Artifact passes integrity verification and remains pinned for the Result lifetime.
 7. Dataset context and Source Item locators are frozen as observed for this Result.
-8. Policy, confirmation, enforcement, and observed facts establish the declared source-read-only and external-effect boundary. The default path seals a local-only Result with zero external calls. The sole current exception is post-compression coordinate reverse geocoding: the Run freezes and deduplicates the exact pending set, pauses for user confirmation, and records authorization plus actual provider effects in the Result.
+8. Policy, confirmation, enforcement, and observed facts establish the declared source-read-only and external-effect boundary. The default path seals a local-only Result with zero external calls. The sole current exception is source-coordinate reverse geocoding: the Run freezes and deduplicates the exact pending set across all located Source Items, pauses for user confirmation, and records authorization plus actual provider effects in the Result.
 9. Status axes are evaluated independently and qualifications explain any partial or blocked state.
 10. The read projection passes contract conformance, reconciliation, and resolution closure checks.
 
@@ -739,7 +739,7 @@ The table maps every capability in the migration ledger to a target responsibili
 | Sensitivity-informed VLM routing | Plan | `intentionally_changed` | Plan owns whether and how a signal affects local/remote inspection, authorization, and user interaction. |
 | Date/location/content clustering | PreCheck and Plan | `not_comparable` as final truth | PreCheck may produce candidates; Plan owns final semantic grouping. |
 | Per-representative caption | Plan by default; PreCheck only for qualifying candidate observers | `intentionally_changed` | Do not bulk-call remote models. A future local candidate observation is allowed only under PreCheck semantics. |
-| Coordinate reverse geocoding and nearby-place lookup | PreCheck | `preserved` capability, `intentionally_changed` mechanism | Run only after location-relevant compression fixes the logical query set; automatically pause for user confirmation; bind reuse to the coordinate, provider profile, and preceding route-observation Work that carries c90-style provider/language continuity; retain datum conversion and provenance; and count actual provider calls. |
+| Coordinate reverse geocoding and nearby-place lookup | PreCheck | `preserved` capability, `intentionally_changed` mechanism | Cover every Source Item with an available final coordinate while deduplicating identical coordinates internally; automatically pause for user confirmation of the exact pending set; bind reuse to the coordinate, provider profile, and preceding route-observation Work that carries c90-style provider/language continuity; retain datum conversion and provenance; and count actual provider calls. |
 | Visual location inference | Plan | `intentionally_changed` | Keep visual inference and final place interpretation in Plan; it does not substitute for coordinate-based PreCheck Evidence. |
 | Per-item title and cluster mode | Plan | `intentionally_changed` | Name the whole organization coherently after evidence review rather than propagating representative titles. |
 | Direct output-tree construction | Plan then Apply | `intentionally_changed` | Freeze intent first; perform no organizational filesystem effect in PreCheck. |
@@ -971,7 +971,7 @@ This keeps polling, pause, and cancel available throughout a multi-hour Run
 without creating a sixth public action, scheduler service, or job entity.
 Result construction or workspace-write failure therefore becomes an explicit
 terminal or resumable Run state; `seal` is not a caller action. Optional
-post-compression reverse geocoding freezes and deduplicates the selected
+source-coordinate reverse geocoding freezes and deduplicates the all-source
 coordinate set first, reports the exact number of pending logical queries, and
 automatically pauses the Run. Only a matching `proceed` decision permits
 provider access; disablement, skipping, cancellation, and reusable completed

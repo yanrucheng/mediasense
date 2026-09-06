@@ -118,7 +118,7 @@ class ReverseGeocodeBatchOutcome:
 
 
 class ReverseGeocodeProducer:
-    """Freeze, authorize, execute, and reuse post-compression coordinate queries."""
+    """Freeze, authorize, execute, and reuse source-coordinate queries."""
 
     def __init__(
         self,
@@ -216,7 +216,7 @@ class ReverseGeocodeProducer:
             )
             status = self.run_tool.require_confirmation(
                 public_run_ref,
-                summary="Reverse-geocode the frozen representative coordinate set.",
+                summary="Reverse-geocode the frozen source coordinate set.",
                 quantity=batch.pending_query_count,
                 unit="logical_queries",
                 skip_allowed=False,

@@ -255,23 +255,6 @@ class PlanWorkTool:
             raise PlanFailure(
                 "result_not_ready", "The PreCheck Result has unsupported coverage."
             )
-        geo = self.precheck_read.read(
-            {
-                "result_ref": result_ref,
-                "operation": "geo_summary",
-                "page": {"limit": 1},
-            }
-        )
-        if not isinstance(geo, Mapping) or geo.get("outcome") != "ok":
-            raise PlanFailure(
-                "operation_failed", "PreCheck returned an invalid Geo summary."
-            )
-        if geo.get("acquisition_status") not in {"complete", "not_applicable"}:
-            raise PlanFailure(
-                "result_not_ready",
-                "The PreCheck Result has incomplete required Geo acquisition.",
-            )
-
         work_ref = self._id_factory("plan-work")
         revision = self._id_factory("work-revision")
         plan_ref = self._id_factory("frozen-plan")

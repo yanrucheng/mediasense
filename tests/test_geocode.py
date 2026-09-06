@@ -945,21 +945,22 @@ def test_sealed_result_exposes_candidates_and_external_effect_proof(
     validator.validate(source_response)
     for item in source_response["items"]:
         source = item["included"]
-        attempt = next(
-            item
-            for item in source["observations"]
-            if item["name"] == "reverse_geocode_attempt"
+        assert all(
+            observation["name"] != "reverse_geocode_attempt"
+            for observation in source["observations"]
         )
         candidate = next(
             item
             for item in source["observations"]
             if item["name"] == "reverse_geocode_candidate"
         )
-        assert attempt["value"]["provider"] == "google_maps"
-        assert attempt["value"]["input_coordinate"]["datum"] == "WGS84"
-        assert attempt["basis"]["refs"] == [
+        assert candidate["provenance"]["provider"] == "google_maps"
+        assert candidate["provenance"]["input_datum"] == "WGS84"
+        assert candidate["basis"]["refs"] == [
             {"kind": "source_item", "ref": item["source_item_ref"]}
         ]
+        assert "logical_query_count" not in candidate["provenance"]
+        assert "provider_request_count" not in candidate["provenance"]
         assert candidate["value"]["address"]["formatted_address"] == ("Tokyo, Japan")
 
     result_response = reader.read(

@@ -164,11 +164,12 @@ unknown rather than guessing.
 
 ## Keep Geo acquisition exact
 
-PreCheck owns reverse geocoding after compression has produced a normalized,
-deduplicated, frozen coordinate set. A non-empty set is a required Result closure
-gate. When the Tool pauses, proceed only if the returned confirmation clearly
-identifies that exact contract-bound effect; otherwise stop and surface the
-ambiguity.
+PreCheck owns reverse geocoding for every Source Item with an available final
+coordinate. It may normalize, deduplicate, and freeze those coordinates for
+execution, but visual compression must not narrow their Source Item coverage. A
+non-empty set is a required Result closure gate. When the Tool pauses, proceed
+only if the returned confirmation clearly identifies that exact contract-bound
+effect; otherwise stop and surface the ambiguity.
 
 1. Show the exact Tool-reported number of logical queries and the coordinate-only
    scope.
@@ -178,11 +179,14 @@ ambiguity.
    provider data-handling policy from the disclosure.
 3. Explain that media, renditions, features, prompts, and ordinary metadata are
    not authorized to leave the local boundary.
-4. Request `resume` with the intended `proceed` or `decline` decision. For an
-   external-effect `proceed`, the MCP Host must obtain trusted Human confirmation bound to the exact disclosure identity
-   through session elicitation and create the trusted confirmation context only
-   after acceptance; never place a
-   caller-authored `authority` object in the MCP request. Do not request
+4. Present that disclosure as orientation, not as a separate confirmation turn.
+   Do not ask the Human to reply with `proceed`, `decline`, or equivalent wording
+   in conversation. Explain that the client will now show the single final
+   authorization control, then request `resume` with `proceed`. The MCP Host must
+   obtain trusted Human confirmation bound to the exact disclosure identity
+   through that session elicitation and create the trusted confirmation context
+   only after acceptance; never place a caller-authored `authority` object in the
+   MCP request. Dismissing the elicitation leaves the Run paused. Do not request
    per-coordinate confirmation, synthesize confirmation, or reuse it for a
    changed pending effect set.
 
@@ -224,11 +228,13 @@ failures, and externally observable cost. Follow each card's
 `available_expansions` menu for targeted detail and use its
 `resolvable_source_set` when exact members are needed.
 
-Read `geo_summary` before handoff. A valid Result reports Geo acquisition as
-`complete` or `not_applicable`; `incomplete` means the Result cannot enter Plan
-even if a historical readiness field says `plan_ready`. Each coordinate group
-contains a compact `geo_coordinate` Source Set; pass it unchanged to paged
-`resolve` when exact members are needed instead of expecting all refs inline.
+Before handoff, rely on Result `readiness` as the stage contract. Every Source Item
+with an available final coordinate must expose its own reverse-geocode outcome;
+visual compression must not reduce that coverage. Use `geo_summary` only when
+diagnosing PreCheck acquisition, deduplication, provider outcomes, or historical
+Results. Each coordinate group contains a compact `geo_coordinate` Source Set;
+pass it unchanged to paged `resolve` when exact members are needed instead of
+expecting all refs inline.
 
 Every accounted Source Item must remain reachable through the normal Evidence
 frontier or an explicit auxiliary, excluded, unsupported, invalid, error, or

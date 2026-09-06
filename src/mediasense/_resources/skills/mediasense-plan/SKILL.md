@@ -27,10 +27,10 @@ or claim the current session reloaded a newly written project configuration.
 
 ## Enter Plan and choose the active Profile
 
-Use only an exact Result whose `readiness` is `plan_ready`, `integrity` is `valid`,
-and `geo_summary.acquisition_status` is `complete` or `not_applicable`; bounded
-partial coverage is acceptable when its limit is explicit. A historical Result
-whose Geo summary is `incomplete` must return to PreCheck. Read Result
+Use only an exact Result whose `readiness` is `plan_ready` and `integrity` is
+`valid`; bounded partial coverage is acceptable when its limit is explicit. Do
+not inspect Geo query batches, deduplication, caching, or acquisition status to
+re-decide the PreCheck handoff. Read Result
 qualifications, accounting reconciliation, exception routes, and the coverage-card
 frontier before making a Dataset-wide claim.
 
@@ -97,9 +97,9 @@ When the Human accepts a user-visible direction, preserve that scope precisely. 
 
 ## Place evidence remains Result-bound
 
-Use qualified place Evidence from the immutable Result and its deterministic Geo
-summary. Plan does not call a map provider, request Geo authorization, or retain
-provider observations. When machine place evidence is insufficient, ask the
+Use each Source Item's qualified place Evidence from the immutable Result. Plan
+does not call a map provider, request Geo authorization, inspect acquisition
+internals, or retain provider observations. When machine place evidence is insufficient, ask the
 Human only for semantic context they own, or stop and require a successor
 PreCheck. Record Human input as Human input, never as provider or PreCheck
 observation.

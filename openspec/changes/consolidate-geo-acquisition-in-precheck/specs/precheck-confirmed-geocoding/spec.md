@@ -1,15 +1,15 @@
 ## MODIFIED Requirements
 
 ### Requirement: PreCheck remains local-first with one bounded external exception
-PreCheck SHALL perform zero external calls by default. After compression has
-selected and frozen its representative-coordinate batch, a Run with a non-empty
+PreCheck SHALL perform zero external calls by default. After coordinate extraction
+and optional GPX matching have frozen the all-source coordinate batch, a Run with a non-empty
 batch SHALL acquire coordinate-level reverse-geocode evidence before Result
 publication and SHALL require trusted Human authority bound to that exact batch
 and provider-policy disclosure. It MUST NOT transmit source media, renditions,
 embeddings, paths, filenames, prompts, or general metadata.
 
 #### Scenario: No coordinates apply
-- **WHEN** the frozen representative batch contains no available GPS or GPX coordinate
+- **WHEN** no Source Item has an available final GPS or GPX coordinate
 - **THEN** Geo acquisition is `not_applicable`, zero provider requests occur, and PreCheck may continue to Result publication
 
 #### Scenario: Provider exists but authority does not
@@ -20,19 +20,24 @@ embeddings, paths, filenames, prompts, or general metadata.
 - **WHEN** an acquisition path would transmit anything beyond normalized coordinates, datum, and required lookup locale
 - **THEN** PreCheck refuses the external work before transmission
 
-### Requirement: Query scope is frozen after compression
-The runtime SHALL derive reverse-geocode inputs only from the completed
-compression frontier, apply GPX-over-embedded-GPS precedence per Source Item,
+### Requirement: Query scope covers every located Source Item
+The runtime SHALL derive reverse-geocode inputs from every Source Item with an
+available final coordinate, apply GPX-over-embedded-GPS precedence per Source Item,
 normalize coordinates, deduplicate exact `(latitude, longitude, datum)` triples,
 and freeze the ordered logical-query set before requesting authorization. The Run
 SHALL retain a full-batch identity for reuse and routing semantics and derive a
 separate external-effect identity from only the queries that remain uncomputed,
 their exact disclosure, and the parent full-batch identity. Selection,
 authorization binding, Work reuse, and Result projection SHALL remain owned by
-that PreCheck Run and SHALL NOT be inherited from Plan state.
+that PreCheck Run and SHALL NOT be inherited from Plan state. Visual compression
+and representative selection SHALL NOT reduce the Geo input scope.
 
-#### Scenario: Duplicate representative coordinates
-- **WHEN** multiple selected representatives have the same exact normalized coordinate triple
+#### Scenario: Visual compression selects fewer representatives
+- **WHEN** visual compression selects only a subset of Source Items as representatives
+- **THEN** every Source Item with an available final coordinate remains in Geo acquisition scope
+
+#### Scenario: Duplicate source coordinates
+- **WHEN** multiple Source Items have the same exact normalized coordinate triple
 - **THEN** the frozen set contains one logical query and retains a Result-bound Source Set containing every member Source Item
 
 #### Scenario: Conflicting GPS and GPX coordinates
@@ -72,13 +77,21 @@ transport-only trusted Human confirmation bound to that exact effect identity.
 - **WHEN** provider data handling is `unknown` and the Human confirms the exact disclosure identity containing that value
 - **THEN** the Run may proceed within the disclosed envelope without representing the policy as `none`
 
-### Requirement: Effects and candidate semantics remain observable
+### Requirement: Per-item place evidence excludes acquisition mechanics
 The Result SHALL identify each reverse-geocode output as provider-derived
-candidate Evidence and retain exact Source Set membership, provider, language,
-input and provider datum, observation time, route attempts, fallback or partial
-failure, logical-query count, actual provider-request count, and an explicit
-billable-cost value or `unknown`. Accepted observations SHALL have immutable
-Result retention and no caller-selectable retention mode.
+candidate Evidence and expose one outcome beneath every corresponding Source
+Item. That per-item outcome SHALL contain the place value or explicit unavailable
+state, qualifications, and the provenance needed to judge the observation. It
+SHALL NOT expose deduplication, batching, caching, route attempts, logical-query
+counts, or provider-request counts as Source Item semantics. Accepted observations
+SHALL have immutable Result retention and no caller-selectable retention mode.
+
+PreCheck execution accounting and its diagnostic Geo summary SHALL retain exact
+Source Set membership, provider, language, input and provider datum, observation
+time, route attempts, fallback or partial failure, logical-query count, actual
+provider-request count, and an explicit billable-cost value or `unknown`. These
+facts support authorization, diagnosis, and audit; they are not Plan inputs or
+additional Plan-entry gates.
 
 #### Scenario: Provider fallback
 - **WHEN** one logical query uses more than one provider request
@@ -96,6 +109,20 @@ Result retention and no caller-selectable retention mode.
 - **WHEN** a non-empty frozen batch has no compatible configured provider
 - **THEN** the Run terminates with `provider_unavailable` before authorization is requested and publishes no Result
 
+### Requirement: Per-item Geo delivery is a PreCheck readiness invariant
+The immutable Result SHALL expose a reverse-geocode outcome for every Source Item
+with an available final coordinate. PreCheck SHALL mark the Result `blocked` when
+any such Source Item lacks an outcome. Downstream stages consume the effective
+readiness and per-item facts, not query batching or acquisition internals.
+
+#### Scenario: One query serves repeated coordinates
+- **WHEN** several Source Items share an exact coordinate and one provider query completes
+- **THEN** each member Source Item exposes the same Result-bound outcome through ordinary Source Item expansion
+
+#### Scenario: A located Source Item has no outcome
+- **WHEN** a Source Item has an available final coordinate but no reverse-geocode candidate observation
+- **THEN** the Result is not `plan_ready`
+
 ### Requirement: Reuse includes routing semantics but excludes credentials
 Reusable geocode Work SHALL depend on the normalized coordinate, effective
 provider/routing profile, preceding route observation when continuity affects the
@@ -112,7 +139,7 @@ Work identity, persisted output, Result content, or logs.
 
 ## ADDED Requirements
 
-### Requirement: PreCheck Read exposes a deterministic Geo summary
+### Requirement: PreCheck Read exposes a deterministic diagnostic Geo summary
 `mediasense.precheck.read` SHALL expose a paged `geo_summary` operation derived
 only from one verified immutable Result. It SHALL report GPS/GPX observation-state
 counts, combined available/missing/failed/conflicting counts, the exact
@@ -132,4 +159,4 @@ semantics, place truth, recommended grouping, or directory names.
 
 #### Scenario: Old Result omitted required acquisition
 - **WHEN** a Result contains an available coordinate but no completed candidate Evidence for that coordinate
-- **THEN** `geo_summary` reports overall acquisition `incomplete` even if the historical Result readiness field says `plan_ready`
+- **THEN** `geo_summary` reports overall acquisition `incomplete` for PreCheck diagnosis without redefining the historical Result's immutable readiness field

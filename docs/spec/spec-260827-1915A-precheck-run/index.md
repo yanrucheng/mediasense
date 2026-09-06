@@ -44,7 +44,7 @@ The Tool is authoritative for:
   control actions; and
 - whether automatic publication completed and which immutable `result_ref` was published.
 
-The Tool may create and mutate Working Run state and internal derived artifacts. It may not mutate source media or any published Result. Before expensive local work, the Tool exposes factual source-tree statistics and enforces an exact caller-selected scope; it does not decide whether a named or hidden subtree is semantically wanted. External work remains disabled until its exact pending work is known and the user confirms it through a later paused Run checkpoint. The permitted online exception is coordinate-only reverse geocoding over the normalized, deduplicated representative-coordinate batch frozen after compression; one matching Run decision covers that batch, not arbitrary later coordinates.
+The Tool may create and mutate Working Run state and internal derived artifacts. It may not mutate source media or any published Result. Before expensive local work, the Tool exposes factual source-tree statistics and enforces an exact caller-selected scope; it does not decide whether a named or hidden subtree is semantically wanted. External work remains disabled until its exact pending work is known and the user confirms it through a later paused Run checkpoint. The permitted online exception is coordinate-only reverse geocoding over the normalized, deduplicated set derived from every Source Item with an available final coordinate; visual compression does not narrow that set, and one matching Run decision covers only that frozen pending work.
 
 Mutable Work Records, cache keys, checkpoints, leases, SQLite rows, internal
 producer states, artifact paths, and orchestration mechanics are not public. The

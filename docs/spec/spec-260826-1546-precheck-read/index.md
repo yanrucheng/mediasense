@@ -19,13 +19,15 @@ tags: ["mediasense", "precheck", "tool", "result", "review"]
 ## Decision
 
 `mediasense.precheck.read` exposes one exact immutable PreCheck Result through
-three consumer-meaningful operations:
+three consumer-meaningful operations plus one PreCheck diagnostic projection:
 
 - `review` gives an Agent a bounded, comparable, loss-aware first reading of the
   Result;
 - `expand` reads selected Evidence or Source Items in more detail; and
 - `resolve` expands one exact Source Set without loss for deterministic Plan and
-  Apply consumers.
+  Apply consumers; and
+- `geo_summary` audits coordinate acquisition and internal query consolidation
+  without becoming a Plan-stage prerequisite.
 
 The Tool does not expose graph traversal as its public abstraction. Result
 entities and relationships remain the provenance and derivation authority, but
@@ -77,7 +79,7 @@ it does not prove that the set is a useful organization.
 ## Common binding and effects
 
 Every request names an exact `result_ref`; no operation resolves an implicit
-`latest`. All three operations are immediate, read-only, local, stateless, and
+`latest`. All four operations are immediate, read-only, local, stateless, and
 safe to retry. They cause no source mutation, network access, model use, billable
 call, Plan revision, or retained query state.
 
@@ -177,14 +179,16 @@ resolution proves no retrieval value or organization meaning.
 
 ## `geo_summary`
 
-`geo_summary` is a deterministic, paged projection over the exact immutable
+`geo_summary` is a deterministic, paged PreCheck diagnostic projection over the exact immutable
 Result. It reports GPS and GPX observation states, conflicting observations, the
 exact no-rounding coordinate deduplication rule, and one ordered record per unique
 coordinate. Each record contains its member count and a compact Result-bound
 `geo_coordinate` Source Set whose exact members are retrieved through paged
 `resolve`, plus reverse-geocode outcome, Provider candidate Evidence references,
-provenance, and qualifications. `not_applicable` means no coordinate entered the
-frozen batch; `incomplete` prevents Plan entry. A large same-coordinate population
+provenance, and qualifications. `not_applicable` means no Source Item had an
+available final coordinate; `incomplete` identifies a Result whose located Source
+Items do not all expose an outcome. Result `readiness`, not this diagnostic view,
+governs Plan entry. A large same-coordinate population
 therefore cannot make one `geo_summary` item exceed the response byte limit.
 
 The operation performs no provider request and does not infer an event, a true

@@ -648,7 +648,7 @@ The trust page must distinguish four kinds of statements:
 - zero media upload;
 - zero general metadata or feature-artifact egress;
 - zero remote-model calls;
-- either zero coordinate/online-map egress or an exact confirmed post-compression reverse-geocode query set with provider, datum, actual-request, result-state, and authorization evidence;
+- either zero coordinate/online-map egress or an exact confirmed all-source reverse-geocode query set with provider, datum, actual-request, per-located-Source-Item result-state, and authorization evidence;
 - zero billable requests when the local-only path is claimed, otherwise an explicit observed or unknown billable-call count rather than an inferred zero;
 - no source-media mutation.
 

@@ -29,6 +29,7 @@ from ._result_types import (
 )
 from ._result_work_projection import (
     _connect,
+    _has_available_coordinate,
     _load_compression_groups,
     _load_mapped_observation_work,
     _load_source_artifact_work,
@@ -659,8 +660,22 @@ def build_minimal_result(
         for source in sources
         if source.scope == "source_media" and source.condition == "unresolved"
     )
+    unresolved_geo_source_media = tuple(
+        source.ref
+        for source in sources
+        if source.scope == "source_media"
+        and _has_available_coordinate(source.observations)
+        and not any(
+            observation.get("name") == "reverse_geocode_candidate"
+            for observation in source.observations
+        )
+    )
     readiness = (
-        "plan_ready" if entry_evidence and not unresolved_source_media else "blocked"
+        "plan_ready"
+        if entry_evidence
+        and not unresolved_source_media
+        and not unresolved_geo_source_media
+        else "blocked"
     )
     result_qualifications: list[dict[str, object]] = []
     coverage = "partial" if unaccounted_issues else "complete"
@@ -676,18 +691,21 @@ def build_minimal_result(
             }
         )
     if readiness == "blocked":
-        message = (
-            "Source media remains unresolved and requires more PreCheck work."
-            if unresolved_source_media
-            else "No usable default Evidence is available for planning."
-        )
+        if unresolved_source_media:
+            code = "unresolved_source_media"
+            message = "Source media remains unresolved and requires more PreCheck work."
+        elif unresolved_geo_source_media:
+            code = "reverse_geocode_incomplete"
+            message = (
+                f"{len(unresolved_geo_source_media)} Source Item(s) have coordinates "
+                "but no reverse-geocode outcome."
+            )
+        else:
+            code = "no_entry_evidence"
+            message = "No usable default Evidence is available for planning."
         result_qualifications.append(
             {
-                "code": (
-                    "unresolved_source_media"
-                    if unresolved_source_media
-                    else "no_entry_evidence"
-                ),
+                "code": code,
                 "effect": "blocks_use",
                 "message": message,
             }

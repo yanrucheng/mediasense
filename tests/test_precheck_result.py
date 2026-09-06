@@ -195,6 +195,63 @@ def test_geo_summary_source_set_stays_bounded_for_high_fanout_coordinate() -> No
     ) == frozenset(source_refs)
 
 
+def test_review_blocks_historical_plan_ready_result_missing_per_source_geo() -> None:
+    result_ref = "precheck-result:historical-incomplete-geo"
+    source_ref = "source-item:located"
+    graph = precheck_read_module._ResultGraph(
+        {
+            "result": {
+                "kind": "result",
+                "ref": result_ref,
+                "readiness": "plan_ready",
+                "qualifications": [],
+            },
+            "dataset": {},
+            "sources": [
+                {
+                    "view": {
+                        "kind": "source_item",
+                        "ref": source_ref,
+                        "observations": [
+                            {
+                                "name": "gps_coordinates",
+                                "status": "available",
+                                "value": {
+                                    "latitude": 22.3193,
+                                    "longitude": 114.1694,
+                                    "datum": "WGS84",
+                                },
+                            }
+                        ],
+                    }
+                }
+            ],
+            "evidence": [],
+            "relationships": [
+                {
+                    "origin": result_ref,
+                    "relation": "accounts_for",
+                    "member": {"target": source_ref, "scope": "source_media"},
+                }
+            ],
+        }
+    )
+
+    view = precheck_read_module._effective_result_view(graph)
+
+    assert view["readiness"] == "blocked"
+    assert view["qualifications"] == [
+        {
+            "code": "reverse_geocode_incomplete",
+            "effect": "blocks_use",
+            "message": (
+                "One or more located Source Items lack a reverse-geocode outcome; "
+                "create a successor PreCheck Result."
+            ),
+        }
+    ]
+
+
 def test_end_to_end_result_is_sealed_and_read_only_through_exact_reference(
     tmp_path: Path,
 ) -> None:

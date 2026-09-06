@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Set
+from collections.abc import Iterable, Mapping, Set
 from contextlib import contextmanager
 import json
 from pathlib import Path
@@ -72,6 +72,8 @@ def _mapped_result_observations(
         raise ResultSealError(f"{label} Work has an invalid inline result")
     projected: list[dict[str, object]] = []
     for item in observations:
+        if item.get("name") != "reverse_geocode_candidate":
+            continue
         observation = {
             key: item[key]
             for key in (
@@ -89,7 +91,12 @@ def _mapped_result_observations(
             observation["provenance"] = {
                 key: value
                 for key, value in provenance.items()
-                if key != "basis_work_ids"
+                if key
+                not in {
+                    "basis_work_ids",
+                    "logical_query_count",
+                    "provider_request_count",
+                }
             }
         summary = "reusable external coordinate observation"
         if isinstance(provenance, dict):
@@ -97,7 +104,12 @@ def _mapped_result_observations(
                 ", ".join(
                     f"{key}={value}"
                     for key, value in provenance.items()
-                    if key != "basis_work_ids"
+                    if key
+                    not in {
+                        "basis_work_ids",
+                        "logical_query_count",
+                        "provider_request_count",
+                    }
                 )
                 or summary
             )
@@ -107,6 +119,17 @@ def _mapped_result_observations(
         }
         projected.append(observation)
     return projected
+
+
+def _has_available_coordinate(
+    observations: Iterable[Mapping[str, object]],
+) -> bool:
+    return any(
+        observation.get("name") in {"gps_coordinates", "gpx_coordinates"}
+        and observation.get("status") == "available"
+        and isinstance(observation.get("value"), Mapping)
+        for observation in observations
+    )
 
 
 def _metadata_result_observations(

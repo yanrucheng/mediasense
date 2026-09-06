@@ -197,6 +197,8 @@ async def _elicit_precheck_authority(
     disclosure = confirmation.get("disclosure")
     if not isinstance(content_identity, str) or not isinstance(disclosure, Mapping):
         return request, None
+    quantity = confirmation.get("quantity")
+    unit = confirmation.get("unit")
     session = getattr(context, "session", None)
     if session is None:
         return request, None
@@ -206,22 +208,11 @@ async def _elicit_precheck_authority(
         return request, None
     try:
         elicited = await session.elicit_form(
-            (
-                "MediaSense requests Human authorization for this exact external "
-                "effect. Confirm only after reviewing the disclosure:\n"
-                + json.dumps(disclosure, ensure_ascii=False, sort_keys=True)
-            ),
+            _precheck_authorization_message(disclosure, quantity=quantity, unit=unit),
             {
                 "type": "object",
                 "additionalProperties": False,
-                "required": ["approve"],
-                "properties": {
-                    "approve": {
-                        "type": "boolean",
-                        "const": True,
-                        "title": "Authorize this exact external effect",
-                    }
-                },
+                "properties": {},
             },
             related_request_id=getattr(context, "request_id", None),
         )
@@ -232,17 +223,52 @@ async def _elicit_precheck_authority(
         return request, None
     if elicited.action == "decline":
         return {**request, "decision": "decline"}, None
-    if (
-        elicited.action != "accept"
-        or not isinstance(elicited.content, Mapping)
-        or elicited.content.get("approve") is not True
-    ):
-        return request, None
+    if elicited.action == "cancel":
+        return {"action": "status", "run_ref": request.get("run_ref")}, None
+    if elicited.action != "accept":
+        return {"action": "status", "run_ref": request.get("run_ref")}, None
     return request, {
         "principal_ref": "human:mcp-elicitation",
         "confirmed_content_identity": content_identity,
         "confirmed_at": datetime.now(timezone.utc).isoformat(),
     }
+
+
+def _precheck_authorization_message(
+    disclosure: Mapping[str, object], *, quantity: object, unit: object
+) -> str:
+    providers = disclosure.get("providers")
+    provider_names: list[str] = []
+    handling: list[str] = []
+    if isinstance(providers, list):
+        for item in providers:
+            if not isinstance(item, Mapping):
+                continue
+            name = str(item.get("provider", "unknown"))
+            provider_names.append(name)
+            handling.append(f"{name}: {item.get('data_handling', 'unknown')}")
+    data_classes = disclosure.get("transmitted_data_classes")
+    transmitted = (
+        ", ".join(str(item) for item in data_classes)
+        if isinstance(data_classes, list)
+        else "unknown"
+    )
+    query_count = str(quantity) if isinstance(quantity, int) else "unknown"
+    query_unit = str(unit).replace("_", " ") if isinstance(unit, str) else "logical queries"
+    return "\n".join(
+        [
+            "Authorize MediaSense to reverse-geocode this exact frozen batch.",
+            f"Scope: {query_count} {query_unit}.",
+            f"Data sent: {transmitted}. Media files are not sent.",
+            f"Providers: {', '.join(provider_names) or 'unknown'}.",
+            f"Maximum provider requests: {disclosure.get('max_provider_requests', 'unknown')}.",
+            f"Billing: {disclosure.get('billable_calls', 'unknown')}.",
+            f"Provider data handling: {'; '.join(handling) or 'unknown'}.",
+            f"Result retention: {disclosure.get('result_retention', 'unknown')}.",
+            "Accept to authorize and continue. Decline to cancel this Run. "
+            "Dismiss to leave the Run paused.",
+        ]
+    )
 
 
 def _tool_result(

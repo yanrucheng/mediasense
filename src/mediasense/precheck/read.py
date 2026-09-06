@@ -281,7 +281,7 @@ class PrecheckReadTool:
             "outcome": "ok",
             "operation": "review",
             "result_ref": graph.result_ref,
-            "result": dict(graph.result),
+            "result": _effective_result_view(graph),
             "reconciliation": reconciliation,
         }
         return _paged_response(
@@ -613,6 +613,35 @@ class PrecheckReadTool:
             yield connection
         finally:
             connection.close()
+
+
+def _effective_result_view(graph: _ResultGraph) -> dict[str, object]:
+    """Apply current handoff invariants without rewriting immutable Result bytes."""
+
+    view = dict(graph.result)
+    if view.get("readiness") != "plan_ready":
+        return view
+    if _geo_projection(graph)["acquisition_status"] != "incomplete":
+        return view
+    view["readiness"] = "blocked"
+    qualifications = list(view.get("qualifications", ()))
+    if not any(
+        isinstance(item, Mapping)
+        and item.get("code") == "reverse_geocode_incomplete"
+        for item in qualifications
+    ):
+        qualifications.append(
+            {
+                "code": "reverse_geocode_incomplete",
+                "effect": "blocks_use",
+                "message": (
+                    "One or more located Source Items lack a reverse-geocode "
+                    "outcome; create a successor PreCheck Result."
+                ),
+            }
+        )
+    view["qualifications"] = qualifications
+    return view
 
 
 def _reconciliation(graph: _ResultGraph) -> dict[str, object]:

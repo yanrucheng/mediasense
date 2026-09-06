@@ -10,6 +10,7 @@ from threading import Event, Thread
 from PIL import Image
 import pytest
 
+from mediasense.plan import PlanWorkTool
 from mediasense.geo import (
     AdaptiveReverseGeocoder,
     GeoCoordinate,
@@ -41,10 +42,12 @@ class FakeExifTool:
         capture_times: dict[str, str] | None = None,
         *,
         include_gps: bool = False,
+        gps_coordinates: dict[str, tuple[float, float]] | None = None,
     ) -> None:
         self.calls: list[tuple[str, ...]] = []
         self.capture_times = capture_times or {}
         self.include_gps = include_gps
+        self.gps_coordinates = gps_coordinates or {}
 
     def __call__(self, command) -> subprocess.CompletedProcess[str]:
         command = tuple(command)
@@ -67,7 +70,15 @@ class FakeExifTool:
                         ),
                     }
                 )
-                if self.include_gps:
+                coordinate = self.gps_coordinates.get(path.name)
+                if coordinate is not None:
+                    record.update(
+                        {
+                            "Composite:GPSLatitude": coordinate[0],
+                            "Composite:GPSLongitude": coordinate[1],
+                        }
+                    )
+                elif self.include_gps:
                     record.update(
                         {
                             "Composite:GPSLatitude": 22.3193,
@@ -165,7 +176,9 @@ class FakeGeocodeProvider:
             input_coordinate=coordinate,
             provider_coordinate=coordinate,
             location={
-                "formatted_address": "Kowloon, Hong Kong",
+                "formatted_address": (
+                    f"{coordinate.latitude:.4f},{coordinate.longitude:.4f}"
+                ),
                 "components": {"country": "China", "country_code": "HK"},
             },
             pois=(),
@@ -637,6 +650,146 @@ def test_geocode_pauses_for_exact_frozen_query_count_before_fake_provider(
     boundary = inspected["result"]["execution_boundary"]
     assert boundary["logical_external_queries"] == 1
     assert boundary["provider_requests"] == 2
+
+
+def test_visual_compression_does_not_reduce_per_source_geocode_coverage(
+    tmp_path: Path,
+) -> None:
+    database, source, accounting_run_id = _prepare_source_bound_run(tmp_path)
+    coordinates = {
+        "a.jpg": (22.2819, 114.1589),
+        "b.jpg": (22.3193, 114.1694),
+        "c.jpg": (22.3964, 114.1095),
+        "d.jpg": (22.3193, 114.1694),
+    }
+    for name, color in (
+        ("a.jpg", "red"),
+        ("b.jpg", "blue"),
+        ("c.jpg", "green"),
+        ("d.jpg", "yellow"),
+    ):
+        Image.new("RGB", (48, 32), color).save(source / name)
+    provider = FakeGeocodeProvider()
+    base = PrecheckExecutionConfig()
+    config = replace(
+        base,
+        gpx=False,
+        video=False,
+        bundles=False,
+        compression_target=1,
+        reverse_geocode_profile=replace(
+            base.reverse_geocode_profile,
+            provider_profile="fake-maps-v1",
+        ),
+    )
+    tool = PrecheckRunTool(
+        database,
+        execution_config=config,
+        execution_dependencies=PrecheckExecutionDependencies(
+            metadata_runner=FakeExifTool(gps_coordinates=coordinates),
+            exiftool_version="13.30",
+            geocoder=AdaptiveReverseGeocoder(
+                providers={provider.provider_id: provider},
+                provider_order=(provider.provider_id,),
+                initial_provider=provider.provider_id,
+                initial_language="zh",
+            ),
+        ),
+    )
+
+    started = tool.run(
+        {
+            "action": "start",
+            "dataset_ref": "dataset:dataset-a",
+            "request_id": "request:per-source-geocode",
+        }
+    )
+    paused = _advance_after_scope(tool, str(started["run_ref"]))
+
+    assert paused["state"] == "paused"
+    unique_coordinates = set(coordinates.values())
+    assert paused["confirmation"]["quantity"] == len(unique_coordinates)
+    assert sum(
+        work.spec.capability == "adaptive-compression-group"
+        for work in WorkStore(database).list_run_work(accounting_run_id)
+    ) == 1
+
+    tool.run(
+        {
+            "action": "resume",
+            "run_ref": started["run_ref"],
+            "decision": "proceed",
+        },
+        confirmation=PrecheckConfirmationContext(
+            principal_ref="human:test",
+            confirmed_content_identity=paused["confirmation"]["content_identity"],
+            confirmed_at=datetime.now(timezone.utc),
+        ),
+    )
+    tool.advance(str(started["run_ref"]))
+    completed = tool.run({"action": "status", "run_ref": started["run_ref"]})
+
+    assert completed["state"] == "completed", completed
+    assert len(provider.calls) == len(unique_coordinates)
+    result_ref = completed["published_result"]["result_ref"]
+    reader = PrecheckReadTool(database)
+    accounts = reader.read(
+        {
+            "operation": "resolve",
+            "result_ref": result_ref,
+            "source_set": {
+                "kind": "precheck_relation",
+                "origin": result_ref,
+                "relation": "accounts_for",
+                "direction": "outbound",
+            },
+        }
+    )
+    source_refs = [
+        member["source_item_ref"]
+        for member in accounts["members"]
+        if member["scope"] == "source_media"
+    ]
+    expanded = reader.read(
+        {
+            "operation": "expand",
+            "result_ref": result_ref,
+            "source_item_refs": source_refs,
+            "include": ["source_item", "observations"],
+        }
+    )
+    locations = {}
+    for item in expanded["items"]:
+        included = item["included"]
+        path = included["source_item"]["locator"]["value"]
+        assert all(
+            observation["name"] != "reverse_geocode_attempt"
+            for observation in included["observations"]
+        )
+        candidate = next(
+            observation
+            for observation in included["observations"]
+            if observation["name"] == "reverse_geocode_candidate"
+        )
+        assert "logical_query_count" not in candidate["provenance"]
+        assert "provider_request_count" not in candidate["provenance"]
+        locations[path] = candidate["value"]["address"]["formatted_address"]
+
+    assert locations == {
+        path: f"{latitude:.4f},{longitude:.4f}"
+        for path, (latitude, longitude) in coordinates.items()
+    }
+    assert reader.read({"operation": "review", "result_ref": result_ref})[
+        "result"
+    ]["readiness"] == "plan_ready"
+    plan = PlanWorkTool(tmp_path / "plan-store", reader).handle(
+        {
+            "action": "create",
+            "result_ref": result_ref,
+            "request_id": "request:plan-from-per-source-geocode",
+        }
+    )
+    assert plan["outcome"] == "ok"
 
 
 def test_nonempty_geo_batch_without_provider_is_terminal_unavailable(

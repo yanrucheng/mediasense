@@ -8,6 +8,9 @@ then created a second Geo lifecycle inside Plan whose authorization preflight
 could mask provider unavailability. Geo acquisition must return to the stage
 that owns reusable source-derived evidence so Plan can interpret one trustworthy
 immutable handoff instead of repairing it.
+This change supersedes the Geo and Plan-enrichment portions of the completed but
+unarchived `harden-tool-independence-boundaries` change; that change's independent
+Apply hardening remains unaffected.
 
 ## What Changes
 
@@ -15,11 +18,12 @@ immutable handoff instead of repairing it.
   remain disabled until an exact frozen PreCheck batch receives trusted Human
   authorization; configured providers and their availability remain observable
   facts.
-- **BREAKING** Make reverse-geocode acquisition a required PreCheck closure gate
-  whenever the frozen representative batch contains coordinates. Provider
+- **BREAKING** Make a reverse-geocode outcome for every Source Item with an
+  available final coordinate a required PreCheck closure gate. Provider
   unavailability, missing authorization, Human decline, no-result, per-coordinate
   failure, and implementation failure remain distinct and cannot publish a
-  misleading `plan_ready` Result.
+  misleading `plan_ready` Result. Exact-coordinate deduplication remains an
+  internal execution optimization and does not reduce Source Item coverage.
 - Add a deterministic, paged Geo summary operation to
   `mediasense.precheck.read`, derived only from the immutable Result. It reports
   coordinate evidence states, exact deduplication semantics, Result-bound Source
@@ -28,8 +32,9 @@ immutable handoff instead of repairing it.
   organization recommendations.
 - **BREAKING** Remove `mediasense.plan.work/enrich_geo`, Plan Geo observations,
   Geo inspection/preview sections, Plan Geo authorization and retention choices,
-  and all Plan Skill guidance that acquires provider evidence. Plan accepts only
-  Results whose Geo acquisition is complete or not applicable.
+  and all Plan Skill guidance that acquires provider evidence. Plan relies only on
+  the effective Result readiness and reads each Source Item's place outcome as
+  ordinary PreCheck evidence; it does not inspect acquisition internals.
 - **BREAKING** Remove the public `mediasense.geo.query` Tool, its contract,
   Dataset Geo journal/store, and MCP exposure because no independent caller
   remains. Retain only provider-neutral values, adapters, routing, normalization,
@@ -51,9 +56,10 @@ not a new Tool, Artifact, service, Skill, or place-cluster entity.
 
 ### Modified Capabilities
 
-- `precheck-confirmed-geocoding`: make frozen-batch Geo acquisition a Result
-  closure responsibility with provider-first availability checks, trusted Human
-  authorization, fixed Result retention, and deterministic summary projection.
+- `precheck-confirmed-geocoding`: make all-located-Source-Item Geo coverage a
+  Result closure responsibility with provider-first availability checks, trusted
+  Human authorization, fixed Result retention, and deterministic diagnostic
+  summary projection.
 - `precheck-run-orchestration`: gate immutable publication on required Geo
   acquisition and preserve distinct terminal/attention/failure meanings.
 - `precheck-agent-workflow`: guide disclosure, authorization, decline,

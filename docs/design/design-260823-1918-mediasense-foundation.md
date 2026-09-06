@@ -53,7 +53,7 @@ stages are not required to map one-to-one to internal Tool calls.
 
 - Source media is read-only. Derived artifacts are written to a separate workspace.
 - Remote calls, uploads, reverse-geocoding services, and billable model access are disabled by default and reported explicitly.
-- After compression freezes a normalized, deduplicated representative-coordinate batch, a Run may perform coordinate-only reverse geocoding under one authorization bound to that exact batch and effective profile. This never authorizes media, rendition, embedding, path, filename, prompt, or general-metadata egress.
+- For every Source Item with an available final coordinate, PreCheck produces that item's reverse-geocode outcome before a Result becomes Plan-ready. It may deduplicate identical normalized coordinates internally and bind one authorization to the exact pending query set and effective profile. Visual compression does not reduce Geo coverage. This never authorizes media, rendition, embedding, path, filename, prompt, or general-metadata egress.
 - Metadata extraction, decoding, thumbnailing, frame selection, fingerprinting, embedding, indexing, and grouping reuse completed work where valid.
 - Work is observable, bounded in resource use, resumable after interruption, and incrementally invalidated.
 - A disconnected volume is treated as unavailable, not as evidence that its files were deleted.
@@ -100,7 +100,7 @@ missing acquisition nor owns a second Geo lifecycle.
 - `precheck` does not choose a local or remote VLM path from sensitivity signals.
   Local evidence acquisition does not relax its source-read-only, local-first, or
   explicit authorization and effect-reporting guarantees. Coordinate-only reverse
-  geocoding may run after compression freezes the exact logical query set and
+  geocoding may run after PreCheck freezes the exact deduplicated source-coordinate query set and
   trusted Human confirmation binds its provider-policy disclosure; this does not
   authorize media, feature, or prompt egress.
 

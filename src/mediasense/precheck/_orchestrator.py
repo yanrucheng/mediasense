@@ -454,11 +454,16 @@ class PrecheckOrchestrator:
         )
         if not self._finish_phase(run_ref, "bundles"):
             return self.run_control.sync_accounting(run_ref)
-        evidence_paths = {item.relative_path for item in evidence_media}
-        metadata = _selected_metadata(
-            self.database_path, accounting_run_id, evidence_paths
+        source_media_paths = {item.relative_path for item in media_items()}
+        all_metadata = _selected_metadata(
+            self.database_path, accounting_run_id, source_media_paths
         )
-        demanded_metadata = metadata
+        evidence_paths = {item.relative_path for item in evidence_media}
+        metadata = {
+            path: outcome
+            for path, outcome in all_metadata.items()
+            if path in evidence_paths
+        }
         rendition_profiles = (
             2
             if config.embedding_profile is not None
@@ -500,7 +505,7 @@ class PrecheckOrchestrator:
             total=(
                 sum(
                     outcome.work.status is WorkStatus.SUCCEEDED
-                    for outcome in metadata.values()
+                    for outcome in all_metadata.values()
                 )
                 if config.gpx and gpx_paths
                 else 0
@@ -509,7 +514,7 @@ class PrecheckOrchestrator:
         gpx = self._gpx(
             run_ref,
             accounting_run_id,
-            demanded_metadata,
+            all_metadata,
             gpx_paths,
             config,
             executor,
@@ -551,7 +556,7 @@ class PrecheckOrchestrator:
             "compression",
             total="unknown" if config.compression_target is not None else 0,
         )
-        compression, representative_paths = self._compression(
+        compression, _representative_paths = self._compression(
             accounting_run_id,
             renditions,
             frames,
@@ -569,8 +574,7 @@ class PrecheckOrchestrator:
         geocode = self._geocode(
             run_ref,
             accounting_run_id,
-            representative_paths,
-            metadata,
+            all_metadata,
             gpx,
             config,
             executor,
@@ -1134,14 +1138,13 @@ class PrecheckOrchestrator:
         self,
         run_ref: str,
         run_id: str,
-        representative_paths: tuple[Path, ...],
         metadata: Mapping[Path, MetadataOutcome],
         gpx: Mapping[Path, GPXOutcome],
         config: PrecheckExecutionConfig,
         executor: BoundedWorkExecutor,
     ) -> ReverseGeocodeBatchOutcome:
         work_ids = []
-        for path in representative_paths:
+        for path in sorted(set(metadata) | set(gpx)):
             for candidate in (metadata.get(path), gpx.get(path)):
                 if (
                     candidate is not None

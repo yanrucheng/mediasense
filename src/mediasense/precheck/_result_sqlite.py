@@ -23,6 +23,7 @@ from ._result_types import (
     SealedResult,
     source_root_reference,
 )
+from ._result_work_projection import _has_available_coordinate
 from ._working_schema import SCHEMA_VERSION
 from ._work_types import DependencyKind, WorkStatus
 from .artifact import ArtifactStore
@@ -325,6 +326,19 @@ class SQLiteResultStore:
                 raise ResultSealError("unknown accounts_for condition")
             if source.scope != accounted[source.relative_path.as_posix()]:
                 raise ResultSealError("Result cannot rewrite accounted source scope")
+            if (
+                draft.readiness == "plan_ready"
+                and
+                source.scope == "source_media"
+                and _has_available_coordinate(source.observations)
+                and not any(
+                    observation.get("name") == "reverse_geocode_candidate"
+                    for observation in source.observations
+                )
+            ):
+                raise ResultSealError(
+                    "located Source Item lacks a reverse-geocode outcome"
+                )
 
         sources = {source.ref: source for source in draft.sources}
         evidence = {item.ref: item for item in draft.evidence}

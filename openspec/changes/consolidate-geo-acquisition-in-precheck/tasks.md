@@ -9,7 +9,7 @@
 
 - [x] 2.1 Project each unique provider candidate as ordinary inline Result Evidence with Result-local refs and exact Source Item membership.
 - [x] 2.2 Add the deterministic paged `precheck.read/geo_summary` implementation and contract, including state counts, conflict detection, exact deduplication rule, Source Sets, outcomes, Evidence refs, provenance, and qualifications.
-- [x] 2.3 Reject historical or malformed Result readiness in Plan when `geo_summary` is incomplete, while allowing complete and not-applicable acquisition.
+- [x] 2.3 Make PreCheck Read safely project historical missing per-item Geo outcomes as blocked, while Plan relies only on the Result readiness handoff.
 
 ## 3. Remove displaced Plan and public Geo entities
 
@@ -32,7 +32,7 @@
 ## 6. Verification
 
 - [x] 6.1 Add acceptance tests for no provider, missing authority, Human decline, exact authorized batch/effect ceilings, no-result, localized failure, no GPS, and source immutability using provider/network spies.
-- [x] 6.2 Add exhaustive Result-versus-Geo-summary equivalence, Plan readiness rejection, public Tool listing, MCP subprocess/authorization, resumability, accounting, idempotency, and Result immutability coverage.
+- [x] 6.2 Add exhaustive Result-versus-Geo-summary equivalence, PreCheck readiness projection and Plan handoff-gate coverage, public Tool listing, MCP subprocess/authorization, resumability, accounting, idempotency, and Result immutability coverage.
 - [x] 6.3 Run focused and full contract/runtime/PreCheck/Plan tests, Honeycomb integration, lint/type checks if configured, and strict OpenSpec validation; record outcomes and remaining risks.
   - Acceptance completed with 166 focused contract/runtime/PreCheck/Plan/MCP tests,
     5 explicit Honeycomb integration tests, and 565 full-suite tests passing with
@@ -76,3 +76,11 @@
   - The final stale-vocabulary scan found only removal/history/negative assertions,
     and the worktree audit found no untracked media, caches, raw logs, model output,
     or other untracked files.
+- [x] 7.8 Correct Geo coverage from visual representatives to every located Source
+  Item, keep exact-coordinate deduplication and request accounting inside PreCheck,
+  and make Plan rely only on effective Result readiness plus per-item place facts.
+  - A focused regression with four photos, three unique coordinates, and one visual
+    representative proves three provider queries and four per-item place outcomes.
+  - The focused suite passed `104` tests; the default full suite passed `571` tests
+    with `16` deselected. Ruff, all `19` strict OpenSpec validations, and
+    `git diff --check` passed.

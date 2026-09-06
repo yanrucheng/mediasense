@@ -53,13 +53,14 @@ Only a trusted Human authentication context may authorize `seal`. The ordinary r
 `create` binds one exact immutable PreCheck Result. The Tool resolves its Result view through the existing [`mediasense.precheck.read`](../spec-260826-1546-precheck-read/) semantics and accepts only:
 
 - `readiness: plan_ready`;
-- `integrity: valid`; and
-- `geo_summary.acquisition_status: complete` or `not_applicable`.
+- `integrity: valid`.
 
-Coverage may be `complete` or honestly bounded `partial`. A blocked, invalid, or
-Geo-incomplete Result returns `result_not_ready` or `result_untrusted` and creates
-no Working State. This check intentionally invalidates historical readiness claims
-that omitted required Geo acquisition.
+Coverage may be `complete` or honestly bounded `partial`. A blocked or invalid
+Result returns `result_not_ready` or `result_untrusted` and creates no Working
+State. PreCheck Read owns the effective readiness judgment, including safely
+blocking a historical Result that lacks a required per-Source-Item fact. Plan does
+not inspect Geo acquisition summaries, batches, deduplication, caching, or
+provider-request state.
 
 A new Working State is `open`. Every accepted `update` replaces its candidate
 atomically and produces a new opaque revision token. Successful `seal` closes the

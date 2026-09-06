@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import shutil
@@ -16,6 +17,7 @@ from mediasense.precheck import (
     ImageRenditionProducer,
     MetadataProducer,
     PrecheckReadTool,
+    ResultSealError,
     ResultStore,
     WorkStatus,
 )
@@ -99,6 +101,36 @@ def test_metadata_many_subjects_share_one_exiftool_command(tmp_path: Path) -> No
     assert len(runner.calls) == 2  # one version command plus one multi-item extraction
     paths = runner.calls[-1][runner.calls[-1].index("--") + 1 :]
     assert len(paths) == len(subjects)
+
+
+def test_result_is_not_plan_ready_when_a_located_source_lacks_geocode_outcome(
+    tmp_path: Path,
+) -> None:
+    database = tmp_path / "working.sqlite3"
+    source = tmp_path / "source"
+    source.mkdir()
+    Image.new("RGB", (40, 30), "blue").save(source / "photo.jpg")
+    run_id = _closed_run(database, source)
+    metadata = MetadataProducer(database, command_runner=FakeExifTool()).produce(
+        run_id, Path("photo.jpg")
+    )
+    rendition = ImageRenditionProducer(database).produce(run_id, Path("photo.jpg"))
+
+    draft = ResultStore(database).build_minimal(
+        run_id,
+        [rendition.work.work_id],
+        metadata_work_ids=[metadata.work.work_id],
+    )
+
+    assert draft.readiness == "blocked"
+    assert any(
+        qualification["code"] == "reverse_geocode_incomplete"
+        for qualification in draft.qualifications
+    )
+    with pytest.raises(
+        ResultSealError, match="located Source Item lacks a reverse-geocode outcome"
+    ):
+        ResultStore(database).seal(replace(draft, readiness="plan_ready"))
 
 
 def test_real_exiftool_stay_open_process_is_reused_and_closed(tmp_path: Path) -> None:

@@ -4,20 +4,19 @@
 The Plan Working State implementation SHALL consume one exact immutable PreCheck
 Result only through `mediasense.precheck.read`. It SHALL accept `coverage` of
 `complete` or bounded `partial` only when `readiness` is `plan_ready`, `integrity`
-is `valid`, and `geo_summary.acquisition_status` is `complete` or
-`not_applicable`. It SHALL NOT read PreCheck SQLite, caches, or internal runtime
-records.
+is `valid`. It SHALL NOT inspect Geo query batches, deduplication, caches,
+acquisition status, PreCheck SQLite, or internal runtime records.
 
 #### Scenario: Create from a usable partial Result
-- **WHEN** `create` names a readable Result with partial coverage, Plan-ready readiness, valid integrity, and closed Geo acquisition
+- **WHEN** `create` names a readable Result with partial coverage, Plan-ready readiness, and valid integrity
 - **THEN** the Tool creates one Working State bound to that exact `result_ref`
 
-#### Scenario: Reject historical incomplete Geo readiness
-- **WHEN** an old Result says `plan_ready` but its deterministic Geo summary is `incomplete`
-- **THEN** the Tool returns `precheck_not_ready` and creates no Working State
+#### Scenario: Reject effective historical readiness
+- **WHEN** PreCheck Read safely projects an old incomplete Result as `blocked`
+- **THEN** the Tool returns `precheck_not_ready` without inspecting Geo acquisition internals and creates no Working State
 
 #### Scenario: Reject an unusable Result
-- **WHEN** the named Result is missing, blocked, invalid, or has incomplete required acquisition
+- **WHEN** the named Result is missing, blocked, or invalid
 - **THEN** the Tool returns the contract-defined error and creates no Working State
 
 ### Requirement: Source safety and stage boundary

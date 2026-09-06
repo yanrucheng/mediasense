@@ -73,10 +73,40 @@ class GeoElicitationRuntimeHost:
                 "outcome": "ok",
                 "action": "status",
                 "run_ref": "precheck-run:test",
+                "dataset_ref": "dataset:test",
                 "state": "paused",
+                "progress": {
+                    "discovered": 1,
+                    "accounted": 1,
+                    "usable": 1,
+                    "exceptional": 0,
+                    "unresolved": 0,
+                },
+                "activity": {
+                    "state": "waiting",
+                    "phase": "external_evidence",
+                    "work": {
+                        "completed": 0,
+                        "reused": 0,
+                        "failed": 0,
+                        "remaining": 1,
+                        "total": 1,
+                    },
+                    "last_progress_at": "unknown",
+                    "errors": {"total": 0, "by_phase": [], "truncated": False},
+                },
+                "allowed_actions": ["resume", "cancel"],
+                "reason": {
+                    "code": "confirmation_required",
+                    "message": "Human authorization is required.",
+                },
                 "confirmation": {
                     "kind": "external_effect",
+                    "summary": "Reverse-geocode one coordinate.",
                     "content_identity": self.content_identity,
+                    "quantity": 1,
+                    "unit": "logical_queries",
+                    "skip_allowed": False,
                     "disclosure": self.disclosure,
                 },
             }
@@ -175,14 +205,17 @@ def _host_error(
 
 
 def test_mcp_geo_resume_uses_session_elicitation_as_trusted_authority() -> None:
-    prompts: list[str] = []
+    prompts: list[types.ElicitRequestParams] = []
 
     async def approve(_context, params):
-        prompts.append(params.message)
-        return types.ElicitResult(action="accept", content={"approve": True})
+        prompts.append(params)
+        return types.ElicitResult(action="accept", content={})
 
     async def decline(_context, _params):
         return types.ElicitResult(action="decline")
+
+    async def cancel(_context, _params):
+        return types.ElicitResult(action="cancel")
 
     async def fail(_context, _params):
         return types.ErrorData(
@@ -206,8 +239,17 @@ def test_mcp_geo_resume_uses_session_elicitation_as_trusted_authority() -> None:
                 "confirmed_at": accepted_runtime.authorities[0]["confirmed_at"],
             }
         ]
-        assert "22.3193" in prompts[0]
-        assert '"max_provider_requests": 1' in prompts[0]
+        assert prompts[0].requested_schema == {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {},
+        }
+        assert "boolean" not in json.dumps(prompts[0].requested_schema)
+        assert "1 logical queries" in prompts[0].message
+        assert "fake_maps" in prompts[0].message
+        assert "Maximum provider requests: 1" in prompts[0].message
+        assert "Media files are not sent" in prompts[0].message
+        assert "22.3193" not in prompts[0].message
 
         declined_runtime = GeoElicitationRuntimeHost()
         declined = await _mcp_geo_resume(declined_runtime, decline)
@@ -216,6 +258,14 @@ def test_mcp_geo_resume_uses_session_elicitation_as_trusted_authority() -> None:
         assert declined.structured_content["target_state"] == "cancelled"
         assert declined_runtime.authorities == [None]
         assert declined_runtime.provider_coordinates == []
+
+        cancelled_runtime = GeoElicitationRuntimeHost()
+        cancelled = await _mcp_geo_resume(cancelled_runtime, cancel)
+        assert cancelled.is_error is False
+        assert cancelled.structured_content is not None
+        assert cancelled.structured_content["state"] == "paused"
+        assert cancelled_runtime.authorities == []
+        assert cancelled_runtime.provider_coordinates == []
 
         unsupported_runtime = GeoElicitationRuntimeHost()
         unsupported = await _mcp_geo_resume(unsupported_runtime)

@@ -19,7 +19,7 @@ from provider observation and PreCheck Evidence.
 - **WHEN** the Human supplies or confirms semantic place context for the Plan
 - **THEN** the Agent records it as Human input or confirmation and never as provider or PreCheck observation
 
-#### Scenario: Result acquisition is incomplete
-- **WHEN** `geo_summary` reports `incomplete`
-- **THEN** Plan does not create Working State and directs the workflow back to PreCheck
+#### Scenario: PreCheck reports the Result as blocked
+- **WHEN** the effective Result view reports `readiness: blocked`
+- **THEN** the Agent does not create Plan Working State and directs the workflow back to PreCheck without inspecting acquisition internals
 
