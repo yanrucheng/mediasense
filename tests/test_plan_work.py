@@ -54,7 +54,7 @@ def test_create_does_not_inspect_precheck_geo_acquisition_internals(
 ) -> None:
     class ReviewOnlyReader(MockPrecheckReader):
         def read(self, request):
-            assert request.get("operation") == "review"
+            assert request.get("action") == "review"
             return super().read(request)
 
     result = _create(_tool(tmp_path, ReviewOnlyReader()))

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import shutil
@@ -17,7 +16,6 @@ from mediasense.precheck import (
     ImageRenditionProducer,
     MetadataProducer,
     PrecheckReadTool,
-    ResultSealError,
     ResultStore,
     WorkStatus,
 )
@@ -103,7 +101,7 @@ def test_metadata_many_subjects_share_one_exiftool_command(tmp_path: Path) -> No
     assert len(paths) == len(subjects)
 
 
-def test_result_is_not_plan_ready_when_a_located_source_lacks_geocode_outcome(
+def test_result_is_plan_ready_when_a_located_source_lacks_geocode_outcome(
     tmp_path: Path,
 ) -> None:
     database = tmp_path / "working.sqlite3"
@@ -122,15 +120,12 @@ def test_result_is_not_plan_ready_when_a_located_source_lacks_geocode_outcome(
         metadata_work_ids=[metadata.work.work_id],
     )
 
-    assert draft.readiness == "blocked"
-    assert any(
-        qualification["code"] == "reverse_geocode_incomplete"
-        for qualification in draft.qualifications
-    )
-    with pytest.raises(
-        ResultSealError, match="located Source Item lacks a complete place outcome"
-    ):
-        ResultStore(database).seal(replace(draft, readiness="plan_ready"))
+    assert draft.readiness == "plan_ready"
+    components = {item["name"]: item for item in draft.sources[0].observations}
+    assert components["address_candidate"]["status"] == "not_checked"
+    assert components["nearby_place_candidates"]["status"] == "not_checked"
+    sealed = ResultStore(database).seal(draft)
+    assert sealed.result_ref.startswith("precheck-result:")
 
 
 def test_real_exiftool_stay_open_process_is_reused_and_closed(tmp_path: Path) -> None:
@@ -321,14 +316,11 @@ def test_metadata_heartbeat_failure_releases_active_leases_for_immediate_retry(
     with pytest.raises(MetadataLeaseRenewalError, match="lease renewal failed"):
         producer.produce_many(run_id, subjects)
 
-    failed = tuple(
-        producer.work.iter_run_work(run_id, capability="source-metadata")
-    )
+    failed = tuple(producer.work.iter_run_work(run_id, capability="source-metadata"))
     assert len(failed) == len(subjects)
     assert all(record.status is WorkStatus.RETRYABLE_FAILURE for record in failed)
     assert all(
-        record.last_failure_code == "metadata_lease_renewal_failed"
-        for record in failed
+        record.last_failure_code == "metadata_lease_renewal_failed" for record in failed
     )
 
     retried = MetadataProducer(
@@ -446,10 +438,15 @@ def test_metadata_cancellation_converges_leases_and_preserves_successful_sibling
         WorkStatus.SUCCEEDED,
         WorkStatus.RETRYABLE_FAILURE,
     }
-    assert sum(
-        record.status is WorkStatus.SUCCEEDED for record in work_by_subject.values()
-    ) == 2
-    assert all(record.status is not WorkStatus.RUNNING for record in work_by_subject.values())
+    assert (
+        sum(
+            record.status is WorkStatus.SUCCEEDED for record in work_by_subject.values()
+        )
+        == 2
+    )
+    assert all(
+        record.status is not WorkStatus.RUNNING for record in work_by_subject.values()
+    )
 
     replay_runner = FakeExifTool()
     replay = MetadataProducer(
@@ -459,7 +456,9 @@ def test_metadata_cancellation_converges_leases_and_preserves_successful_sibling
     ).produce_many(run_id, subjects)
 
     assert sum(outcome.reused for outcome in replay.values()) == 2
-    assert all(outcome.work.status is WorkStatus.SUCCEEDED for outcome in replay.values())
+    assert all(
+        outcome.work.status is WorkStatus.SUCCEEDED for outcome in replay.values()
+    )
     replay_paths = replay_runner.calls[-1][replay_runner.calls[-1].index("--") + 1 :]
     assert len(replay_paths) == 2
 
@@ -586,8 +585,9 @@ def test_metadata_failure_is_local_and_result_exposes_field_provenance(
     reader = PrecheckReadTool(database)
     accounted = reader.read(
         {
+            "dataset_ref": "dataset:dataset-a",
             "result_ref": sealed.result_ref,
-            "operation": "resolve",
+            "action": "resolve",
             "source_set": {
                 "kind": "precheck_relation",
                 "origin": sealed.result_ref,
@@ -602,15 +602,14 @@ def test_metadata_failure_is_local_and_result_exposes_field_provenance(
     }
     expanded = reader.read(
         {
+            "dataset_ref": "dataset:dataset-a",
             "result_ref": sealed.result_ref,
-            "operation": "expand",
+            "action": "expand",
             "source_item_refs": [source_refs["good.jpg"], source_refs["bad.jpg"]],
             "include": ["source_item", "observations"],
         }
     )
-    views = {
-        item["source_item_ref"]: item["included"] for item in expanded["items"]
-    }
+    views = {item["source_item_ref"]: item["included"] for item in expanded["items"]}
     good_view = views[source_refs["good.jpg"]]
     bad_view = views[source_refs["bad.jpg"]]
 

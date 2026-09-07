@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from jsonschema import Draft202012Validator
 
 from mediasense.precheck import AccountingStore, PrecheckReadTool, PrecheckRunTool
@@ -85,11 +86,11 @@ def test_scope_inventory_is_factual_bounded_and_expandable(tmp_path: Path) -> No
 
     run_ref, paused = _start_and_inventory(tool, "request:scope-tree")
     inventory = paused["confirmation"]["inventory"]
-    tree = inventory["view"]["tree"]
+    entries = inventory["view"]["entries"]
 
-    assert tree["file_count"] == 4
-    assert tree["byte_count"] == 1_024 + 2_048 + 8 + 8
-    assert {child["path"] for child in tree["children"]} >= {
+    assert sum(entry["file_count"] for entry in entries) == 4
+    assert sum(entry["byte_count"] for entry in entries) == 1_024 + 2_048 + 8 + 8
+    assert {child["path"] for child in entries} >= {
         ".DS_Store",
         ".private-album",
         ".similarity_cache",
@@ -105,14 +106,15 @@ def test_scope_inventory_is_factual_bounded_and_expandable(tmp_path: Path) -> No
 
     expanded = tool.run(
         {
+            "dataset_ref": "dataset:scope-review",
             "action": "status",
             "run_ref": run_ref,
             "scope_path": ".similarity_cache",
         }
     )
-    expanded_tree = expanded["confirmation"]["inventory"]["view"]["tree"]
-    assert expanded_tree["path"] == ".similarity_cache"
-    assert expanded_tree["file_count"] == 2
+    expanded_view = expanded["confirmation"]["inventory"]["view"]
+    assert expanded_view["root"] == ".similarity_cache"
+    assert sum(entry["file_count"] for entry in expanded_view["entries"]) == 2
 
 
 def test_scope_selection_excludes_cache_frames_but_keeps_accounting(
@@ -128,11 +130,26 @@ def test_scope_selection_excludes_cache_frames_but_keeps_accounting(
 
     run_ref, paused = _start_and_inventory(tool, "request:scope-exclude")
     decision = _selection(paused, exceptions=[".similarity_cache"])
-    accepted = tool.run({"action": "resume", "run_ref": run_ref, "decision": decision})
-    assert accepted["outcome"] == "accepted"
+    accepted = tool.run(
+        {
+            "dataset_ref": "dataset:scope-review",
+            "action": "resume",
+            "run_ref": run_ref,
+            "decision": decision,
+        }
+    )
+    assert "error" not in accepted
     finished = tool.advance(run_ref)
     assert finished["state"] == "completed"
-    assert finished["scope_selection"] == {
+    details = tool.run(
+        {
+            "action": "status",
+            "dataset_ref": "dataset:scope-review",
+            "run_ref": run_ref,
+            "include": ["accounting"],
+        }
+    )
+    assert details["accounting"]["selection"] == {
         **decision,
         "provenance": "accepted",
     }
@@ -152,11 +169,12 @@ def test_scope_selection_excludes_cache_frames_but_keeps_accounting(
     )
     result_items = PrecheckReadTool(tool.database_path).read(
         {
-            "operation": "resolve",
-            "result_ref": finished["published_result"]["result_ref"],
+            "dataset_ref": "dataset:scope-review",
+            "action": "resolve",
+            "result_ref": finished["result"]["ref"],
             "source_set": {
                 "kind": "precheck_relation",
-                "origin": finished["published_result"]["result_ref"],
+                "origin": finished["result"]["ref"],
                 "relation": "accounts_for",
                 "direction": "outbound",
             },
@@ -180,7 +198,14 @@ def test_default_exclude_can_include_a_legal_hidden_media_directory(
         default="exclude",
         exceptions=[".private-album"],
     )
-    tool.run({"action": "resume", "run_ref": run_ref, "decision": decision})
+    tool.run(
+        {
+            "dataset_ref": "dataset:scope-review",
+            "action": "resume",
+            "run_ref": run_ref,
+            "decision": decision,
+        }
+    )
     assert tool.advance(run_ref)["state"] == "completed"
 
     accounting_run_id = tool._store.get(run_ref)["accounting_run_id"]
@@ -201,7 +226,14 @@ def test_changed_tree_rejects_old_selection_before_expensive_work(
     (source / "photo.jpg").write_bytes(b"first")
     run_ref, paused = _start_and_inventory(tool, "request:scope-stale")
     decision = _selection(paused)
-    tool.run({"action": "resume", "run_ref": run_ref, "decision": decision})
+    tool.run(
+        {
+            "dataset_ref": "dataset:scope-review",
+            "action": "resume",
+            "run_ref": run_ref,
+            "decision": decision,
+        }
+    )
     (source / "new.jpg").write_bytes(b"new")
 
     refreshed = tool.advance(run_ref)
@@ -228,16 +260,35 @@ def test_scope_selection_rejects_overlapping_or_absent_exceptions(
         exceptions=[".similarity_cache", ".similarity_cache/frames"],
     )
     overlap_response = tool.run(
-        {"action": "resume", "run_ref": run_ref, "decision": overlap}
+        {
+            "dataset_ref": "dataset:scope-review",
+            "action": "resume",
+            "run_ref": run_ref,
+            "decision": overlap,
+        }
     )
     assert overlap_response["error"]["code"] == "invalid_request"
 
     absent = _selection(paused, exceptions=["missing"])
     absent_response = tool.run(
-        {"action": "resume", "run_ref": run_ref, "decision": absent}
+        {
+            "dataset_ref": "dataset:scope-review",
+            "action": "resume",
+            "run_ref": run_ref,
+            "decision": absent,
+        }
     )
     assert absent_response["error"]["code"] == "invalid_request"
-    assert tool.run({"action": "status", "run_ref": run_ref})["state"] == "paused"
+    assert (
+        tool.run(
+            {
+                "dataset_ref": "dataset:scope-review",
+                "action": "status",
+                "run_ref": run_ref,
+            }
+        )["state"]
+        == "paused"
+    )
 
 
 def test_unattended_run_waits_without_expensive_work(tmp_path: Path) -> None:
@@ -245,10 +296,12 @@ def test_unattended_run_waits_without_expensive_work(tmp_path: Path) -> None:
     (source / "photo.jpg").write_bytes(b"photo")
     run_ref, paused = _start_and_inventory(tool, "request:scope-unattended")
 
-    status = tool.run({"action": "status", "run_ref": run_ref})
+    status = tool.run(
+        {"dataset_ref": "dataset:scope-review", "action": "status", "run_ref": run_ref}
+    )
 
     assert status == paused
-    assert status["activity"]["state"] == "waiting"
+    assert status["reason"]["code"] == "scope_confirmation_required"
     assert status["allowed_actions"] == ["resume", "cancel"]
 
 
@@ -318,23 +371,26 @@ def test_many_ordinary_dotfiles_are_aggregated_in_a_bounded_tree(
         (source / f".setting-{index:03d}").write_bytes(b"x")
 
     run_ref, paused = _start_and_inventory(tool, "request:scope-dotfiles")
-    tree = paused["confirmation"]["inventory"]["view"]["tree"]
-
-    assert tree["file_count"] == 100
-    assert tree["byte_count"] == 100
-    assert len(tree["children"]) == 63
-    assert tree["omitted_children"] == 37
-    assert tree["kind_counts"] == [{"kind": "unknown", "count": 100}]
+    entries = paused["confirmation"]["inventory"]["view"]["entries"]
+    assert len(entries) == 63
+    assert sum(entry["byte_count"] for entry in entries) == 63
+    assert all(
+        entry["kind_counts"] == [{"kind": "unknown", "count": 1}] for entry in entries
+    )
     next_page = tool.run(
         {
+            "dataset_ref": "dataset:scope-review",
             "action": "status",
             "run_ref": run_ref,
             "scope_path": ".",
             "scope_after": paused["confirmation"]["inventory"]["view"]["next_after"],
         }
     )
-    next_children = next_page["confirmation"]["inventory"]["view"]["tree"]["children"]
+    next_children = next_page["confirmation"]["inventory"]["view"]["entries"]
     assert next_children[0]["path"] == ".setting-063"
+    assert len(next_children) + len(entries) == 100
+    assert sum(entry["byte_count"] for entry in [*entries, *next_children]) == 100
+    assert next_page["confirmation"]["inventory"]["view"]["next_after"] is None
 
 
 def test_large_flat_inventory_projection_has_a_fixed_node_budget() -> None:
@@ -358,22 +414,20 @@ def test_large_flat_inventory_projection_has_a_fixed_node_budget() -> None:
             }
 
     inventory = build_scope_inventory(facts(), (), scan_generation=1)
-    tree = inventory["view"]["tree"]
-
-    assert tree["file_count"] == 10_000
-    assert tree["byte_count"] == 10_000
-    assert len(tree["children"]) == 63
-    assert tree["omitted_children"] == 9_937
-    assert len(tree["representative_paths"]) == 3
-    assert inventory["view"]["next_after"] == "item-00062.jpg"
-
+    entries = inventory["view"]["entries"]
+    assert len(entries) == 63
+    assert sum(item["file_count"] for item in entries) == 63
+    assert all(len(item["representative_paths"]) == 1 for item in entries)
+    assert inventory["view"]["next_after"].startswith("scope-cursor:")
     next_page = build_scope_inventory(
-        facts(),
-        (),
-        scan_generation=1,
-        scope_after="item-00062.jpg",
+        facts(), (), scan_generation=1, scope_after=inventory["view"]["next_after"]
     )
-    assert next_page["view"]["tree"]["children"][0]["path"] == "item-00063.jpg"
+    assert next_page["view"]["entries"][0]["path"] == "item-00063.jpg"
+    with pytest.raises(ValueError, match="cursor"):
+        build_scope_inventory(
+            facts(), (), scan_generation=1, scope_after="item-00062.jpg"
+        )
+    assert next_page["inventory_fingerprint"] == inventory["inventory_fingerprint"]
 
 
 def test_unchanged_later_run_reuses_exact_scope_selection(tmp_path: Path) -> None:
@@ -381,7 +435,14 @@ def test_unchanged_later_run_reuses_exact_scope_selection(tmp_path: Path) -> Non
     (source / "photo.jpg").write_bytes(b"photo")
     first_ref, paused = _start_and_inventory(tool, "request:scope-first")
     decision = _selection(paused)
-    tool.run({"action": "resume", "run_ref": first_ref, "decision": decision})
+    tool.run(
+        {
+            "dataset_ref": "dataset:scope-review",
+            "action": "resume",
+            "run_ref": first_ref,
+            "decision": decision,
+        }
+    )
     assert tool.advance(first_ref)["state"] == "completed"
 
     AccountingStore(tool.database_path).start_or_resume_run("scope-review", source)
@@ -399,8 +460,16 @@ def test_unchanged_later_run_reuses_exact_scope_selection(tmp_path: Path) -> Non
     assert review is not None
     assert review["state"] == "reused"
     assert review["reused_from_run_ref"] == first_ref
-    assert second_status["scope_selection"]["provenance"] == "reused"
-    assert second_status["scope_selection"]["reused_from_run_ref"] == first_ref
+    details = tool.run(
+        {
+            "action": "status",
+            "dataset_ref": "dataset:scope-review",
+            "run_ref": second["run_ref"],
+            "include": ["accounting"],
+        }
+    )
+    assert details["accounting"]["selection"]["provenance"] == "reused"
+    assert details["accounting"]["selection"]["reused_from_run_ref"] == first_ref
 
 
 def test_scope_review_responses_match_public_contract(tmp_path: Path) -> None:
@@ -417,6 +486,11 @@ def test_scope_review_responses_match_public_contract(tmp_path: Path) -> None:
     output.validate(paused)
 
     decision = _selection(paused)
-    resume_request = {"action": "resume", "run_ref": run_ref, "decision": decision}
+    resume_request = {
+        "dataset_ref": "dataset:scope-review",
+        "action": "resume",
+        "run_ref": run_ref,
+        "decision": decision,
+    }
     request.validate(resume_request)
     output.validate(tool.run(resume_request))

@@ -123,18 +123,14 @@ class _FakePrecheckRead:
     def read(self, request: dict[str, object]) -> dict[str, object]:
         self.requests.append(request)
         result_ref = str(request["result_ref"])
-        if request["operation"] == "resolve":
+        if request["action"] == "resolve":
             try:
                 refs = sorted(self._resolve(request["source_set"]))
             except (KeyError, TypeError, ValueError):
                 return {
-                    "outcome": "error",
-                    "result_ref": result_ref,
-                    "operation": "resolve",
                     "error": {
                         "code": "invalid_source_set",
                         "message": "invalid source set",
-                        "retryable": False,
                     },
                 }
             source_set_json = json.dumps(
@@ -143,22 +139,22 @@ class _FakePrecheckRead:
                 sort_keys=True,
                 separators=(",", ":"),
             )
-            source_set_identity = "sha256:" + hashlib.sha256(
-                source_set_json.encode("utf-8")
-            ).hexdigest()
+            source_set_identity = (
+                "sha256:" + hashlib.sha256(source_set_json.encode("utf-8")).hexdigest()
+            )
             membership_payload = json.dumps(
-                    {
-                        "result_ref": result_ref,
-                        "source_set": json.loads(source_set_json),
-                        "members": refs,
-                    },
-                    ensure_ascii=False,
-                    sort_keys=True,
-                    separators=(",", ":"),
-                ).encode("utf-8")
-            membership_identity = "sha256:" + hashlib.sha256(
-                membership_payload
-            ).hexdigest()
+                {
+                    "result_ref": result_ref,
+                    "source_set": json.loads(source_set_json),
+                    "members": refs,
+                },
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+            membership_identity = (
+                "sha256:" + hashlib.sha256(membership_payload).hexdigest()
+            )
             members = [
                 {
                     "source_item_ref": ref,
@@ -170,26 +166,19 @@ class _FakePrecheckRead:
                 for ref in refs
             ]
             return {
-                "outcome": "ok",
-                "result_ref": result_ref,
-                "operation": "resolve",
                 "resolution": {
                     "source_set_identity": source_set_identity,
                     "membership_identity": membership_identity,
-                    "ordering": "source_item_ref_ascending",
-                    "total": len(members),
                 },
                 "members": members,
                 "page": {
-                    "returned": len(members),
                     "total": len(members),
-                    "complete": True,
-                    "stop_reason": "complete",
+                    "next_cursor": None,
                 },
             }
         assert request == {
             "result_ref": result_ref,
-            "operation": "expand",
+            "action": "expand",
             "source_item_refs": request["source_item_refs"],
             "include": ["source_item", "observations"],
         }
@@ -197,19 +186,12 @@ class _FakePrecheckRead:
         view = self.views.get(source_item_ref)
         if view is None:
             return {
-                "outcome": "error",
-                "result_ref": result_ref,
-                "operation": "expand",
                 "error": {
                     "code": "reference_not_in_result",
                     "message": "missing",
-                    "retryable": False,
                 },
             }
         return {
-            "outcome": "ok",
-            "result_ref": result_ref,
-            "operation": "expand",
             "items": [
                 {
                     "source_item_ref": source_item_ref,
@@ -217,17 +199,15 @@ class _FakePrecheckRead:
                         "source_item": {
                             key: deepcopy(value)
                             for key, value in view.items()
-                            if key != "observations"
+                            if key not in {"observations", "kind", "ref"}
                         },
                         "observations": deepcopy(view.get("observations", [])),
                     },
                 }
             ],
             "page": {
-                "returned": 1,
                 "total": 1,
-                "complete": True,
-                "stop_reason": "complete",
+                "next_cursor": None,
             },
         }
 

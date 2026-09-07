@@ -4,7 +4,7 @@ title: "MediaSense Plan Working State Tool Contract"
 type: spec
 status: active
 created: 2026-08-27
-updated: 2026-08-30
+updated: 2026-09-07
 timezone: "Asia/Shanghai"
 parent: "index-spec"
 depends-on:
@@ -53,7 +53,9 @@ Only a trusted Human authentication context may authorize `seal`. The ordinary r
 `create` binds one exact immutable PreCheck Result. The Tool resolves its Result view through the existing [`mediasense.precheck.read`](../spec-260826-1546-precheck-read/) semantics and accepts only:
 
 - `readiness: plan_ready`;
-- `integrity: valid`.
+- successful trusted PreCheck Read, which enforces seal, hash, reference and Observation integrity without a returned constant.
+
+Missing coordinates, no_result and terminal known Geo failure never independently prevent entry, including a whole collection without locations.
 
 Coverage may be `complete` or honestly bounded `partial`. A blocked or invalid
 Result returns `result_not_ready` or `result_untrusted` and creates no Working

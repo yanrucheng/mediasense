@@ -614,6 +614,13 @@ class PrecheckOrchestrator:
         )
         if geocode.status == "confirmation_required":
             return self.run_control.sync_accounting(run_ref)
+        if geocode.status == "indeterminate":
+            return self.run_control.mark_blocked(
+                run_ref,
+                code="geo_effect_indeterminate",
+                message="An admitted Geo effect has no provable terminal outcome.",
+                resume_when="Reconcile the admitted Geo effect; automatic reissuance is forbidden.",
+            )
         if geocode.status == "unavailable":
             return self.run_control.mark_failed(
                 run_ref,

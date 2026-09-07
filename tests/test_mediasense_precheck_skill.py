@@ -9,12 +9,7 @@ from jsonschema import Draft202012Validator
 
 ROOT = Path(__file__).parents[1]
 SKILL_DIR = (
-    ROOT
-    / "src"
-    / "mediasense"
-    / "_resources"
-    / "skills"
-    / "mediasense-precheck"
+    ROOT / "src" / "mediasense" / "_resources" / "skills" / "mediasense-precheck"
 )
 SKILL_PATH = SKILL_DIR / "SKILL.md"
 OPENAI_PATH = SKILL_DIR / "agents" / "openai.yaml"
@@ -51,9 +46,7 @@ def _operation_constants(value: object) -> set[str]:
     if isinstance(properties, dict):
         for field in ("action", "operation"):
             operation = properties.get(field)
-            if isinstance(operation, dict) and isinstance(
-                operation.get("const"), str
-            ):
+            if isinstance(operation, dict) and isinstance(operation.get("const"), str):
                 operations.add(operation["const"])
     return operations | set().union(
         *(_operation_constants(item) for item in value.values())
@@ -123,8 +116,8 @@ def test_skill_keeps_reverse_geocoding_run_scoped_and_batch_bound() -> None:
 def test_skill_distinguishes_source_accounting_from_execution_liveness() -> None:
     skill = SKILL_PATH.read_text(encoding="utf-8")
 
-    assert "`progress` is Source Item accounting" in skill
-    assert "`activity` is current execution evidence" in skill
+    assert "`progress` counts terminal logical work" in skill
+    assert "`accounting` reports Source Item coverage" in skill
     assert "`no_recent_progress`" in skill
     assert "`suspected_stalled`" in skill
     assert "percentage, ETA, throughput, or success promise" in skill

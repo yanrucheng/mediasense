@@ -64,7 +64,7 @@ class GeoQueryTool:
 
         existing = self.journal.get(request_id)
         if existing is not None:
-            if existing.request_fingerprint != parsed.fingerprint():
+            if existing.request_fingerprint != self.capability.fingerprint(parsed):
                 return _error(
                     "idempotency_conflict",
                     "request_id was already used with different input",
@@ -86,11 +86,16 @@ class GeoQueryTool:
             return _response(request_id, preflight)
         assert authorization is not None
 
-        indeterminate = _indeterminate_result(parsed)
+        from dataclasses import replace
+
+        indeterminate = replace(
+            _indeterminate_result(parsed),
+            request_fingerprint=self.capability.fingerprint(parsed),
+        )
         try:
             existing = self.journal.admit(
                 request_id=request_id,
-                request_fingerprint=parsed.fingerprint(),
+                request_fingerprint=self.capability.fingerprint(parsed),
                 authorization_binding=authorization.binding(),
                 indeterminate_result=_response(request_id, indeterminate),
             )
@@ -108,7 +113,8 @@ class GeoQueryTool:
             response = _response(request_id, result)
             self.journal.complete(request_id, response)
         except Exception:
-            return _response(request_id, indeterminate)
+            # The admission journal retains uncertainty; programming failures still surface.
+            raise
         return response
 
 

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from typing import Protocol
 
 from .model import (
@@ -99,6 +99,8 @@ class GeoProvider(Protocol):
         locale: str,
         radius_meters: float | None = None,
         max_places: int | None = None,
+        deadline: float | None = None,
+        cancelled: Callable[[], bool] | None = None,
     ) -> GeoProviderExecution: ...
 
 

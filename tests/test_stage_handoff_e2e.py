@@ -12,6 +12,8 @@ from jsonschema import Draft202012Validator
 from mediasense.apply import ApplyRunTool
 from mediasense.frozen_plan import content_identity
 from mediasense.plan import ConfirmationContext, PlanWorkTool
+from mediasense.precheck.read import bind_precheck_read
+
 from mediasense.precheck import (
     AccountingStore,
     ImageRenditionProducer,
@@ -31,7 +33,7 @@ class RecordingPrecheckRead:
     name = "mediasense.precheck.read"
 
     def __init__(self, tool: PrecheckReadTool) -> None:
-        self.tool = tool
+        self.tool = bind_precheck_read(tool, "dataset:dataset-stage-handoff")
         self.calls: list[dict[str, object]] = []
 
     def read(self, request: dict[str, object]) -> dict[str, object]:
@@ -43,13 +45,13 @@ class UnderreportingPrecheckRead(RecordingPrecheckRead):
     def read(self, request: dict[str, object]) -> dict[str, object]:
         response = super().read(request)
         if (
-            request.get("operation") != "resolve"
+            request.get("action") != "resolve"
             or request.get("source_set", {}).get("relation") != "accounts_for"
         ):
             return response
         tampered = deepcopy(response)
         tampered["members"] = []
-        tampered["page"]["returned"] = 0
+        assert tampered["page"]["total"] > 0
         return tampered
 
 
@@ -77,8 +79,9 @@ def test_public_precheck_plan_apply_prepare_handoff_has_no_hidden_protocol(
     read_boundary = RecordingPrecheckRead(PrecheckReadTool(precheck_database))
     accounts = read_boundary.read(
         {
+            "dataset_ref": "dataset:dataset-stage-handoff",
             "result_ref": result.result_ref,
-            "operation": "resolve",
+            "action": "resolve",
             "source_set": {
                 "kind": "precheck_relation",
                 "origin": result.result_ref,
@@ -90,8 +93,9 @@ def test_public_precheck_plan_apply_prepare_handoff_has_no_hidden_protocol(
     source_item_ref = str(accounts["members"][0]["source_item_ref"])
     source_view = read_boundary.read(
         {
+            "dataset_ref": "dataset:dataset-stage-handoff",
             "result_ref": result.result_ref,
-            "operation": "expand",
+            "action": "expand",
             "source_item_refs": [source_item_ref],
             "include": ["source_item"],
         }
@@ -193,7 +197,7 @@ def test_public_precheck_plan_apply_prepare_handoff_has_no_hidden_protocol(
     assert "frozen_plan_path" not in str(prepare_request)
     assert all(call["result_ref"] == result.result_ref for call in read_boundary.calls)
     assert all(
-        call["operation"] in {"review", "expand", "resolve", "geo_summary"}
+        call["action"] in {"review", "expand", "resolve", "geo_summary"}
         for call in read_boundary.calls
     )
     assert (source / "original.jpg").read_bytes() == source_before

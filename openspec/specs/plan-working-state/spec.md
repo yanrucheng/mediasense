@@ -5,15 +5,19 @@ Define the mutable, revisioned Plan authority and its deterministic publication 
 one complete Frozen Plan for direct downstream consumption.
 ## Requirements
 ### Requirement: Exact PreCheck entry boundary
-The Plan Working State implementation SHALL consume one exact immutable PreCheck Result only through the `mediasense.precheck.read` contract. It SHALL accept `coverage` of `complete` or bounded `partial` only when `readiness` is `plan_ready` and `integrity` is `valid`, and SHALL NOT read PreCheck SQLite, caches, or internal runtime records.
+Plan Working State SHALL consume one exact immutable Result only through the trusted PreCheck Read contract. Successful Read SHALL enforce integrity checks; Plan SHALL accept complete or bounded partial coverage when readiness is plan_ready without requiring an integrity constant in the payload. It SHALL NOT read PreCheck SQLite, caches, acquisition groups or Provider state. Missing coordinates, no_result or terminal location failure SHALL NOT alone prevent entry or force Agent reacquisition.
 
 #### Scenario: Create from a usable partial Result
-- **WHEN** `create` names a readable Result with `coverage=partial`, `readiness=plan_ready`, and `integrity=valid`
-- **THEN** the Tool creates one Working State bound to that exact `result_ref`
+- **WHEN** trusted Read returns partial coverage and plan_ready with material qualifications
+- **THEN** Plan creates one Working State bound to that exact Result without expecting integrity:valid
 
 #### Scenario: Reject an unusable Result
-- **WHEN** the named Result is missing, blocked, or invalid
-- **THEN** the Tool returns the contract-defined error and creates no Working State
+- **WHEN** Read reports missing, unavailable, inconsistent or untrusted Result, or readiness is blocked for a valid non-location reason
+- **THEN** Plan returns the contract error without creating Working State
+
+#### Scenario: No photos have location
+- **WHEN** all Source Items lack location but other prerequisites hold
+- **THEN** Plan may organize from images, time and user intent without mandatory additional Geo work
 
 ### Requirement: Mutable Working State authority
 The implementation SHALL keep each Work's exact Result binding, open or closed lifecycle, opaque current revision, organization-preference snapshot, complete candidate content, and idempotency state in `work.sqlite3`. It SHALL NOT copy the PreCheck Result or Default Organization Profile into the Plan store.

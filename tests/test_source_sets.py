@@ -20,7 +20,15 @@ class ContractReader:
 
     def __init__(self) -> None:
         self.sources = {
-            ref: {"kind": "source_item", "ref": ref, "locator": {"kind": "test"}}
+            ref: {
+                "kind": "source_item",
+                "ref": ref,
+                "locator": {
+                    "kind": "source_root_relative_path",
+                    "source_root_ref": "source-root:test",
+                    "value": ref.split(":")[-1] + ".jpg",
+                },
+            }
             for ref in ("source-item:a", "source-item:b", "source-item:c")
         }
         self.evidence = {
@@ -34,7 +42,7 @@ class ContractReader:
 
     def read(self, request: dict) -> dict:
         self.calls.append(deepcopy(request))
-        if request["operation"] == "expand":
+        if request["action"] == "expand":
             items = []
             if "source_item_refs" in request:
                 for ref in request["source_item_refs"]:
@@ -43,7 +51,11 @@ class ContractReader:
                         return self._error("reference_not_in_result")
                     included = {}
                     if "source_item" in request["include"]:
-                        included["source_item"] = deepcopy(view)
+                        included["source_item"] = {
+                            key: deepcopy(value)
+                            for key, value in view.items()
+                            if key not in {"kind", "ref"}
+                        }
                     if "observations" in request["include"]:
                         included["observations"] = []
                     items.append({"source_item_ref": ref, "included": included})
@@ -54,21 +66,21 @@ class ContractReader:
                         return self._error("reference_not_in_result")
                     included = {}
                     if "anchor_evidence" in request["include"]:
-                        included["anchor_evidence"] = deepcopy(view)
-                    items.append({"anchor_evidence_ref": ref, "included": included})
+                        included["anchor_evidence"] = {
+                            key: deepcopy(value)
+                            for key, value in view.items()
+                            if key not in {"kind", "ref"}
+                        }
+                        included["anchor_evidence"]["roles"] = []
+                    items.append({"evidence_ref": ref, "included": included})
             return {
-                "outcome": "ok",
-                "result_ref": RESULT_REF,
-                "operation": "expand",
                 "items": items,
                 "page": {
-                    "returned": len(items),
                     "total": len(items),
-                    "complete": True,
-                    "stop_reason": "complete",
+                    "next_cursor": None,
                 },
             }
-        if request["operation"] != "resolve":
+        if request["action"] != "resolve":
             return self._error("invalid_request")
         try:
             resolved = sorted(self._resolve(request["source_set"]))
@@ -86,27 +98,21 @@ class ContractReader:
             refs = resolved[:2] if cursor is None else resolved[2:]
             page = (
                 {
-                    "returned": 2,
                     "total": 3,
-                    "complete": False,
                     "next_cursor": "cursor:two",
                     "stop_reason": "byte_limit",
                 }
                 if cursor is None
                 else {
-                    "returned": 1,
                     "total": 3,
-                    "complete": True,
-                    "stop_reason": "complete",
+                    "next_cursor": None,
                 }
             )
         else:
             refs = resolved
             page = {
-                "returned": len(refs),
                 "total": len(refs),
-                "complete": True,
-                "stop_reason": "complete",
+                "next_cursor": None,
             }
         members = [
             {
@@ -138,14 +144,9 @@ class ContractReader:
             ).encode("utf-8")
         )
         return {
-            "outcome": "ok",
-            "result_ref": RESULT_REF,
-            "operation": "resolve",
             "resolution": {
                 "source_set_identity": source_set_identity,
                 "membership_identity": membership_identity,
-                "ordering": "source_item_ref_ascending",
-                "total": len(resolved),
             },
             "members": members,
             "page": page,
@@ -179,8 +180,6 @@ class ContractReader:
     @staticmethod
     def _error(code: str) -> dict:
         return {
-            "outcome": "error",
-            "result_ref": RESULT_REF,
             "error": {"code": code, "message": code},
         }
 
@@ -223,7 +222,7 @@ def test_resolver_supports_all_frozen_plan_source_set_forms() -> None:
     [
         (
             lambda response: response.update(result_ref="precheck-result:other"),
-            "bound Result",
+            "invalid action response",
         ),
         (
             lambda response: response["resolution"].update(
@@ -238,16 +237,12 @@ def test_resolver_supports_all_frozen_plan_source_set_forms() -> None:
             "changed between pages",
         ),
         (
-            lambda response: (
-                response["resolution"].update(total=4),
-                response["page"].update(total=4),
-            ),
+            lambda response: (response["page"].update(total=4),),
             "changed between pages",
         ),
         (
             lambda response: (
                 response["members"].append(deepcopy(response["members"][0])),
-                response["page"].update(returned=2),
             ),
             "repeats Source Item",
         ),
@@ -260,9 +255,7 @@ def test_resolver_supports_all_frozen_plan_source_set_forms() -> None:
         (
             lambda response: response.update(
                 page={
-                    "returned": 1,
                     "total": 3,
-                    "complete": False,
                     "next_cursor": "cursor:two",
                 }
             ),
@@ -279,9 +272,7 @@ def test_resolver_fails_closed_on_untrustworthy_traversal(mutation, message) -> 
 
         def read(self, request: dict) -> dict:
             response = original(request)
-            if request["operation"] == "resolve" and request.get("page", {}).get(
-                "cursor"
-            ):
+            if request["action"] == "resolve" and request.get("page", {}).get("cursor"):
                 mutation(response)
             return response
 

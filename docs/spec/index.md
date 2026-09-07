@@ -4,7 +4,7 @@ title: "Specifications"
 type: index
 status: active
 created: 2026-08-26
-updated: 2026-08-31
+updated: 2026-09-07
 timezone: "Asia/Shanghai"
 parent: "index-docs"
 depends-on: []
@@ -15,6 +15,7 @@ superseded-by: ""
 
 | ID | Title | Status | Created | Summary |
 | --- | --- | --- | --- | --- |
+| [spec-260907-0247-precheck-plan-handoff](spec-260907-0247-precheck-plan-handoff/) | MediaSense PreCheck 最小接口草图 | draft | 2026-09-07 | 覆盖九个 command、通用字段和示例；地点缺失或有限重试后的失败不阻塞 Plan，保留授权、恢复及精确读取能力。 |
 | [spec-260831-0009-dataset-open](spec-260831-0009-dataset-open/) | MediaSense Dataset Open Tool Contract | active | 2026-08-31 | Defines deterministic explicit, external-volume, and local Dataset workspace resolution, identity-safe reuse, and observable configuration provenance. |
 | [spec-260829-0050-apply](spec-260829-0050-apply/) | MediaSense Apply Contract | active | 2026-08-29 | Defines direct Frozen Plan handoff, trusted Source Set expansion, complete validation, structured Receipt reads, authorization, recovery, and verification for `move_originals`. |
 | [spec-260828-2026-default-organization-profile](spec-260828-2026-default-organization-profile/) | MediaSense Default Organization Profile | active | 2026-08-28 | Defines the event-first, adaptive-depth default product policy for naming, related media, auxiliary material, unresolved media, and damaged items during Plan. |

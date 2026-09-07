@@ -58,16 +58,18 @@ def test_ordinary_rendition_is_frontier_and_high_resolution_expands_from_it(
 
     entry = reader.read(
         {
+            "dataset_ref": "dataset:dataset-a",
             "result_ref": sealed.result_ref,
-            "operation": "review",
+            "action": "review",
         }
     )
-    assert len(entry["coverage_cards"]) == 1
-    ordinary_ref = entry["coverage_cards"][0]["anchor_evidence_ref"]
+    assert len(entry["cards"]) == 1
+    ordinary_ref = entry["cards"][0]["evidence_ref"]
     expanded = reader.read(
         {
+            "dataset_ref": "dataset:dataset-a",
             "result_ref": sealed.result_ref,
-            "operation": "expand",
+            "action": "expand",
             "evidence_refs": [ordinary_ref],
             "include": ["anchor_evidence", "prepared_targets"],
         }
@@ -81,8 +83,9 @@ def test_ordinary_rendition_is_frontier_and_high_resolution_expands_from_it(
     )
     high_view = reader.read(
         {
+            "dataset_ref": "dataset:dataset-a",
             "result_ref": sealed.result_ref,
-            "operation": "expand",
+            "action": "expand",
             "evidence_refs": [high_ref],
             "include": ["anchor_evidence"],
         }
@@ -195,7 +198,7 @@ def test_geo_summary_source_set_stays_bounded_for_high_fanout_coordinate() -> No
     ) == frozenset(source_refs)
 
 
-def test_review_blocks_historical_plan_ready_result_missing_per_source_geo() -> None:
+def test_review_allows_historical_plan_ready_result_missing_per_source_geo() -> None:
     result_ref = "precheck-result:historical-incomplete-geo"
     source_ref = "source-item:located"
     graph = precheck_read_module._ResultGraph(
@@ -204,6 +207,7 @@ def test_review_blocks_historical_plan_ready_result_missing_per_source_geo() -> 
                 "kind": "result",
                 "ref": result_ref,
                 "readiness": "plan_ready",
+                "coverage": "complete",
                 "qualifications": [],
             },
             "dataset": {},
@@ -239,17 +243,8 @@ def test_review_blocks_historical_plan_ready_result_missing_per_source_geo() -> 
 
     view = precheck_read_module._effective_result_view(graph)
 
-    assert view["readiness"] == "blocked"
-    assert view["qualifications"] == [
-        {
-            "code": "reverse_geocode_incomplete",
-            "effect": "blocks_use",
-            "message": (
-                "One or more located Source Items lack a reverse-geocode outcome; "
-                "create a successor PreCheck Result."
-            ),
-        }
-    ]
+    assert view["readiness"] == "plan_ready"
+    assert "qualifications" not in view
 
 
 def test_end_to_end_result_is_sealed_and_read_only_through_exact_reference(
@@ -266,11 +261,18 @@ def test_end_to_end_result_is_sealed_and_read_only_through_exact_reference(
     reader = PrecheckReadTool(database)
     database_before_reads = database.read_bytes()
 
-    inspected = reader.read({"result_ref": sealed.result_ref, "operation": "review"})
+    inspected = reader.read(
+        {
+            "dataset_ref": "dataset:dataset-a",
+            "result_ref": sealed.result_ref,
+            "action": "review",
+        }
+    )
     first_page = reader.read(
         {
+            "dataset_ref": "dataset:dataset-a",
             "result_ref": sealed.result_ref,
-            "operation": "resolve",
+            "action": "resolve",
             "source_set": {
                 "kind": "precheck_relation",
                 "origin": sealed.result_ref,
@@ -282,8 +284,9 @@ def test_end_to_end_result_is_sealed_and_read_only_through_exact_reference(
     )
     second_page = reader.read(
         {
+            "dataset_ref": "dataset:dataset-a",
             "result_ref": sealed.result_ref,
-            "operation": "resolve",
+            "action": "resolve",
             "source_set": {
                 "kind": "precheck_relation",
                 "origin": sealed.result_ref,
@@ -299,10 +302,10 @@ def test_end_to_end_result_is_sealed_and_read_only_through_exact_reference(
     assert inspected["result"]["coverage"] == "complete"
     assert inspected["result"]["readiness"] == "plan_ready"
     assert "source_root_ref" not in inspected["result"]
-    assert first_page["page"]["complete"] is False
-    assert second_page["page"]["complete"] is True
+    assert first_page["page"]["next_cursor"] is not None
+    assert second_page["page"]["next_cursor"] is None
     assert first_page["page"]["total"] == 3
-    assert inspected["reconciliation"]["frontier"]["entry_evidence_count"] == 2
+    assert inspected["accounting"]["frontier"]["entry_evidence_count"] == 2
     member_refs = [
         item["source_item_ref"]
         for item in (*first_page["members"], *second_page["members"])
@@ -310,8 +313,9 @@ def test_end_to_end_result_is_sealed_and_read_only_through_exact_reference(
     source_views = [
         reader.read(
             {
+                "dataset_ref": "dataset:dataset-a",
                 "result_ref": sealed.result_ref,
-                "operation": "expand",
+                "action": "expand",
                 "source_item_refs": [ref],
                 "include": ["source_item", "observations"],
             }
@@ -319,10 +323,14 @@ def test_end_to_end_result_is_sealed_and_read_only_through_exact_reference(
         for ref in member_refs
     ]
     first_source = next(
-        item for item in source_views if item["source_item"]["locator"]["value"] == "first.jpg"
+        item
+        for item in source_views
+        if item["source_item"]["locator"]["value"] == "first.jpg"
     )
     assert first_source["source_item"]["locator"]["kind"] == "source_root_relative_path"
-    assert first_source["source_item"]["locator"]["source_root_ref"].startswith("source-root:")
+    assert first_source["source_item"]["locator"]["source_root_ref"].startswith(
+        "source-root:"
+    )
     verification = next(
         item
         for item in first_source["observations"]
@@ -335,9 +343,13 @@ def test_end_to_end_result_is_sealed_and_read_only_through_exact_reference(
     assert database.read_bytes() == database_before_reads
     assert {path.name: path.read_bytes() for path in source.iterdir()} == source_before
     assert (
-        reader.read({"result_ref": "precheck-result:not-latest", "operation": "review"})[
-            "error"
-        ]["code"]
+        reader.read(
+            {
+                "dataset_ref": "dataset:dataset-a",
+                "result_ref": "precheck-result:not-latest",
+                "action": "review",
+            }
+        )["error"]["code"]
         == "result_not_found"
     )
 
@@ -392,15 +404,17 @@ def test_review_expand_and_resolve_cover_public_result_questions(
     result_ref = sealed.result_ref
     entry = reader.read(
         {
+            "dataset_ref": "dataset:dataset-a",
             "result_ref": result_ref,
-            "operation": "review",
+            "action": "review",
         }
     )
-    evidence_ref = entry["coverage_cards"][0]["anchor_evidence_ref"]
+    evidence_ref = entry["cards"][0]["evidence_ref"]
     represents = reader.read(
         {
+            "dataset_ref": "dataset:dataset-a",
             "result_ref": result_ref,
-            "operation": "resolve",
+            "action": "resolve",
             "source_set": {
                 "kind": "precheck_relation",
                 "origin": evidence_ref,
@@ -412,32 +426,36 @@ def test_review_expand_and_resolve_cover_public_result_questions(
     source_ref = represents["members"][0]["source_item_ref"]
     reverse = reader.read(
         {
+            "dataset_ref": "dataset:dataset-a",
             "result_ref": result_ref,
-            "operation": "expand",
+            "action": "expand",
             "source_item_refs": [source_ref],
             "include": ["covering_evidence"],
         }
     )
     derived = reader.read(
         {
+            "dataset_ref": "dataset:dataset-a",
             "result_ref": result_ref,
-            "operation": "expand",
+            "action": "expand",
             "evidence_refs": [evidence_ref],
             "include": ["provenance"],
         }
     )
     expanded = reader.read(
         {
+            "dataset_ref": "dataset:dataset-a",
             "result_ref": result_ref,
-            "operation": "expand",
+            "action": "expand",
             "evidence_refs": [evidence_ref],
             "include": ["prepared_targets"],
         }
     )
     attention = reader.read(
         {
+            "dataset_ref": "dataset:dataset-a",
             "result_ref": result_ref,
-            "operation": "resolve",
+            "action": "resolve",
             "source_set": {
                 "kind": "precheck_relation",
                 "origin": result_ref,
@@ -449,7 +467,10 @@ def test_review_expand_and_resolve_cover_public_result_questions(
 
     for response in (represents, reverse, derived, expanded, attention):
         _assert_response_conforms(response)
-    assert reverse["items"][0]["included"]["covering_evidence"][0]["evidence_ref"] == evidence_ref
+    assert (
+        reverse["items"][0]["included"]["covering_evidence"][0]["evidence_ref"]
+        == evidence_ref
+    )
     assert derived["items"][0]["included"]["provenance"][0]["target"] == {
         "kind": "source_item",
         "ref": source_ref,
@@ -458,7 +479,9 @@ def test_review_expand_and_resolve_cover_public_result_questions(
         "kind": "source_item",
         "ref": source_ref,
     }
-    assert [item["condition"] for item in attention["members"]].count("unsupported") == 1
+    assert [item["condition"] for item in attention["members"]].count(
+        "unsupported"
+    ) == 1
 
 
 def test_expand_and_resolve_validation_is_atomic_and_result_bound(
@@ -470,29 +493,38 @@ def test_expand_and_resolve_validation_is_atomic_and_result_bound(
         store.build_minimal(run_id, [first.work.work_id, second.work.work_id])
     )
     reader = PrecheckReadTool(database)
-    review = reader.read({"result_ref": sealed.result_ref, "operation": "review"})
-    evidence_ref = review["coverage_cards"][0]["anchor_evidence_ref"]
+    review = reader.read(
+        {
+            "dataset_ref": "dataset:dataset-a",
+            "result_ref": sealed.result_ref,
+            "action": "review",
+        }
+    )
+    evidence_ref = review["cards"][0]["evidence_ref"]
 
     missing_evidence = reader.read(
         {
+            "dataset_ref": "dataset:dataset-a",
             "result_ref": sealed.result_ref,
-            "operation": "expand",
+            "action": "expand",
             "evidence_refs": [evidence_ref, "evidence:not-in-result"],
             "include": ["anchor_evidence"],
         }
     )
     unknown_include = reader.read(
         {
+            "dataset_ref": "dataset:dataset-a",
             "result_ref": sealed.result_ref,
-            "operation": "expand",
+            "action": "expand",
             "evidence_refs": [evidence_ref],
             "include": ["semantic_recommendation"],
         }
     )
     missing_member = reader.read(
         {
+            "dataset_ref": "dataset:dataset-a",
             "result_ref": sealed.result_ref,
-            "operation": "resolve",
+            "action": "resolve",
             "source_set": {
                 "kind": "explicit",
                 "source_item_refs": ["source-item:not-in-result"],
@@ -501,8 +533,9 @@ def test_expand_and_resolve_validation_is_atomic_and_result_bound(
     )
     malformed_set = reader.read(
         {
+            "dataset_ref": "dataset:dataset-a",
             "result_ref": sealed.result_ref,
-            "operation": "resolve",
+            "action": "resolve",
             "source_set": {
                 "kind": "explicit",
                 "source_item_refs": ["source-item:a", "source-item:a"],
@@ -535,8 +568,9 @@ def test_review_cursor_is_repeatable_query_bound_and_byte_bounded(
     )
     reader = PrecheckReadTool(database)
     request = {
+        "dataset_ref": "dataset:dataset-a",
         "result_ref": sealed.result_ref,
-        "operation": "review",
+        "action": "review",
         "page": {"limit": 1},
     }
 
@@ -555,20 +589,30 @@ def test_review_cursor_is_repeatable_query_bound_and_byte_bounded(
             "page": {"limit": 2, "cursor": cursor},
         }
     )
-    assert second_page["page"]["complete"] is True
+    assert second_page["page"]["next_cursor"] is None
     assert wrong_limit["error"]["code"] == "invalid_cursor"
 
     complete = reader.read(
-        {"result_ref": sealed.result_ref, "operation": "review", "page": {"limit": 2}}
+        {
+            "dataset_ref": "dataset:dataset-a",
+            "result_ref": sealed.result_ref,
+            "action": "review",
+            "page": {"limit": 2},
+        }
     )
     complete_size = len(
         json.dumps(complete, ensure_ascii=False, separators=(",", ":")).encode()
     )
     monkeypatch.setattr(precheck_read_module, "_MAX_RESPONSE_BYTES", complete_size - 1)
     bounded = reader.read(
-        {"result_ref": sealed.result_ref, "operation": "review", "page": {"limit": 2}}
+        {
+            "dataset_ref": "dataset:dataset-a",
+            "result_ref": sealed.result_ref,
+            "action": "review",
+            "page": {"limit": 2},
+        }
     )
-    assert bounded["page"]["returned"] == 1
+    assert len(bounded["cards"]) == 1
     assert bounded["page"]["stop_reason"] == "byte_limit"
     assert len(
         json.dumps(bounded, ensure_ascii=False, separators=(",", ":")).encode()
@@ -576,7 +620,12 @@ def test_review_cursor_is_repeatable_query_bound_and_byte_bounded(
 
     monkeypatch.setattr(precheck_read_module, "_MAX_RESPONSE_BYTES", 1)
     oversized = reader.read(
-        {"result_ref": sealed.result_ref, "operation": "review", "page": {"limit": 1}}
+        {
+            "dataset_ref": "dataset:dataset-a",
+            "result_ref": sealed.result_ref,
+            "action": "review",
+            "page": {"limit": 1},
+        }
     )
     assert oversized["error"]["code"] == "response_item_too_large"
 
@@ -625,8 +674,9 @@ def test_frontier_model_supports_many_to_one_and_one_to_many(tmp_path: Path) -> 
     reader = PrecheckReadTool(database)
     many = reader.read(
         {
+            "dataset_ref": "dataset:dataset-a",
             "result_ref": sealed.result_ref,
-            "operation": "resolve",
+            "action": "resolve",
             "source_set": {
                 "kind": "precheck_relation",
                 "origin": first_evidence.ref,
@@ -637,8 +687,9 @@ def test_frontier_model_supports_many_to_one_and_one_to_many(tmp_path: Path) -> 
     )
     one_to_many = reader.read(
         {
+            "dataset_ref": "dataset:dataset-a",
             "result_ref": sealed.result_ref,
-            "operation": "expand",
+            "action": "expand",
             "source_item_refs": [first_source.ref],
             "include": ["covering_evidence"],
         }
@@ -755,14 +806,23 @@ def test_sealed_result_bytes_never_change_and_corruption_is_refused(
     )
     original = sealed.path.read_bytes()
     reader = PrecheckReadTool(database)
-    assert (
-        reader.read({"result_ref": sealed.result_ref, "operation": "review"})["outcome"]
-        == "ok"
+    assert "error" not in reader.read(
+        {
+            "dataset_ref": "dataset:dataset-a",
+            "result_ref": sealed.result_ref,
+            "action": "review",
+        }
     )
 
     sealed.path.chmod(0o644)
     sealed.path.write_bytes(b"corrupt")
-    response = reader.read({"result_ref": sealed.result_ref, "operation": "review"})
+    response = reader.read(
+        {
+            "dataset_ref": "dataset:dataset-a",
+            "result_ref": sealed.result_ref,
+            "action": "review",
+        }
+    )
 
     assert response["error"]["code"] == "result_untrusted"
     assert original != sealed.path.read_bytes()
@@ -915,7 +975,11 @@ def test_read_integrity_check_does_not_mutate_working_state(tmp_path: Path) -> N
     before = database.read_bytes()
 
     response = PrecheckReadTool(database).read(
-        {"result_ref": sealed.result_ref, "operation": "review"}
+        {
+            "dataset_ref": "dataset:dataset-a",
+            "result_ref": sealed.result_ref,
+            "action": "review",
+        }
     )
 
     assert response["error"]["code"] == "result_untrusted"
@@ -931,7 +995,11 @@ def test_unavailable_result_is_retryable_without_changing_the_request(
         store.build_minimal(run_id, [first.work.work_id, second.work.work_id])
     )
     reader = PrecheckReadTool(database)
-    request = {"result_ref": sealed.result_ref, "operation": "review"}
+    request = {
+        "dataset_ref": "dataset:dataset-a",
+        "result_ref": sealed.result_ref,
+        "action": "review",
+    }
     read_bytes = Path.read_bytes
 
     def unavailable(path: Path) -> bytes:
@@ -944,14 +1012,14 @@ def test_unavailable_result_is_retryable_without_changing_the_request(
         failed = reader.read(request)
 
     assert failed["error"]["code"] == "result_unavailable"
-    assert failed["error"]["retryable"] is True
+    assert "result" not in failed
     _assert_response_conforms(failed)
     recovered = reader.read(request)
-    assert recovered["outcome"] == "ok"
+    assert "error" not in recovered
     _assert_response_conforms(recovered)
 
 
-def test_byte_trusted_invalid_result_remains_inspectable(tmp_path: Path) -> None:
+def test_byte_trusted_invalid_result_is_rejected(tmp_path: Path) -> None:
     database, _source, _source_before, run_id, first, second = _prepared(tmp_path)
     store = ResultStore(database)
     draft = store.build_minimal(run_id, [first.work.work_id, second.work.work_id])
@@ -967,10 +1035,28 @@ def test_byte_trusted_invalid_result_remains_inspectable(tmp_path: Path) -> None
         ),
     )
 
-    sealed = store.seal(invalid)
+    with pytest.raises(ResultSealError, match="valid Result"):
+        store.seal(invalid)
+    sealed = store.seal(draft)
+    package = json.loads(sealed.path.read_bytes())
+    package["result"]["integrity"] = "invalid"
+    encoded = json.dumps(package).encode()
+    sealed.path.chmod(0o644)
+    sealed.path.write_bytes(encoded)
+    import hashlib
+
+    with sqlite3.connect(database) as connection:
+        connection.execute(
+            "UPDATE sealed_results SET size_bytes = ?, digest = ? WHERE result_ref = ?",
+            (len(encoded), hashlib.sha256(encoded).hexdigest(), sealed.result_ref),
+        )
     response = PrecheckReadTool(database).read(
-        {"result_ref": sealed.result_ref, "operation": "review"}
+        {
+            "dataset_ref": "dataset:dataset-a",
+            "result_ref": sealed.result_ref,
+            "action": "review",
+        }
     )
 
     _assert_response_conforms(response)
-    assert response["result"]["integrity"] == "invalid"
+    assert response["error"]["code"] == "result_untrusted"

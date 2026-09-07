@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 import json
+import hashlib
 from pathlib import Path
 
 from jsonschema import Draft202012Validator
@@ -45,6 +46,7 @@ from mediasense.precheck import (
     PrecheckRunTool,
     ReverseGeocodeProducer,
     ReverseGeocodeProfile,
+    ResultSealError,
     ResultStore,
     WorkDependency,
     WorkSpec,
@@ -185,6 +187,8 @@ class FakeGeoProviderAdapter:
         locale: str,
         radius_meters: float | None = None,
         max_places: int | None = None,
+        deadline: float | None = None,
+        cancelled=None,
     ) -> GeoProviderExecution:
         del radius_meters, max_places
         result = self.provider.lookup(coordinate, language=locale)
@@ -378,7 +382,7 @@ def _legacy_geocode_work(
     coordinate: GeoCoordinate,
     *,
     previous=None,
-    provider_request_count: int = 2,
+    provider_request_count: int | None = 2,
 ):
     dependencies = [
         WorkDependency(
@@ -477,10 +481,17 @@ def _legacy_geocode_work(
 
 
 def _authorize(tool: PrecheckRunTool, run_ref: str) -> dict[str, object]:
-    status = tool.run({"action": "status", "run_ref": run_ref})
+    status = tool.run(
+        {"dataset_ref": "dataset:dataset-a", "action": "status", "run_ref": run_ref}
+    )
     identity = status["confirmation"]["content_identity"]
     return tool.run(
-        {"action": "resume", "run_ref": run_ref, "decision": "proceed"},
+        {
+            "dataset_ref": "dataset:dataset-a",
+            "action": "resume",
+            "run_ref": run_ref,
+            "decision": "proceed",
+        },
         confirmation=PrecheckConfirmationContext(
             principal_ref="human:test",
             confirmed_content_identity=identity,
@@ -842,7 +853,7 @@ def test_expanded_resolve_discloses_amap_plus_google_three_request_ceiling() -> 
         max_places=30,
     )
 
-    assert capability.proposed_envelope(request).max_provider_requests == 3
+    assert capability.proposed_envelope(request).max_provider_requests == 9
 
 
 def test_expanded_resolve_fallback_cannot_exceed_three_request_ceiling() -> None:
@@ -895,7 +906,7 @@ def test_expanded_resolve_fallback_cannot_exceed_three_request_ceiling() -> None
     )
     authorization = GeoAuthorization(
         "human:test",
-        request.fingerprint(),
+        capability.fingerprint(request),
         datetime.now(timezone.utc),
         capability.proposed_envelope(request),
     )
@@ -983,7 +994,7 @@ def test_expanded_resolve_journal_does_not_replay_indeterminate_poi_effect(
     request = {"request_id": "request:indeterminate-place", **value.value()}
     authorization = GeoAuthorization(
         "human:test",
-        value.fingerprint(),
+        capability.fingerprint(value),
         datetime.now(timezone.utc),
         capability.proposed_envelope(value),
     )
@@ -1092,9 +1103,9 @@ def test_complete_place_bounds_participate_in_precheck_work_identity(
         if dependency.kind is DependencyKind.PARAMETER
     }
     assert first_dependencies["operation"] == "resolve_place"
-    assert '"nearby_radius_meters":500.0' in first_dependencies[
-        "reverse_geocode_profile"
-    ]
+    assert (
+        '"nearby_radius_meters":500.0' in first_dependencies["reverse_geocode_profile"]
+    )
     assert '"max_places":30' in first_dependencies["reverse_geocode_profile"]
 
 
@@ -1132,18 +1143,24 @@ def test_batch_pauses_before_exact_deduplicated_queries(
     assert pending.batch.logical_query_count == 1
     assert pending.batch.pending_query_count == 1
     assert provider.calls == []
-    status = run_tool.run({"action": "status", "run_ref": public_run_ref})
-    assert status["confirmation"]["quantity"] == 1
-    assert status["confirmation"]["unit"] == "logical_queries"
+    status = run_tool.run(
+        {
+            "dataset_ref": "dataset:dataset-a",
+            "action": "status",
+            "run_ref": public_run_ref,
+        }
+    )
+    assert status["confirmation"]["disclosure"]["pending_logical_queries"] == 1
+    assert status["confirmation"]["page"]["total"] == 1
     disclosure = status["confirmation"]["disclosure"]
     assert disclosure["source_item_outcomes"] == 2
-    assert disclosure["logical_queries"] == 1
+    assert len(disclosure["coordinates"]) == 1
     assert disclosure["pending_logical_queries"] == 1
-    assert disclosure["cached_logical_queries"] == 0
+    assert disclosure["retry_policy"]["max_attempts"] == 3
     assert disclosure["operation"] == "resolve_place"
     assert disclosure["nearby_radius_meters"] == 500
     assert disclosure["max_places"] == 30
-    assert disclosure["max_provider_requests"] == 2
+    assert disclosure["max_provider_requests"] == 6
 
     _authorize(run_tool, public_run_ref)
     completed = producer.produce(
@@ -1156,16 +1173,16 @@ def test_batch_pauses_before_exact_deduplicated_queries(
     assert completed.actual_provider_requests == 2
     assert len(provider.calls) == 1
     assert len(set(completed.work_by_source().values())) == 1
-    candidate = next(
-        observation
-        for observation in completed.outcomes[0].observations
-        if observation["name"] == "reverse_geocode_candidate"
+    components = {item["name"]: item for item in completed.outcomes[0].observations}
+    assert (
+        components["nearby_place_candidates"]["value"][0]["name"]
+        == "Nearby fixture place"
     )
-    assert candidate["value"]["pois"][0]["name"] == "Nearby fixture place"
-    assert candidate["value"]["component_outcomes"] == {
-        "reverse_geocode": "success",
-        "nearby_places": "success",
-    }
+    assert (
+        components["address_candidate"]["status"]
+        == components["nearby_place_candidates"]["status"]
+        == "available"
+    )
 
     reused = producer.produce(
         public_run_ref,
@@ -1189,6 +1206,13 @@ def test_batch_pauses_before_exact_deduplicated_queries(
         )
         for name in ("a.jpg", "b.jpg")
     ]
+    run_tool.run(
+        {
+            "action": "cancel",
+            "dataset_ref": "dataset:dataset-a",
+            "run_ref": public_run_ref,
+        }
+    )
     second_public_ref = _public_run(run_tool, "request:geocode-reuse")
     cross_run = ReverseGeocodeProducer(database, run_tool).produce(
         second_public_ref,
@@ -1200,7 +1224,13 @@ def test_batch_pauses_before_exact_deduplicated_queries(
     assert cross_run.actual_provider_requests == 0
     assert all(outcome.reused for outcome in cross_run.outcomes)
     assert (
-        run_tool.run({"action": "status", "run_ref": second_public_ref})["state"]
+        run_tool.run(
+            {
+                "dataset_ref": "dataset:dataset-a",
+                "action": "status",
+                "run_ref": second_public_ref,
+            }
+        )["state"]
         == "running"
     )
 
@@ -1252,20 +1282,24 @@ def test_precheck_amap_acquires_address_and_poi_with_one_provider_request(
 
     pending = producer.produce(public_run_ref, run_id, [metadata.work_id])
     assert pending.status == "confirmation_required"
-    status = run_tool.run({"action": "status", "run_ref": public_run_ref})
-    assert status["confirmation"]["disclosure"]["max_provider_requests"] == 1
+    status = run_tool.run(
+        {
+            "dataset_ref": "dataset:dataset-a",
+            "action": "status",
+            "run_ref": public_run_ref,
+        }
+    )
+    assert status["confirmation"]["disclosure"]["max_provider_requests"] == 3
     _authorize(run_tool, public_run_ref)
     completed = producer.produce(public_run_ref, run_id, [metadata.work_id])
 
     assert completed.actual_provider_requests == 1
     assert len(transport.gets) == 1
-    candidate = next(
-        observation
-        for observation in completed.outcomes[0].observations
-        if observation["name"] == "reverse_geocode_candidate"
+    components = {item["name"]: item for item in completed.outcomes[0].observations}
+    assert (
+        components["address_candidate"]["value"]["formatted_address"] == "北京市东城区"
     )
-    assert candidate["value"]["address"]["formatted_address"] == "北京市东城区"
-    assert candidate["value"]["pois"][0]["name"] == "故宫"
+    assert components["nearby_place_candidates"]["value"][0]["name"] == "故宫"
 
 
 def test_precheck_preserves_partial_when_nearby_lookup_fails(
@@ -1314,28 +1348,23 @@ def test_precheck_preserves_partial_when_nearby_lookup_fails(
 
     assert completed.status == "completed"
     assert completed.actual_provider_requests == 2
-    candidate = next(
-        observation
-        for observation in completed.outcomes[0].observations
-        if observation["name"] == "reverse_geocode_candidate"
-    )
-    assert candidate["status"] == "available"
-    assert candidate["value"]["address"]["formatted_address"] == (
+    components = {item["name"]: item for item in completed.outcomes[0].observations}
+    assert components["address_candidate"]["status"] == "available"
+    assert components["address_candidate"]["value"]["formatted_address"] == (
         "Shibuya, Tokyo, Japan"
     )
-    assert candidate["value"]["component_outcomes"] == {
-        "reverse_geocode": "success",
-        "nearby_places": "failed",
-    }
-    assert candidate["value"]["pois"] == []
-    assert candidate["qualifications"][0]["code"] == (
-        "nearby_places:google_maps_error"
+    assert components["nearby_place_candidates"]["status"] == "failed"
+    assert "value" not in components["nearby_place_candidates"]
+    assert any(
+        q["code"] == "nearby_places:google_maps_error"
+        for q in components["nearby_place_candidates"]["qualifications"]
     )
     assert completed.outcomes[0].work.output["result"]["status"] == "partial"
 
 
 def test_precheck_preserves_cross_provider_provenance_in_result_audit(
     tmp_path: Path,
+    monkeypatch,
 ) -> None:
     database = tmp_path / "workspace" / "working.sqlite3"
     accounting = AccountingStore(database)
@@ -1410,15 +1439,11 @@ def test_precheck_preserves_cross_provider_provenance_in_result_audit(
         "amap",
         "google_maps",
     }
-    candidate = next(
-        observation
-        for observation in completed.outcomes[0].observations
-        if observation["name"] == "reverse_geocode_candidate"
-    )
-    assert candidate["value"]["address"]["formatted_address"] == (
+    components = {item["name"]: item for item in completed.outcomes[0].observations}
+    assert components["address_candidate"]["value"]["formatted_address"] == (
         "Victoria Harbour, Hong Kong"
     )
-    assert candidate["value"]["pois"][0]["name"] == "维多利亚港"
+    assert components["nearby_place_candidates"]["value"][0]["name"] == "维多利亚港"
 
     rendition = ImageRenditionProducer(database).produce(run_id, Path("a.jpg"))
     result_store = ResultStore(database)
@@ -1431,12 +1456,39 @@ def test_precheck_preserves_cross_provider_provenance_in_result_audit(
         )
     )
     reviewed = PrecheckReadTool(database).read(
-        {"result_ref": sealed.result_ref, "operation": "review"}
+        {
+            "dataset_ref": "dataset:dataset-a",
+            "result_ref": sealed.result_ref,
+            "action": "review",
+            "include": ["execution_boundary"],
+        }
     )
-    assert reviewed["result"]["execution_boundary"]["providers"] == [
+    assert reviewed["execution_boundary"]["providers_attempted"] == [
         "amap",
         "google_maps",
     ]
+
+    from mediasense.precheck import read as read_module
+
+    request = {
+        "dataset_ref": "dataset:dataset-a",
+        "result_ref": sealed.result_ref,
+        "action": "review",
+        "include": ["execution_boundary"],
+    }
+    monkeypatch.setattr(
+        read_module, "_MAX_RESPONSE_BYTES", read_module._encoded_size(reviewed) - 1
+    )
+    limited = PrecheckReadTool(database).read(request)
+    assert "error" not in limited
+    assert limited["cards"]
+    assert 0 < len(limited["execution_boundary"]["attempts"]) < 3
+    assert limited["execution_boundary"]["page"]["total"] == 3
+    cursor = limited["execution_boundary"]["page"]["next_cursor"]
+    assert cursor
+    assert read_module._encoded_size(limited) <= read_module._MAX_RESPONSE_BYTES
+    crossed = PrecheckReadTool(database).read({**request, "page": {"cursor": cursor}})
+    assert crossed["error"]["code"] == "invalid_cursor"
 
 
 def test_result_audit_accepts_legacy_single_provider_work() -> None:
@@ -1458,7 +1510,10 @@ def test_result_audit_accepts_legacy_single_provider_work() -> None:
                     }
                 ),
             }
-        ]
+        ],
+        {},
+        "run:synthetic",
+        set(),
     )
 
     assert boundary is not None
@@ -1507,14 +1562,10 @@ def test_precheck_distinguishes_empty_poi_result_from_unexecuted_lookup(
     producer.produce(public_run_ref, run_id, [metadata.work_id])
     _authorize(run_tool, public_run_ref)
     completed = producer.produce(public_run_ref, run_id, [metadata.work_id])
-    candidate = next(
-        observation
-        for observation in completed.outcomes[0].observations
-        if observation["name"] == "reverse_geocode_candidate"
-    )
+    components = {item["name"]: item for item in completed.outcomes[0].observations}
 
-    assert candidate["value"]["component_outcomes"]["nearby_places"] == "no_result"
-    assert candidate["value"]["pois"] == []
+    assert components["nearby_place_candidates"]["status"] == "missing"
+    assert "value" not in components["nearby_place_candidates"]
     assert completed.actual_provider_requests == 2
 
 
@@ -1594,7 +1645,12 @@ def test_bundle_is_a_candidate_scope_and_movement_splits_geo_units(
         )
     )
     reviewed = PrecheckReadTool(database).read(
-        {"result_ref": sealed.result_ref, "operation": "review"}
+        {
+            "dataset_ref": "dataset:dataset-a",
+            "result_ref": sealed.result_ref,
+            "action": "review",
+            "include": ["execution_boundary"],
+        }
     )
     assert reviewed["result"]["readiness"] == "plan_ready"
 
@@ -1738,6 +1794,13 @@ def test_reused_query_identity_does_not_depend_on_batch_order(
     shanghai = _coordinate_work(
         database, second_run, "b.jpg", latitude=31.2304, longitude=121.4737
     )
+    run_tool.run(
+        {
+            "action": "cancel",
+            "dataset_ref": "dataset:dataset-a",
+            "run_ref": first_public_ref,
+        }
+    )
     second_public_ref = _public_run(run_tool, "request:route-continuity")
     second_google = FakeCountryProvider("google_maps", "China", "CN", MapDatum.WGS84)
     second_amap = FakeCountryProvider("amap", "中国", "CN", MapDatum.GCJ02)
@@ -1756,17 +1819,29 @@ def test_reused_query_identity_does_not_depend_on_batch_order(
     assert pending.status == "confirmation_required"
     assert pending.batch.pending_query_count == 1
     assert pending.batch.logical_query_count == 2
-    status = run_tool.run({"action": "status", "run_ref": second_public_ref})
-    disclosure = status["confirmation"]["disclosure"]
-    assert status["confirmation"]["quantity"] == 1
-    assert status["confirmation"]["content_identity"] == (
-        pending.batch.pending_fingerprint
+    status = run_tool.run(
+        {
+            "dataset_ref": "dataset:dataset-a",
+            "action": "status",
+            "run_ref": second_public_ref,
+        }
     )
-    assert disclosure["frozen_batch_identity"] == pending.batch.batch_fingerprint
+    disclosure = status["confirmation"]["disclosure"]
+    assert status["confirmation"]["disclosure"]["pending_logical_queries"] == 1
+    assert (
+        status["confirmation"]["content_identity"]
+        == "sha256:"
+        + hashlib.sha256(
+            json.dumps(
+                disclosure, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+            ).encode()
+        ).hexdigest()
+    )
+    assert disclosure["geo_request_fingerprint"] == pending.batch.pending_fingerprint
     assert disclosure["coordinates"] == [
         GeoCoordinate(31.2304, 121.4737, MapDatum.WGS84).value()
     ]
-    assert disclosure["max_provider_requests"] == 4
+    assert disclosure["max_provider_requests"] == 12
     assert pending.batch.pending_fingerprint != pending.batch.batch_fingerprint
     _authorize(run_tool, second_public_ref)
     completed = second_producer.produce(
@@ -1846,7 +1921,7 @@ def test_semantically_compatible_legacy_chain_observations_are_reused(
     assert outcome.actual_provider_requests == 0
     assert all(item.reused for item in outcome.outcomes)
     assert all(
-        item.work.spec.producer_identity == "builtin-geo-query-address-poi-v3"
+        item.work.spec.producer_identity == "builtin-geo-component-observations-v4"
         for item in outcome.outcomes
     )
     assert all(
@@ -1856,15 +1931,16 @@ def test_semantically_compatible_legacy_chain_observations_are_reused(
         )
         for item in outcome.outcomes
     )
-    assert all(
-        next(
-            observation
-            for observation in item.observations
-            if observation["name"] == "reverse_geocode_candidate"
-        )["value"]["component_outcomes"]
-        == {"reverse_geocode": "success", "nearby_places": "no_result"}
-        for item in outcome.outcomes
-    )
+    for item in outcome.outcomes:
+        components = {
+            observation["name"]: observation for observation in item.observations
+        }
+        assert components["address_candidate"]["status"] == "available"
+        assert components["nearby_place_candidates"]["status"] == "not_checked"
+        assert (
+            components["nearby_place_candidates"]["basis"]["code"]
+            == "historical_geo_unrecorded"
+        )
     work = WorkStore(database)
     for legacy in (first_legacy, second_legacy):
         assert work.get_work(legacy.work_id).status is WorkStatus.SUCCEEDED
@@ -1899,8 +1975,11 @@ def test_reverse_only_legacy_observation_is_not_reused_as_address_and_poi(
         [metadata.work_id],
     )
 
-    assert batch.pending_query_count == 1
-    assert batch.work[0].spec.producer_identity == "builtin-geo-query-address-poi-v3"
+    assert batch.pending_query_count == 0
+    assert batch.work[0].output["observations"][-1]["status"] == "not_checked"
+    assert (
+        batch.work[0].spec.producer_identity == "builtin-geo-component-observations-v4"
+    )
 
 
 def test_missing_authority_and_decline_make_no_calls(
@@ -1926,17 +2005,23 @@ def test_missing_authority_and_decline_make_no_calls(
     assert pending.status == "confirmation_required"
     assert provider.calls == []
     missing = run_tool.run(
-        {"action": "resume", "run_ref": public_run_ref, "decision": "proceed"}
+        {
+            "dataset_ref": "dataset:dataset-a",
+            "action": "resume",
+            "run_ref": public_run_ref,
+            "decision": "proceed",
+        }
     )
-    assert missing["error"]["code"] == "authorization_required"
+    assert missing["error"]["code"] == "confirmation_required"
     declined = run_tool.run(
         {
+            "dataset_ref": "dataset:dataset-a",
             "action": "resume",
             "run_ref": public_run_ref,
             "decision": "decline",
         }
     )
-    assert declined["target_state"] == "cancelled"
+    assert declined["state"] == "cancelled"
     assert provider.calls == []
 
 
@@ -1977,9 +2062,13 @@ def test_changed_pending_set_requires_new_confirmation(tmp_path: Path) -> None:
     assert changed.status == "confirmation_required"
     assert changed.batch.pending_query_count == 1
     assert (
-        run_tool.run({"action": "status", "run_ref": public_run_ref})["confirmation"][
-            "quantity"
-        ]
+        run_tool.run(
+            {
+                "dataset_ref": "dataset:dataset-a",
+                "action": "status",
+                "run_ref": public_run_ref,
+            }
+        )["confirmation"]["disclosure"]["pending_logical_queries"]
         == 1
     )
 
@@ -2011,7 +2100,13 @@ def test_cancellation_stops_new_external_queries_without_discarding_finished_wor
 
     def cancel_after_first(coordinate: GeoCoordinate, *, language: str):
         result = original_lookup(coordinate, language=language)
-        run_tool.run({"action": "cancel", "run_ref": public_run_ref})
+        run_tool.run(
+            {
+                "dataset_ref": "dataset:dataset-a",
+                "action": "cancel",
+                "run_ref": public_run_ref,
+            }
+        )
         return result
 
     provider.lookup = cancel_after_first
@@ -2041,9 +2136,253 @@ def test_cancellation_stops_new_external_queries_without_discarding_finished_wor
     assert interrupted.outcomes[0].work.status is WorkStatus.SUCCEEDED
     assert interrupted.outcomes[1].work.status is WorkStatus.RETRYABLE_FAILURE
     assert len(provider.calls) == 1
-    status = run_tool.run({"action": "status", "run_ref": public_run_ref})
+    status = run_tool.run(
+        {
+            "dataset_ref": "dataset:dataset-a",
+            "action": "status",
+            "run_ref": public_run_ref,
+        }
+    )
     assert status["state"] == "cancelled"
-    assert "published_result" not in status
+    assert "result" not in status
+
+
+@pytest.mark.parametrize("interrupted", [True, False], ids=["crash", "known-zero"])
+@pytest.mark.parametrize("view", ["work", "diagnostics", "review", "historical"])
+def test_recovered_geo_effects_preserve_unknown_and_known_zero(
+    tmp_path: Path, monkeypatch, interrupted: bool, view: str
+) -> None:
+    class SyntheticProvider:
+        capabilities = GeoProviderCapabilities(
+            "synthetic",
+            (GeoOperation.RESOLVE_PLACE,),
+            MapDatum.WGS84,
+            max_billable_units_per_operation=1,
+        )
+        calls = 0
+
+        def execute(self, operation, coordinate, **_kwargs):
+            assert operation is GeoOperation.RESOLVE_PLACE
+            self.calls += 1
+            status = (
+                GeoComponentStatus.NO_RESULT
+                if interrupted
+                else GeoComponentStatus.FAILED
+            )
+            return GeoProviderExecution(
+                GeoComponentResult(
+                    GeoOperation.REVERSE_GEOCODE, status, (), coordinate
+                ),
+                GeoProviderAttempt(
+                    "synthetic",
+                    operation,
+                    status,
+                    coordinate,
+                    coordinate,
+                    1 if interrupted else 0,
+                    1 if interrupted else 0,
+                    None if interrupted else "permanent",
+                ),
+                (
+                    GeoComponentResult(
+                        GeoOperation.NEARBY_PLACES, status, (), coordinate
+                    ),
+                ),
+            )
+
+    database = tmp_path / "workspace" / "working.sqlite3"
+    accounting = AccountingStore(database)
+    accounting.register_dataset("dataset-a")
+    run_id = _closed_run(tmp_path, database, accounting, ("a.jpg",))
+    metadata = _coordinate_work(
+        database, run_id, "a.jpg", latitude=22.3, longitude=114.1
+    )
+    run = PrecheckRunTool(database)
+    run_ref = _public_run(run, "request:recover-effects")
+    provider = SyntheticProvider()
+    capability = GeoCapability(
+        {"synthetic": provider}, OrderedGeoRoutingPolicy(("synthetic",))
+    )
+    journal_path = tmp_path / "geo-journal.sqlite3"
+    geo = GeoQueryTool(capability, GeoOperationJournal(journal_path))
+    producer = ReverseGeocodeProducer(database, run, geo)
+    assert (
+        producer.produce(run_ref, run_id, [metadata.work_id]).status
+        == "confirmation_required"
+    )
+    assert provider.calls == 0
+    _authorize(run, run_ref)
+    journaled_requests = []
+
+    def crash_before_completion(request_id, _response):
+        journaled_requests.append(request_id)
+        raise RuntimeError("synthetic crash before journal completion")
+
+    if interrupted:
+        with monkeypatch.context() as crash:
+            crash.setattr(geo.journal, "complete", crash_before_completion)
+            with pytest.raises(RuntimeError, match="synthetic crash"):
+                producer.produce(run_ref, run_id, [metadata.work_id])
+        entry = geo.journal.get(journaled_requests[0])
+        assert entry.state == "indeterminate"
+        assert entry.result["attempts"] == []
+        assert entry.result["effects"]["provider_requests"] is None
+        assert entry.result["effects"]["billable_units"] is None
+        assert entry.result["effects"]["transmitted_data_classes"] == [
+            "coordinate",
+            "datum",
+            "locale",
+        ]
+    else:
+        completed = producer.produce(run_ref, run_id, [metadata.work_id])
+        assert completed.actual_provider_requests == 0
+    assert provider.calls == 1
+
+    # Reopen both stores: recovery must consume retained evidence without new effects.
+    run = PrecheckRunTool(database)
+    geo = GeoQueryTool(capability, GeoOperationJournal(journal_path))
+    producer = ReverseGeocodeProducer(database, run, geo)
+    recovered = producer.produce(run_ref, run_id, [metadata.work_id])
+    assert recovered.status == ("indeterminate" if interrupted else "completed")
+    assert recovered.actual_provider_requests == (None if interrupted else 0)
+    assert provider.calls == 1
+    if interrupted:
+        assert geo.journal.get(journaled_requests[0]) == entry
+
+    if view == "historical":
+        run.run(
+            {"action": "cancel", "dataset_ref": "dataset:dataset-a", "run_ref": run_ref}
+        )
+        run_id = _closed_run(tmp_path, database, accounting, ("a.jpg",))
+        metadata = _coordinate_work(
+            database, run_id, "a.jpg", latitude=22.3, longitude=114.1
+        )
+        run_ref = _public_run(run, "request:historical-effects")
+        recovered = producer.produce(run_ref, run_id, [metadata.work_id])
+        assert recovered.actual_provider_requests == 0
+        assert provider.calls == 1
+
+    expected_count = None if interrupted else 0
+    if view == "work":
+        output = recovered.outcomes[0].work.output["result"]
+        assert output["provider_request_count"] == expected_count
+        assert output["billable_units"] == expected_count
+        return
+    if view == "review":
+        rendition = ImageRenditionProducer(database).produce(run_id, Path("a.jpg"))
+        store = ResultStore(database)
+        draft = store.build_minimal(
+            run_id,
+            [rendition.work.work_id],
+            metadata_work_ids=[metadata.work_id],
+            reverse_geocode_work_by_source=recovered.work_by_source(),
+        )
+        if interrupted:
+            assert all(
+                any(
+                    q["code"] == "geo_effect_indeterminate"
+                    and q["effect"] == "blocks_use"
+                    for q in observation.get("qualifications", ())
+                )
+                for observation in recovered.outcomes[0].observations
+                if observation["name"]
+                in {"address_candidate", "nearby_place_candidates"}
+            )
+            # The admission journal cannot identify an attempted Provider.
+            # Preserve the seal gate; do not invent that missing evidence.
+            with pytest.raises(ResultSealError, match="provider evidence"):
+                store.seal(draft)
+            return
+        sealed = store.seal(draft)
+        original = sealed.path.read_bytes()
+        review = PrecheckReadTool(database).read(
+            {
+                "action": "review",
+                "dataset_ref": "dataset:dataset-a",
+                "result_ref": sealed.result_ref,
+                "include": ["execution_boundary"],
+            }
+        )
+        assert review["result"]["readiness"] == (
+            "blocked" if interrupted else "plan_ready"
+        )
+        assert sealed.path.read_bytes() == original
+        boundary = review["execution_boundary"]
+    else:
+        status = run.run(
+            {
+                "action": "status",
+                "dataset_ref": "dataset:dataset-a",
+                "run_ref": run_ref,
+                "include": ["diagnostics"],
+            }
+        )
+        boundary = status["diagnostics"]["execution_boundary"]
+    assert boundary["logical_external_queries"] == 1
+    assert boundary["current_provider_requests"] == (
+        0 if view == "historical" else expected_count
+    )
+    assert boundary["historical_provider_requests"] == (
+        expected_count if view == "historical" else 0
+    )
+    assert boundary["billable_calls"] == expected_count
+    assert boundary["transmitted_data_classes"] == (
+        ["coordinate", "datum", "locale"] if interrupted else []
+    )
+    assert provider.calls == 1
+
+
+@pytest.mark.parametrize("request_count", [None, 0, 2])
+def test_legacy_result_review_preserves_unknown_effects(tmp_path, request_count):
+    database = tmp_path / "workspace" / "working.sqlite3"
+    accounting = AccountingStore(database)
+    accounting.register_dataset("dataset-a")
+    run_id = _closed_run(tmp_path, database, accounting, ("a.jpg",))
+    metadata = _coordinate_work(
+        database, run_id, "a.jpg", latitude=22.3, longitude=114.1
+    )
+    legacy = _legacy_geocode_work(
+        database,
+        run_id,
+        GeoCoordinate(22.3, 114.1),
+        provider_request_count=request_count,
+    )
+    run = PrecheckRunTool(database)
+    run_ref = _public_run(run, "request:legacy-unknown-effects")
+    reused = ReverseGeocodeProducer(database, run).produce(
+        run_ref, run_id, [metadata.work_id]
+    )
+    assert reused.actual_provider_requests == 0
+    assert all(outcome.reused for outcome in reused.outcomes)
+    assert WorkStore(database).get_work(legacy.work_id).output == legacy.output
+    rendition = ImageRenditionProducer(database).produce(run_id, Path("a.jpg"))
+    store = ResultStore(database)
+    sealed = store.seal(
+        store.build_minimal(
+            run_id,
+            [rendition.work.work_id],
+            metadata_work_ids=[metadata.work_id],
+            reverse_geocode_work_by_source=reused.work_by_source(),
+        )
+    )
+    before = sealed.path.read_bytes()
+    review = PrecheckReadTool(database).read(
+        {
+            "action": "review",
+            "dataset_ref": "dataset:dataset-a",
+            "result_ref": sealed.result_ref,
+            "include": ["execution_boundary"],
+        }
+    )
+    boundary = review["execution_boundary"]
+    assert boundary["historical_provider_requests"] == request_count
+    assert boundary["current_provider_requests"] == 0
+    assert boundary["billable_calls"] is None
+    assert boundary["transmitted_data_classes"] == (
+        [] if request_count == 0 else ["coordinate", "datum", "locale"]
+    )
+    assert sealed.path.read_bytes() == before
+    assert store.get(sealed.result_ref).digest == sealed.digest
 
 
 def test_sealed_result_exposes_candidates_and_external_effect_proof(
@@ -2102,8 +2441,9 @@ def test_sealed_result_exposes_candidates_and_external_effect_proof(
     reader = PrecheckReadTool(database)
     accounts = reader.read(
         {
+            "dataset_ref": "dataset:dataset-a",
             "result_ref": sealed.result_ref,
-            "operation": "resolve",
+            "action": "resolve",
             "source_set": {
                 "kind": "precheck_relation",
                 "origin": sealed.result_ref,
@@ -2122,8 +2462,9 @@ def test_sealed_result_exposes_candidates_and_external_effect_proof(
     validator.validate(accounts)
     source_response = reader.read(
         {
+            "dataset_ref": "dataset:dataset-a",
             "result_ref": sealed.result_ref,
-            "operation": "expand",
+            "action": "expand",
             "source_item_refs": [
                 account["source_item_ref"] for account in accounts["members"]
             ],
@@ -2137,27 +2478,33 @@ def test_sealed_result_exposes_candidates_and_external_effect_proof(
             observation["name"] != "reverse_geocode_attempt"
             for observation in source["observations"]
         )
-        candidate = next(
-            item
-            for item in source["observations"]
-            if item["name"] == "reverse_geocode_candidate"
-        )
-        assert candidate["provenance"]["provider"] == "google_maps"
-        assert candidate["provenance"]["input_datum"] == "WGS84"
-        assert candidate["basis"]["refs"] == [
-            {"kind": "source_item", "ref": item["source_item_ref"]}
-        ]
-        assert "logical_query_count" not in candidate["provenance"]
-        assert "provider_request_count" not in candidate["provenance"]
-        assert candidate["value"]["address"]["formatted_address"] == ("Tokyo, Japan")
-        assert candidate["value"]["pois"][0]["name"] == "Nearby fixture place"
-        assert candidate["value"]["component_outcomes"] == {
-            "reverse_geocode": "success",
-            "nearby_places": "success",
+        components = {
+            observation["name"]: observation for observation in source["observations"]
         }
+        for name in ("address_candidate", "nearby_place_candidates"):
+            assert components[name]["basis"]["refs"] == [
+                {"kind": "source_item", "ref": item["source_item_ref"]}
+            ]
+            assert components[name]["basis"]["query_coordinate"]["datum"] == "WGS84"
+            assert "provider_request_count" not in components[name].get(
+                "provenance", {}
+            )
+        assert (
+            components["address_candidate"]["value"]["formatted_address"]
+            == "Tokyo, Japan"
+        )
+        assert (
+            components["nearby_place_candidates"]["value"][0]["name"]
+            == "Nearby fixture place"
+        )
 
     result_response = reader.read(
-        {"result_ref": sealed.result_ref, "operation": "review"}
+        {
+            "dataset_ref": "dataset:dataset-a",
+            "result_ref": sealed.result_ref,
+            "action": "review",
+            "include": ["execution_boundary"],
+        }
     )
     validator.validate(result_response)
     result_view = result_response["result"]
@@ -2167,23 +2514,35 @@ def test_sealed_result_exposes_candidates_and_external_effect_proof(
         if item["code"] == "external_reverse_geocode_candidates"
     )
     assert "1 logical queries" in qualification["message"]
-    boundary = result_view["execution_boundary"]
+    boundary = result_response["execution_boundary"]
     assert boundary["logical_external_queries"] == 1
-    assert boundary["provider_requests"] == 2
-    assert boundary["billable_calls"] == "unknown"
+    assert boundary["current_provider_requests"] == 2
+    assert boundary["historical_provider_requests"] == 0
+    assert boundary["attempts"][0]["provider"] == "google_maps"
+    assert boundary["billable_calls"] is None
 
-    summary = reader.read({"result_ref": sealed.result_ref, "operation": "geo_summary"})
+    summary = reader.read(
+        {
+            "dataset_ref": "dataset:dataset-a",
+            "result_ref": sealed.result_ref,
+            "action": "geo_summary",
+        }
+    )
     validator.validate(summary)
     assert summary["acquisition_status"] == "complete"
-    assert summary["unique_coordinate_count"] == 1
+    assert summary["page"]["total"] == 1
     assert summary["coordinate_groups"][0]["member_count"] == 2
-    assert summary["coordinate_groups"][0]["reverse_geocode"] == "success"
+    assert summary["coordinate_groups"][0]["components"] == {
+        "address": {"success": 2},
+        "nearby_places": {"success": 2},
+    }
     assert len(summary["coordinate_groups"][0]["candidate_evidence_refs"]) == 2
     assert summary["coordinate_groups"][0]["source_set"]["kind"] == "geo_coordinate"
     resolved_members = reader.read(
         {
+            "dataset_ref": "dataset:dataset-a",
             "result_ref": sealed.result_ref,
-            "operation": "resolve",
+            "action": "resolve",
             "source_set": summary["coordinate_groups"][0]["source_set"],
         }
     )

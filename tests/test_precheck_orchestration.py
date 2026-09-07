@@ -47,6 +47,7 @@ from mediasense.precheck._orchestrator import (
     PrecheckOrchestrator,
 )
 from mediasense.precheck.work import WorkStore
+from mediasense.precheck.read import bind_precheck_read
 
 
 class FakeExifTool:
@@ -229,6 +230,8 @@ class FakeGeoProviderAdapter:
         locale: str,
         radius_meters: float | None = None,
         max_places: int | None = None,
+        deadline: float | None = None,
+        cancelled=None,
     ) -> GeoProviderExecution:
         del radius_meters, max_places
         result = self.provider.lookup(coordinate, language=locale)
@@ -334,8 +337,15 @@ def _resume_with_default_scope(tool: PrecheckRunTool, run_ref: str) -> None:
         "default_disposition": "include",
         "exceptions": [],
     }
-    accepted = tool.run({"action": "resume", "run_ref": run_ref, "decision": decision})
-    assert accepted["outcome"] == "accepted"
+    accepted = tool.run(
+        {
+            "dataset_ref": "dataset:dataset-a",
+            "action": "resume",
+            "run_ref": run_ref,
+            "decision": decision,
+        }
+    )
+    assert "error" not in accepted
 
 
 def _advance_after_scope(tool: PrecheckRunTool, run_ref: str) -> dict[str, object]:
@@ -398,7 +408,7 @@ def test_start_then_internal_worker_drives_mixed_source_to_readable_result(
             "request_id": "request:mixed-e2e",
         }
     )
-    assert started["state"] == "running"
+    assert set(started) == {"run_ref"}
     assert WorkStore(database).list_run_work(_accounting_run_id) == ()
     advanced = _advance_after_scope(tool, str(started["run_ref"]))
     if (
@@ -407,6 +417,7 @@ def test_start_then_internal_worker_drives_mixed_source_to_readable_result(
     ):
         tool.run(
             {
+                "dataset_ref": "dataset:dataset-a",
                 "action": "resume",
                 "run_ref": started["run_ref"],
                 "decision": "proceed",
@@ -418,16 +429,26 @@ def test_start_then_internal_worker_drives_mixed_source_to_readable_result(
             ),
         )
         tool.advance(str(started["run_ref"]))
-    status = tool.run({"action": "status", "run_ref": started["run_ref"]})
-
-    assert started["outcome"] == "ok"
-    assert status["state"] == "completed", status
-    assert status["published_result"]["integrity"] == "valid"
-    result_ref = status["published_result"]["result_ref"]
-    inspected = PrecheckReadTool(database).read(
-        {"operation": "review", "result_ref": result_ref}
+    status = tool.run(
+        {
+            "dataset_ref": "dataset:dataset-a",
+            "action": "status",
+            "run_ref": started["run_ref"],
+        }
     )
-    assert inspected["outcome"] == "ok"
+
+    assert "error" not in started
+    assert status["state"] == "completed", status
+    assert set(status["result"]) >= {"ref", "coverage", "readiness"}
+    result_ref = status["result"]["ref"]
+    inspected = PrecheckReadTool(database).read(
+        {
+            "dataset_ref": "dataset:dataset-a",
+            "action": "review",
+            "result_ref": result_ref,
+        }
+    )
+    assert "error" not in inspected
     assert inspected["result"]["ref"] == result_ref
     assert inspected["result"]["coverage"] == "complete"
     assert inspected["result"]["readiness"] == "plan_ready"
@@ -516,14 +537,21 @@ def test_bundle_reduces_initial_visual_demand_without_reducing_accounting(
         )[1]
         for work in renditions
     }
-    status = tool.run({"action": "status", "run_ref": started["run_ref"]})
+    status = tool.run(
+        {
+            "dataset_ref": "dataset:dataset-a",
+            "action": "status",
+            "run_ref": started["run_ref"],
+        }
+    )
     accounts = PrecheckReadTool(database).read(
         {
-            "operation": "resolve",
-            "result_ref": status["published_result"]["result_ref"],
+            "dataset_ref": "dataset:dataset-a",
+            "action": "resolve",
+            "result_ref": status["result"]["ref"],
             "source_set": {
                 "kind": "precheck_relation",
-                "origin": status["published_result"]["result_ref"],
+                "origin": status["result"]["ref"],
                 "relation": "accounts_for",
                 "direction": "outbound",
             },
@@ -636,7 +664,13 @@ def test_metadata_batches_respect_configured_provider_ceiling(tmp_path: Path) ->
     _advance_after_scope(tool, str(started["run_ref"]))
 
     assert (
-        tool.run({"action": "status", "run_ref": started["run_ref"]})["state"]
+        tool.run(
+            {
+                "dataset_ref": "dataset:dataset-a",
+                "action": "status",
+                "run_ref": started["run_ref"],
+            }
+        )["state"]
         == "completed"
     )
     assert len(metadata_runner.calls) == 3
@@ -675,7 +709,13 @@ def test_default_orchestration_makes_no_external_requests(tmp_path: Path) -> Non
         }
     )
     _advance_after_scope(tool, str(started["run_ref"]))
-    status = tool.run({"action": "status", "run_ref": started["run_ref"]})
+    status = tool.run(
+        {
+            "dataset_ref": "dataset:dataset-a",
+            "action": "status",
+            "run_ref": started["run_ref"],
+        }
+    )
     assert status["state"] == "completed"
 
 
@@ -726,15 +766,22 @@ def test_geocode_pauses_for_exact_frozen_query_count_before_fake_provider(
         }
     )
     _advance_after_scope(tool, str(started["run_ref"]))
-    paused = tool.run({"action": "status", "run_ref": started["run_ref"]})
+    paused = tool.run(
+        {
+            "dataset_ref": "dataset:dataset-a",
+            "action": "status",
+            "run_ref": started["run_ref"],
+        }
+    )
     assert paused["state"] == "paused"
     assert paused["reason"]["code"] == "confirmation_required"
-    assert paused["confirmation"]["quantity"] == 1
-    assert paused["confirmation"]["unit"] == "logical_queries"
+    assert paused["confirmation"]["disclosure"]["pending_logical_queries"] == 1
+    assert paused["confirmation"]["page"]["total"] == 1
     assert provider.calls == []
 
     resumed = tool.run(
         {
+            "dataset_ref": "dataset:dataset-a",
             "action": "resume",
             "run_ref": started["run_ref"],
             "decision": "proceed",
@@ -746,23 +793,41 @@ def test_geocode_pauses_for_exact_frozen_query_count_before_fake_provider(
         ),
     )
     assert (
-        tool.run({"action": "status", "run_ref": started["run_ref"]})["state"]
+        tool.run(
+            {
+                "dataset_ref": "dataset:dataset-a",
+                "action": "status",
+                "run_ref": started["run_ref"],
+            }
+        )["state"]
         == "running"
     )
     assert provider.calls == []
     tool.advance(str(started["run_ref"]))
-    completed = tool.run({"action": "status", "run_ref": started["run_ref"]})
+    completed = tool.run(
+        {
+            "dataset_ref": "dataset:dataset-a",
+            "action": "status",
+            "run_ref": started["run_ref"],
+        }
+    )
 
-    assert resumed["outcome"] == "accepted"
+    assert "error" not in resumed
     assert completed["state"] == "completed", completed
     assert len(provider.calls) == 1
-    result_ref = completed["published_result"]["result_ref"]
+    result_ref = completed["result"]["ref"]
     inspected = PrecheckReadTool(database).read(
-        {"operation": "review", "result_ref": result_ref}
+        {
+            "dataset_ref": "dataset:dataset-a",
+            "action": "review",
+            "result_ref": result_ref,
+            "include": ["execution_boundary"],
+        }
     )
-    boundary = inspected["result"]["execution_boundary"]
+    boundary = inspected["execution_boundary"]
     assert boundary["logical_external_queries"] == 1
-    assert boundary["provider_requests"] == 2
+    assert boundary["current_provider_requests"] == 2
+    assert boundary["historical_provider_requests"] == 0
 
 
 def test_visual_compression_does_not_reduce_per_source_geocode_coverage(
@@ -816,7 +881,9 @@ def test_visual_compression_does_not_reduce_per_source_geocode_coverage(
 
     assert paused["state"] == "paused"
     unique_coordinates = set(coordinates.values())
-    assert paused["confirmation"]["quantity"] == len(unique_coordinates)
+    assert paused["confirmation"]["disclosure"]["pending_logical_queries"] == len(
+        unique_coordinates
+    )
     assert (
         sum(
             work.spec.capability == "adaptive-compression-group"
@@ -827,6 +894,7 @@ def test_visual_compression_does_not_reduce_per_source_geocode_coverage(
 
     tool.run(
         {
+            "dataset_ref": "dataset:dataset-a",
             "action": "resume",
             "run_ref": started["run_ref"],
             "decision": "proceed",
@@ -838,15 +906,22 @@ def test_visual_compression_does_not_reduce_per_source_geocode_coverage(
         ),
     )
     tool.advance(str(started["run_ref"]))
-    completed = tool.run({"action": "status", "run_ref": started["run_ref"]})
+    completed = tool.run(
+        {
+            "dataset_ref": "dataset:dataset-a",
+            "action": "status",
+            "run_ref": started["run_ref"],
+        }
+    )
 
     assert completed["state"] == "completed", completed
     assert len(provider.calls) == len(unique_coordinates)
-    result_ref = completed["published_result"]["result_ref"]
+    result_ref = completed["result"]["ref"]
     reader = PrecheckReadTool(database)
     accounts = reader.read(
         {
-            "operation": "resolve",
+            "dataset_ref": "dataset:dataset-a",
+            "action": "resolve",
             "result_ref": result_ref,
             "source_set": {
                 "kind": "precheck_relation",
@@ -863,7 +938,8 @@ def test_visual_compression_does_not_reduce_per_source_geocode_coverage(
     ]
     expanded = reader.read(
         {
-            "operation": "expand",
+            "dataset_ref": "dataset:dataset-a",
+            "action": "expand",
             "result_ref": result_ref,
             "source_item_refs": source_refs,
             "include": ["source_item", "observations"],
@@ -877,38 +953,44 @@ def test_visual_compression_does_not_reduce_per_source_geocode_coverage(
             observation["name"] != "reverse_geocode_attempt"
             for observation in included["observations"]
         )
-        candidate = next(
-            observation
+        components = {
+            observation["name"]: observation
             for observation in included["observations"]
-            if observation["name"] == "reverse_geocode_candidate"
-        )
-        assert "logical_query_count" not in candidate["provenance"]
-        assert "provider_request_count" not in candidate["provenance"]
-        assert candidate["value"]["pois"][0]["name"] == "Nearby fixture place"
-        assert candidate["value"]["component_outcomes"] == {
-            "reverse_geocode": "success",
-            "nearby_places": "success",
+            if observation["name"] in {"address_candidate", "nearby_place_candidates"}
         }
-        locations[path] = candidate["value"]["address"]["formatted_address"]
+        assert set(components) == {"address_candidate", "nearby_place_candidates"}
+        assert all(item["status"] == "available" for item in components.values())
+        assert (
+            components["nearby_place_candidates"]["value"][0]["name"]
+            == "Nearby fixture place"
+        )
+        assert "provider_ref" not in components["nearby_place_candidates"]["value"][0]
+        locations[path] = components["address_candidate"]["value"]["formatted_address"]
 
     assert locations == {
         path: f"{latitude:.4f},{longitude:.4f}"
         for path, (latitude, longitude) in coordinates.items()
     }
     assert (
-        reader.read({"operation": "review", "result_ref": result_ref})["result"][
-            "readiness"
-        ]
+        reader.read(
+            {
+                "dataset_ref": "dataset:dataset-a",
+                "action": "review",
+                "result_ref": result_ref,
+            }
+        )["result"]["readiness"]
         == "plan_ready"
     )
-    plan = PlanWorkTool(tmp_path / "plan-store", reader).handle(
+    plan = PlanWorkTool(
+        tmp_path / "plan-store", bind_precheck_read(reader, "dataset:dataset-a")
+    ).handle(
         {
             "action": "create",
             "result_ref": result_ref,
             "request_id": "request:plan-from-per-source-geocode",
         }
     )
-    assert plan["outcome"] == "ok"
+    assert "error" not in plan
 
 
 def test_nonempty_geo_batch_without_provider_is_terminal_unavailable(
@@ -935,11 +1017,17 @@ def test_nonempty_geo_batch_without_provider_is_terminal_unavailable(
     )
 
     _advance_after_scope(tool, str(started["run_ref"]))
-    status = tool.run({"action": "status", "run_ref": started["run_ref"]})
+    status = tool.run(
+        {
+            "dataset_ref": "dataset:dataset-a",
+            "action": "status",
+            "run_ref": started["run_ref"],
+        }
+    )
 
     assert status["state"] == "failed"
     assert status["reason"]["code"] == "provider_unavailable"
-    assert "published_result" not in status
+    assert "result" not in status
 
 
 def test_human_declines_frozen_geo_batch_without_provider_request(
@@ -967,21 +1055,32 @@ def test_human_declines_frozen_geo_batch_without_provider_request(
         }
     )
     _advance_after_scope(tool, str(started["run_ref"]))
-    paused = tool.run({"action": "status", "run_ref": started["run_ref"]})
+    paused = tool.run(
+        {
+            "dataset_ref": "dataset:dataset-a",
+            "action": "status",
+            "run_ref": started["run_ref"],
+        }
+    )
 
     assert paused["state"] == "paused"
     assert provider.calls == []
     declined = tool.run(
         {
+            "dataset_ref": "dataset:dataset-a",
             "action": "resume",
             "run_ref": started["run_ref"],
             "decision": "decline",
         }
     )
-    assert declined["target_state"] == "cancelled"
+    assert declined["state"] == "cancelled"
     assert provider.calls == []
-    assert "published_result" not in tool.run(
-        {"action": "status", "run_ref": started["run_ref"]}
+    assert "result" not in tool.run(
+        {
+            "dataset_ref": "dataset:dataset-a",
+            "action": "status",
+            "run_ref": started["run_ref"],
+        }
     )
 
 
@@ -1008,23 +1107,37 @@ def test_local_item_failure_isolated_while_other_source_completes(
         }
     )
     _advance_after_scope(tool, str(started["run_ref"]))
-    status = tool.run({"action": "status", "run_ref": started["run_ref"]})
+    status = tool.run(
+        {
+            "dataset_ref": "dataset:dataset-a",
+            "action": "status",
+            "run_ref": started["run_ref"],
+        }
+    )
 
     assert status["state"] == "completed"
-    assert status["progress"] == {
-        "discovered": 2,
-        "accounted": 2,
-        "usable": 1,
-        "exceptional": 1,
-        "unresolved": 0,
-    }
-    assert status["activity"]["state"] == "finished"
-    assert status["activity"]["phase"] == "complete"
-    assert status["activity"]["errors"] == {
-        "total": 1,
-        "by_phase": [{"phase": "renditions", "count": 1}],
-        "truncated": False,
-    }
+    details = tool.run(
+        {
+            "action": "status",
+            "dataset_ref": "dataset:dataset-a",
+            "run_ref": started["run_ref"],
+            "include": ["accounting", "diagnostics"],
+        }
+    )
+    assert details["accounting"]["accounted"] == 2
+    assert sorted(
+        (item["condition"], item["count"])
+        for item in details["accounting"]["scope_condition"]
+    ) == [("invalid", 1), ("usable", 1)]
+    assert "progress" not in status
+    assert (
+        sum(
+            item["count"]
+            for item in status["issues"]
+            if item["phase"] == "renditions" and item["unit"] != "phase"
+        )
+        == 1
+    )
     works = WorkStore(database).list_run_work(accounting_run_id)
     assert sum(work.status.value == "succeeded" for work in works) >= 2
     assert sum(work.status.value == "terminal_failure" for work in works) == 1
@@ -1071,15 +1184,24 @@ def test_local_item_failure_is_visible_before_result_publication(
     worker.start()
     assert reached_boundary.wait(timeout=5)
 
-    status = tool.run({"action": "status", "run_ref": started["run_ref"]})
+    status = tool.run(
+        {
+            "dataset_ref": "dataset:dataset-a",
+            "action": "status",
+            "run_ref": started["run_ref"],
+        }
+    )
     assert status["state"] == "running"
-    assert status["activity"]["phase"] == "renditions"
-    assert status["activity"]["work"]["failed"] == 1
-    assert status["activity"]["errors"] == {
-        "total": 1,
-        "by_phase": [{"phase": "renditions", "count": 1}],
-        "truncated": False,
-    }
+    assert status["progress"]["phase"] == "renditions"
+    assert status["progress"]["processed"] == status["progress"]["total"]
+    assert (
+        sum(
+            item["count"]
+            for item in status["issues"]
+            if item["phase"] == "renditions" and item["unit"] != "phase"
+        )
+        == 1
+    )
 
     release_worker.set()
     worker.join(timeout=5)
@@ -1120,7 +1242,7 @@ def test_user_pause_resume_and_cancel_are_honored_between_phases(
             "request_id": "request:pause-resume",
         }
     )
-    assert started["state"] == "running"
+    assert set(started) == {"run_ref"}
     _resume_with_default_scope(tool, str(started["run_ref"]))
     worker_results: list[dict[str, object]] = []
     worker = Thread(
@@ -1128,32 +1250,71 @@ def test_user_pause_resume_and_cancel_are_honored_between_phases(
     )
     worker.start()
     assert reached_boundary.wait(timeout=5)
-    boundary = tool.run({"action": "status", "run_ref": started["run_ref"]})
+    boundary = tool.run(
+        {
+            "dataset_ref": "dataset:dataset-a",
+            "action": "status",
+            "run_ref": started["run_ref"],
+        }
+    )
     assert boundary["state"] == "running"
-    assert boundary["activity"]["state"] == "working"
-    assert boundary["activity"]["phase"] == "renditions"
-    assert boundary["activity"]["work"]["remaining"] == 0
-    accepted_pause = tool.run({"action": "pause", "run_ref": started["run_ref"]})
+    assert boundary.get("reason", {}).get("code") not in {
+        "suspected_stalled",
+        "no_recent_progress",
+    }
+    assert boundary["progress"]["phase"] == "renditions"
+    assert boundary["progress"]["processed"] == boundary["progress"]["total"]
+    accepted_pause = tool.run(
+        {
+            "dataset_ref": "dataset:dataset-a",
+            "action": "pause",
+            "run_ref": started["run_ref"],
+        }
+    )
     release_worker.set()
     worker.join(timeout=5)
     assert not worker.is_alive()
     assert worker_results[0]["state"] == "paused"
-    assert accepted_pause["outcome"] == "accepted"
-    paused = tool.run({"action": "status", "run_ref": started["run_ref"]})
+    assert "error" not in accepted_pause
+    paused = tool.run(
+        {
+            "dataset_ref": "dataset:dataset-a",
+            "action": "status",
+            "run_ref": started["run_ref"],
+        }
+    )
     assert paused["state"] == "paused"
     assert paused["reason"]["code"] == "user_requested"
-    assert paused["activity"]["state"] == "paused"
+    assert "progress" not in paused
 
     monkeypatch.setattr(PrecheckOrchestrator, "_after_phase", original)
-    accepted_resume = tool.run({"action": "resume", "run_ref": started["run_ref"]})
-    assert accepted_resume["outcome"] == "accepted"
+    accepted_resume = tool.run(
+        {
+            "dataset_ref": "dataset:dataset-a",
+            "action": "resume",
+            "run_ref": started["run_ref"],
+        }
+    )
+    assert "error" not in accepted_resume
     assert (
-        tool.run({"action": "status", "run_ref": started["run_ref"]})["state"]
+        tool.run(
+            {
+                "dataset_ref": "dataset:dataset-a",
+                "action": "status",
+                "run_ref": started["run_ref"],
+            }
+        )["state"]
         == "running"
     )
     tool.advance(str(started["run_ref"]))
     assert (
-        tool.run({"action": "status", "run_ref": started["run_ref"]})["state"]
+        tool.run(
+            {
+                "dataset_ref": "dataset:dataset-a",
+                "action": "status",
+                "run_ref": started["run_ref"],
+            }
+        )["state"]
         == "completed"
     )
 
@@ -1190,18 +1351,26 @@ def test_user_pause_resume_and_cancel_are_honored_between_phases(
     cancel_worker.start()
     assert cancel_boundary.wait(timeout=5)
     accepted_cancel = cancel_tool.run(
-        {"action": "cancel", "run_ref": cancelled_start["run_ref"]}
+        {
+            "dataset_ref": "dataset:dataset-a",
+            "action": "cancel",
+            "run_ref": cancelled_start["run_ref"],
+        }
     )
     release_cancelled_worker.set()
     cancel_worker.join(timeout=5)
     assert not cancel_worker.is_alive()
     assert cancel_results[0]["state"] == "cancelled"
-    assert accepted_cancel["outcome"] == "accepted"
+    assert "error" not in accepted_cancel
     cancelled = cancel_tool.run(
-        {"action": "status", "run_ref": cancelled_start["run_ref"]}
+        {
+            "dataset_ref": "dataset:dataset-a",
+            "action": "status",
+            "run_ref": cancelled_start["run_ref"],
+        }
     )
     assert cancelled["state"] == "cancelled"
-    assert "published_result" not in cancelled
+    assert "result" not in cancelled
 
 
 def test_process_interruption_resumes_without_repeating_completed_work(
@@ -1237,10 +1406,20 @@ def test_process_interruption_resumes_without_repeating_completed_work(
     _resume_with_default_scope(first_tool, run_ref)
     with pytest.raises(KeyboardInterrupt, match="simulated process loss"):
         first_tool.advance(run_ref)
-    interrupted = first_tool.run({"action": "status", "run_ref": run_ref})
+    interrupted = first_tool.run(
+        {"dataset_ref": "dataset:dataset-a", "action": "status", "run_ref": run_ref}
+    )
     assert interrupted["state"] == "paused"
     assert interrupted["reason"]["code"] == "process_interrupted"
-    assert interrupted["activity"]["phase"] == "renditions"
+    detail = first_tool.run(
+        {
+            "action": "status",
+            "dataset_ref": "dataset:dataset-a",
+            "run_ref": run_ref,
+            "include": ["diagnostics"],
+        }
+    )
+    assert detail["diagnostics"]["work"]["phase"] == "renditions"
     before = {
         work.work_id
         for work in WorkStore(database).list_run_work(accounting_run_id)
@@ -1250,16 +1429,20 @@ def test_process_interruption_resumes_without_repeating_completed_work(
 
     monkeypatch.setattr(PrecheckOrchestrator, "_after_phase", original)
     restarted = PrecheckRunTool(database, execution_config=config)
-    resumed = restarted.run({"action": "resume", "run_ref": run_ref})
+    resumed = restarted.run(
+        {"dataset_ref": "dataset:dataset-a", "action": "resume", "run_ref": run_ref}
+    )
     restarted.advance(run_ref)
-    completed = restarted.run({"action": "status", "run_ref": run_ref})
+    completed = restarted.run(
+        {"dataset_ref": "dataset:dataset-a", "action": "status", "run_ref": run_ref}
+    )
     after = {
         work.work_id
         for work in WorkStore(database).list_run_work(accounting_run_id)
         if work.spec.capability == "image-rendition"
     }
 
-    assert resumed["outcome"] == "accepted"
+    assert "error" not in resumed
     assert completed["state"] == "completed"
     assert after == before
 
@@ -1300,13 +1483,23 @@ def test_crash_immediately_before_seal_resumes_to_one_result(
 
     monkeypatch.setattr(PrecheckOrchestrator, "_after_phase", original)
     restarted = PrecheckRunTool(database, execution_config=config)
-    restarted.run({"action": "resume", "run_ref": started["run_ref"]})
-    restarted.advance(str(started["run_ref"]))
-    completed = restarted.run({"action": "status", "run_ref": started["run_ref"]})
-    assert completed["state"] == "completed"
-    assert ResultStore(database).audit().available == (
-        completed["published_result"]["result_ref"],
+    restarted.run(
+        {
+            "dataset_ref": "dataset:dataset-a",
+            "action": "resume",
+            "run_ref": started["run_ref"],
+        }
     )
+    restarted.advance(str(started["run_ref"]))
+    completed = restarted.run(
+        {
+            "dataset_ref": "dataset:dataset-a",
+            "action": "status",
+            "run_ref": started["run_ref"],
+        }
+    )
+    assert completed["state"] == "completed"
+    assert ResultStore(database).audit().available == (completed["result"]["ref"],)
 
 
 def test_crash_after_sealed_bytes_recovers_without_partial_result(
@@ -1337,7 +1530,13 @@ def test_crash_after_sealed_bytes_recovers_without_partial_result(
     )
     _resume_with_default_scope(tool, str(started["run_ref"]))
     tool.advance(str(started["run_ref"]))
-    interrupted = tool.run({"action": "status", "run_ref": started["run_ref"]})
+    interrupted = tool.run(
+        {
+            "dataset_ref": "dataset:dataset-a",
+            "action": "status",
+            "run_ref": started["run_ref"],
+        }
+    )
     audit = ResultStore(database).audit()
     assert interrupted["state"] == "paused"
     assert interrupted["reason"]["code"] == "process_interrupted"
@@ -1346,13 +1545,25 @@ def test_crash_after_sealed_bytes_recovers_without_partial_result(
 
     monkeypatch.undo()
     restarted = PrecheckRunTool(database, execution_config=config)
-    restarted.run({"action": "resume", "run_ref": started["run_ref"]})
+    restarted.run(
+        {
+            "dataset_ref": "dataset:dataset-a",
+            "action": "resume",
+            "run_ref": started["run_ref"],
+        }
+    )
     restarted.advance(str(started["run_ref"]))
-    completed = restarted.run({"action": "status", "run_ref": started["run_ref"]})
+    completed = restarted.run(
+        {
+            "dataset_ref": "dataset:dataset-a",
+            "action": "status",
+            "run_ref": started["run_ref"],
+        }
+    )
     recovered = ResultStore(database).audit()
     assert completed["state"] == "completed", completed
     assert recovered.orphan_paths == ()
-    assert recovered.available == (completed["published_result"]["result_ref"],)
+    assert recovered.available == (completed["result"]["ref"],)
 
 
 def test_crash_after_result_registration_rebinds_run_completion(
@@ -1393,16 +1604,34 @@ def test_crash_after_result_registration_rebinds_run_completion(
     available = ResultStore(database).audit().available
     assert len(available) == 1
     assert record["state"] == "paused"
-    interrupted = tool.run({"action": "status", "run_ref": record["run_ref"]})
+    interrupted = tool.run(
+        {
+            "dataset_ref": "dataset:dataset-a",
+            "action": "status",
+            "run_ref": record["run_ref"],
+        }
+    )
     assert interrupted["reason"]["code"] == "process_interrupted"
 
     monkeypatch.setattr(PrecheckRunTool, "complete_with_result", original)
     restarted = PrecheckRunTool(database, execution_config=config)
-    restarted.run({"action": "resume", "run_ref": record["run_ref"]})
+    restarted.run(
+        {
+            "dataset_ref": "dataset:dataset-a",
+            "action": "resume",
+            "run_ref": record["run_ref"],
+        }
+    )
     restarted.advance(str(record["run_ref"]))
-    completed = restarted.run({"action": "status", "run_ref": record["run_ref"]})
+    completed = restarted.run(
+        {
+            "dataset_ref": "dataset:dataset-a",
+            "action": "status",
+            "run_ref": record["run_ref"],
+        }
+    )
     assert completed["state"] == "completed"
-    assert completed["published_result"]["result_ref"] == available[0]
+    assert completed["result"]["ref"] == available[0]
 
 
 def test_low_level_work_and_artifact_are_reused_across_public_runs(
@@ -1427,7 +1656,13 @@ def test_low_level_work_and_artifact_are_reused_across_public_runs(
         }
     )
     _advance_after_scope(first_tool, str(first["run_ref"]))
-    first_status = first_tool.run({"action": "status", "run_ref": first["run_ref"]})
+    first_status = first_tool.run(
+        {
+            "dataset_ref": "dataset:dataset-a",
+            "action": "status",
+            "run_ref": first["run_ref"],
+        }
+    )
     assert first_status["state"] == "completed"
     first_renditions = {
         work.work_id: work.output["artifacts"][0]["artifact_ref"]
@@ -1447,7 +1682,13 @@ def test_low_level_work_and_artifact_are_reused_across_public_runs(
         }
     )
     second_tool.advance(str(second["run_ref"]))
-    second_status = second_tool.run({"action": "status", "run_ref": second["run_ref"]})
+    second_status = second_tool.run(
+        {
+            "dataset_ref": "dataset:dataset-a",
+            "action": "status",
+            "run_ref": second["run_ref"],
+        }
+    )
     second_renditions = {
         work.work_id: work.output["artifacts"][0]["artifact_ref"]
         for work in WorkStore(database).list_run_work(second_accounting)
@@ -1455,8 +1696,5 @@ def test_low_level_work_and_artifact_are_reused_across_public_runs(
     }
 
     assert second_status["state"] == "completed"
-    assert (
-        second_status["published_result"]["result_ref"]
-        != first_status["published_result"]["result_ref"]
-    )
+    assert second_status["result"]["ref"] != first_status["result"]["ref"]
     assert second_renditions == first_renditions

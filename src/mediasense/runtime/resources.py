@@ -2,12 +2,32 @@
 
 from __future__ import annotations
 
+from functools import lru_cache
+from datetime import datetime
+
+from jsonschema import Draft202012Validator, FormatChecker
+
 import hashlib
 import json
 from importlib.resources import files
 from pathlib import Path
 import re
 from typing import Any
+
+FORMAT_CHECKER = FormatChecker()
+
+
+@FORMAT_CHECKER.checks("date-time", raises=(ValueError, TypeError))
+def _date_time(value: object) -> bool:
+    if not isinstance(value, str):
+        return True
+    if "T" not in value and "t" not in value:
+        return False
+    return (
+        datetime.fromisoformat(value.replace("t", "T").replace("z", "Z")).utcoffset()
+        is not None
+    )
+
 
 CONTRACT_FILES = {
     "mediasense.dataset.open": "dataset-open.tool.json",
@@ -47,6 +67,21 @@ def load_contract(name: str) -> dict[str, Any]:
     if not isinstance(value, dict) or value.get("name") != name:
         raise ValueError(f"installed Tool contract is invalid: {name}")
     return value
+
+
+@lru_cache(maxsize=None)
+def contract_validator(name: str, action: str | None = None) -> Draft202012Validator:
+    contract = load_contract(name)
+    schema = (
+        contract["inputSchema"]
+        if action is None
+        else {
+            "$schema": contract["outputSchema"]["$schema"],
+            "$defs": contract["outputSchema"]["$defs"],
+            **contract["responseSchemas"][action],
+        }
+    )
+    return Draft202012Validator(schema, format_checker=FORMAT_CHECKER)
 
 
 def contract_digest(name: str) -> str:

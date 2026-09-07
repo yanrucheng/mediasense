@@ -172,13 +172,13 @@ def _hong_kong_resolver() -> Resolver:
     inspected = {}
     for exchange in precheck["exchanges"]:
         response = exchange["response"]
-        if response.get("operation") == "expand":
+        if exchange["request"].get("action") == "expand":
             for item in response.get("items", []):
                 included = item.get("included", {})
                 source = included.get("source_item")
                 if isinstance(source, dict):
-                    inspected[source["ref"]] = source
-        if response.get("operation") == "resolve":
+                    inspected[item["source_item_ref"]] = source
+        if exchange["request"].get("action") == "resolve":
             for member in response.get("members", []):
                 inspected.setdefault(
                     member["source_item_ref"],
@@ -221,27 +221,29 @@ def _hong_kong_resolver() -> Resolver:
     relations = {}
     for exchange in precheck["exchanges"]:
         response = exchange["response"]
-        if response.get("operation") != "resolve":
+        if exchange["request"].get("action") != "resolve":
             continue
         targets = {item["source_item_ref"] for item in response.get("members", [])}
         if not targets:
             continue
         source_set = exchange["request"]["source_set"]
-        relations[(source_set["origin"], source_set["relation"], source_set["direction"])] = (
+        relations[
+            (source_set["origin"], source_set["relation"], source_set["direction"])
+        ] = (
             targets,
-            response["page"]["complete"],
+            response["page"]["next_cursor"] is None,
         )
     review = next(
         exchange["response"]
         for exchange in precheck["exchanges"]
-        if exchange["response"].get("operation") == "review"
+        if exchange["request"].get("action") == "review"
     )
-    for card in review["coverage_cards"]:
-        anchor_key = (card["anchor_evidence_ref"], "represents", "outbound")
+    for card in review["cards"]:
+        anchor_key = (card["evidence_ref"], "represents", "outbound")
         represented = relations.get(anchor_key)
         if represented is None:
             continue
-        for role_refs in card["evidence_roles"].values():
+        for role_refs in card["roles"].values():
             for evidence_ref in role_refs:
                 relations.setdefault(
                     (evidence_ref, "represents", "outbound"), represented

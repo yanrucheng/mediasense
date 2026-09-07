@@ -6,6 +6,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 import hashlib
+import json
 import logging
 from pathlib import Path
 import sqlite3
@@ -15,6 +16,7 @@ from uuid import uuid4
 from mediasense.dataset_reference import dataset_id_from_ref, dataset_ref_from_id
 
 from ._run_sqlite import (
+    RunAlreadyActive,
     RunBindingError,
     RunDecisionError,
     RunExecutionConflict,
@@ -68,7 +70,7 @@ _PHASE_NAMES = {
     "sensitivity": "sensitivity",
     "bundles": "bundling",
     "compression": "compression",
-    "external_evidence": "external_evidence",
+    "external_evidence": "geo",
     "publishing": "publishing",
     "sealing": "publishing",
 }
@@ -81,7 +83,7 @@ _PHASE_CAPABILITIES = {
     "sensitivity": {"content-sensitivity"},
     "bundling": {"bundle-candidate"},
     "compression": {"adaptive-compression-group"},
-    "external_evidence": {"reverse-geocode-observation"},
+    "geo": {"reverse-geocode-observation"},
 }
 _CAPABILITY_PHASE = {
     capability: phase
@@ -93,7 +95,6 @@ _WORK_FAILURE_STATES = {
     "terminal_failure",
     "blocked",
 }
-_ERROR_PHASE_LIMIT = 5
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -159,40 +160,45 @@ class PrecheckRunTool:
     ) -> dict[str, object]:
         """Apply one public lifecycle operation and return its contract envelope."""
 
-        if not isinstance(request, dict):
-            raise ValueError("Run request must be an object")
-        action = request.get("action")
-        if action not in _ACTIONS:
-            raise ValueError("action must be start, status, pause, resume, or cancel")
-        action = str(action)
-        try:
-            _validate_request(action, request)
-        except ValueError as error:
-            return _error(action, "invalid_request", str(error))
+        from mediasense.runtime.resources import contract_validator
 
+        if not contract_validator(self.name).is_valid(request):
+            return _error("", "invalid_request", "Invalid flat PreCheck Run request.")
         try:
+            action = str(request["action"])
             if action == "start":
                 return self._start(request)
             run_ref = str(request["run_ref"])
+            try:
+                record = self._store.get(run_ref)
+            except KeyError:
+                return _error(action, "run_not_found", "Run does not exist.")
+            if record["dataset_ref"] != request["dataset_ref"]:
+                return _error(
+                    action, "run_not_found", "Run does not exist in this Dataset."
+                )
             if action == "status":
                 return self._status(
                     run_ref,
                     scope_path=request.get("scope_path"),
                     scope_after=request.get("scope_after"),
+                    include=request.get("include", []),
+                    page=request.get("page"),
                 )
             return self._control(
                 action, run_ref, request.get("decision"), confirmation=confirmation
             )
-        except sqlite3.Error:
+
+        except sqlite3.OperationalError as error:
+            if error.sqlite_errorcode not in {
+                sqlite3.SQLITE_BUSY,
+                sqlite3.SQLITE_LOCKED,
+            }:
+                raise
             return _error(
-                action,
+                str(request["action"]),
                 "operation_failed",
-                "Durable Run state is temporarily unavailable.",
-                (
-                    str(request["run_ref"])
-                    if isinstance(request.get("run_ref"), str)
-                    else None
-                ),
+                "Durable Run state is temporarily locked.",
             )
 
     def record_progress(
@@ -286,7 +292,15 @@ class PrecheckRunTool:
             "quantity": quantity,
             "unit": unit,
             "skip_allowed": skip_allowed,
-            "content_identity": pending_fingerprint,
+            "content_identity": "sha256:"
+            + hashlib.sha256(
+                json.dumps(
+                    dict(disclosure or {}),
+                    ensure_ascii=False,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                ).encode()
+            ).hexdigest(),
         }
         if disclosure is not None:
             confirmation["disclosure"] = dict(disclosure)
@@ -635,10 +649,10 @@ class PrecheckRunTool:
         except KeyError:
             return _error("status", "run_not_found", "Run does not exist", run_ref)
         verified = self._verified_result(result_ref)
-        if isinstance(verified, str):
+        if isinstance(verified, _ReadFailure):
             failed = self._store.mark_failed(
                 run_ref,
-                _reason("result_untrusted", verified),
+                _reason("result_untrusted", str(verified)),
             )
             return self._status_record(failed)
         result_view, package = verified
@@ -721,15 +735,16 @@ class PrecheckRunTool:
         else:
             result_ref = str(prior_result_ref)
             verified = self._verified_result(result_ref)
-            if isinstance(verified, str):
-                code = (
-                    "result_not_found"
-                    if verified == "Result does not exist"
-                    else "result_untrusted"
-                )
-                return _error("start", code, verified)
+            if isinstance(verified, _ReadFailure):
+                return _error("start", verified.code, str(verified))
             result_view, _package = verified
             dataset_ref = str(result_view["dataset_ref"])
+            if dataset_ref != request["dataset_ref"]:
+                return _error(
+                    "start",
+                    "result_not_found",
+                    "Prior Result does not exist in this Dataset.",
+                )
             dataset_id = dataset_id_from_ref(dataset_ref)
             if not self._store.dataset_exists(dataset_id):
                 return _error(
@@ -751,6 +766,8 @@ class PrecheckRunTool:
                 "idempotency_conflict",
                 "request_id was already used with different start inputs",
             )
+        except RunAlreadyActive as error:
+            return _error("start", "already_running", str(error), error.run_ref)
         try:
             self.prepare_execution(str(record["run_ref"]), dataset_id=dataset_id)
         except (RunBindingError, RunExecutionConflict, ValueError, OSError):
@@ -779,16 +796,13 @@ class PrecheckRunTool:
         *,
         scope_path: object = None,
         scope_after: object = None,
+        include: object = (),
+        page: object = None,
     ) -> dict[str, object]:
         try:
-            record = self._store.get(run_ref)
+            record = self._store.observe(run_ref)
         except KeyError:
             return _error("status", "run_not_found", "Run does not exist", run_ref)
-        if record["state"] != "completed" and record["accounting_run_id"] is not None:
-            progress, _accounting_state, _blocked_reason = (
-                self._store.accounting_progress(run_ref)
-            )
-            record = {**record, "progress": progress}
         if record["state"] == "completed":
             published = record["published_result"]
             if not isinstance(published, dict):
@@ -799,8 +813,9 @@ class PrecheckRunTool:
                     run_ref,
                 )
             verified = self._verified_result(str(published["result_ref"]))
-            if isinstance(verified, str):
-                return _error("status", "result_untrusted", verified, run_ref)
+            if isinstance(verified, _ReadFailure):
+                return _error("status", verified.code, str(verified), run_ref)
+            record["_verified_result"] = verified
             result_view, _package = verified
             current = {
                 "result_ref": result_view["ref"],
@@ -815,7 +830,7 @@ class PrecheckRunTool:
                     "Published Result projection no longer matches its sealed bytes",
                     run_ref,
                 )
-        response = self._status_record(record)
+        response = self._status_record(record, include=include, page=page)
         if scope_path is not None:
             confirmation = response.get("confirmation")
             if (
@@ -840,16 +855,16 @@ class PrecheckRunTool:
                 inventory = self._scope_inventory(
                     accounting_run_id,
                     scope_path=normalize_scope_path(scope_path, allow_root=True),
-                    scope_after=(
-                        None
-                        if scope_after is None
-                        else normalize_scope_path(scope_after, allow_root=False)
-                    ),
+                    scope_after=(None if scope_after is None else str(scope_after)),
                 )
             except ScopeSelectionError as error:
                 return _error("status", "invalid_request", str(error), run_ref)
             confirmation = dict(confirmation)
-            confirmation["inventory"] = inventory
+            confirmation["inventory"] = {
+                key: value
+                for key, value in inventory.items()
+                if key not in {"inventory_fingerprint", "scan_generation"}
+            }
             response["confirmation"] = confirmation
         return response
 
@@ -865,7 +880,6 @@ class PrecheckRunTool:
         try:
             if action == "pause":
                 observed, _current = self._store.request_pause(run_ref)
-                target = "paused"
             elif action == "resume":
                 if isinstance(decision, dict):
                     record = self._store.get(run_ref)
@@ -897,7 +911,11 @@ class PrecheckRunTool:
                 if normalized_decision == "proceed":
                     record = self._store.get(run_ref)
                     pending = record.get("confirmation")
-                    identity = record.get("confirmation_fingerprint")
+                    identity = (
+                        pending.get("content_identity")
+                        if isinstance(pending, Mapping)
+                        else None
+                    )
                     if (
                         not isinstance(pending, Mapping)
                         or pending.get("kind") != "external_effect"
@@ -906,7 +924,9 @@ class PrecheckRunTool:
                     ):
                         return _error(
                             action,
-                            "authorization_required",
+                            "confirmation_required"
+                            if confirmation is None
+                            else "confirmation_stale",
                             "Proceed requires trusted confirmation for the exact pending disclosure.",
                             run_ref,
                         )
@@ -914,26 +934,15 @@ class PrecheckRunTool:
                 observed, _current = self._store.request_resume(
                     run_ref, decision=normalized_decision, authority=authority
                 )
-                target = str(_current["state"])
             else:
                 observed, _current = self._store.request_cancel(run_ref)
-                target = "cancelled"
         except KeyError:
             return _error(action, "run_not_found", "Run does not exist", run_ref)
         except (RunDecisionError, ScopeSelectionError) as error:
             return _error(action, "invalid_request", str(error), run_ref)
         except RunStateConflict as error:
             return _invalid_state(action, run_ref, error.record)
-        response: dict[str, object] = {
-            "outcome": "accepted",
-            "action": action,
-            "run_ref": run_ref,
-            "observed_state": observed["state"],
-            "target_state": target,
-        }
-        if action == "resume" and normalized_decision is not None:
-            response["decision"] = normalized_decision
-        return response
+        return {"state": _current["state"]}
 
     def _scope_inventory(
         self,
@@ -959,89 +968,312 @@ class PrecheckRunTool:
             scan_generation=summary.scan_generation,
             scope_path=scope_path,
             scope_after=scope_after,
+            cursor_ref=accounting_run_id,
         )
 
     def _verified_result(
         self, result_ref: str
-    ) -> tuple[dict[str, object], dict[str, object]] | str:
+    ) -> tuple[dict[str, object], dict[str, object]] | _ReadFailure:
         try:
             package, _digest = self._reader._load(result_ref)
         except _ReadFailure as error:
-            if error.code == "result_not_found":
-                return "Result does not exist"
-            return str(error) or "sealed Result cannot be trusted"
+            return error
         if not isinstance(package, dict) or not isinstance(package.get("result"), dict):
-            return "sealed Result has an invalid package shape"
+            return _ReadFailure(
+                "result_untrusted", "sealed Result has an invalid package shape"
+            )
         result_view = package["result"]
         required = {"ref", "dataset_ref", "coverage", "readiness", "integrity"}
         if not required <= set(result_view):
-            return "sealed Result is missing required status fields"
+            return _ReadFailure(
+                "result_untrusted", "sealed Result is missing required status fields"
+            )
         if result_view["ref"] != result_ref or result_view["integrity"] != "valid":
-            return "sealed Result does not provide valid integrity"
+            return _ReadFailure(
+                "result_untrusted", "sealed Result does not provide valid integrity"
+            )
         return result_view, package
 
-    def _status_record(self, record: dict[str, object]) -> dict[str, object]:
+    def _status_record(
+        self, record: dict[str, object], *, include: object = (), page: object = None
+    ) -> dict[str, object]:
         activity = self._activity_record(record)
         state = str(record["state"])
-        allowed_actions = list(_ALLOWED_ACTIONS[state])
-        response: dict[str, object] = {
-            "outcome": "ok",
-            "action": "status",
-            "run_ref": record["run_ref"],
-            "dataset_ref": record["dataset_ref"],
-            "state": state,
-            "progress": record["progress"],
-            "activity": activity,
-            "allowed_actions": allowed_actions,
-        }
-        if record["prior_result_ref"] is not None:
-            response["prior_result_ref"] = record["prior_result_ref"]
-        if state in {"paused", "blocked", "failed"}:
+        response: dict[str, object] = {"state": state}
+        if _ALLOWED_ACTIONS[state]:
+            response["allowed_actions"] = list(_ALLOWED_ACTIONS[state])
+        if state == "running":
+            work = activity["work"]
+            counts = [work[key] for key in ("completed", "reused", "failed")]
+            response["progress"] = {
+                "phase": activity["phase"],
+                "unit": _phase_unit(str(activity["phase"])),
+                "processed": sum(counts)
+                if all(isinstance(n, int) for n in counts)
+                else None,
+                "total": _known(work["total"]),
+                "last_progress_at": _known(activity["last_progress_at"]),
+            }
+            if activity["state"] in {"suspected_stalled", "no_recent_progress"}:
+                response["reason"] = _reason(
+                    str(activity["state"]),
+                    "The execution owner is unresponsive."
+                    if activity["state"] == "suspected_stalled"
+                    else "The owner is responsive but has not made recent durable progress.",
+                    **(
+                        {
+                            "resume_when": "Explicitly resume after verifying the prior owner is stale."
+                        }
+                        if activity["state"] == "suspected_stalled"
+                        else {}
+                    ),
+                )
+                if activity["state"] == "suspected_stalled":
+                    response["allowed_actions"] = ["resume", "cancel"]
+        elif state in {"paused", "blocked", "failed"}:
             response["reason"] = record["reason"]
-        elif state == "running" and activity["state"] == "suspected_stalled":
-            checkpoint = record["execution_checkpoint"]
-            assert isinstance(checkpoint, dict)
-            worker = checkpoint["worker"]
-            response["allowed_actions"] = list(_ALLOWED_ACTIONS["paused"])
-            response["reason"] = _reason(
-                (
-                    "execution_owner_missing"
-                    if worker is None
-                    else "execution_owner_stale"
-                ),
-                (
-                    "No execution worker has claimed this Run."
-                    if worker is None
-                    else "The execution worker is no longer responsive."
-                ),
-                resume_when="A live Tool Host explicitly resumes this Run.",
-            )
         if state == "paused" and record["confirmation"] is not None:
-            response["confirmation"] = record["confirmation"]
-        scope_review = self._store.latest_scope_review(str(record["run_ref"]))
-        if (
-            scope_review is not None
-            and scope_review["state"] in {"accepted", "reused"}
-            and isinstance(scope_review["selection"], dict)
-        ):
+            try:
+                response["confirmation"] = self._confirmation_view(
+                    record, include=include, page=page
+                )
+            except _ReadFailure as error:
+                return _error("status", error.code, str(error))
+        if state == "completed":
+            published = record["published_result"]
+            verified = (
+                record["_verified_result"]
+                if "_verified_result" in record
+                else self._verified_result(str(published["result_ref"]))
+            )
+            if isinstance(verified, _ReadFailure):
+                return _error("status", verified.code, str(verified))
+            from .read import _ResultGraph, _effective_result_view
+
+            response["result"] = _effective_result_view(_ResultGraph(verified[1]))
+        issues = self._issues(record)
+        if record["execution_checkpoint"].get("progress_scope_changed"):
+            scope_reason = _reason(
+                "progress_scope_changed",
+                "The current phase work membership changed; reset progress comparisons.",
+            )
+            if state == "running" and "reason" not in response:
+                response["reason"] = scope_reason
+            else:
+                issues.append(
+                    {
+                        **scope_reason,
+                        "phase": activity["phase"],
+                        "unit": "phase",
+                        "count": 1,
+                    }
+                )
+        if issues:
+            response["issues"] = issues[:5]
+            if len(issues) > 5:
+                response["issues_truncated"] = True
+        if "accounting" in include:
+            response["accounting"] = self._accounting(record)
+        if "diagnostics" in include:
+            from .read import (
+                _page_request,
+                _paged_response,
+                _sha256_identity,
+                _canonical_json,
+            )
+
+            work = {key: _known(value) for key, value in activity["work"].items()}
+            work = {
+                "phase": activity["phase"],
+                "unit": _phase_unit(str(activity["phase"])),
+                **work,
+            }
+            facts = (
+                record["_facts"]
+                if "_facts" in record
+                else self._store.execution_facts(record["accounting_run_id"])
+            )
+            boundary = _execution_summary(facts, str(record["run_ref"]))
+            digest = _sha256_identity(
+                _canonical_json(
+                    {"work": work, "issues": issues, "execution_boundary": boundary}
+                ).encode()
+            )
+            query_key = _canonical_json(
+                {"include": sorted(include), "order": "phase_code_unit"}
+            )
+            try:
+                limit, offset = _page_request(
+                    page,
+                    default=50,
+                    maximum=200,
+                    result_ref=str(record["run_ref"]),
+                    result_digest=digest,
+                    operation="status",
+                    query_key=query_key,
+                )
+                response["diagnostics"] = _paged_response(
+                    {"work": work, "execution_boundary": boundary},
+                    collection="issues",
+                    values=issues,
+                    offset=offset,
+                    limit=limit,
+                    result_ref=str(record["run_ref"]),
+                    result_digest=digest,
+                    operation="status",
+                    query_key=query_key,
+                )
+            except _ReadFailure as error:
+                return _error("status", error.code, str(error))
+        return response
+
+    def _issues(self, record: dict[str, object]) -> list[dict[str, object]]:
+        facts = (
+            record["_facts"]
+            if "_facts" in record
+            else self._store.execution_facts(record["accounting_run_id"])
+        )
+        groups: dict[tuple[str, str, str], int] = {}
+        for row in facts.get("work", ()):
+            if row["status"] not in _WORK_FAILURE_STATES:
+                continue
+            phase = _CAPABILITY_PHASE.get(row["capability"], "unknown")
+            code = row.get("error_code") or row["status"]
+            key = (phase, code, _phase_unit(phase))
+            groups[key] = groups.get(key, 0) + row["count"]
+        for output in facts.get("geo_effects", ()):
+            outcomes = json.loads(output["components"] or "{}")
+            if any(state in {"failed", "indeterminate"} for state in outcomes.values()):
+                code = (
+                    "geo_effect_indeterminate"
+                    if "indeterminate" in outcomes.values()
+                    else "location_query_failed"
+                )
+                key = ("geo", code, "location_query")
+                groups[key] = groups.get(key, 0) + output["count"]
+        return [
+            {
+                "phase": phase,
+                "code": code,
+                "unit": unit,
+                "count": count,
+                "message": f"{count} logical operations report {code}.",
+            }
+            for (phase, code, unit), count in sorted(groups.items())
+        ]
+
+    def _accounting(self, record: dict[str, object]) -> dict[str, object]:
+        if record["state"] == "completed":
+            from .read import _ResultGraph, _reconciliation
+
+            verified = (
+                record["_verified_result"]
+                if "_verified_result" in record
+                else self._verified_result(
+                    str(record["published_result"]["result_ref"])
+                )
+            )
+            if isinstance(verified, _ReadFailure):
+                raise ValueError(str(verified))
+            accounting = _reconciliation(_ResultGraph(verified[1]))
+            result = {
+                "discovered": _known(record["progress"]["discovered"]),
+                "accounted": accounting["total"],
+                "scope_condition": accounting["scope_condition"],
+            }
+        else:
+            result = (
+                record["_accounting"]
+                if "_accounting" in record
+                else self._store.accounting_detail(record)
+            )
+        scope_review = (
+            record["_scope_review"]
+            if "_scope_review" in record
+            else self._store.latest_scope_review(str(record["run_ref"]))
+        )
+        if scope_review is not None and scope_review["state"] in {"accepted", "reused"}:
             selection = dict(scope_review["selection"])
             selection["provenance"] = scope_review["state"]
             if scope_review["reused_from_run_ref"] is not None:
                 selection["reused_from_run_ref"] = scope_review["reused_from_run_ref"]
-            response["scope_selection"] = selection
-        if state == "completed":
-            response["published_result"] = record["published_result"]
-        return response
+            result["selection"] = selection
+        return result
+
+    def _confirmation_view(
+        self, record: dict[str, object], *, include: object, page: object
+    ) -> dict[str, object]:
+        confirmation = record["confirmation"]
+        if confirmation["kind"] == "source_scope":
+            return {
+                "kind": "source_scope",
+                "inventory_fingerprint": confirmation["inventory_fingerprint"],
+                "inventory": {
+                    key: value
+                    for key, value in confirmation["inventory"].items()
+                    if key not in {"inventory_fingerprint", "scan_generation"}
+                },
+            }
+        from .read import (
+            _page_request,
+            _paged_response,
+            _encoded_size,
+            _MAX_RESPONSE_BYTES,
+        )
+
+        view = {
+            key: confirmation[key] for key in ("kind", "content_identity", "summary")
+        }
+        disclosure = dict(confirmation["disclosure"])
+        coordinates = disclosure.pop("coordinates", [])
+        if (
+            "confirmation" not in include
+            and _encoded_size(confirmation) > _MAX_RESPONSE_BYTES - 8192
+        ):
+            view["summary"] += (
+                " Read status include=confirmation for paged coordinate details."
+            )
+            return view
+        query_key = json.dumps(
+            {"view": "confirmation", "include": sorted(include)}, sort_keys=True
+        )
+        limit, offset = _page_request(
+            page,
+            default=50 if "confirmation" in include else max(1, len(coordinates)),
+            maximum=200 if "confirmation" in include else max(200, len(coordinates)),
+            result_ref=str(record["run_ref"]),
+            result_digest=confirmation["content_identity"],
+            operation="status",
+            query_key=query_key,
+        )
+        paged = _paged_response(
+            disclosure,
+            collection="coordinates",
+            values=coordinates,
+            offset=offset,
+            limit=limit,
+            result_ref=str(record["run_ref"]),
+            result_digest=confirmation["content_identity"],
+            operation="status",
+            query_key=query_key,
+        )
+        view["page"] = paged.pop("page")
+        view["disclosure"] = paged
+        return view
 
     def _activity_record(self, record: dict[str, object]) -> dict[str, object]:
         checkpoint = record["execution_checkpoint"]
         assert isinstance(checkpoint, dict)
         internal_phase = str(checkpoint["phase"])
         phase = _PHASE_NAMES.get(internal_phase, "unknown")
-        facts = self._store.execution_facts(
-            None
-            if record["accounting_run_id"] is None
-            else str(record["accounting_run_id"])
+        facts = (
+            record["_facts"]
+            if "_facts" in record
+            else self._store.execution_facts(
+                None
+                if record["accounting_run_id"] is None
+                else str(record["accounting_run_id"])
+            )
         )
         work, work_last_progress_at = _phase_work_progress(
             internal_phase,
@@ -1067,7 +1299,6 @@ class PrecheckRunTool:
             "phase": phase,
             "work": work,
             "last_progress_at": last_progress_at,
-            "errors": _error_summary(facts),
         }
 
     def _activity_state(
@@ -1157,22 +1388,25 @@ def _phase_work_progress(
         count = int(row["count"])
         observed += count
         if status == "succeeded":
-            if row["attempted_here"]:
+            if row.get("geo_status") in {"failed", "indeterminate"}:
+                failed += count
+            elif row["attempted_here"]:
                 completed += count
             else:
                 reused += count
-        elif status in _WORK_FAILURE_STATES:
+        elif status == "terminal_failure":
             failed += count
-        last_progress_at = _latest_timestamp(
-            last_progress_at, str(row["last_progress_at"])
-        )
+        if status in {"succeeded", "terminal_failure"}:
+            last_progress_at = _latest_timestamp(
+                last_progress_at, str(row["last_progress_at"])
+            )
     settled = completed + reused + failed
     if complete:
         total = max(observed, settled)
         remaining: int | str = max(total - settled, 0)
-    elif isinstance(total_hint, int) and not isinstance(total_hint, bool):
-        total = max(total_hint, observed, settled)
-        remaining = max(total - settled, 0)
+    elif observed:
+        total = observed
+        remaining = total - settled
     else:
         total = "unknown"
         remaining = "unknown"
@@ -1180,27 +1414,6 @@ def _phase_work_progress(
         _work_counts(completed, reused, failed, remaining, total),
         last_progress_at,
     )
-
-
-def _error_summary(facts: Mapping[str, object]) -> dict[str, object]:
-    rows = facts.get("work")
-    counts: dict[str, int] = {}
-    if isinstance(rows, tuple):
-        for row in rows:
-            if (
-                not isinstance(row, dict)
-                or row.get("status") not in _WORK_FAILURE_STATES
-            ):
-                continue
-            phase = _CAPABILITY_PHASE.get(str(row.get("capability")), "unknown")
-            counts[phase] = counts.get(phase, 0) + int(row["count"])
-    ordered = sorted(counts.items(), key=lambda item: (-item[1], item[0]))
-    shown = ordered[:_ERROR_PHASE_LIMIT]
-    return {
-        "total": sum(counts.values()),
-        "by_phase": [{"phase": phase, "count": count} for phase, count in shown],
-        "truncated": len(ordered) > len(shown),
-    }
 
 
 def _work_counts(
@@ -1237,60 +1450,11 @@ def _as_datetime(value: str) -> datetime:
     return parsed.astimezone(timezone.utc)
 
 
-def _validate_request(action: str, request: dict[str, object]) -> None:
-    allowed = {
-        "start": {"action", "dataset_ref", "prior_result_ref", "request_id"},
-        "status": {"action", "run_ref", "scope_path", "scope_after"},
-        "pause": {"action", "run_ref"},
-        "resume": {"action", "run_ref", "decision"},
-        "cancel": {"action", "run_ref"},
-    }[action]
-    if unknown := set(request) - allowed:
-        raise ValueError(f"unknown request fields: {sorted(unknown)}")
-    if action == "start":
-        _require_ref(request.get("request_id"), "request:", "request_id")
-        upstream = [
-            key for key in ("dataset_ref", "prior_result_ref") if key in request
-        ]
-        if len(upstream) != 1:
-            raise ValueError("start requires exactly one upstream reference")
-        field = upstream[0]
-        if field == "dataset_ref":
-            dataset_id_from_ref(request[field])
-        else:
-            _require_ref(request[field], "precheck-result:", field)
-        return
-    _require_ref(request.get("run_ref"), "precheck-run:", "run_ref")
-    if action == "status" and "scope_path" in request:
-        normalize_scope_path(request["scope_path"], allow_root=True)
-    if action == "status" and "scope_after" in request:
-        if "scope_path" not in request:
-            raise ValueError("scope_after requires scope_path")
-        normalize_scope_path(request["scope_after"], allow_root=False)
-    if action == "resume" and "decision" in request:
-        decision = request["decision"]
-        if not isinstance(decision, (dict, str)) or (
-            isinstance(decision, str)
-                and decision not in {"proceed", "decline"}
-        ):
-            raise ValueError(
-                "decision must be proceed, decline, or source_scope"
-            )
-
-
-def _require_ref(value: object, prefix: str, field: str) -> None:
-    if (
-        not isinstance(value, str)
-        or not value.startswith(prefix)
-        or len(value) == len(prefix)
-        or any(character.isspace() for character in value)
-    ):
-        raise ValueError(f"{field} must be a valid {prefix[:-1]} reference")
-
-
 def _validate_progress(progress: dict[str, object]) -> None:
     if set(progress) != _PROGRESS_KEYS:
-        raise ValueError("progress must contain exactly the five public counters")
+        raise ValueError(
+            "accounting progress must contain exactly the five internal counters"
+        )
     for key, value in progress.items():
         if value == "unknown":
             continue
@@ -1350,16 +1514,7 @@ def _completed_progress(
 
 
 def _start_response(record: dict[str, object]) -> dict[str, object]:
-    response: dict[str, object] = {
-        "outcome": "ok",
-        "action": "start",
-        "run_ref": record["run_ref"],
-        "dataset_ref": record["dataset_ref"],
-        "state": "running",
-    }
-    if record["prior_result_ref"] is not None:
-        response["prior_result_ref"] = record["prior_result_ref"]
-    return response
+    return {"run_ref": record["run_ref"]}
 
 
 def _reason(
@@ -1401,16 +1556,60 @@ def _error(
     detail: dict[str, object] = {"code": code, "message": message}
     if current_state is not None:
         detail["current_state"] = current_state
-    if allowed_actions is not None:
+    if allowed_actions:
         detail["allowed_actions"] = list(allowed_actions)
-    response: dict[str, object] = {
-        "outcome": "error",
-        "action": action,
-        "error": detail,
-    }
     if run_ref is not None:
-        response["run_ref"] = run_ref
-    return response
+        detail["run_ref"] = run_ref
+    return {"error": detail}
+
+
+def _execution_summary(facts: Mapping[str, object], run_ref: str) -> dict[str, object]:
+    rows = facts.get("geo_effects", ())
+    historical = current = bills = 0
+    unknown_historical = unknown_current = unknown_bills = False
+    providers: set[str] = set()
+    for row in rows:
+        if row["owner"] == run_ref:
+            current += row["requests"] or 0
+            unknown_current |= bool(row["requests_unknown"])
+        else:
+            historical += row["requests"] or 0
+            unknown_historical |= bool(row["requests_unknown"])
+        bills += row["bills"] or 0
+        unknown_bills |= bool(row["bills_unknown"])
+        providers.update(
+            json.loads(row["providers"])
+            if row["providers"]
+            else [row["provider"]]
+            if row["provider"]
+            else []
+        )
+    return {
+        "source_read_only": True,
+        "remote_models": False,
+        "logical_external_queries": sum(row["count"] for row in rows),
+        "historical_provider_requests": None if unknown_historical else historical,
+        "current_provider_requests": None if unknown_current else current,
+        "billable_calls": None if unknown_bills else bills,
+        "transmitted_data_classes": ["coordinate", "datum", "locale"]
+        if unknown_current or unknown_historical or current + historical > 0
+        else [],
+        "providers_attempted": sorted(providers),
+    }
+
+
+def _known(value: object) -> object:
+    return None if value == "unknown" else value
+
+
+def _phase_unit(phase: str) -> str:
+    return (
+        "source_item"
+        if phase == "source_accounting"
+        else "location_query"
+        if phase == "geo"
+        else "logical_operation"
+    )
 
 
 __all__ = ["PrecheckRunTool"]

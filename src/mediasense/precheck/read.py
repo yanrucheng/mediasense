@@ -13,6 +13,7 @@ import json
 from pathlib import Path
 import sqlite3
 from typing import Any, Iterator, Protocol, cast
+from types import SimpleNamespace
 from urllib.parse import quote
 
 from ._working_schema import SCHEMA_VERSION
@@ -57,6 +58,24 @@ def require_precheck_read_boundary(value: object) -> PrecheckReadBoundary:
     return cast(PrecheckReadBoundary, value)
 
 
+def bind_precheck_read(
+    reader: PrecheckReadBoundary, dataset_ref: str
+) -> PrecheckReadBoundary:
+    """Inject an explicitly opened Dataset at the in-process stage adapter."""
+
+    def read(request: dict[str, object]) -> dict[str, object]:
+        if request.get("dataset_ref", dataset_ref) != dataset_ref:
+            return {
+                "error": {
+                    "code": "reference_not_in_dataset",
+                    "message": "Conflicting Dataset references.",
+                }
+            }
+        return reader.read({**request, "dataset_ref": dataset_ref})
+
+    return cast(PrecheckReadBoundary, SimpleNamespace(name=reader.name, read=read))
+
+
 class _ReadFailure(RuntimeError):
     def __init__(
         self,
@@ -87,13 +106,14 @@ class _ResultGraph:
             self.evidence = _unique_views(evidence_records, "Evidence")
         except (KeyError, TypeError) as error:
             raise _ReadFailure(
-                "result_inconsistent", "The sealed Result graph is structurally invalid."
+                "result_inconsistent",
+                "The sealed Result graph is structurally invalid.",
             ) from error
 
         self.result_ref = str(self.result.get("ref", ""))
-        self.by_origin_relation: dict[
-            tuple[str, str], list[Mapping[str, object]]
-        ] = defaultdict(list)
+        self.by_origin_relation: dict[tuple[str, str], list[Mapping[str, object]]] = (
+            defaultdict(list)
+        )
         for relationship in self.relationships:
             origin = relationship.get("origin")
             relation = relationship.get("relation")
@@ -115,7 +135,8 @@ class _ResultGraph:
         )
         if len(set(self.entry_evidence_refs)) != len(self.entry_evidence_refs):
             raise _ReadFailure(
-                "result_inconsistent", "The entry Evidence frontier contains duplicates."
+                "result_inconsistent",
+                "The entry Evidence frontier contains duplicates.",
             )
 
     def members(self, origin: str, relation: str) -> tuple[Mapping[str, object], ...]:
@@ -160,8 +181,34 @@ class PrecheckReadTool:
 
     def read(self, request: dict[str, object]) -> dict[str, object]:
         result_ref = request.get("result_ref")
-        operation = request.get("operation")
+        operation = request.get("action")
         try:
+            from mediasense.runtime.resources import contract_validator
+
+            if operation == "expand" and isinstance(request.get("include"), list):
+                allowed = (
+                    _SOURCE_INCLUDES
+                    if "source_item_refs" in request
+                    else _EVIDENCE_INCLUDES
+                )
+                if any(item not in allowed for item in request["include"]):
+                    raise _ReadFailure(
+                        "unsupported_include",
+                        "The selector does not support a requested include.",
+                    )
+            if not contract_validator(self.name).is_valid(request):
+                if operation == "resolve" and "source_set" in request:
+                    schema = contract_validator(self.name).schema
+                    selection_validator = contract_validator(self.name).evolve(
+                        schema={"$defs": schema["$defs"], "$ref": "#/$defs/source_set"}
+                    )
+                    if not selection_validator.is_valid(request["source_set"]):
+                        raise _ReadFailure(
+                            "invalid_source_set", "Invalid Source Set expression."
+                        )
+                raise _ReadFailure(
+                    "invalid_request", "Invalid flat PreCheck Read request."
+                )
             if not isinstance(result_ref, str) or not result_ref:
                 raise _ReadFailure(
                     "invalid_request", "result_ref must be a non-empty string."
@@ -173,18 +220,25 @@ class PrecheckReadTool:
                 )
             package, result_digest = self._load(result_ref)
             graph = _ResultGraph(package)
+            if graph.result.get("dataset_ref") != request["dataset_ref"]:
+                raise _ReadFailure(
+                    "result_not_found", "Result does not exist in this Dataset."
+                )
             if graph.result_ref != result_ref:
                 raise _ReadFailure(
                     "result_untrusted",
                     "The sealed Result identity does not match its reference.",
                 )
             if operation == "review":
-                return self._review(graph, result_digest, request)
-            if operation == "expand":
-                return self._expand(graph, result_digest, request)
-            if operation == "geo_summary":
-                return self._geo_summary(graph, result_digest, request)
-            return self._resolve(graph, result_digest, request)
+                response = self._review(graph, result_digest, request)
+            elif operation == "expand":
+                response = self._expand(graph, result_digest, request)
+            elif operation == "geo_summary":
+                response = self._geo_summary(graph, result_digest, request)
+            else:
+                response = self._resolve(graph, result_digest, request)
+            contract_validator(self.name, operation).validate(response)
+            return response
         except _ReadFailure as failure:
             return _error(
                 result_ref if isinstance(result_ref, str) else None,
@@ -256,6 +310,121 @@ class PrecheckReadTool:
                     "result_untrusted",
                     f"Retained Artifact is corrupt: {artifact['artifact_id']}.",
                 )
+        from ._result_sqlite import _validate_observations, _validate_execution_boundary
+        from ._result_types import ResultSealError
+
+        try:
+            graph = _ResultGraph(package)
+            if graph.result.get("integrity") != "valid":
+                raise ValueError("Result was not validly sealed")
+            if graph.result_ref != result_ref or graph.result.get(
+                "dataset_ref"
+            ) != graph.dataset.get("ref"):
+                raise ValueError("Result identity mismatch")
+            if set(graph.sources) != set(graph.accounts):
+                raise ValueError("Result source accounting is incomplete")
+            for view in (*graph.sources.values(), *graph.evidence.values()):
+                _validate_observations(tuple(view.get("observations", ())))
+            _validate_execution_boundary(package["execution_boundary"])
+            _reconciliation(graph)
+            seen_relations = set()
+            known_refs = {
+                graph.result_ref,
+                str(graph.dataset["ref"]),
+                *graph.sources,
+                *graph.evidence,
+            }
+            for relationship in graph.relationships:
+                origin, relation, member = (
+                    relationship["origin"],
+                    relationship["relation"],
+                    relationship["member"],
+                )
+                target = member.get("target")
+                if relation not in {
+                    "accounts_for",
+                    "entry_evidence",
+                    "represents",
+                    "derived_from",
+                    "expands_to",
+                }:
+                    raise ValueError("Unknown Result relationship")
+                if origin not in known_refs:
+                    raise ValueError("Relationship has an unknown origin")
+                if (
+                    relation in {"accounts_for", "entry_evidence"}
+                    and origin != graph.result_ref
+                ):
+                    raise ValueError(
+                        "Only the Result owns accounting and entry relationships"
+                    )
+                if (
+                    relation in {"represents", "derived_from", "expands_to"}
+                    and origin not in graph.evidence
+                ):
+                    raise ValueError("Only Evidence owns evidence relationships")
+                target_ref = (
+                    target.get("ref") if isinstance(target, Mapping) else target
+                )
+                if target_ref not in known_refs:
+                    raise ValueError("Relationship target is missing")
+                identity = (origin, relation, str(target_ref))
+                if identity in seen_relations:
+                    raise ValueError("Duplicate relationship membership")
+                seen_relations.add(identity)
+                if (
+                    relation in {"accounts_for", "represents"}
+                    and target_ref not in graph.sources
+                ):
+                    raise ValueError("Source relationship targets another kind")
+                if relation == "entry_evidence" and target_ref not in graph.evidence:
+                    raise ValueError("Entry relationship targets another kind")
+            for ref in graph.evidence:
+                _represented_refs(graph, ref)
+                for relation in ("derived_from", "expands_to"):
+                    for member in graph.members(ref, relation):
+                        _prepared_target(graph, member)
+            from .geocode import normalize_geo_observations
+
+            for view in graph.evidence.values():
+                observations = list(view.get("observations", ()))
+                if any(
+                    item.get("name") == "reverse_geocode_candidate"
+                    for item in observations
+                ):
+                    view["observations"] = [
+                        item
+                        for item in observations
+                        if item.get("name")
+                        not in {"reverse_geocode_candidate", "reverse_geocode_attempt"}
+                    ] + list(normalize_geo_observations({"observations": observations}))
+            for ref, view in graph.sources.items():
+                if graph.accounts[ref]["scope"] != "source_media":
+                    continue
+                observations = list(view.get("observations", ()))
+                available = any(
+                    item.get("name") in {"gps_coordinates", "gpx_coordinates"}
+                    and item.get("status") == "available"
+                    for item in observations
+                )
+                normalized = normalize_geo_observations(
+                    {"observations": observations}, coordinate_available=available
+                )
+                view["observations"] = [
+                    item
+                    for item in observations
+                    if item.get("name")
+                    not in {
+                        "reverse_geocode_candidate",
+                        "reverse_geocode_attempt",
+                        "address_candidate",
+                        "nearby_place_candidates",
+                    }
+                ] + list(normalized)
+        except (ValueError, KeyError, TypeError, ResultSealError) as error:
+            raise _ReadFailure(
+                "result_untrusted", "Sealed Result has invalid evidence or references."
+            ) from error
         return package, str(row["digest"])
 
     def _review(
@@ -264,8 +433,20 @@ class PrecheckReadTool:
         result_digest: str,
         request: Mapping[str, object],
     ) -> dict[str, object]:
-        _require_keys(request, {"result_ref", "operation", "page"})
-        query_key = "review:frontier_order"
+        _require_keys(
+            request,
+            {
+                "dataset_ref",
+                "result_ref",
+                "action",
+                "page",
+                "include",
+                "execution_page",
+            },
+        )
+        query_key = _query_key(
+            "review:frontier_order", {"include": sorted(request.get("include", []))}
+        )
         limit, offset = _page_request(
             request.get("page"),
             default=25,
@@ -278,15 +459,73 @@ class PrecheckReadTool:
         reconciliation = _reconciliation(graph)
         cards = [_coverage_card(graph, ref) for ref in graph.entry_evidence_refs]
         base: dict[str, object] = {
-            "outcome": "ok",
-            "operation": "review",
-            "result_ref": graph.result_ref,
             "result": _effective_result_view(graph),
-            "reconciliation": reconciliation,
+            "accounting": reconciliation,
         }
+        if "execution_boundary" in request.get("include", ()):
+            boundary = graph.result.get("execution_boundary", {})
+            audit = boundary.get("audit", {})
+            local = boundary.get("network_access") is False
+            execution = {
+                "source_read_only": True,
+                "remote_models": boundary.get("remote_models", False),
+                "logical_external_queries": boundary.get(
+                    "logical_external_queries", 0 if local else None
+                ),
+                "historical_provider_requests": audit.get(
+                    "historical_provider_requests", 0 if local else None
+                ),
+                "current_provider_requests": audit.get(
+                    "current_provider_requests", 0 if local else None
+                ),
+                "billable_calls": audit.get("billable_calls", 0 if local else None),
+                "transmitted_data_classes": ["coordinate", "datum", "locale"]
+                if boundary.get("network_access") is True
+                and boundary.get("provider_requests") != 0
+                else [],
+                "providers_attempted": list(boundary.get("providers", ())),
+            }
+            execution_limit, execution_offset = _page_request(
+                request.get("execution_page"),
+                default=50,
+                maximum=200,
+                result_ref=graph.result_ref,
+                result_digest=result_digest,
+                operation="review",
+                query_key="execution_boundary:durable_attempt_order",
+            )
+            minimum_cards = _paged_response(
+                base,
+                collection="cards",
+                values=cards,
+                offset=offset,
+                limit=limit,
+                result_ref=graph.result_ref,
+                result_digest=result_digest,
+                operation="review",
+                query_key=query_key,
+                max_items=1,
+            )
+            audit_budget = (
+                _MAX_RESPONSE_BYTES
+                - _encoded_size(minimum_cards)
+                - len('"execution_boundary":,')
+            )
+            base["execution_boundary"] = _paged_response(
+                execution,
+                collection="attempts",
+                values=audit.get("attempts", []),
+                offset=execution_offset,
+                limit=execution_limit,
+                result_ref=graph.result_ref,
+                result_digest=result_digest,
+                operation="review",
+                query_key="execution_boundary:durable_attempt_order",
+                byte_budget=audit_budget,
+            )
         return _paged_response(
             base,
-            collection="coverage_cards",
+            collection="cards",
             values=cards,
             offset=offset,
             limit=limit,
@@ -294,7 +533,6 @@ class PrecheckReadTool:
             result_digest=result_digest,
             operation="review",
             query_key=query_key,
-            page_extra={"order": "frontier_order"},
         )
 
     def _geo_summary(
@@ -303,7 +541,7 @@ class PrecheckReadTool:
         result_digest: str,
         request: Mapping[str, object],
     ) -> dict[str, object]:
-        _require_keys(request, {"result_ref", "operation", "page"})
+        _require_keys(request, {"dataset_ref", "result_ref", "action", "page"})
         projection = _geo_projection(graph)
         groups = cast(list[dict[str, object]], projection.pop("coordinate_groups"))
         query_key = "geo_summary:exact_coordinate_order"
@@ -317,9 +555,6 @@ class PrecheckReadTool:
             query_key=query_key,
         )
         base: dict[str, object] = {
-            "outcome": "ok",
-            "operation": "geo_summary",
-            "result_ref": graph.result_ref,
             **projection,
         }
         return _paged_response(
@@ -332,7 +567,6 @@ class PrecheckReadTool:
             result_digest=result_digest,
             operation="geo_summary",
             query_key=query_key,
-            page_extra={"order": "latitude_longitude_datum"},
         )
 
     def _expand(
@@ -343,7 +577,15 @@ class PrecheckReadTool:
     ) -> dict[str, object]:
         _require_keys(
             request,
-            {"result_ref", "operation", "evidence_refs", "source_item_refs", "include", "page"},
+            {
+                "dataset_ref",
+                "result_ref",
+                "action",
+                "evidence_refs",
+                "source_item_refs",
+                "include",
+                "page",
+            },
         )
         evidence_refs = request.get("evidence_refs")
         source_refs = request.get("source_item_refs")
@@ -397,9 +639,10 @@ class PrecheckReadTool:
                     "member_observations must be paged alone for one evidence_ref.",
                 )
             ref = refs[0]
-            member_refs = _represented_refs(graph, ref)
+            member_refs = tuple(sorted(_represented_refs(graph, ref)))
             query_key = _query_key(
-                "expand-member-observations", {"evidence_refs": refs, "include": include}
+                "expand-member-observations",
+                {"evidence_refs": refs, "include": include},
             )
             limit, offset = _page_request(
                 page_request,
@@ -412,16 +655,17 @@ class PrecheckReadTool:
             )
             values = [
                 {
-                    "anchor_evidence_ref": ref,
-                    "source_item": dict(graph.sources[source_ref]),
+                    "source_item_ref": source_ref,
+                    "observations": list(_observations(graph.sources[source_ref])),
+                    **(
+                        {"qualifications": graph.sources[source_ref]["qualifications"]}
+                        if graph.sources[source_ref].get("qualifications")
+                        else {}
+                    ),
                 }
                 for source_ref in member_refs
             ]
-            base = {
-                "outcome": "ok",
-                "operation": "expand",
-                "result_ref": graph.result_ref,
-            }
+            base = {}
             return _paged_response(
                 base,
                 collection="items",
@@ -456,17 +700,12 @@ class PrecheckReadTool:
                 ]
             if "coverage_basis" in include:
                 included["coverage_basis"] = _coverage_basis(graph, ref)
-            items.append({"anchor_evidence_ref": ref, "included": included})
+            items.append({"evidence_ref": ref, "included": included})
         response: dict[str, object] = {
-            "outcome": "ok",
-            "operation": "expand",
-            "result_ref": graph.result_ref,
             "items": items,
             "page": {
-                "returned": len(items),
                 "total": len(items),
-                "complete": True,
-                "stop_reason": "complete",
+                "next_cursor": None,
             },
         }
         _ensure_response_size(response)
@@ -508,7 +747,7 @@ class PrecheckReadTool:
                 included["source_item"] = {
                     key: value
                     for key, value in view.items()
-                    if key != "observations"
+                    if key not in {"observations", "kind", "ref"}
                 }
             if "observations" in include:
                 included["observations"] = list(view.get("observations", ()))
@@ -516,15 +755,10 @@ class PrecheckReadTool:
                 included["covering_evidence"] = _covering_evidence(graph, ref)
             items.append({"source_item_ref": ref, "included": included})
         response: dict[str, object] = {
-            "outcome": "ok",
-            "operation": "expand",
-            "result_ref": graph.result_ref,
             "items": items,
             "page": {
-                "returned": len(items),
                 "total": len(items),
-                "complete": True,
-                "stop_reason": "complete",
+                "next_cursor": None,
             },
         }
         _ensure_response_size(response)
@@ -536,7 +770,9 @@ class PrecheckReadTool:
         result_digest: str,
         request: Mapping[str, object],
     ) -> dict[str, object]:
-        _require_keys(request, {"result_ref", "operation", "source_set", "page"})
+        _require_keys(
+            request, {"dataset_ref", "result_ref", "action", "source_set", "page"}
+        )
         source_set = request.get("source_set")
         if not isinstance(source_set, Mapping):
             raise _ReadFailure("invalid_source_set", "source_set must be an object.")
@@ -569,14 +805,9 @@ class PrecheckReadTool:
         )
         values = [_resolved_member(graph, ref) for ref in refs]
         base: dict[str, object] = {
-            "outcome": "ok",
-            "operation": "resolve",
-            "result_ref": graph.result_ref,
             "resolution": {
                 "source_set_identity": source_set_identity,
                 "membership_identity": membership_identity,
-                "ordering": "source_item_ref_ascending",
-                "total": len(values),
             },
         }
         return _paged_response(
@@ -618,29 +849,25 @@ class PrecheckReadTool:
 def _effective_result_view(graph: _ResultGraph) -> dict[str, object]:
     """Apply current handoff invariants without rewriting immutable Result bytes."""
 
-    view = dict(graph.result)
-    if view.get("readiness") != "plan_ready":
-        return view
-    if _geo_projection(graph)["acquisition_status"] != "incomplete":
-        return view
-    view["readiness"] = "blocked"
-    qualifications = list(view.get("qualifications", ()))
-    if not any(
-        isinstance(item, Mapping)
-        and item.get("code") == "reverse_geocode_incomplete"
-        for item in qualifications
+    view = {key: graph.result[key] for key in ("ref", "coverage", "readiness")}
+    qualifications = [
+        item
+        for item in graph.result.get("qualifications", ())
+        if item.get("code") != "reverse_geocode_incomplete"
+    ]
+    if (
+        view["readiness"] == "blocked"
+        and graph.result.get("qualifications")
+        and not any(item.get("effect") == "blocks_use" for item in qualifications)
     ):
-        qualifications.append(
-            {
-                "code": "reverse_geocode_incomplete",
-                "effect": "blocks_use",
-                "message": (
-                    "One or more located Source Items lack a reverse-geocode "
-                    "outcome; create a successor PreCheck Result."
-                ),
-            }
-        )
-    view["qualifications"] = qualifications
+        if graph.entry_evidence_refs and all(
+            item.get("condition") != "unresolved"
+            for item in graph.accounts.values()
+            if item.get("scope") == "source_media"
+        ):
+            view["readiness"] = "plan_ready"
+    if qualifications:
+        view["qualifications"] = qualifications
     return view
 
 
@@ -679,17 +906,17 @@ def _reconciliation(graph: _ResultGraph) -> dict[str, object]:
             "A complete Result has Source Items outside its frontier and exception routes.",
             details={"residual_count": len(residual)},
         )
-    route_counts = Counter(
-        (
-            str(graph.accounts[ref].get("scope")),
-            str(graph.accounts[ref].get("condition")),
-        )
-        for ref in sorted(exception_only)
+    counts = Counter(
+        (str(member.get("scope")), str(member.get("condition")))
+        for member in graph.accounts.values()
     )
-    right = len(frontier_only) + len(exception_only) + len(both) + len(residual)
     return {
-        "accounted_total": len(accounted),
-        "partition": {
+        "total": len(accounted),
+        "scope_condition": [
+            {"scope": scope, "condition": condition, "count": count}
+            for (scope, condition), count in sorted(counts.items())
+        ],
+        "routes": {
             "frontier_only": len(frontier_only),
             "exception_only": len(exception_only),
             "frontier_and_exception": len(both),
@@ -699,15 +926,6 @@ def _reconciliation(graph: _ResultGraph) -> dict[str, object]:
             "entry_evidence_count": len(graph.entry_evidence_refs),
             "coverage_memberships": membership_count,
             "represented_unique_source_items": len(frontier),
-            "overlap_count": membership_count - len(frontier),
-        },
-        "exception_routes": [
-            {"scope": scope, "condition": condition, "count": count}
-            for (scope, condition), count in sorted(route_counts.items())
-        ],
-        "closure_check": {
-            "status": "passed" if not residual else "partial",
-            "equation": {"left": len(accounted), "right": right},
         },
     }
 
@@ -747,36 +965,25 @@ def _coverage_card(graph: _ResultGraph, ref: str) -> dict[str, object]:
         for observation in _observations(graph.evidence[evidence_ref])
     )
     return {
-        "anchor_evidence_ref": ref,
-        "anchor_access": evidence.get("access"),
-        "represented": {
-            "relationship": "represents",
-            "membership_count": len(member_refs),
-            "unique_source_item_count": len(set(member_refs)),
-            "scope_condition": [
-                {"scope": scope, "condition": condition, "count": count}
-                for (scope, condition), count in sorted(accounts.items())
-            ],
-        },
-        "projected_facts": {
+        "evidence_ref": ref,
+        "access": evidence.get("access"),
+        "source_count": len(member_refs),
+        "scope_condition": [
+            {"scope": scope, "condition": condition, "count": count}
+            for (scope, condition), count in sorted(accounts.items())
+        ],
+        "facts": {
             "capture_time": _capture_time_projection(graph, member_refs),
             "media_type": _media_type_projection(graph, member_refs),
         },
-        "evidence_roles": role_refs,
+        "roles": {role: values for role, values in role_refs.items() if values},
         "unassigned_prepared_evidence": [
             evidence_ref
             for evidence_ref in prepared_evidence
             if evidence_ref not in assigned
         ],
-        "qualification_summary": qualifications,
-        "projection_scope": {
-            "projected_observations": [
-                "capture_time",
-                "media_type",
-                "evidence_role",
-            ],
-            "other_observations_available": other_observations,
-        },
+        "qualifications": qualifications,
+        "other_observations_available": other_observations,
         "available_expansions": [
             {"include": "anchor_evidence", "estimated_items": 1},
             {"include": "prepared_targets", "estimated_items": len(prepared)},
@@ -787,7 +994,7 @@ def _coverage_card(graph: _ResultGraph, ref: str) -> dict[str, object]:
             {"include": "coverage_basis", "estimated_items": len(member_refs)},
             {"include": "member_observations", "estimated_items": len(member_refs)},
         ],
-        "resolvable_source_set": {
+        "source_set": {
             "kind": "precheck_relation",
             "origin": ref,
             "relation": "represents",
@@ -850,7 +1057,9 @@ def _capture_time_projection(
                     "result_inconsistent", "Available capture_time has no UTC offset."
                 )
             available.append((parsed, value))
-    result: dict[str, object] = {"status_counts": dict(states)}
+    result: dict[str, object] = {
+        "status_counts": {state: count for state, count in states.items() if count}
+    }
     if available:
         result["earliest"] = min(available, key=lambda item: item[0])[1]
         result["latest"] = max(available, key=lambda item: item[0])[1]
@@ -882,7 +1091,7 @@ def _media_type_projection(
                 )
             values[value.lower()] += 1
     return {
-        "status_counts": dict(states),
+        "status_counts": {state: count for state, count in states.items() if count},
         "values": [
             {"value": value, "count": count} for value, count in sorted(values.items())
         ],
@@ -897,7 +1106,11 @@ def _qualification_summary(
     def add(applies_to: str, qualification: Mapping[str, object]) -> None:
         key = applies_to + ":" + _canonical_json(qualification)
         current = grouped.get(key)
-        grouped[key] = (applies_to, qualification, 1 if current is None else current[2] + 1)
+        grouped[key] = (
+            applies_to,
+            qualification,
+            1 if current is None else current[2] + 1,
+        )
 
     for qualification in _qualifications(graph.evidence[anchor_ref]):
         add("anchor_evidence", qualification)
@@ -919,9 +1132,7 @@ def _coverage_basis(graph: _ResultGraph, ref: str) -> dict[str, object]:
     members = graph.members(ref, "represents")
     qualified = sum(bool(member.get("qualifications")) for member in members)
     return {
-        "relationship": "represents",
         "member_count": len(members),
-        "unqualified_member_count": len(members) - qualified,
         "qualified_member_count": qualified,
         "qualification_groups": _qualification_summary_for_members(members),
         "member_specific_basis": any("basis" in member for member in members),
@@ -945,7 +1156,10 @@ def _qualification_summary_for_members(
 
 def _evidence_detail(graph: _ResultGraph, ref: str) -> dict[str, object]:
     view = graph.evidence[ref]
-    return {**dict(view), "roles": list(_evidence_roles(view))}
+    return {
+        **{key: value for key, value in view.items() if key not in {"kind", "ref"}},
+        "roles": list(_evidence_roles(view)),
+    }
 
 
 def _prepared_target(
@@ -953,9 +1167,7 @@ def _prepared_target(
 ) -> dict[str, object]:
     target = member.get("target")
     if not isinstance(target, Mapping):
-        raise _ReadFailure(
-            "result_inconsistent", "An expands_to target is not typed."
-        )
+        raise _ReadFailure("result_inconsistent", "An expands_to target is not typed.")
     kind = target.get("kind")
     ref = target.get("ref")
     if not isinstance(ref, str) or kind not in {"source_item", "evidence"}:
@@ -981,7 +1193,8 @@ def _prepared_target(
         account = graph.accounts.get(ref)
         if view is None or account is None:
             raise _ReadFailure(
-                "result_inconsistent", "Prepared Source Item is missing from the Result."
+                "result_inconsistent",
+                "Prepared Source Item is missing from the Result.",
             )
         result["scope"] = account.get("scope")
         result["condition"] = account.get("condition")
@@ -1009,7 +1222,8 @@ def _resolved_member(graph: _ResultGraph, ref: str) -> dict[str, object]:
     account = graph.accounts.get(ref)
     if view is None or account is None:
         raise _ReadFailure(
-            "result_inconsistent", "Resolved Source Item is missing from Result accounting."
+            "result_inconsistent",
+            "Resolved Source Item is missing from Result accounting.",
         )
     result: dict[str, object] = {
         "source_item_ref": ref,
@@ -1044,7 +1258,9 @@ def _geo_projection(graph: _ResultGraph) -> dict[str, object]:
     state_names = (*_OBSERVATION_STATES, "unreported")
     gps_counts = Counter({state: 0 for state in state_names})
     gpx_counts = Counter({state: 0 for state in state_names})
-    combined = Counter({state: 0 for state in ("available", "missing", "failed", "conflicting")})
+    combined = Counter(
+        {state: 0 for state in ("available", "missing", "failed", "conflict")}
+    )
     groups: dict[str, dict[str, object]] = {}
 
     for source_ref in sorted(graph.sources):
@@ -1065,7 +1281,7 @@ def _geo_projection(graph: _ResultGraph) -> dict[str, object]:
         )
         selected = gpx_coordinate or gps_coordinate
         if conflict:
-            combined["conflicting"] += 1
+            combined["conflict"] += 1
         if selected is not None:
             combined["available"] += 1
             key = _canonical_json(selected)
@@ -1078,58 +1294,71 @@ def _geo_projection(graph: _ResultGraph) -> dict[str, object]:
                 },
             )
             cast(list[str], group["source_item_refs"]).append(source_ref)
-        elif _geo_observation_state(gps) == "failed" or _geo_observation_state(gpx) == "failed":
+        elif (
+            _geo_observation_state(gps) == "failed"
+            or _geo_observation_state(gpx) == "failed"
+        ):
             combined["failed"] += 1
         else:
             combined["missing"] += 1
 
-    evidence_by_source: dict[str, set[str]] = defaultdict(set)
-    for relationship in graph.relationships:
-        if relationship.get("relation") != "represents":
-            continue
-        origin = relationship.get("origin")
-        member = relationship.get("member")
-        if not isinstance(origin, str) or origin not in graph.evidence or not isinstance(member, Mapping):
-            continue
-        target = member.get("target")
-        if not isinstance(target, str) or target not in graph.sources:
-            continue
-        if _one_observation(graph.evidence[origin], "reverse_geocode_candidate") is not None:
-            evidence_by_source[target].add(origin)
-
-    coordinate_groups: list[dict[str, object]] = []
+    coordinate_groups = []
     incomplete = False
-    for key in sorted(groups):
-        group = groups[key]
-        members = tuple(sorted(cast(list[str], group["source_item_refs"])))
-        evidence_refs = sorted(
-            {ref for member in members for ref in evidence_by_source.get(member, ())}
-        )
-        outcomes: set[str] = set()
-        provenance: list[object] = []
-        qualifications: list[object] = []
-        for evidence_ref in evidence_refs:
-            observation = _one_observation(
-                graph.evidence[evidence_ref], "reverse_geocode_candidate"
-            )
-            assert observation is not None
-            outcomes.add(
-                {
+    for group in sorted(
+        groups.values(),
+        key=lambda item: (
+            item["coordinate"]["latitude"],
+            item["coordinate"]["longitude"],
+            item["coordinate"]["datum"],
+        ),
+    ):
+        members = tuple(sorted(group["source_item_refs"]))
+        components = {}
+        for name, component in (
+            ("address_candidate", "address"),
+            ("nearby_place_candidates", "nearby_places"),
+        ):
+            counts = Counter()
+            for ref in members:
+                observation = _one_observation(graph.sources[ref], name)
+                outcome = {
                     "available": "success",
                     "missing": "no_result",
-                    "failed": "failure",
-                }.get(str(observation.get("status")), "failure")
-            )
-            if "provenance" in observation:
-                provenance.append(observation["provenance"])
-            qualifications.extend(_qualifications(observation))
-        if not outcomes:
-            outcome = "not_requested"
-            incomplete = True
-        elif len(outcomes) == 1:
-            outcome = next(iter(outcomes))
-        else:
-            outcome = "failure" if "failure" in outcomes else "success"
+                    "failed": "failed",
+                    "not_checked": "not_requested",
+                    "not_applicable": "not_applicable",
+                }.get(
+                    observation.get("status") if observation else None, "not_requested"
+                )
+                if observation and any(
+                    q.get("code") == "geo_effect_indeterminate"
+                    for q in observation.get("qualifications", ())
+                ):
+                    outcome = "indeterminate"
+                counts[outcome] += 1
+                if outcome in {"not_requested", "indeterminate"}:
+                    incomplete = True
+            components[component] = dict(counts)
+        evidence_refs = sorted(
+            {
+                str(relation["origin"])
+                for relation in graph.relationships
+                if relation.get("relation") == "represents"
+                and relation["member"].get("target") in members
+                and any(
+                    item.get("name")
+                    in {
+                        "address_candidate",
+                        "nearby_place_candidates",
+                        "reverse_geocode_candidate",
+                    }
+                    and item.get("status") == "available"
+                    for item in _observations(
+                        graph.evidence.get(relation["origin"], {})
+                    )
+                )
+            }
+        )
         coordinate_groups.append(
             {
                 "coordinate": group["coordinate"],
@@ -1139,29 +1368,21 @@ def _geo_projection(graph: _ResultGraph) -> dict[str, object]:
                     "coordinate": group["coordinate"],
                     "selection_rule": "gpx_over_gps_exact_normalized_v1",
                 },
-                "reverse_geocode": outcome,
+                "components": components,
                 "candidate_evidence_refs": evidence_refs,
-                "provenance": provenance,
-                "qualifications": qualifications,
             }
         )
-
-    acquisition_status = (
-        "not_applicable" if not coordinate_groups else "incomplete" if incomplete else "complete"
-    )
     return {
-        "acquisition_status": acquisition_status,
+        "acquisition_status": "not_applicable"
+        if not coordinate_groups
+        else "incomplete"
+        if incomplete
+        else "complete",
         "coordinate_evidence": {
-            "gps": dict(gps_counts),
-            "gpx": dict(gpx_counts),
-            "combined": dict(combined),
+            "gps": {key: count for key, count in gps_counts.items() if count},
+            "gpx": {key: count for key, count in gpx_counts.items() if count},
+            "combined": {key: count for key, count in combined.items() if count},
         },
-        "deduplication": {
-            "rule": "exact_normalized_coordinate_v1",
-            "fields": ["latitude", "longitude", "datum"],
-            "rounding": "none",
-        },
-        "unique_coordinate_count": len(coordinate_groups),
         "coordinate_groups": coordinate_groups,
     }
 
@@ -1235,21 +1456,23 @@ def _resolve_source_set(
         )
         if source_set.get("selection_rule") != "gpx_over_gps_exact_normalized_v1":
             raise _ReadFailure(
-                "invalid_source_set", "Geo Source Set has an unsupported selection rule."
+                "invalid_source_set",
+                "Geo Source Set has an unsupported selection rule.",
             )
         coordinate = source_set.get("coordinate")
         if not isinstance(coordinate, Mapping):
             raise _ReadFailure(
                 "invalid_source_set", "Geo Source Set coordinate must be an object."
             )
-        target = _geo_coordinate_value(
-            {"status": "available", "value": coordinate}
-        )
+        target = _geo_coordinate_value({"status": "available", "value": coordinate})
         assert target is not None
         members: set[str] = set()
         for source_ref, source in graph.sources.items():
             account = graph.accounts.get(source_ref)
-            if not isinstance(account, Mapping) or account.get("scope") != "source_media":
+            if (
+                not isinstance(account, Mapping)
+                or account.get("scope") != "source_media"
+            ):
                 continue
             selected = _geo_coordinate_value(
                 _one_observation(source, "gpx_coordinates")
@@ -1309,9 +1532,9 @@ def _resolve_source_set(
             raise _ReadFailure(
                 "invalid_source_set", "difference operands must be source sets."
             )
-        return _resolve_source_set(
-            graph, base, depth=depth + 1
-        ) - _resolve_source_set(graph, subtract, depth=depth + 1)
+        return _resolve_source_set(graph, base, depth=depth + 1) - _resolve_source_set(
+            graph, subtract, depth=depth + 1
+        )
     raise _ReadFailure("invalid_source_set", "source_set has an unsupported kind.")
 
 
@@ -1385,9 +1608,7 @@ def _page_request(
 ) -> tuple[int, int]:
     page = {} if value is None else value
     if not isinstance(page, Mapping) or set(page) - {"limit", "cursor"}:
-        raise _ReadFailure(
-            "invalid_request", "page may contain only limit and cursor."
-        )
+        raise _ReadFailure("invalid_request", "page may contain only limit and cursor.")
     limit = page.get("limit", default)
     if (
         not isinstance(limit, int)
@@ -1395,7 +1616,8 @@ def _page_request(
         or not 1 <= limit <= maximum
     ):
         raise _ReadFailure(
-            "invalid_request", f"page.limit must be an integer from 1 through {maximum}."
+            "invalid_request",
+            f"page.limit must be an integer from 1 through {maximum}.",
         )
     cursor = page.get("cursor")
     if cursor is None:
@@ -1428,22 +1650,26 @@ def _paged_response(
     result_digest: str,
     operation: str,
     query_key: str,
-    page_extra: Mapping[str, object] | None = None,
+    max_items: int | None = None,
+    byte_budget: int | None = None,
 ) -> dict[str, object]:
     if offset > len(values):
         raise _ReadFailure("invalid_cursor", "Cursor position is outside the result.")
     selected: list[object] = []
     byte_limited = False
-    for value in values[offset : offset + limit]:
+    effective_limit = limit if max_items is None else min(limit, max_items)
+    effective_budget = (
+        _MAX_RESPONSE_BYTES
+        if byte_budget is None
+        else min(_MAX_RESPONSE_BYTES, byte_budget)
+    )
+    for value in values[offset : offset + effective_limit]:
         candidate = [*selected, value]
         candidate_next_offset = offset + len(candidate)
         candidate_complete = candidate_next_offset >= len(values)
         candidate_page: dict[str, object] = {
-            **dict(page_extra or {}),
-            "returned": len(candidate),
             "total": len(values),
-            "complete": candidate_complete,
-            "stop_reason": "complete" if candidate_complete else "byte_limit",
+            "next_cursor": None,
         }
         if not candidate_complete:
             candidate_page["next_cursor"] = _encode_cursor(
@@ -1459,7 +1685,7 @@ def _paged_response(
             collection: candidate,
             "page": candidate_page,
         }
-        if _encoded_size(provisional) > _MAX_RESPONSE_BYTES:
+        if _encoded_size(provisional) > effective_budget:
             byte_limited = True
             break
         selected = candidate
@@ -1471,14 +1697,11 @@ def _paged_response(
     next_offset = offset + len(selected)
     complete = next_offset >= len(values)
     page: dict[str, object] = {
-        **dict(page_extra or {}),
-        "returned": len(selected),
         "total": len(values),
-        "complete": complete,
-        "stop_reason": (
-            "complete" if complete else "byte_limit" if byte_limited else "limit"
-        ),
+        "next_cursor": None,
     }
+    if byte_limited and not complete:
+        page["stop_reason"] = "byte_limit"
     if not complete:
         page["next_cursor"] = _encode_cursor(
             result_digest,
@@ -1506,7 +1729,7 @@ def _encode_cursor(
         {
             "limit": limit,
             "offset": offset,
-            "operation": operation,
+            "action": operation,
             "query": query_key,
             "result_ref": result_ref,
         }
@@ -1544,7 +1767,7 @@ def _decode_cursor(
     if not isinstance(value, dict) or value != {
         "limit": limit,
         "offset": value.get("offset"),
-        "operation": operation,
+        "action": operation,
         "query": query_key,
         "result_ref": result_ref,
     }:
@@ -1559,7 +1782,8 @@ def _require_keys(value: Mapping[str, object], allowed: set[str]) -> None:
     unknown = set(value) - allowed
     if unknown:
         raise _ReadFailure(
-            "invalid_request", f"Request contains unsupported fields: {sorted(unknown)}."
+            "invalid_request",
+            f"Request contains unsupported fields: {sorted(unknown)}.",
         )
 
 
@@ -1673,21 +1897,7 @@ def _error(
     operation: str | None,
     failure: _ReadFailure,
 ) -> dict[str, object]:
-    error: dict[str, object] = {
-        "code": failure.code,
-        "message": str(failure),
-        "retryable": failure.retryable,
-    }
-    if failure.details:
-        error["details"] = failure.details
-    response: dict[str, object] = {
-        "outcome": "error",
-        "operation": operation if operation in {"review", "expand", "resolve"} else "unknown",
-        "error": error,
-    }
-    if result_ref:
-        response["result_ref"] = result_ref
-    return response
+    return {"error": {"code": failure.code, "message": str(failure)}}
 
 
 __all__ = ["PrecheckReadTool"]

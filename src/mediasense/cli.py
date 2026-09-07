@@ -234,7 +234,11 @@ def _call_tool(args: argparse.Namespace) -> int:
                 + "\n\nTool result\n"
                 + json.dumps(result, ensure_ascii=False, indent=2)
             )
-            outcome = result.get("outcome")
+            outcome = (
+                ("error" if "error" in result else "ok")
+                if args.name in {"mediasense.precheck.run", "mediasense.precheck.read"}
+                else result.get("outcome")
+            )
     except (HostRequestError, OSError, ValueError, json.JSONDecodeError) as error:
         value = {
             "outcome": "error",
@@ -284,9 +288,7 @@ def _dataset_text(value: dict[str, object]) -> str:
                 for name, facts in providers.items()
                 if isinstance(facts, dict) and facts.get("capability") == "available"
             ]
-            lines.append(
-                "  map providers: " + (", ".join(available) or "unavailable")
-            )
+            lines.append("  map providers: " + (", ".join(available) or "unavailable"))
         sources = config.get("sources", [])
         lines.append(
             "  config: "

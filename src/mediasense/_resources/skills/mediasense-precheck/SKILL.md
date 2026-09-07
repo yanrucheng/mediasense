@@ -13,7 +13,7 @@ goal.
 ## Tool Host prerequisite
 
 Proceed only when the current Honeycomb session exposes a compatible MediaSense
-`0.7.x` Tool Host and `mediasense.dataset.open`, `mediasense.precheck.run`,
+`0.8.x` Tool Host and `mediasense.dataset.open`, `mediasense.precheck.run`,
 `mediasense.precheck.read`, and `mediasense.geo.query` are discoverable. A CLI found in `PATH` or an MCP table
 present on disk is not sufficient. If the Host is absent or incompatible, stop
 PreCheck work and use the `mediasense` product entry Skill's local Honeycomb
@@ -46,12 +46,12 @@ the current session reloaded a newly written project configuration.
 The first local discovery pass may pause with
 `reason.code=scope_confirmation_required`. Treat the returned inventory as Tool
 facts, not a Tool judgment about what the user wants. It reports a bounded
-source-relative tree with counts, bytes, kinds, size buckets, representative
+source-relative entries view with counts, bytes, kinds, size buckets, representative
 paths, and discovery limitations. Use `status.scope_path` to expand a collapsed
 subtree and `status.scope_after` to continue its child list when the current
 confirmation permits it.
 
-Interpret the tree for the Human. Explain why a subtree may be a cache, derived
+Interpret the entries for the Human. Explain why a subtree may be a cache, derived
 output, backup, index, or legitimate hidden media as Agent judgment; never claim
 that a dot name or Tool statistic proves that meaning. Focus attention on
 media-bearing or materially large subtrees rather than enumerating every
@@ -74,6 +74,9 @@ paused before expensive work.
 
 Learn enough about the Dataset and intended Plan use to select a suitable
 available initial configuration, then start through `mediasense.precheck.run`.
+Both PreCheck Tools use flat inputs: put `action`, the exact `dataset_ref`, and
+operation parameters at the top level. Do not send a `request` wrapper or an
+`operation` alias. A successor start still carries `dataset_ref` alongside `prior_result_ref`.
 Do not ask the user to guess a desired Evidence count or treat one universal
 count as the definition of good compression. The useful frontier depends on the
 Dataset; its size is an observed result to review alongside coverage, variation,
@@ -123,26 +126,23 @@ the transition was accepted; continue observing until the Tool reports a
 truthful attention or terminal state.
 
 Treat `status` as observational: polling never starts, resumes, or reclaims a
-worker. There is no public queued state. If activity is `suspected_stalled`,
+worker. There is no public queued state. If reason.code is `suspected_stalled`,
 report its required reason and use explicit `resume` only when the user already
 authorized continuation; do not wait or poll as a substitute for recovery.
 
-Keep the two status views distinct. `progress` is Source Item accounting;
-`activity` is current execution evidence. Report `activity.phase`, its exact or
-explicitly unknown completed/reused/failed/remaining/total Work counts,
-`last_progress_at`, and any bounded error summary when a Run is long-lived. Do
-not derive a percentage, ETA, throughput, or success promise from those counts.
-Localized activity errors do not make the whole Run failed while unrelated Work
-can continue.
+Keep counting domains distinct. `progress` counts terminal logical work in the
+current phase, including valid reuse and finalized localized failure.
+`accounting` reports Source Item coverage through status include.
+Unknown counts and times are null. Do not derive a
+percentage, ETA, throughput, or success promise from counts across phases.
+Use `progress_scope_changed` to reset comparisons after a same-phase membership change.
+Default issues contain at most five classes; when issues_truncated is true,
+read diagnostics pages for all classes and their exact units.
 
-Interpret liveness conservatively: `working` means both worker liveness and
-recent durable progress are observed; `no_recent_progress` means the worker is
-responsive but no durable Work or phase boundary has advanced recently;
-`suspected_stalled` means liveness itself is stale after execution began.
-Neither quiet state proves failure. Preserve the `run_ref`, report the last
-progress time and available controls, and recheck the same Run rather than
-starting a duplicate. `waiting`, `paused`, and `finished` must be interpreted
-together with the top-level state, reason, confirmation, and published Result.
+A responsive owner may report `no_recent_progress`; expired owner liveness
+reports `suspected_stalled` through reason. Status never recovers execution.
+Follow allowed_actions and the reported condition. A control response's state is
+what is observed after acceptance, not a promise that pause or cancellation has finished.
 
 Follow the Tool's localized recovery facts:
 
@@ -174,11 +174,13 @@ representative location applies to every member. Exact or near-coordinate
 deduplication is a final request defense, not a substitute for this media-aware
 step.
 
-Every Source Item with an available final coordinate must receive its own
-qualified address-and-nearby-place outcome before a Result is Plan-ready. That does
-not require one
-Provider call per Source Item or per component. A non-empty
-compressed query set is a required Result closure gate. When the Run pauses,
+Every Source Item has separate address_candidate and nearby_place_candidates
+Observations. Missing coordinates, no_result, known terminal service failure, and
+policy-disabled lookup do not alone block Plan, even if the whole collection lacks location.
+The Tool owns finite authorized retries; do not resubmit terminal failures in an Agent loop.
+This does not require one
+Provider call per Source Item or per component. Pending confirmation, in-flight
+acquisition, indeterminate effects, and invalid Result data still require their real resolution. When the Run pauses,
 proceed only if the returned confirmation identifies the exact bounded
 `mediasense.geo.query` request fingerprint and effect envelope; otherwise stop and
 surface the ambiguity.
@@ -234,15 +236,15 @@ rewrites, or proof that any one count is inherently correct.
 ## Judge the immutable Result
 
 After publication, `review` the exact `result_ref` through
-`mediasense.precheck.read`. Interpret coverage, readiness, and integrity as
-independent axes and preserve qualifications, omissions, provenance, confidence,
+`mediasense.precheck.read`. Interpret coverage and readiness as
+independent axes; successful Read enforces integrity and preserve qualifications, omissions, provenance, confidence,
 failures, and externally observable cost. Follow each card's
 `available_expansions` menu for targeted detail and use its
-`resolvable_source_set` when exact members are needed.
+`source_set` when exact members are needed.
 
 Before handoff, rely on Result `readiness` as the stage contract. Every Source Item
-with an available final coordinate must expose its own address and nearby-place
-component outcomes; visual compression must not reduce that coverage. Use
+must expose honest component outcomes or explicit not_checked historical gaps;
+visual compression must not reduce source coverage. Use
 `geo_summary` only when
 diagnosing PreCheck acquisition, deduplication, provider outcomes, or historical
 Results. Each coordinate group contains a compact `geo_coordinate` Source Set;

@@ -6,6 +6,7 @@ import argparse
 import json
 import os
 import subprocess
+import sys
 import tempfile
 import tomllib
 import zipfile
@@ -77,6 +78,10 @@ def main() -> int:
         home.mkdir()
         source.mkdir()
         environment = os.environ.copy()
+        environment.setdefault(
+            "UV_CACHE_DIR",
+            subprocess.check_output(["uv", "cache", "dir"], text=True).strip(),
+        )
         environment.update(
             {
                 "UV_TOOL_DIR": str(tool_root),
@@ -91,7 +96,12 @@ def main() -> int:
         if args.offline:
             install_command.append("--offline")
         install_command.extend(
-            ["--python", "3.11", "--no-python-downloads", str(wheel)]
+            [
+                "--python",
+                str(Path(sys.executable).resolve()),
+                "--no-python-downloads",
+                str(wheel),
+            ]
         )
         _run(
             install_command,
@@ -291,17 +301,17 @@ async def _mcp_scenario(
         started = await session.call_tool(
             "mediasense.precheck.run",
             {
-                "dataset_ref": dataset_ref,
-                "request": {
+                **{
                     "action": "start",
                     "dataset_ref": dataset_ref,
                     "request_id": "request:installed-first-use",
                 },
+                "dataset_ref": dataset_ref,
             },
         )
         if started.is_error or started.structured_content is None:
             raise AssertionError("installed MCP PreCheck start failed")
-        if started.structured_content.get("outcome") != "ok" or not str(
+        if "error" in started.structured_content or not str(
             started.structured_content.get("run_ref", "")
         ).startswith("precheck-run:"):
             raise AssertionError(
@@ -310,16 +320,20 @@ async def _mcp_scenario(
         status = await session.call_tool(
             "mediasense.precheck.run",
             {
-                "dataset_ref": dataset_ref,
-                "request": {
+                **{
+                    "dataset_ref": "dataset:dataset-a",
                     "action": "status",
                     "run_ref": "precheck-run:not-found",
                 },
+                "dataset_ref": dataset_ref,
             },
         )
-        if status.is_error or status.structured_content is None:
-            raise AssertionError("installed MCP non-destructive Tool call failed")
-        if status.structured_content.get("error", {}).get("code") != "run_not_found":
+        if not status.is_error:
+            raise AssertionError("installed MCP query failure did not set isError")
+        if (
+            json.loads(status.content[0].text).get("error", {}).get("code")
+            != "run_not_found"
+        ):
             raise AssertionError("installed MCP Tool returned an unexpected outcome")
 
         created = await session.call_tool(
@@ -370,9 +384,7 @@ def _verify_wheel(wheel: Path, expected_version: str) -> None:
     if "mediasense = mediasense.cli:main" not in entry_points:
         raise AssertionError("wheel does not contain the mediasense entry point")
     if contracts != EXPECTED_CONTRACT_FILES:
-        raise AssertionError(
-            f"wheel contract resources mismatch: {sorted(contracts)}"
-        )
+        raise AssertionError(f"wheel contract resources mismatch: {sorted(contracts)}")
     if skill_files != EXPECTED_SKILL_FILES:
         raise AssertionError(f"wheel Skill resources mismatch: {sorted(skill_files)}")
 

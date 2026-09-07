@@ -52,7 +52,7 @@ def test_doctor_rejects_skill_release_mismatch(
     monkeypatch.setattr(
         "mediasense.runtime.doctor.validate_skill_release_line",
         lambda _version: (_ for _ in ()).throw(
-            ValueError("installed Skill declares 0.6.x; expected only 0.7.x")
+            ValueError("installed Skill declares 0.7.x; expected only 0.8.x")
         ),
     )
 
@@ -60,7 +60,7 @@ def test_doctor_rejects_skill_release_mismatch(
     result = json.loads(capsys.readouterr().out)
     resources = next(item for item in result["checks"] if item["name"] == "resources")
     assert resources["status"] == "error"
-    assert "expected only 0.7.x" in resources["message"]
+    assert "expected only 0.8.x" in resources["message"]
 
 
 def test_dataset_open_command_reports_selected_workspace(
@@ -139,7 +139,10 @@ def test_tool_discovery_lists_dataset_and_seven_tools(capsys) -> None:
 
     assert run(["tools", "show", "mediasense.precheck.run", "--json"]) == 0
     detail = json.loads(capsys.readouterr().out)
-    assert detail["input_schema"]["$id"] == ("urn:mediasense:tool:precheck-run-input")
+    assert {
+        branch["properties"]["action"]["const"]
+        for branch in detail["input_schema"]["oneOf"]
+    } == {"start", "status", "pause", "resume", "cancel"}
 
 
 def test_tool_call_reports_dataset_binding_and_business_result(
@@ -149,6 +152,11 @@ def test_tool_call_reports_dataset_binding_and_business_result(
     source.mkdir()
     workspace = tmp_path / "workspace"
 
+    assert (
+        run(["dataset", "open", str(source), "--workspace", str(workspace), "--json"])
+        == 0
+    )
+    dataset_ref = json.loads(capsys.readouterr().out)["dataset_ref"]
     exit_code = run(
         [
             "tools",
@@ -159,7 +167,13 @@ def test_tool_call_reports_dataset_binding_and_business_result(
             "--workspace",
             str(workspace),
             "--request",
-            '{"action":"status","run_ref":"precheck-run:not-found"}',
+            json.dumps(
+                {
+                    "action": "status",
+                    "dataset_ref": dataset_ref,
+                    "run_ref": "precheck-run:not-found",
+                }
+            ),
             "--json",
         ]
     )

@@ -1,6 +1,6 @@
 # Installation and first use
 
-MediaSense 0.7 is a pre-release local product for Python 3.11 or newer. macOS is
+MediaSense 0.8 is a pre-release local product for Python 3.11 or newer. macOS is
 the first product-certified platform. Linux can run the Python package, but its
 removable-volume and Apply filesystem behavior is not yet certified. Windows is
 not currently supported.
@@ -39,7 +39,7 @@ replace an existing MediaSense tool environment.
 For a built release artifact, install the exact wheel instead:
 
 ```bash
-uv tool install ./dist/mediasense-0.7.2-py3-none-any.whl
+uv tool install ./dist/mediasense-0.8.0-py3-none-any.whl
 ```
 
 `uv` may download declared Python dependencies. MediaSense does not install
@@ -145,14 +145,15 @@ trusted channel used to install it. MediaSense checks manifest and component-sto
 versions before ordinary use and refuses newer or unsupported state without
 rewriting it.
 
-MediaSense `0.7.0` replaces the public PreCheck Read `inspect` and `traverse`
-operations with `review`, `expand`, and `resolve`, without a compatibility
-layer. Replace an older tool environment with the exact trusted current `0.7.x`
-artifact; do not keep both under the same `mediasense` command or infer
-compatibility from six-Tool discovery alone:
+MediaSense `0.8.0` replaces nested PreCheck requests with flat `action` and
+`dataset_ref` inputs and updates the corresponding response contracts. The
+run/read Tools still expose nine actions; the former `request` wrapper and
+`operation` alias are unsupported. Replace an older tool environment with the
+exact trusted current `0.8.x` artifact and update its Skills; matching Tool names
+alone do not establish compatibility:
 
 ```bash
-uv tool install --force ./dist/mediasense-0.7.2-py3-none-any.whl
+uv tool install --force ./dist/mediasense-0.8.0-py3-none-any.whl
 ```
 
 Application versions follow SemVer during `0.y.z`: minor releases may contain
@@ -160,21 +161,24 @@ documented breaking CLI, Host, manifest, or store changes; patch releases are
 compatible fixes. A changed application version alone never invalidates all
 PreCheck work.
 
-The supported `0.7.x` combination is:
+The supported `0.8.x` combination is:
 
 | Surface | Supported value |
 | --- | --- |
-| Application | `0.7.x` |
-| Dataset manifest | `1` |
+| Application | `0.8.x` |
+| Dataset manifest | `3` |
 | PreCheck store | `17` |
-| Plan store | `2` |
+| Plan store | `3` |
 | Geo journal | `1` |
 | Apply store | `2` |
 | Packaged Skills | From the same MediaSense release |
 
-PreCheck store 16 has no supported migration to 17. Preserve an existing
-`0.3.x` Dataset workspace for rollback and create a distinct workspace for
-`0.7.x`; do not copy only its PreCheck database or edit its version marker.
+Older manifest/store formats without a supported migration are refused; do not
+edit their version markers or copy only a PreCheck database into a new workspace.
+An application upgrade does not automatically discard retained data. For a fresh
+start, explicitly remove the selected Dataset workspace from discovery only after
+deciding that its Results and recovery history are no longer needed. Preserve
+source media and unrelated Dataset workspaces.
 
 After replacing the CLI, upgrade the four release-matched Skills in each
 explicit Honeycomb:
@@ -185,7 +189,7 @@ mediasense skills upgrade --target <absolute-honeycomb>/.agents/skills
 
 This operation changes only the four MediaSense Skill directories, preserves
 unrelated Skills, and rolls back its own replacements if the set cannot be
-completed. Start a new Agent session afterwards so it loads the `0.7.x` Skills
+completed. Start a new Agent session afterwards so it loads the `0.8.x` Skills
 and MCP Host.
 
 Public Tool contracts are identified by their stable contract ID and exact schema

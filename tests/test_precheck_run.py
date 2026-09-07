@@ -9,7 +9,6 @@ import sqlite3
 
 import pytest
 from jsonschema import Draft202012Validator
-from referencing import Registry, Resource
 from PIL import Image
 
 from mediasense.precheck import (
@@ -31,12 +30,30 @@ def _output_validator() -> Draft202012Validator:
     run_contract = json.loads(
         (RUN_SPEC / "precheck-run.tool.json").read_text(encoding="utf-8")
     )
-    read_contract = json.loads(
-        (READ_SPEC / "precheck-read.tool.json").read_text(encoding="utf-8")
-    )
-    output = read_contract["outputSchema"]
-    registry = Registry().with_resource(output["$id"], Resource.from_contents(output))
-    return Draft202012Validator(run_contract["outputSchema"], registry=registry)
+    return Draft202012Validator(run_contract["outputSchema"])
+
+
+def _disclosure():
+    return {
+        "geo_request_fingerprint": "sha256:" + "a" * 64,
+        "operation": "resolve_place",
+        "coordinates": [{"latitude": 22.3, "longitude": 114.1, "datum": "WGS84"}],
+        "pending_logical_queries": 237,
+        "source_item_outcomes": 237,
+        "nearby_radius_meters": 500,
+        "max_places": 30,
+        "transmitted_data_classes": ["coordinate", "datum", "locale"],
+        "providers": [{"provider": "fake", "data_handling": "synthetic"}],
+        "max_provider_requests": 711,
+        "max_billable_units": None,
+        "billable_calls": None,
+        "result_retention": "immutable_precheck_result",
+        "retry_policy": {
+            "max_attempts": 3,
+            "backoff_seconds": [1, 3],
+            "coordinate_deadline_seconds": 120,
+        },
+    }
 
 
 def _workspace(tmp_path: Path, *dataset_ids: str) -> tuple[Path, AccountingStore]:
@@ -119,8 +136,14 @@ def test_start_is_durable_idempotent_and_conflict_safe(tmp_path: Path) -> None:
 
     started = tool.run(request)
     _assert_valid(started)
-    assert started["state"] == "running"
-    tool.run({"action": "pause", "run_ref": started["run_ref"]})
+    assert set(started) == {"run_ref"}
+    tool.run(
+        {
+            "dataset_ref": "dataset:dataset-a",
+            "action": "pause",
+            "run_ref": started["run_ref"],
+        }
+    )
 
     replayed = tool.run(request)
     _assert_valid(replayed)
@@ -158,54 +181,75 @@ def test_pause_resume_cancel_are_target_idempotent(tmp_path: Path) -> None:
         }
     )
     run_ref = str(started["run_ref"])
-    running = tool.run({"action": "status", "run_ref": run_ref})
+    running = tool.run(
+        {"dataset_ref": "dataset:dataset-a", "action": "status", "run_ref": run_ref}
+    )
     _assert_valid(running)
-    assert running["activity"]["state"] == "suspected_stalled"
-    assert running["reason"]["code"] == "execution_owner_missing"
+    assert running["reason"]["code"] == "suspected_stalled"
+    assert running["reason"]["code"] == "suspected_stalled"
     assert set(running["allowed_actions"]) == {"resume", "cancel"}
-    assert running["progress"] == {
-        "discovered": "unknown",
-        "accounted": "unknown",
-        "usable": "unknown",
-        "exceptional": "unknown",
-        "unresolved": "unknown",
+    assert set(running["progress"]) == {
+        "phase",
+        "unit",
+        "processed",
+        "total",
+        "last_progress_at",
     }
+    assert running["progress"]["total"] is None
 
-    paused = tool.run({"action": "pause", "run_ref": run_ref})
+    paused = tool.run(
+        {"dataset_ref": "dataset:dataset-a", "action": "pause", "run_ref": run_ref}
+    )
     _assert_valid(paused)
-    assert paused["observed_state"] == "running"
-    paused_again = tool.run({"action": "pause", "run_ref": run_ref})
+    assert paused["state"] == "paused"
+    paused_again = tool.run(
+        {"dataset_ref": "dataset:dataset-a", "action": "pause", "run_ref": run_ref}
+    )
     _assert_valid(paused_again)
-    assert paused_again["observed_state"] == "paused"
-    paused_status = tool.run({"action": "status", "run_ref": run_ref})
+    assert paused_again["state"] == "paused"
+    paused_status = tool.run(
+        {"dataset_ref": "dataset:dataset-a", "action": "status", "run_ref": run_ref}
+    )
     _assert_valid(paused_status)
     assert paused_status["reason"]["code"] == "user_requested"
-    assert "published_result" not in paused_status
+    assert "result" not in paused_status
 
-    resumed = tool.run({"action": "resume", "run_ref": run_ref})
+    resumed = tool.run(
+        {"dataset_ref": "dataset:dataset-a", "action": "resume", "run_ref": run_ref}
+    )
     _assert_valid(resumed)
-    assert resumed["observed_state"] == "paused"
-    resumed_again = tool.run({"action": "resume", "run_ref": run_ref})
+    assert resumed["state"] == "running"
+    resumed_again = tool.run(
+        {"dataset_ref": "dataset:dataset-a", "action": "resume", "run_ref": run_ref}
+    )
     _assert_valid(resumed_again)
-    assert resumed_again["observed_state"] == "running"
+    assert resumed_again["state"] == "running"
 
-    cancelled = tool.run({"action": "cancel", "run_ref": run_ref})
+    cancelled = tool.run(
+        {"dataset_ref": "dataset:dataset-a", "action": "cancel", "run_ref": run_ref}
+    )
     _assert_valid(cancelled)
-    cancelled_again = tool.run({"action": "cancel", "run_ref": run_ref})
+    cancelled_again = tool.run(
+        {"dataset_ref": "dataset:dataset-a", "action": "cancel", "run_ref": run_ref}
+    )
     _assert_valid(cancelled_again)
-    assert cancelled_again["observed_state"] == "cancelled"
-    cancelled_status = tool.run({"action": "status", "run_ref": run_ref})
+    assert cancelled_again["state"] == "cancelled"
+    cancelled_status = tool.run(
+        {"dataset_ref": "dataset:dataset-a", "action": "status", "run_ref": run_ref}
+    )
     _assert_valid(cancelled_status)
     assert cancelled_status["state"] == "cancelled"
-    assert "published_result" not in cancelled_status
+    assert "result" not in cancelled_status
 
-    refused = tool.run({"action": "pause", "run_ref": run_ref})
+    refused = tool.run(
+        {"dataset_ref": "dataset:dataset-a", "action": "pause", "run_ref": run_ref}
+    )
     _assert_valid(refused)
     assert refused["error"] == {
         "code": "invalid_state",
         "message": "A cancelled Run cannot pause.",
         "current_state": "cancelled",
-        "allowed_actions": [],
+        "run_ref": run_ref,
     }
 
 
@@ -246,23 +290,35 @@ def test_confirmation_binds_authority_to_the_frozen_work_set(tmp_path: Path) -> 
         unit="logical_queries",
         skip_allowed=False,
         pending_fingerprint="sha256:" + "a" * 64,
-        disclosure={"provider_policy": "unknown"},
+        disclosure=_disclosure(),
     )
     _assert_valid(paused)
     assert paused["state"] == "paused"
-    assert paused["activity"]["state"] == "waiting"
-    assert paused["confirmation"]["quantity"] == 237
+    assert paused["reason"]["resume_when"]
+    assert paused["confirmation"]["disclosure"]["pending_logical_queries"] == 237
 
-    missing_decision = tool.run({"action": "resume", "run_ref": run_ref})
+    missing_decision = tool.run(
+        {"dataset_ref": "dataset:dataset-a", "action": "resume", "run_ref": run_ref}
+    )
     _assert_valid(missing_decision)
     assert missing_decision["error"]["code"] == "invalid_request"
-    assert tool.run({"action": "status", "run_ref": run_ref})["state"] == "paused"
+    assert (
+        tool.run(
+            {"dataset_ref": "dataset:dataset-a", "action": "status", "run_ref": run_ref}
+        )["state"]
+        == "paused"
+    )
 
     resumed = tool.run(
-        {"action": "resume", "run_ref": run_ref, "decision": "proceed"},
+        {
+            "dataset_ref": "dataset:dataset-a",
+            "action": "resume",
+            "run_ref": run_ref,
+            "decision": "proceed",
+        },
         confirmation=PrecheckConfirmationContext(
             principal_ref="human:test",
-            confirmed_content_identity="sha256:" + "a" * 64,
+            confirmed_content_identity=paused["confirmation"]["content_identity"],
             confirmed_at=datetime.now(timezone.utc),
         ),
     )
@@ -279,7 +335,7 @@ def test_confirmation_binds_authority_to_the_frozen_work_set(tmp_path: Path) -> 
         unit="logical_queries",
         skip_allowed=False,
         pending_fingerprint="sha256:" + "a" * 64,
-        disclosure={"provider_policy": "unknown"},
+        disclosure=_disclosure(),
     )
     assert still_running["state"] == "running"
 
@@ -290,7 +346,7 @@ def test_confirmation_binds_authority_to_the_frozen_work_set(tmp_path: Path) -> 
         unit="logical_queries",
         skip_allowed=False,
         pending_fingerprint="sha256:" + "b" * 64,
-        disclosure={"provider_policy": "unknown"},
+        disclosure=_disclosure(),
     )
     _assert_valid(changed)
     assert changed["state"] == "paused"
@@ -319,13 +375,18 @@ def test_block_interruption_and_failure_remain_observable(tmp_path: Path) -> Non
     )
     _assert_valid(blocked)
     assert blocked["state"] == "blocked"
-    assert blocked["activity"]["state"] == "waiting"
-    tool.run({"action": "resume", "run_ref": first_ref})
+    assert blocked["reason"]["resume_when"]
+    tool.run(
+        {"dataset_ref": "dataset:dataset-a", "action": "resume", "run_ref": first_ref}
+    )
     interrupted = tool.mark_interrupted(first_ref)
     _assert_valid(interrupted)
     assert interrupted["reason"]["code"] == "process_interrupted"
-    assert interrupted["activity"]["state"] == "paused"
+    assert interrupted["state"] == "paused"
 
+    tool.run(
+        {"action": "cancel", "dataset_ref": "dataset:dataset-a", "run_ref": first_ref}
+    )
     second = tool.run(
         {
             "action": "start",
@@ -340,8 +401,8 @@ def test_block_interruption_and_failure_remain_observable(tmp_path: Path) -> Non
     )
     _assert_valid(failed)
     assert failed["state"] == "failed"
-    assert failed["activity"]["state"] == "finished"
-    assert "published_result" not in failed
+    assert "allowed_actions" not in failed
+    assert "result" not in failed
 
 
 def test_completion_verifies_result_and_successor_lineage(tmp_path: Path) -> None:
@@ -359,32 +420,32 @@ def test_completion_verifies_result_and_successor_lineage(tmp_path: Path) -> Non
     completed = tool.complete_with_result(str(started["run_ref"]), result.result_ref)
     _assert_valid(completed)
     assert completed["state"] == "completed"
-    assert completed["progress"] == {
-        "discovered": "unknown",
-        "accounted": 1,
-        "usable": 1,
-        "exceptional": 0,
-        "unresolved": 0,
-    }
-    assert completed["published_result"] == {
-        "result_ref": result.result_ref,
+    assert "progress" not in completed
+    assert completed["result"]["coverage"] == "complete"
+    assert completed["result"] == {
+        "ref": result.result_ref,
         "coverage": "complete",
         "readiness": "plan_ready",
-        "integrity": "valid",
     }
-    assert completed["activity"]["state"] == "finished"
-    assert completed["activity"]["phase"] == "complete"
+    assert "allowed_actions" not in completed
+    assert (
+        tool._store.get(str(started["run_ref"]))["published_result"]["result_ref"]
+        == result.result_ref
+    )
 
     successor = tool.run(
         {
+            "dataset_ref": "dataset:dataset-a",
             "action": "start",
             "prior_result_ref": result.result_ref,
             "request_id": "request:successor",
         }
     )
     _assert_valid(successor)
-    assert successor["dataset_ref"] == "dataset:dataset-a"
-    assert successor["prior_result_ref"] == result.result_ref
+    assert tool._store.get(successor["run_ref"])["dataset_ref"] == "dataset:dataset-a"
+    assert (
+        tool._store.get(successor["run_ref"])["prior_result_ref"] == result.result_ref
+    )
 
 
 def test_internal_publish_result_seals_verifies_and_completes_run(
@@ -404,14 +465,21 @@ def test_internal_publish_result_seals_verifies_and_completes_run(
 
     _assert_valid(completed)
     assert completed["state"] == "completed"
-    assert completed["progress"] == {
-        "discovered": 1,
-        "accounted": 1,
-        "usable": 1,
-        "exceptional": 0,
-        "unresolved": 0,
-    }
-    result_ref = str(completed["published_result"]["result_ref"])
+    details = tool.run(
+        {
+            "action": "status",
+            "dataset_ref": "dataset:dataset-a",
+            "run_ref": run_ref,
+            "include": ["accounting"],
+        }
+    )
+    assert (
+        details["accounting"]["discovered"] == details["accounting"]["accounted"] == 1
+    )
+    assert details["accounting"]["scope_condition"] == [
+        {"scope": "source_media", "condition": "usable", "count": 1}
+    ]
+    result_ref = str(completed["result"]["ref"])
     assert ResultStore(database).audit().available == (result_ref,)
 
 
@@ -442,7 +510,7 @@ def test_internal_publish_result_marks_validation_failure_without_publication(
     _assert_valid(failed)
     assert failed["state"] == "failed"
     assert failed["reason"]["code"] == "result_validation_failed"
-    assert "published_result" not in failed
+    assert "result" not in failed
     assert ResultStore(database).audit().available == ()
 
 
@@ -472,7 +540,7 @@ def test_internal_publish_result_blocks_on_disk_full_without_partial_success(
     _assert_valid(blocked)
     assert blocked["state"] == "blocked"
     assert blocked["reason"]["code"] == "workspace_write_failed"
-    assert "published_result" not in blocked
+    assert "result" not in blocked
     audit = ResultStore(database).audit()
     assert audit.available == ()
     assert len(audit.unpublished_paths) == 1
@@ -514,7 +582,7 @@ def test_internal_publish_result_recovers_crash_before_result_registration(
     _assert_valid(completed)
     assert completed["state"] == "completed"
     audit = ResultStore(database).audit()
-    assert audit.available == (completed["published_result"]["result_ref"],)
+    assert audit.available == (completed["result"]["ref"],)
     assert audit.orphan_paths == ()
 
 
@@ -548,21 +616,21 @@ def test_internal_publish_result_reuses_registered_result_after_completion_crash
     _assert_valid(completed)
     assert completed["state"] == "completed"
     assert ResultStore(database).audit().available == first_results
-    assert completed["published_result"]["result_ref"] == first_results[0]
+    assert completed["result"]["ref"] == first_results[0]
 
 
 def test_seal_is_not_a_public_run_action(tmp_path: Path) -> None:
     database, _accounting = _workspace(tmp_path, "dataset-a")
     tool = PrecheckRunTool(database)
 
-    with pytest.raises(ValueError, match="action must be"):
-        tool.run(
-            {
-                "action": "seal",
-                "dataset_ref": "dataset:dataset-a",
-                "request_id": "request:public-seal",
-            }
-        )
+    response = tool.run(
+        {
+            "action": "seal",
+            "dataset_ref": "dataset:dataset-a",
+            "request_id": "request:public-seal",
+        }
+    )
+    assert response["error"]["code"] == "invalid_request"
 
 
 def test_corrupt_result_fails_without_publishing_on_the_run(tmp_path: Path) -> None:
@@ -583,7 +651,7 @@ def test_corrupt_result_fails_without_publishing_on_the_run(tmp_path: Path) -> N
     _assert_valid(failed)
     assert failed["state"] == "failed"
     assert failed["reason"]["code"] == "result_untrusted"
-    assert "published_result" not in failed
+    assert "result" not in failed
 
 
 def test_prepare_execution_never_rebinds_to_a_newer_accounting_run(
@@ -677,42 +745,52 @@ def test_status_projects_work_progress_while_source_accounting_is_unchanged(
     run_ref = str(started["run_ref"])
     tool.bind_working_run(run_ref, second_run)
     tool.record_phase(run_ref, "renditions", total=2)
-    before = tool.run({"action": "status", "run_ref": run_ref})
+    before = tool.run(
+        {"dataset_ref": "dataset:dataset-a", "action": "status", "run_ref": run_ref}
+    )
 
     reused = ImageRenditionProducer(database).produce(second_run, Path("reused.jpg"))
-    after_reuse = tool.run({"action": "status", "run_ref": run_ref})
+    after_reuse = tool.run(
+        {"dataset_ref": "dataset:dataset-a", "action": "status", "run_ref": run_ref}
+    )
     created = ImageRenditionProducer(database).produce(second_run, Path("new.jpg"))
-    after_create = tool.run({"action": "status", "run_ref": run_ref})
+    after_create = tool.run(
+        {"dataset_ref": "dataset:dataset-a", "action": "status", "run_ref": run_ref}
+    )
 
     assert reused.reused is True
     assert created.reused is False
-    assert before["progress"] == after_reuse["progress"] == after_create["progress"]
-    assert before["activity"]["work"] == {
-        "completed": 0,
-        "reused": 0,
-        "failed": 0,
-        "remaining": 2,
-        "total": 2,
-    }
-    assert after_reuse["activity"]["work"] == {
-        "completed": 0,
-        "reused": 1,
-        "failed": 0,
-        "remaining": 1,
-        "total": 2,
-    }
-    assert after_create["activity"]["work"] == {
+    assert before["progress"]["total"] is None
+    assert after_reuse["progress"]["processed"] == 1
+    assert after_reuse["progress"]["total"] == 1
+    assert after_create["progress"]["processed"] == 2
+    assert after_create["progress"]["total"] == 2
+    assert after_create["progress"]["phase"] == "renditions"
+    assert (
+        after_create["progress"]["last_progress_at"]
+        >= after_reuse["progress"]["last_progress_at"]
+    )
+    assert any(
+        issue["code"] == "progress_scope_changed" for issue in after_create["issues"]
+    )
+    details = tool.run(
+        {
+            "action": "status",
+            "dataset_ref": "dataset:dataset-a",
+            "run_ref": run_ref,
+            "include": ["accounting", "diagnostics"],
+        }
+    )
+    assert details["accounting"]["accounted"] == 2
+    assert details["diagnostics"]["work"] == {
+        "phase": "renditions",
+        "unit": "logical_operation",
         "completed": 1,
         "reused": 1,
         "failed": 0,
         "remaining": 0,
         "total": 2,
     }
-    assert after_create["activity"]["phase"] == "renditions"
-    assert (
-        after_create["activity"]["last_progress_at"]
-        >= after_reuse["activity"]["last_progress_at"]
-    )
 
 
 def test_status_distinguishes_recent_work_no_progress_and_stale_worker(
@@ -743,10 +821,14 @@ def test_status_distinguishes_recent_work_no_progress_and_stale_worker(
         run_ref, "worker:other", stale_after=timedelta(seconds=30)
     )
 
-    working = tool.run({"action": "status", "run_ref": run_ref})
+    working = tool.run(
+        {"dataset_ref": "dataset:dataset-a", "action": "status", "run_ref": run_ref}
+    )
     clock.advance(21)
     assert tool._store.heartbeat_execution_worker(run_ref, "worker:test")
-    quiet = tool.run({"action": "status", "run_ref": run_ref})
+    quiet = tool.run(
+        {"dataset_ref": "dataset:dataset-a", "action": "status", "run_ref": run_ref}
+    )
     clock.advance(31)
     reopened = PrecheckRunTool(
         database,
@@ -755,27 +837,31 @@ def test_status_distinguishes_recent_work_no_progress_and_stale_worker(
         worker_stale_seconds=30,
         progress_stale_seconds=20,
     )
-    stale = reopened.run({"action": "status", "run_ref": run_ref})
+    stale = reopened.run(
+        {"dataset_ref": "dataset:dataset-a", "action": "status", "run_ref": run_ref}
+    )
 
     for response in (working, quiet, stale):
         _assert_valid(response)
-    assert working["activity"]["state"] == "working"
-    assert quiet["activity"]["state"] == "no_recent_progress"
+    assert "reason" not in working
+    assert quiet["reason"]["code"] == "no_recent_progress"
     assert stale["state"] == "running"
-    assert stale["activity"]["state"] == "suspected_stalled"
-    assert stale["reason"]["code"] == "execution_owner_stale"
+    assert stale["reason"]["code"] == "suspected_stalled"
+    assert stale["reason"]["code"] == "suspected_stalled"
     assert set(stale["allowed_actions"]) == {"resume", "cancel"}
     assert (
-        stale["activity"]["last_progress_at"]
-        == (working["activity"]["last_progress_at"])
+        stale["progress"]["last_progress_at"]
+        == (working["progress"]["last_progress_at"])
     )
     assert reopened._store.claim_execution_worker(
         run_ref, "worker:replacement", stale_after=timedelta(seconds=30)
     )
-    recovered = reopened.run({"action": "status", "run_ref": run_ref})
+    recovered = reopened.run(
+        {"dataset_ref": "dataset:dataset-a", "action": "status", "run_ref": run_ref}
+    )
     _assert_valid(recovered)
-    assert recovered["run_ref"] == run_ref
-    assert recovered["activity"]["state"] == "no_recent_progress"
+    assert reopened._store.get(run_ref)["run_ref"] == run_ref
+    assert recovered["reason"]["code"] == "no_recent_progress"
 
 
 def test_status_recovers_a_legacy_plain_phase_checkpoint(tmp_path: Path) -> None:
@@ -794,11 +880,17 @@ def test_status_recovers_a_legacy_plain_phase_checkpoint(tmp_path: Path) -> None
             ("metadata:complete", started["run_ref"]),
         )
 
-    status = tool.run({"action": "status", "run_ref": started["run_ref"]})
+    status = tool.run(
+        {
+            "dataset_ref": "dataset:dataset-a",
+            "action": "status",
+            "run_ref": started["run_ref"],
+        }
+    )
 
     _assert_valid(status)
-    assert status["activity"]["phase"] == "metadata"
-    assert status["activity"]["work"]["remaining"] == 0
+    assert status["progress"]["phase"] == "metadata"
+    assert status["progress"]["processed"] == status["progress"]["total"] == 0
 
 
 def test_database_lock_returns_temporary_failure_without_state_change(
@@ -817,11 +909,18 @@ def test_database_lock_returns_temporary_failure_without_state_change(
 
     with sqlite3.connect(database, timeout=0) as blocker:
         blocker.execute("BEGIN EXCLUSIVE")
-        response = tool.run({"action": "pause", "run_ref": run_ref})
+        response = tool.run(
+            {"dataset_ref": "dataset:dataset-a", "action": "pause", "run_ref": run_ref}
+        )
 
     _assert_valid(response)
     assert response["error"]["code"] == "operation_failed"
-    assert tool.run({"action": "status", "run_ref": run_ref})["state"] == "running"
+    assert (
+        tool.run(
+            {"dataset_ref": "dataset:dataset-a", "action": "status", "run_ref": run_ref}
+        )["state"]
+        == "running"
+    )
 
 
 def test_bound_accounting_progress_and_blocking_are_projected(tmp_path: Path) -> None:
@@ -844,12 +943,20 @@ def test_bound_accounting_progress_and_blocking_are_projected(tmp_path: Path) ->
     status = tool.bind_working_run(str(public["run_ref"]), accounting_run)
 
     _assert_valid(status)
-    assert status["progress"] == {
+    details = tool.run(
+        {
+            "action": "status",
+            "dataset_ref": "dataset:dataset-a",
+            "run_ref": public["run_ref"],
+            "include": ["accounting"],
+        }
+    )
+    assert details["accounting"] == {
         "discovered": 2,
         "accounted": 2,
-        "usable": 0,
-        "exceptional": 0,
-        "unresolved": 2,
+        "scope_condition": [
+            {"scope": "source_media", "condition": "unresolved", "count": 2}
+        ],
     }
 
     other_source = tmp_path / "other-source"

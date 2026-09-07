@@ -52,7 +52,7 @@ def _result_view(result_ref: str) -> dict:
     precheck = _load(READ_SPEC / "hong-kong.mock.json")
     for exchange in precheck["exchanges"]:
         result = exchange["response"].get("result", {})
-        if result.get("kind") == "result" and result.get("ref") == result_ref:
+        if result.get("ref") == result_ref:
             return result
     raise AssertionError(f"missing Result view: {result_ref}")
 
@@ -80,7 +80,7 @@ def _content_identity(content: dict) -> str:
 
 
 def _assert_create_gate(result: dict) -> None:
-    if result["integrity"] != "valid":
+    if "integrity" in result:
         raise ValueError("result is untrusted")
     if result["readiness"] != "plan_ready":
         raise ValueError("result is not ready")

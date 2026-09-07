@@ -2099,7 +2099,7 @@ def _read_source_item(
 ) -> SourceItemEvidence:
     request = {
         "result_ref": result_ref,
-        "operation": "expand",
+        "action": "expand",
         "source_item_refs": [source_item_ref],
         "include": ["source_item", "observations"],
     }
@@ -2115,7 +2115,7 @@ def _read_source_item(
             "precheck_read_failed",
             f"PreCheck read returned no structured result for {source_item_ref}",
         )
-    if response.get("outcome") == "error":
+    if "error" in response:
         error = response.get("error")
         error_code = (
             str(error.get("code"))
@@ -2126,21 +2126,27 @@ def _read_source_item(
             "precheck_read_failed",
             f"PreCheck read refused {source_item_ref}: {error_code}",
         )
-    if (
-        response.get("outcome") != "ok"
-        or response.get("operation") != "expand"
-        or response.get("result_ref") != result_ref
-    ):
+    from mediasense.runtime.resources import contract_validator
+
+    if not contract_validator("mediasense.precheck.read", "expand").is_valid(response):
         raise SourceEvidenceError(
             "precheck_read_mismatch",
             f"PreCheck read response is not bound to {result_ref}",
         )
+    page = response.get("page")
+    if (
+        not isinstance(page, Mapping)
+        or page.get("total") != 1
+        or page.get("next_cursor") is not None
+    ):
+        raise SourceEvidenceError(
+            "precheck_read_mismatch",
+            "Source expansion is not a complete one-item page.",
+        )
     items = response.get("items")
     item = items[0] if isinstance(items, list) and len(items) == 1 else None
     included = item.get("included") if isinstance(item, Mapping) else None
-    source_item = (
-        included.get("source_item") if isinstance(included, Mapping) else None
-    )
+    source_item = included.get("source_item") if isinstance(included, Mapping) else None
     observations = (
         included.get("observations") if isinstance(included, Mapping) else None
     )
@@ -2154,7 +2160,12 @@ def _read_source_item(
             "precheck_read_mismatch",
             f"PreCheck read returned the wrong Source Item for {source_item_ref}",
         )
-    target = {**dict(source_item), "observations": observations}
+    target = {
+        **dict(source_item),
+        "kind": "source_item",
+        "ref": source_item_ref,
+        "observations": observations,
+    }
     try:
         return SourceItemEvidence.from_precheck_view(
             result_ref=result_ref,

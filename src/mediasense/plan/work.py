@@ -109,9 +109,7 @@ class PlanWorkTool:
     ) -> dict[str, Any]:
         action = request.get("action") if isinstance(request, Mapping) else None
         if action not in {"create", "update", "inspect", "seal"}:
-            raise ValueError(
-                "request action must be create, update, inspect, or seal"
-            )
+            raise ValueError("request action must be create, update, inspect, or seal")
         try:
             if action == "create":
                 return self._create(dict(request))
@@ -228,25 +226,36 @@ class PlanWorkTool:
         response = self.precheck_read.read(
             {
                 "result_ref": result_ref,
-                "operation": "review",
+                "action": "review",
                 "page": {"limit": 1},
             }
         )
-        if not isinstance(response, Mapping) or response.get("outcome") != "ok":
+        if not isinstance(response, Mapping) or "error" in response:
+            error = response.get("error", {}) if isinstance(response, Mapping) else {}
+            code = error.get("code", "result_not_found")
+            if code not in {
+                "result_not_found",
+                "result_unavailable",
+                "result_untrusted",
+                "result_inconsistent",
+            }:
+                code = "operation_failed"
             raise PlanFailure(
-                "result_not_found", "The exact PreCheck Result is unavailable."
+                code, "The exact PreCheck Result could not be trusted or read."
+            )
+        from mediasense.runtime.resources import contract_validator
+
+        if not contract_validator("mediasense.precheck.read", "review").is_valid(
+            response
+        ):
+            raise PlanFailure(
+                "result_untrusted", "PreCheck returned an invalid Result response."
             )
         target = response.get("result")
-        if (
-            not isinstance(target, Mapping)
-            or target.get("kind") != "result"
-            or target.get("ref") != result_ref
-        ):
+        if not isinstance(target, Mapping) or target.get("ref") != result_ref:
             raise PlanFailure(
                 "operation_failed", "PreCheck returned an invalid Result view."
             )
-        if target.get("integrity") != "valid":
-            raise PlanFailure("result_untrusted", "The PreCheck Result is not valid.")
         if target.get("readiness") != "plan_ready":
             raise PlanFailure(
                 "result_not_ready", "The PreCheck Result is not plan-ready."

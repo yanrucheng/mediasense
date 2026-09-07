@@ -55,21 +55,42 @@ def create_mcp_server(host: RuntimeHost | None = None) -> Server[Any]:
                 )
             else:
                 dataset_ref = arguments.get("dataset_ref")
-                request = arguments.get("request")
+                precheck = params.name in {
+                    "mediasense.precheck.run",
+                    "mediasense.precheck.read",
+                }
+                request = arguments if precheck else arguments.get("request")
                 authority = arguments.get("authority")
                 if not isinstance(dataset_ref, str) or not dataset_ref:
                     raise HostRequestError("dataset_ref must be a non-empty string")
                 if not isinstance(request, dict):
                     raise HostRequestError("request must be an object")
-                if params.name in {
-                    "mediasense.precheck.run",
-                    "mediasense.geo.query",
-                } and "authority" in arguments:
+                if (
+                    params.name
+                    in {
+                        "mediasense.precheck.run",
+                        "mediasense.geo.query",
+                    }
+                    and "authority" in arguments
+                ):
                     raise HostRequestError(
                         "External-effect authority is supplied only by MCP Human elicitation"
                     )
                 if authority is not None and not isinstance(authority, dict):
                     raise HostRequestError("authority must be an object")
+                if precheck:
+                    from .resources import contract_validator
+
+                    if not contract_validator(params.name).is_valid(request):
+                        return _tool_result(
+                            {
+                                "error": {
+                                    "code": "invalid_request",
+                                    "message": "Invalid flat PreCheck request.",
+                                }
+                            },
+                            is_error=True,
+                        )
                 if params.name == "mediasense.precheck.run":
                     request, authority = await _elicit_precheck_authority(
                         _context,
@@ -100,8 +121,20 @@ def create_mcp_server(host: RuntimeHost | None = None) -> Server[Any]:
         except HostRequestError as error:
             result = {
                 "outcome": "error",
-                "error": {"code": "host_invalid_request", "message": str(error)},
+                "error": {
+                    "code": (
+                        "invalid_request"
+                        if error.code == "host_invalid_request"
+                        else error.code
+                    )
+                    if params.name
+                    in {"mediasense.precheck.run", "mediasense.precheck.read"}
+                    else error.code,
+                    "message": str(error),
+                },
             }
+            if params.name in {"mediasense.precheck.run", "mediasense.precheck.read"}:
+                result.pop("outcome", None)
             return _tool_result(result, is_error=True)
         except Exception:
             diagnostic_id = f"diagnostic:{uuid4()}"
@@ -120,7 +153,16 @@ def create_mcp_server(host: RuntimeHost | None = None) -> Server[Any]:
                 },
             }
             return _tool_result(result, is_error=True)
-        return _tool_result(result)
+        if params.name in {"mediasense.precheck.run", "mediasense.precheck.read"}:
+            result.pop("outcome", None)
+        return _tool_result(
+            result,
+            is_error=params.name
+            in {"mediasense.precheck.run", "mediasense.precheck.read"}
+            and "error" in result,
+            structured_error=params.name
+            in {"mediasense.precheck.run", "mediasense.precheck.read"},
+        )
 
     return Server(
         "mediasense",
@@ -151,8 +193,12 @@ def run_stdio() -> None:
 
 
 def _mcp_tool(descriptor: ToolDescriptor) -> types.Tool:
-    if descriptor.name == "mediasense.dataset.open":
-        input_schema = descriptor.input_schema
+    if descriptor.name in {
+        "mediasense.dataset.open",
+        "mediasense.precheck.run",
+        "mediasense.precheck.read",
+    }:
+        input_schema = {"type": "object", **descriptor.input_schema}
     else:
         properties: dict[str, object] = {
             "dataset_ref": {
@@ -199,14 +245,9 @@ async def _elicit_precheck_authority(
 ) -> tuple[dict[str, Any], Mapping[str, object] | None]:
     if request.get("action") != "resume" or request.get("decision") != "proceed":
         return request, None
-    status = await anyio.to_thread.run_sync(
-        lambda: runtime.call_tool(
-            "mediasense.precheck.run",
-            dataset_ref=dataset_ref,
-            request={"action": "status", "run_ref": request.get("run_ref")},
-        )
+    confirmation = await anyio.to_thread.run_sync(
+        lambda: runtime.precheck_confirmation(dataset_ref, str(request.get("run_ref")))
     )
-    confirmation = status.get("confirmation")
     if not isinstance(confirmation, Mapping) or confirmation.get("kind") != (
         "external_effect"
     ):
@@ -215,7 +256,12 @@ async def _elicit_precheck_authority(
     disclosure = confirmation.get("disclosure")
     if not isinstance(content_identity, str) or not isinstance(disclosure, Mapping):
         return request, None
-    quantity = confirmation.get("quantity")
+    if len(json.dumps(disclosure, ensure_ascii=False).encode()) > 524288:
+        raise HostRequestError(
+            "The client cannot present the complete frozen disclosure.",
+            code="confirmation_unavailable",
+        )
+    quantity = disclosure.get("pending_logical_queries")
     unit = confirmation.get("unit")
     session = getattr(context, "session", None)
     if session is None:
@@ -242,7 +288,11 @@ async def _elicit_precheck_authority(
     if elicited.action == "decline":
         return {**request, "decision": "decline"}, None
     if elicited.action == "cancel":
-        return {"action": "status", "run_ref": request.get("run_ref")}, None
+        return {
+            "action": "pause",
+            "dataset_ref": dataset_ref,
+            "run_ref": request.get("run_ref"),
+        }, None
     if elicited.action != "accept":
         return {"action": "status", "run_ref": request.get("run_ref")}, None
     return request, {
@@ -280,7 +330,9 @@ async def _elicit_geo_authority(
             related_request_id=getattr(context, "request_id", None),
         )
     except NoBackChannelError:
-        _LOGGER.info("MCP client did not provide Human elicitation for Geo authorization")
+        _LOGGER.info(
+            "MCP client did not provide Human elicitation for Geo authorization"
+        )
         return None
     if elicited.action != "accept":
         return None
@@ -339,7 +391,9 @@ def _precheck_authorization_message(
         else "unknown"
     )
     query_count = str(quantity) if isinstance(quantity, int) else "unknown"
-    query_unit = str(unit).replace("_", " ") if isinstance(unit, str) else "logical queries"
+    query_unit = (
+        str(unit).replace("_", " ") if isinstance(unit, str) else "logical queries"
+    )
     return "\n".join(
         [
             "Authorize MediaSense to reverse-geocode this exact frozen batch.",
@@ -350,6 +404,8 @@ def _precheck_authorization_message(
             f"Billing: {disclosure.get('billable_calls', 'unknown')}.",
             f"Provider data handling: {'; '.join(handling) or 'unknown'}.",
             f"Result retention: {disclosure.get('result_retention', 'unknown')}.",
+            "Exact frozen disclosure: "
+            + json.dumps(dict(disclosure), ensure_ascii=False, sort_keys=True),
             "Accept to authorize and continue. Decline to cancel this Run. "
             "Dismiss to leave the Run paused.",
         ]
@@ -357,7 +413,7 @@ def _precheck_authorization_message(
 
 
 def _tool_result(
-    result: dict[str, object], *, is_error: bool = False
+    result: dict[str, object], *, is_error: bool = False, structured_error: bool = False
 ) -> types.CallToolResult:
     return types.CallToolResult(
         content=[
@@ -366,6 +422,6 @@ def _tool_result(
                 text=json.dumps(result, ensure_ascii=False, sort_keys=True),
             )
         ],
-        structured_content=None if is_error else result,
+        structured_content=None if is_error and not structured_error else result,
         is_error=is_error,
     )

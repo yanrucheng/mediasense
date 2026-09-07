@@ -1,228 +1,153 @@
 from __future__ import annotations
 
-from collections.abc import Iterator
+from copy import deepcopy
 import json
 from pathlib import Path
 
+import pytest
 from jsonschema import Draft202012Validator
-
+from mediasense.runtime.resources import FORMAT_CHECKER
 
 ROOT = Path(__file__).parents[1]
-SPEC_ROOT = ROOT / "docs" / "spec" / "spec-260826-1546-precheck-read"
-RUNTIME_CONTRACT = (
-    ROOT / "src" / "mediasense" / "_resources" / "contracts" / "precheck-read.tool.json"
+SPEC = ROOT / "docs/spec/spec-260826-1546-precheck-read"
+PACKET = ROOT / "openspec/changes/simplify-precheck-contract/contracts"
+TOOL = json.loads((SPEC / "precheck-read.tool.json").read_text())
+CASES = json.loads((PACKET / "examples.json").read_text())
+
+
+def validator(action=None):
+    schema = (
+        TOOL["inputSchema"]
+        if action is None
+        else {"$defs": TOOL["outputSchema"]["$defs"], **TOOL["responseSchemas"][action]}
+    )
+    return Draft202012Validator(schema, format_checker=FORMAT_CHECKER)
+
+
+@pytest.mark.parametrize(
+    "exchange",
+    [e for e in CASES["exchanges"] if e["tool"] == "read"],
+    ids=lambda e: e["name"],
 )
+def test_read_transcript_is_action_bound(exchange):
+    validator().validate(exchange["request"])
+    validator(exchange["request"]["action"]).validate(exchange["response"])
 
 
-def _load(name: str):
-    return json.loads((SPEC_ROOT / name).read_text(encoding="utf-8"))
+@pytest.mark.parametrize(
+    "case",
+    [e for e in CASES["negative"] if e["tool"] == "read"],
+    ids=lambda e: e["name"],
+)
+def test_read_rejects_invalid_shape(case):
+    selected = (
+        validator()
+        if case["side"] == "inputSchema"
+        else Draft202012Validator(TOOL["outputSchema"])
+    )
+    assert not selected.is_valid(case["value"])
 
 
-def _objects(value) -> Iterator[dict]:
-    if isinstance(value, dict):
-        yield value
-        for child in value.values():
-            yield from _objects(child)
-    elif isinstance(value, list):
-        for child in value:
-            yield from _objects(child)
+def test_mock_requests_and_responses_conform():
+    for exchange in json.loads((SPEC / "hong-kong.mock.json").read_text())["exchanges"]:
+        validator().validate(exchange["request"])
+        validator(exchange["request"]["action"]).validate(exchange["response"])
 
 
-def test_contract_is_zero_bc_and_exposes_only_consumer_operations() -> None:
-    tool = _load("precheck-read.tool.json")
-    branches = tool["inputSchema"]["oneOf"]
-    definitions = tool["inputSchema"]["$defs"]
-    operations = {
-        definitions[branch["$ref"].rsplit("/", 1)[1]]["properties"]["operation"][
-            "const"
-        ]
-        for branch in branches
+@pytest.mark.parametrize(
+    "action,limit",
+    [("review", 100), ("expand", 200), ("geo_summary", 200), ("resolve", 1000)],
+)
+def test_page_limits_and_selector_requirements(action, limit):
+    request = {
+        "action": action,
+        "dataset_ref": "dataset:a",
+        "result_ref": "precheck-result:a",
+        "page": {"limit": limit},
     }
+    if action == "expand":
+        request.update(evidence_refs=["evidence:a"], include=["member_observations"])
+    if action == "resolve":
+        request["source_set"] = {
+            "kind": "explicit",
+            "source_item_refs": ["source-item:a"],
+        }
+    validator().validate(request)
+    request["page"]["limit"] += 1
+    assert not validator().is_valid(request)
 
-    assert operations == {"review", "expand", "resolve", "geo_summary"}
-    encoded = json.dumps(tool)
-    assert '"action"' not in encoded
-    assert '"inspect"' not in encoded
-    assert '"traverse"' not in encoded
 
-
-def test_expand_requires_one_selector_and_published_include_names() -> None:
-    tool = _load("precheck-read.tool.json")
-    validator = Draft202012Validator(tool["inputSchema"])
-    result_ref = "precheck-result:test"
-
-    valid = {
-        "operation": "expand",
-        "result_ref": result_ref,
-        "evidence_refs": ["evidence:a"],
-        "include": ["anchor_evidence", "prepared_targets"],
-    }
-    validator.validate(valid)
-
-    assert list(
-        validator.iter_errors(
-            {
-                **valid,
-                "source_item_refs": ["source-item:a"],
-            }
+def test_prepared_targets_keep_both_kinds_and_atomic_expansion():
+    response = deepcopy(
+        next(
+            e["response"] for e in CASES["exchanges"] if e["name"] == "expand-evidence"
         )
     )
-    assert list(
-        validator.iter_errors(
-            {
-                **valid,
-                "include": ["semantic_recommendation"],
-            }
-        )
-    )
-
-
-def test_contract_publishes_projection_roles_and_bounded_pages() -> None:
-    tool = _load("precheck-read.tool.json")
-    input_defs = tool["inputSchema"]["$defs"]
-    output_defs = tool["outputSchema"]["$defs"]
-
-    assert output_defs["evidence_role"]["enum"] == [
-        "representative",
-        "boundary",
-        "outlier",
-        "conflict",
-    ]
-    assert input_defs["page_100"]["properties"]["limit"]["maximum"] == 100
-    assert input_defs["page_200"]["properties"]["limit"]["maximum"] == 200
-    assert input_defs["page_1000"]["properties"]["limit"]["maximum"] == 1000
-    assert output_defs["page"]["properties"]["stop_reason"]["enum"] == [
-        "complete",
-        "limit",
-        "byte_limit",
-    ]
-    assert output_defs["review_response"]["properties"]["page"]["allOf"][1] == {
-        "required": ["order"]
+    target = response["items"][0]["included"]["prepared_targets"][0]
+    validator("expand").validate(response)
+    target["target"] = {"kind": "evidence", "ref": "evidence:other"}
+    validator("expand").validate(response)
+    target["target"]["kind"] = "private_work"
+    assert not validator("expand").is_valid(response)
+    request = {
+        "action": "expand",
+        "dataset_ref": "dataset:a",
+        "result_ref": "precheck-result:a",
+        "source_item_refs": [f"source-item:{n}" for n in range(16)],
+        "include": ["observations"],
     }
-    error_codes = output_defs["error_response"]["properties"]["error"][
-        "properties"
-    ]["code"]["enum"]
-    assert "reference_not_in_result" in error_codes
-    assert "source_set_out_of_scope" not in error_codes
+    validator().validate(request)
+    request["source_item_refs"].append("source-item:17")
+    assert not validator().is_valid(request)
 
 
-def test_contract_keeps_qualification_and_source_verification_explicit() -> None:
-    definitions = _load("precheck-read.tool.json")["outputSchema"]["$defs"]
-
+def test_observation_and_verification_guarantees_are_preserved():
+    definitions = TOOL["outputSchema"]["$defs"]
     assert definitions["qualification"]["properties"]["effect"]["enum"] == [
         "limits_interpretation",
         "blocks_use",
     ]
-    assert definitions["resolved_member"]["required"] == [
-        "source_item_ref",
-        "locator",
-        "scope",
-        "condition",
-        "source_content_verification",
-    ]
-    assert definitions["source_verification"]["properties"]["profile"]["type"] == (
-        "string"
+    assert "source_content_verification" in definitions["resolved_member"]["required"]
+    assert (
+        definitions["source_verification"]["properties"]["profile"]["type"] == "string"
     )
-
-
-def test_contract_does_not_expose_private_storage_vocabulary() -> None:
-    encoded = json.dumps(_load("precheck-read.tool.json")).lower()
-
-    for forbidden in (
-        "sqlite",
-        "table_name",
-        "row_id",
-        "cache_key",
-        "compression_group",
-    ):
+    assert definitions["page"]["required"] == ["total", "next_cursor"]
+    encoded = json.dumps(TOOL).lower()
+    for forbidden in ("sqlite", "cache_key", "row_id", "compression_group"):
         assert forbidden not in encoded
 
 
-def test_mock_requests_and_responses_conform() -> None:
-    tool = _load("precheck-read.tool.json")
-    mock = _load("hong-kong.mock.json")
-    input_validator = Draft202012Validator(tool["inputSchema"])
-    output_validator = Draft202012Validator(tool["outputSchema"])
+def test_active_mock_accounting_and_membership_are_recomputable():
+    import hashlib
 
-    assert {exchange["request"]["operation"] for exchange in mock["exchanges"]} == {
-        "review",
-        "expand",
-        "resolve",
-        "geo_summary",
-    }
-    for exchange in mock["exchanges"]:
-        input_validator.validate(exchange["request"])
-        output_validator.validate(exchange["response"])
+    def identity(value):
+        return (
+            "sha256:"
+            + hashlib.sha256(
+                json.dumps(
+                    value, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+                ).encode()
+            ).hexdigest()
+        )
 
-
-def test_geo_summary_mock_is_human_reviewable_and_resolvable() -> None:
-    mock = _load("hong-kong.mock.json")
-    summary = next(
-        exchange["response"]
-        for exchange in mock["exchanges"]
-        if exchange["request"]["operation"] == "geo_summary"
-    )
-
-    assert summary["acquisition_status"] == "complete"
-    assert summary["deduplication"] == {
-        "rule": "exact_normalized_coordinate_v1",
-        "fields": ["latitude", "longitude", "datum"],
-        "rounding": "none",
-    }
-    group = summary["coordinate_groups"][0]
-    assert group["member_count"] == 3
-    assert group["source_set"]["kind"] == "geo_coordinate"
-    assert group["reverse_geocode"] == "success"
-    assert group["candidate_evidence_refs"]
-    assert group["provenance"][0]["provider"] == "amap"
-    assert group["qualifications"][0]["code"] == (
-        "provider_candidate_not_place_truth"
-    )
-
-
-def test_review_mock_carries_reconciliation_and_no_semantic_decision() -> None:
-    mock = _load("hong-kong.mock.json")
-    review = next(
-        exchange["response"]
-        for exchange in mock["exchanges"]
-        if exchange["request"]["operation"] == "review"
-    )
-    reconciliation = review["reconciliation"]
-    partition = reconciliation["partition"]
-
-    assert reconciliation["accounted_total"] == sum(partition.values())
-    assert partition["residual"] == 0
-    assert reconciliation["closure_check"]["status"] == "passed"
-    assert all(
-        {item["include"] for item in card["available_expansions"]}
-        == {
-            "anchor_evidence",
-            "prepared_targets",
-            "provenance",
-            "coverage_basis",
-            "member_observations",
-        }
-        for card in review["coverage_cards"]
-    )
-    encoded = json.dumps(review, ensure_ascii=False)
-    for forbidden in ("recommended_group", "directory_name", "organization_profile"):
-        assert forbidden not in encoded
-
-
-def test_all_local_schema_references_resolve() -> None:
-    tool = _load("precheck-read.tool.json")
-    for schema in (tool["inputSchema"], tool["outputSchema"]):
-        for value in _objects(schema):
-            reference = value.get("$ref")
-            if not reference or not reference.startswith("#/"):
-                continue
-            resolved = schema
-            for component in reference[2:].split("/"):
-                resolved = resolved[component.replace("~1", "/").replace("~0", "~")]
-            assert resolved
-
-
-def test_runtime_contract_matches_authoritative_spec() -> None:
-    assert json.loads(RUNTIME_CONTRACT.read_text(encoding="utf-8")) == _load(
-        "precheck-read.tool.json"
-    )
+    for exchange in json.loads((SPEC / "hong-kong.mock.json").read_text())["exchanges"]:
+        request, response = exchange["request"], exchange["response"]
+        if request["action"] == "review":
+            assert response["accounting"]["total"] == sum(
+                row["count"] for row in response["accounting"]["scope_condition"]
+            )
+            assert response["accounting"]["total"] == sum(
+                response["accounting"]["routes"].values()
+            )
+        if request["action"] == "resolve":
+            members = sorted(item["source_item_ref"] for item in response["members"])
+            assert response["resolution"]["source_set_identity"] == identity(
+                request["source_set"]
+            )
+            assert response["resolution"]["membership_identity"] == identity(
+                {
+                    "result_ref": request["result_ref"],
+                    "source_set": request["source_set"],
+                    "members": members,
+                }
+            )

@@ -116,30 +116,34 @@ def test_adaptive_compression_reuses_inputs_across_different_result_targets(
     reader = PrecheckReadTool(database)
     two_entries = reader.read(
         {
-            "operation": "review",
+            "dataset_ref": "dataset:dataset-a",
+            "action": "review",
             "result_ref": two_result.result_ref,
         }
     )
     three_entries = reader.read(
         {
-            "operation": "review",
+            "dataset_ref": "dataset:dataset-a",
+            "action": "review",
             "result_ref": three_result.result_ref,
         }
     )
     represented = set()
-    for entry in two_entries["coverage_cards"]:
+    for entry in two_entries["cards"]:
         coverage = reader.read(
             {
-                "operation": "resolve",
+                "dataset_ref": "dataset:dataset-a",
+                "action": "resolve",
                 "result_ref": two_result.result_ref,
-                "source_set": entry["resolvable_source_set"],
+                "source_set": entry["source_set"],
             }
         )
         represented.update(item["source_item_ref"] for item in coverage["members"])
-    first_entry_ref = two_entries["coverage_cards"][0]["anchor_evidence_ref"]
+    first_entry_ref = two_entries["cards"][0]["evidence_ref"]
     expanded = reader.read(
         {
-            "operation": "expand",
+            "dataset_ref": "dataset:dataset-a",
+            "action": "expand",
             "result_ref": two_result.result_ref,
             "evidence_refs": [first_entry_ref],
             "include": ["anchor_evidence", "prepared_targets"],
@@ -148,8 +152,8 @@ def test_adaptive_compression_reuses_inputs_across_different_result_targets(
     included = expanded["items"][0]["included"]
     first_entry = included["anchor_evidence"]
 
-    assert len(two_entries["coverage_cards"]) == 2
-    assert len(three_entries["coverage_cards"]) == 3
+    assert len(two_entries["cards"]) == 2
+    assert len(three_entries["cards"]) == 3
     assert len(represented) == 6
     assert any(
         observation["name"] == "evidence_role"
@@ -157,8 +161,7 @@ def test_adaptive_compression_reuses_inputs_across_different_result_targets(
         for observation in first_entry["observations"]
     )
     assert any(
-        item["target"]["kind"] == "evidence"
-        for item in included["prepared_targets"]
+        item["target"]["kind"] == "evidence" for item in included["prepared_targets"]
     )
     assert two_result.result_ref != three_result.result_ref
     assert two_result.path.read_bytes() == two_result_bytes
@@ -224,7 +227,8 @@ def test_bundle_members_are_covered_by_one_compressed_representative(
     reader = PrecheckReadTool(database)
     accounts = reader.read(
         {
-            "operation": "resolve",
+            "dataset_ref": "dataset:dataset-a",
+            "action": "resolve",
             "result_ref": sealed.result_ref,
             "source_set": {
                 "kind": "precheck_relation",
@@ -242,7 +246,8 @@ def test_bundle_members_are_covered_by_one_compressed_representative(
     raw_ref = raw_account["source_item_ref"]
     reverse = reader.read(
         {
-            "operation": "expand",
+            "dataset_ref": "dataset:dataset-a",
+            "action": "expand",
             "result_ref": sealed.result_ref,
             "source_item_refs": [raw_ref],
             "include": ["covering_evidence"],
@@ -250,7 +255,8 @@ def test_bundle_members_are_covered_by_one_compressed_representative(
     )
     result_view = reader.read(
         {
-            "operation": "review",
+            "dataset_ref": "dataset:dataset-a",
+            "action": "review",
             "result_ref": sealed.result_ref,
         }
     )["result"]

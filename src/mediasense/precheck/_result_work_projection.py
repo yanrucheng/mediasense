@@ -62,70 +62,14 @@ def _mapped_result_observations(
     *,
     label: str,
 ) -> list[dict[str, object]]:
+    from .geocode import normalize_geo_observations
+
     output = json.loads(work["output_json"])
-    observations = output.get("observations")
-    if (
-        not isinstance(observations, list)
-        or not observations
-        or any(not isinstance(item, dict) for item in observations)
-    ):
-        raise ResultSealError(f"{label} Work has an invalid inline result")
-    projected: list[dict[str, object]] = []
-    for item in observations:
-        if item.get("name") != "reverse_geocode_candidate":
-            continue
-        value = item.get("value")
-        component_outcomes = (
-            value.get("component_outcomes") if isinstance(value, dict) else None
-        )
-        if not isinstance(component_outcomes, dict) or set(component_outcomes) != {
-            "reverse_geocode",
-            "nearby_places",
-        }:
-            raise ResultSealError(
-                f"{label} Work lacks complete address-and-nearby-place outcomes"
-            )
-        observation = {
-            key: item[key]
-            for key in (
-                "name",
-                "status",
-                "value",
-                "confidence",
-                "qualifications",
-                "provenance",
-            )
-            if key in item
-        }
-        provenance = item.get("provenance")
-        if isinstance(provenance, dict):
-            observation["provenance"] = {
-                key: value
-                for key, value in provenance.items()
-                if key
-                not in {
-                    "basis_work_ids",
-                    "logical_query_count",
-                    "provider_request_count",
-                }
-            }
-        summary = "reusable external coordinate observation"
-        if isinstance(provenance, dict):
-            summary = (
-                ", ".join(
-                    f"{key}={value}"
-                    for key, value in provenance.items()
-                    if key
-                    not in {
-                        "basis_work_ids",
-                        "logical_query_count",
-                        "provider_request_count",
-                    }
-                )
-                or summary
-            )
+    projected = []
+    for item in normalize_geo_observations(output):
+        observation = dict(item)
         observation["basis"] = {
-            "summary": summary,
+            **item["basis"],
             "refs": [{"kind": "source_item", "ref": source_ref}],
         }
         projected.append(observation)
@@ -141,24 +85,6 @@ def _has_available_coordinate(
         and isinstance(observation.get("value"), Mapping)
         for observation in observations
     )
-
-
-def _has_complete_place_outcome(
-    observations: Iterable[Mapping[str, object]],
-) -> bool:
-    for observation in observations:
-        if observation.get("name") != "reverse_geocode_candidate":
-            continue
-        value = observation.get("value")
-        component_outcomes = (
-            value.get("component_outcomes") if isinstance(value, Mapping) else None
-        )
-        if isinstance(component_outcomes, Mapping) and set(component_outcomes) == {
-            "reverse_geocode",
-            "nearby_places",
-        }:
-            return True
-    return False
 
 
 def _metadata_result_observations(

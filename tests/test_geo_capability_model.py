@@ -100,7 +100,9 @@ def test_nearby_places_requires_bounded_radius_and_result_count() -> None:
     with pytest.raises(ValueError, match="requires radius_meters and max_places"):
         GeoRequest(GeoOperation.NEARBY_PLACES, (subject,), "zh-CN")
 
-    with pytest.raises(ValueError, match="apply only to resolve_place or nearby_places"):
+    with pytest.raises(
+        ValueError, match="apply only to resolve_place or nearby_places"
+    ):
         GeoRequest(
             GeoOperation.REVERSE_GEOCODE,
             (subject,),
@@ -255,6 +257,8 @@ class _FakeProvider:
         locale: str,
         radius_meters: float | None = None,
         max_places: int | None = None,
+        deadline: float | None = None,
+        cancelled=None,
     ) -> GeoProviderExecution:
         self.calls += 1
         if operation is GeoOperation.RESOLVE_PLACE:
@@ -414,7 +418,7 @@ def test_capability_executes_with_exact_authority_and_offers_bounded_continuatio
     envelope = capability.proposed_envelope(request)
     authorization = GeoAuthorization(
         "human:one",
-        request.fingerprint(),
+        capability.fingerprint(request),
         datetime.now(timezone.utc),
         envelope,
     )
@@ -462,14 +466,14 @@ def test_bounded_resolve_executes_address_and_nearby_under_one_authority() -> No
     envelope = capability.proposed_envelope(request)
     authorization = GeoAuthorization(
         "human:one",
-        request.fingerprint(),
+        capability.fingerprint(request),
         datetime.now(timezone.utc),
         envelope,
     )
 
     result = capability.invoke(request, authorization=authorization)
 
-    assert envelope.max_provider_requests == 2
+    assert envelope.max_provider_requests == 6
     assert result.outcome is GeoOutcome.SUCCESS
     assert [component.operation for component in result.components] == [
         GeoOperation.REVERSE_GEOCODE,
@@ -506,7 +510,7 @@ def test_bounded_resolve_rejects_authority_that_cannot_cover_both_effects() -> N
     )
     authorization = GeoAuthorization(
         "human:one",
-        request.fingerprint(),
+        capability.fingerprint(request),
         datetime.now(timezone.utc),
         GeoEffectEnvelope(
             ("provider-a",),
@@ -554,7 +558,7 @@ def test_capability_fallback_is_bounded_by_authorized_providers() -> None:
     )
     authorization = GeoAuthorization(
         "human:one",
-        request.fingerprint(),
+        capability.fingerprint(request),
         datetime.now(timezone.utc),
         envelope,
     )
@@ -594,7 +598,7 @@ def test_provider_request_ceiling_is_enforced_across_the_whole_batch() -> None:
     )
     authorization = GeoAuthorization(
         "human:one",
-        request.fingerprint(),
+        capability.fingerprint(request),
         datetime.now(timezone.utc),
         GeoEffectEnvelope(
             ("provider-a", "provider-b"),
@@ -640,7 +644,7 @@ def test_route_context_is_explicit_and_does_not_leak_between_calls() -> None:
     envelope = capability.proposed_envelope(request)
     authorization = GeoAuthorization(
         "human:one",
-        request.fingerprint(),
+        capability.fingerprint(request),
         datetime.now(timezone.utc),
         envelope,
     )
@@ -653,7 +657,7 @@ def test_route_context_is_explicit_and_does_not_leak_between_calls() -> None:
     )
     preferred_authorization = GeoAuthorization(
         "human:one",
-        preferred_request.fingerprint(),
+        capability.fingerprint(preferred_request),
         datetime.now(timezone.utc),
         capability.proposed_envelope(preferred_request),
     )
@@ -696,7 +700,7 @@ def test_batch_order_does_not_change_each_coordinate_route_seed() -> None:
     )
     authorization = GeoAuthorization(
         "human:one",
-        request.fingerprint(),
+        capability.fingerprint(request),
         datetime.now(timezone.utc),
         capability.proposed_envelope(request),
     )
@@ -734,7 +738,7 @@ def test_indeterminate_effect_stops_later_batch_requests() -> None:
     )
     authorization = GeoAuthorization(
         "human:one",
-        request.fingerprint(),
+        capability.fingerprint(request),
         datetime.now(timezone.utc),
         capability.proposed_envelope(request),
     )

@@ -10,7 +10,7 @@ Organize every in-scope media item so none is silently lost and the Human can la
 ## Tool Host prerequisite
 
 Proceed only when the current Honeycomb session exposes a compatible MediaSense
-`0.7.x` Tool Host, `mediasense.plan.work`, and `mediasense.geo.query` are discoverable. A CLI found in
+`0.8.x` Tool Host, `mediasense.plan.work`, and `mediasense.geo.query` are discoverable. A CLI found in
 `PATH` or an MCP table present on disk is not sufficient. If the Host is absent or
 incompatible, stop Plan work and use the `mediasense` product entry Skill's local
 Honeycomb bootstrap; do not duplicate setup, edit user-level Agent configuration,
@@ -27,8 +27,12 @@ or claim the current session reloaded a newly written project configuration.
 
 ## Enter Plan and choose the active Profile
 
-Use only an exact Result whose `readiness` is `plan_ready` and `integrity` is
-`valid`; bounded partial coverage is acceptable when its limit is explicit. Do
+Use only an exact Result returned by trusted Read whose `readiness` is `plan_ready`;
+bounded partial coverage is acceptable when its limit is explicit. Read enforces
+integrity without a public integrity constant. Use flat `action` and `dataset_ref`
+on PreCheck calls. Missing coordinates, no_result, and terminal known Geo failures
+do not alone prevent entry, even when no photo has a location. Do not invent
+locations, force Human questions, or loop on terminal Geo failures. Do
 not inspect Geo query batches, deduplication, caching, or acquisition status to
 re-decide the PreCheck handoff. Read Result
 qualifications, accounting reconciliation, exception routes, and the coverage-card

@@ -37,7 +37,7 @@ class FailingRuntimeHost:
 class GeoElicitationRuntimeHost:
     content_identity = "sha256:" + "a" * 64
     disclosure = {
-        "frozen_batch_identity": "sha256:" + "b" * 64,
+        "pending_logical_queries": 1,
         "operation": "reverse_geocode",
         "coordinates": [{"latitude": 22.3193, "longitude": 114.1694, "datum": "WGS84"}],
         "transmitted_data_classes": ["coordinate", "datum", "locale"],
@@ -57,85 +57,31 @@ class GeoElicitationRuntimeHost:
         self.authorities: list[object] = []
         self.provider_coordinates: list[object] = []
 
-    def call_tool(
-        self,
-        name: str,
-        *,
-        dataset_ref: str,
-        request: dict[str, object],
-        authority: object = None,
-    ) -> dict[str, object]:
-        assert name == "mediasense.precheck.run"
-        assert dataset_ref == "dataset:test"
-        if request.get("action") == "status":
-            return {
-                "outcome": "ok",
-                "action": "status",
-                "run_ref": "precheck-run:test",
-                "dataset_ref": "dataset:test",
-                "state": "paused",
-                "progress": {
-                    "discovered": 1,
-                    "accounted": 1,
-                    "usable": 1,
-                    "exceptional": 0,
-                    "unresolved": 0,
-                },
-                "activity": {
-                    "state": "waiting",
-                    "phase": "external_evidence",
-                    "work": {
-                        "completed": 0,
-                        "reused": 0,
-                        "failed": 0,
-                        "remaining": 1,
-                        "total": 1,
-                    },
-                    "last_progress_at": "unknown",
-                    "errors": {"total": 0, "by_phase": [], "truncated": False},
-                },
-                "allowed_actions": ["resume", "cancel"],
-                "reason": {
-                    "code": "confirmation_required",
-                    "message": "Human authorization is required.",
-                },
-                "confirmation": {
-                    "kind": "external_effect",
-                    "summary": "Reverse-geocode one coordinate.",
-                    "content_identity": self.content_identity,
-                    "quantity": 1,
-                    "unit": "logical_queries",
-                    "skip_allowed": False,
-                    "disclosure": self.disclosure,
-                },
-            }
+    def precheck_confirmation(self, dataset_ref, run_ref):
+        assert dataset_ref == "dataset:test" and run_ref == "precheck-run:test"
+        return {
+            "kind": "external_effect",
+            "summary": "One synthetic coordinate",
+            "content_identity": self.content_identity,
+            "disclosure": self.disclosure,
+        }
+
+    def call_tool(self, name, *, dataset_ref, request, authority=None):
+        assert name == "mediasense.precheck.run" and dataset_ref == "dataset:test"
+        if request["action"] == "pause":
+            return {"state": "paused"}
         self.authorities.append(authority)
         if request.get("decision") == "decline":
-            return {
-                "outcome": "accepted",
-                "action": "resume",
-                "run_ref": "precheck-run:test",
-                "observed_state": "paused",
-                "target_state": "cancelled",
-            }
+            return {"state": "cancelled"}
         if authority is None:
             return {
-                "outcome": "error",
-                "action": "resume",
-                "run_ref": "precheck-run:test",
                 "error": {
-                    "code": "authorization_required",
-                    "message": "Human authorization is required.",
-                },
+                    "code": "confirmation_required",
+                    "message": "Trusted confirmation is required.",
+                }
             }
         self.provider_coordinates.extend(self.disclosure["coordinates"])
-        return {
-            "outcome": "accepted",
-            "action": "resume",
-            "run_ref": "precheck-run:test",
-            "observed_state": "paused",
-            "target_state": "running",
-        }
+        return {"state": "running"}
 
 
 class DirectGeoRuntimeHost:
@@ -274,12 +220,13 @@ async def _mcp_geo_resume(
             result = await session.call_tool(
                 "mediasense.precheck.run",
                 {
-                    "dataset_ref": "dataset:test",
-                    "request": {
+                    **{
+                        "dataset_ref": "dataset:dataset-a",
                         "action": "resume",
                         "run_ref": "precheck-run:test",
                         "decision": "proceed",
                     },
+                    "dataset_ref": "dataset:test",
                 },
             )
         group.cancel_scope.cancel()
@@ -385,7 +332,7 @@ def test_mcp_geo_resume_uses_session_elicitation_as_trusted_authority() -> None:
         accepted = await _mcp_geo_resume(accepted_runtime, approve)
         assert accepted.is_error is False
         assert accepted.structured_content is not None
-        assert accepted.structured_content["target_state"] == "running"
+        assert accepted.structured_content["state"] == "running"
         assert (
             accepted_runtime.provider_coordinates
             == (accepted_runtime.disclosure["coordinates"])
@@ -407,13 +354,13 @@ def test_mcp_geo_resume_uses_session_elicitation_as_trusted_authority() -> None:
         assert "fake_maps" in prompts[0].message
         assert "Maximum provider requests: 1" in prompts[0].message
         assert "Media files are not sent" in prompts[0].message
-        assert "22.3193" not in prompts[0].message
+        assert "22.3193" in prompts[0].message
 
         declined_runtime = GeoElicitationRuntimeHost()
         declined = await _mcp_geo_resume(declined_runtime, decline)
         assert declined.is_error is False
         assert declined.structured_content is not None
-        assert declined.structured_content["target_state"] == "cancelled"
+        assert declined.structured_content["state"] == "cancelled"
         assert declined_runtime.authorities == [None]
         assert declined_runtime.provider_coordinates == []
 
@@ -427,9 +374,10 @@ def test_mcp_geo_resume_uses_session_elicitation_as_trusted_authority() -> None:
 
         unsupported_runtime = GeoElicitationRuntimeHost()
         unsupported = await _mcp_geo_resume(unsupported_runtime)
-        assert unsupported.structured_content is not None
-        assert unsupported.structured_content["error"]["code"] == (
-            "authorization_required"
+        assert unsupported.is_error is True
+        assert (
+            json.loads(unsupported.content[0].text)["error"]["code"]
+            == "confirmation_required"
         )
         assert unsupported_runtime.authorities == [None]
         assert unsupported_runtime.provider_coordinates == []
@@ -524,14 +472,19 @@ def test_stdio_mcp_handshake_discovery_and_non_destructive_call(
             precheck_run = next(
                 tool for tool in listed.tools if tool.name == "mediasense.precheck.run"
             )
-            assert "authority" not in precheck_run.input_schema["properties"]
+            assert all(
+                "authority" not in branch["properties"]
+                and "request" not in branch["properties"]
+                for branch in precheck_run.input_schema["oneOf"]
+            )
             geo_query = next(
                 tool for tool in listed.tools if tool.name == "mediasense.geo.query"
             )
             assert "authority" not in geo_query.input_schema["properties"]
-            assert precheck_run.input_schema["properties"]["request"]["$id"] == (
-                "urn:mediasense:tool:precheck-run-input"
-            )
+            assert {
+                branch["properties"]["action"]["const"]
+                for branch in precheck_run.input_schema["oneOf"]
+            } == {"start", "status", "pause", "resume", "cancel"}
             assert precheck_run.output_schema is not None
             assert precheck_run.output_schema["type"] == "object"
             opened = await session.call_tool(
@@ -544,17 +497,67 @@ def test_stdio_mcp_handshake_discovery_and_non_destructive_call(
             status = await session.call_tool(
                 "mediasense.precheck.run",
                 {
-                    "dataset_ref": dataset_ref,
-                    "request": {
+                    **{
+                        "dataset_ref": "dataset:dataset-a",
                         "action": "status",
                         "run_ref": "precheck-run:not-found",
                     },
+                    "dataset_ref": dataset_ref,
                 },
             )
-            assert status.is_error is False
-            assert status.structured_content is not None
-            assert status.structured_content["outcome"] == "error"
-            assert status.structured_content["error"]["code"] == "run_not_found"
+            assert status.is_error is True
+            assert (
+                json.loads(status.content[0].text)["error"]["code"] == "run_not_found"
+            )
+
+    anyio.run(scenario)
+
+
+def test_stdio_mcp_missing_run_resume_matches_direct_error(tmp_path: Path) -> None:
+    from mediasense.runtime.host import RuntimeHost
+
+    source = tmp_path / "source"
+    source.mkdir()
+    workspace = tmp_path / "workspace"
+    host = RuntimeHost()
+    dataset_ref = host.open_dataset(str(source), str(workspace))["dataset_ref"]
+    request = {
+        "dataset_ref": dataset_ref,
+        "action": "resume",
+        "run_ref": "precheck-run:not-found",
+        "decision": "proceed",
+    }
+    direct = host.call_tool(
+        "mediasense.precheck.run", dataset_ref=dataset_ref, request=request
+    )
+    assert direct["error"]["code"] == "run_not_found"
+
+    async def scenario() -> None:
+        parameters = StdioServerParameters(
+            command=sys.executable,
+            args=["-m", "mediasense", "mcp"],
+            cwd=str(ROOT),
+            env={
+                "MEDIASENSE_CONFIG_HOME": str(tmp_path / "config"),
+                "MEDIASENSE_DATA_HOME": str(tmp_path / "data"),
+                "AMAP_API_KEY": "",
+                "GOOGLE_MAPS_API_KEY": "",
+            },
+        )
+        async with (
+            stdio_client(parameters) as (incoming, outgoing),
+            ClientSession(incoming, outgoing) as session,
+        ):
+            await session.initialize()
+            opened = await session.call_tool(
+                "mediasense.dataset.open",
+                {"source_root": str(source), "workspace": str(workspace)},
+            )
+            assert opened.structured_content["dataset_ref"] == dataset_ref
+            result = await session.call_tool("mediasense.precheck.run", request)
+            assert result.is_error is True
+            assert json.loads(result.content[0].text) == direct
+            assert result.structured_content == direct
 
     anyio.run(scenario)
 
@@ -590,12 +593,12 @@ def test_stdio_mcp_scope_confirmation_resume_continues_the_same_run(
             started = await session.call_tool(
                 "mediasense.precheck.run",
                 {
-                    "dataset_ref": dataset_ref,
-                    "request": {
+                    **{
                         "action": "start",
                         "dataset_ref": dataset_ref,
                         "request_id": "request:mcp-scope-resume",
                     },
+                    "dataset_ref": dataset_ref,
                 },
             )
             assert started.structured_content is not None
@@ -606,8 +609,12 @@ def test_stdio_mcp_scope_confirmation_resume_continues_the_same_run(
                 current = await session.call_tool(
                     "mediasense.precheck.run",
                     {
+                        **{
+                            "dataset_ref": "dataset:dataset-a",
+                            "action": "status",
+                            "run_ref": run_ref,
+                        },
                         "dataset_ref": dataset_ref,
-                        "request": {"action": "status", "run_ref": run_ref},
                     },
                 )
                 assert current.structured_content is not None
@@ -633,32 +640,37 @@ def test_stdio_mcp_scope_confirmation_resume_continues_the_same_run(
             resumed = await session.call_tool(
                 "mediasense.precheck.run",
                 {
-                    "dataset_ref": dataset_ref,
-                    "request": {
+                    **{
+                        "dataset_ref": "dataset:dataset-a",
                         "action": "resume",
                         "run_ref": run_ref,
                         "decision": {
                             "kind": "source_scope",
                             "inventory_fingerprint": paused["confirmation"][
-                                "inventory"
-                            ]["inventory_fingerprint"],
+                                "inventory_fingerprint"
+                            ],
                             "default_disposition": "include",
                             "exceptions": [],
                         },
                     },
+                    "dataset_ref": dataset_ref,
                 },
             )
             assert resumed.is_error is False
             assert resumed.structured_content is not None
-            assert resumed.structured_content["outcome"] == "accepted"
+            assert resumed.structured_content["state"] == "running"
 
             finished: dict[str, object] | None = None
             for _ in range(1000):
                 current = await session.call_tool(
                     "mediasense.precheck.run",
                     {
+                        **{
+                            "dataset_ref": "dataset:dataset-a",
+                            "action": "status",
+                            "run_ref": run_ref,
+                        },
                         "dataset_ref": dataset_ref,
-                        "request": {"action": "status", "run_ref": run_ref},
                     },
                 )
                 assert current.structured_content is not None

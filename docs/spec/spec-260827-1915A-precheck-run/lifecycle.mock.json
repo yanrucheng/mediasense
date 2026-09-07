@@ -1,443 +1,242 @@
 {
-  "mock_kind": "mediasense.precheck.run.lifecycle",
-  "contract": "mediasense.precheck.run",
-  "authority": "Human-authored review example; not runtime output.",
+  "kind": "synthetic-contract-transcript",
   "exchanges": [
     {
+      "name": "start",
+      "tool": "run",
       "request": {
         "action": "start",
-        "dataset_ref": "dataset:hong-kong-food-trip",
-        "request_id": "request:precheck-hk-001"
+        "dataset_ref": "dataset:example-001",
+        "request_id": "request:start-001"
       },
       "response": {
-        "outcome": "ok",
-        "action": "start",
-        "run_ref": "precheck-run:hk-001",
-        "dataset_ref": "dataset:hong-kong-food-trip",
-        "state": "running"
+        "run_ref": "precheck-run:example-001"
       }
     },
     {
+      "name": "start-successor",
+      "tool": "run",
       "request": {
-        "action": "status",
-        "run_ref": "precheck-run:hk-001"
+        "action": "start",
+        "dataset_ref": "dataset:example-001",
+        "request_id": "request:start-002",
+        "prior_result_ref": "precheck-result:example-001"
       },
       "response": {
-        "outcome": "ok",
+        "run_ref": "precheck-run:002"
+      }
+    },
+    {
+      "name": "running",
+      "tool": "run",
+      "request": {
         "action": "status",
-        "run_ref": "precheck-run:hk-001",
-        "dataset_ref": "dataset:hong-kong-food-trip",
+        "dataset_ref": "dataset:example-001",
+        "run_ref": "precheck-run:example-001"
+      },
+      "response": {
         "state": "running",
         "progress": {
-          "discovered": "unknown",
-          "accounted": "unknown",
-          "usable": "unknown",
-          "exceptional": "unknown",
-          "unresolved": "unknown"
+          "phase": "geo",
+          "unit": "location_query",
+          "processed": 1,
+          "total": 2,
+          "last_progress_at": "2026-09-07T12:00:00+08:00"
         },
-        "activity": {
-          "state": "working",
-          "phase": "metadata",
-          "work": {
-            "completed": 71,
-            "reused": 120,
-            "failed": 1,
-            "remaining": 1944,
-            "total": 2136
-          },
-          "last_progress_at": "2026-08-27T03:12:14Z",
-          "errors": {
-            "total": 1,
-            "by_phase": [{ "phase": "metadata", "count": 1 }],
-            "truncated": false
-          }
-        },
-        "allowed_actions": ["cancel", "pause"]
+        "allowed_actions": [
+          "pause",
+          "cancel"
+        ]
       }
     },
     {
-      "request": {
-        "action": "pause",
-        "run_ref": "precheck-run:hk-001"
-      },
-      "response": {
-        "outcome": "accepted",
-        "action": "pause",
-        "run_ref": "precheck-run:hk-001",
-        "observed_state": "running",
-        "target_state": "paused"
-      }
-    },
-    {
+      "name": "completed-no-place",
+      "tool": "run",
       "request": {
         "action": "status",
-        "run_ref": "precheck-run:hk-001"
+        "dataset_ref": "dataset:example-001",
+        "run_ref": "precheck-run:example-001"
       },
       "response": {
-        "outcome": "ok",
-        "action": "status",
-        "run_ref": "precheck-run:hk-001",
-        "dataset_ref": "dataset:hong-kong-food-trip",
-        "state": "paused",
-        "progress": {
-          "discovered": "unknown",
-          "accounted": "unknown",
-          "usable": "unknown",
-          "exceptional": "unknown",
-          "unresolved": "unknown"
-        },
-        "activity": {
-          "state": "paused",
-          "phase": "metadata",
-          "work": {
-            "completed": 71,
-            "reused": 120,
-            "failed": 1,
-            "remaining": 1944,
-            "total": 2136
-          },
-          "last_progress_at": "2026-08-27T03:12:14Z",
-          "errors": {
-            "total": 1,
-            "by_phase": [{ "phase": "metadata", "count": 1 }],
-            "truncated": false
-          }
-        },
-        "allowed_actions": ["resume", "cancel"],
-        "reason": {
-          "code": "user_requested",
-          "message": "The caller requested a durable pause.",
-          "resume_when": "The caller chooses to continue this Run."
-        }
-      }
-    },
-    {
-      "request": {
-        "action": "resume",
-        "run_ref": "precheck-run:hk-001"
-      },
-      "response": {
-        "outcome": "accepted",
-        "action": "resume",
-        "run_ref": "precheck-run:hk-001",
-        "observed_state": "paused",
-        "target_state": "running"
-      }
-    },
-    {
-      "request": {
-        "action": "status",
-        "run_ref": "precheck-run:hk-001"
-      },
-      "response": {
-        "outcome": "ok",
-        "action": "status",
-        "run_ref": "precheck-run:hk-001",
-        "dataset_ref": "dataset:hong-kong-food-trip",
         "state": "completed",
-        "progress": {
-          "discovered": "unknown",
-          "accounted": 5,
-          "usable": 4,
-          "exceptional": 1,
-          "unresolved": 0
-        },
-        "activity": {
-          "state": "finished",
-          "phase": "complete",
-          "work": {
-            "completed": 1,
-            "reused": 0,
-            "failed": 0,
-            "remaining": 0,
-            "total": 1
-          },
-          "last_progress_at": "2026-08-27T03:22:31Z",
-          "errors": {
-            "total": 1,
-            "by_phase": [{ "phase": "metadata", "count": 1 }],
-            "truncated": false
-          }
-        },
-        "allowed_actions": [],
-        "published_result": {
-          "result_ref": "precheck-result:hk-review-slice-002",
-          "coverage": "partial",
+        "result": {
+          "ref": "precheck-result:example-001",
+          "coverage": "complete",
           "readiness": "plan_ready",
-          "integrity": "valid"
+          "qualifications": [
+            {
+              "code": "location_query_failed",
+              "effect": "limits_interpretation",
+              "message": "地点查询终结失败，仍可规划。"
+            }
+          ]
         }
       }
     },
     {
+      "name": "failed",
+      "tool": "run",
       "request": {
-        "action": "start",
-        "prior_result_ref": "precheck-result:hk-review-slice-002",
-        "request_id": "request:precheck-hk-002"
+        "action": "status",
+        "dataset_ref": "dataset:example-001",
+        "run_ref": "precheck-run:example-001"
       },
       "response": {
-        "outcome": "ok",
-        "action": "start",
-        "run_ref": "precheck-run:hk-002",
-        "dataset_ref": "dataset:hong-kong-food-trip",
-        "prior_result_ref": "precheck-result:hk-review-slice-002",
+        "state": "failed",
+        "reason": {
+          "code": "result_validation_failed",
+          "message": "Result结构矛盾。"
+        }
+      }
+    },
+    {
+      "name": "cancelled",
+      "tool": "run",
+      "request": {
+        "action": "status",
+        "dataset_ref": "dataset:example-001",
+        "run_ref": "precheck-run:example-001"
+      },
+      "response": {
+        "state": "cancelled"
+      }
+    },
+    {
+      "name": "blocked",
+      "tool": "run",
+      "request": {
+        "action": "status",
+        "dataset_ref": "dataset:example-001",
+        "run_ref": "precheck-run:example-001"
+      },
+      "response": {
+        "state": "blocked",
+        "reason": {
+          "code": "source_unavailable",
+          "message": "源磁盘不可用。",
+          "resume_when": "重新连接同一磁盘。"
+        },
+        "allowed_actions": [
+          "cancel",
+          "resume"
+        ]
+      }
+    },
+    {
+      "name": "pause-accepted",
+      "tool": "run",
+      "request": {
+        "action": "pause",
+        "dataset_ref": "dataset:example-001",
+        "run_ref": "precheck-run:example-001"
+      },
+      "response": {
         "state": "running"
       }
     },
     {
+      "name": "resume",
+      "tool": "run",
       "request": {
-        "action": "status",
-        "run_ref": "precheck-run:hk-002"
+        "action": "resume",
+        "dataset_ref": "dataset:example-001",
+        "run_ref": "precheck-run:example-001"
       },
       "response": {
-        "outcome": "ok",
-        "action": "status",
-        "run_ref": "precheck-run:hk-002",
-        "dataset_ref": "dataset:hong-kong-food-trip",
-        "prior_result_ref": "precheck-result:hk-review-slice-002",
-        "state": "blocked",
-        "progress": {
-          "discovered": "unknown",
-          "accounted": "unknown",
-          "usable": "unknown",
-          "exceptional": "unknown",
-          "unresolved": "unknown"
-        },
-        "activity": {
-          "state": "waiting",
-          "phase": "source_accounting",
-          "work": {
-            "completed": 0,
-            "reused": 0,
-            "failed": 0,
-            "remaining": "unknown",
-            "total": "unknown"
-          },
-          "last_progress_at": "2026-08-27T04:01:00Z",
-          "errors": {
-            "total": 0,
-            "by_phase": [],
-            "truncated": false
-          }
-        },
-        "allowed_actions": ["cancel", "resume"],
-        "reason": {
-          "code": "source_unavailable",
-          "message": "The source volume is not currently available.",
-          "resume_when": "The same compatible source is available again."
-        }
+        "state": "running"
       }
     },
     {
+      "name": "cancel",
+      "tool": "run",
       "request": {
         "action": "cancel",
-        "run_ref": "precheck-run:hk-002"
+        "dataset_ref": "dataset:example-001",
+        "run_ref": "precheck-run:example-001"
       },
       "response": {
-        "outcome": "accepted",
-        "action": "cancel",
-        "run_ref": "precheck-run:hk-002",
-        "observed_state": "blocked",
-        "target_state": "cancelled"
+        "state": "cancelled"
       }
     },
     {
+      "name": "paused",
+      "tool": "run",
       "request": {
         "action": "status",
-        "run_ref": "precheck-run:hk-002"
+        "dataset_ref": "dataset:example-001",
+        "run_ref": "precheck-run:example-001"
       },
       "response": {
-        "outcome": "ok",
-        "action": "status",
-        "run_ref": "precheck-run:hk-002",
-        "dataset_ref": "dataset:hong-kong-food-trip",
-        "prior_result_ref": "precheck-result:hk-review-slice-002",
-        "state": "cancelled",
-        "progress": {
-          "discovered": "unknown",
-          "accounted": "unknown",
-          "usable": "unknown",
-          "exceptional": "unknown",
-          "unresolved": "unknown"
-        },
-        "activity": {
-          "state": "finished",
-          "phase": "source_accounting",
-          "work": {
-            "completed": 0,
-            "reused": 0,
-            "failed": 0,
-            "remaining": "unknown",
-            "total": "unknown"
-          },
-          "last_progress_at": "2026-08-27T04:01:00Z",
-          "errors": {
-            "total": 0,
-            "by_phase": [],
-            "truncated": false
-          }
-        },
-        "allowed_actions": []
-      }
-    },
-    {
-      "request": {
-        "action": "status",
-        "run_ref": "precheck-run:scope-review"
-      },
-      "response": {
-        "outcome": "ok",
-        "action": "status",
-        "run_ref": "precheck-run:scope-review",
-        "dataset_ref": "dataset:source-with-derived-files",
         "state": "paused",
-        "progress": {
-          "discovered": 2,
-          "accounted": 2,
-          "usable": 0,
-          "exceptional": 1,
-          "unresolved": 1
-        },
-        "activity": {
-          "state": "waiting",
-          "phase": "scope_review",
-          "work": {
-            "completed": 0,
-            "reused": 0,
-            "failed": 0,
-            "remaining": 1,
-            "total": 1
-          },
-          "last_progress_at": "2026-09-02T01:00:00Z",
-          "errors": {
-            "total": 0,
-            "by_phase": [],
-            "truncated": false
-          }
-        },
-        "allowed_actions": ["resume", "cancel"],
         "reason": {
-          "code": "scope_confirmation_required",
-          "message": "The discovered source tree requires a scope selection.",
-          "resume_when": "The caller supplies an include/exclude selection for this exact inventory."
+          "code": "pause_requested",
+          "message": "已暂停。"
         },
-        "confirmation": {
-          "kind": "source_scope",
-          "summary": "Review the discovered source tree before expensive work.",
-          "inventory_fingerprint": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-          "scan_generation": 1,
-          "inventory": {
-            "inventory_fingerprint": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-            "scan_generation": 1,
-            "complete": true,
-            "view": {
-              "root": ".",
-              "max_depth": 2,
-              "max_nodes": 64,
-              "tree": {
-                "path": ".",
-                "name": ".",
-                "node_type": "directory",
-                "file_count": 2,
-                "byte_count": 1032,
-                "unknown_size_count": 0,
-                "kind_counts": [
-                  {"kind": "image", "count": 1},
-                  {"kind": "unknown", "count": 1}
-                ],
-                "size_buckets": [
-                  {"bucket": "under_1_mib", "count": 2}
-                ],
-                "representative_paths": [
-                  ".DS_Store",
-                  ".similarity_cache/frame.jpg"
-                ],
-                "children": [
-                  {
-                    "path": ".DS_Store",
-                    "name": ".DS_Store",
-                    "node_type": "file",
-                    "file_count": 1,
-                    "byte_count": 8,
-                    "unknown_size_count": 0,
-                    "kind_counts": [{"kind": "unknown", "count": 1}],
-                    "size_buckets": [
-                      {"bucket": "under_1_mib", "count": 1}
-                    ],
-                    "representative_paths": [".DS_Store"],
-                    "children": [],
-                    "omitted_children": 0
-                  },
-                  {
-                    "path": ".similarity_cache",
-                    "name": ".similarity_cache",
-                    "node_type": "directory",
-                    "file_count": 1,
-                    "byte_count": 1024,
-                    "unknown_size_count": 0,
-                    "kind_counts": [{"kind": "image", "count": 1}],
-                    "size_buckets": [
-                      {"bucket": "under_1_mib", "count": 1}
-                    ],
-                    "representative_paths": [
-                      ".similarity_cache/frame.jpg"
-                    ],
-                    "children": [
-                      {
-                        "path": ".similarity_cache/frame.jpg",
-                        "name": "frame.jpg",
-                        "node_type": "file",
-                        "file_count": 1,
-                        "byte_count": 1024,
-                        "unknown_size_count": 0,
-                        "kind_counts": [{"kind": "image", "count": 1}],
-                        "size_buckets": [
-                          {"bucket": "under_1_mib", "count": 1}
-                        ],
-                        "representative_paths": [
-                          ".similarity_cache/frame.jpg"
-                        ],
-                        "children": [],
-                        "omitted_children": 0
-                      }
-                    ],
-                    "omitted_children": 0
-                  }
-                ],
-                "omitted_children": 0
-              }
-            },
-            "issues": {
-              "count": 0,
-              "representative": [],
-              "truncated": false
-            }
-          }
-        }
+        "allowed_actions": [
+          "resume",
+          "cancel"
+        ]
       }
     },
     {
+      "name": "scope-resume",
+      "tool": "run",
       "request": {
         "action": "resume",
-        "run_ref": "precheck-run:scope-review",
+        "dataset_ref": "dataset:example-001",
+        "run_ref": "precheck-run:example-001",
         "decision": {
           "kind": "source_scope",
           "inventory_fingerprint": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-          "default_disposition": "include",
-          "exceptions": [".similarity_cache"]
+          "default_disposition": "exclude",
+          "exceptions": [
+            "旅行"
+          ]
         }
       },
       "response": {
-        "outcome": "accepted",
+        "state": "running"
+      }
+    },
+    {
+      "name": "trusted-proceed",
+      "tool": "run",
+      "request": {
         "action": "resume",
-        "run_ref": "precheck-run:scope-review",
-        "decision": {
-          "kind": "source_scope",
-          "inventory_fingerprint": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-          "default_disposition": "include",
-          "exceptions": [".similarity_cache"]
-        },
-        "observed_state": "paused",
-        "target_state": "running"
+        "dataset_ref": "dataset:example-001",
+        "run_ref": "precheck-run:example-001",
+        "decision": "proceed"
+      },
+      "response": {
+        "state": "running"
+      }
+    },
+    {
+      "name": "decline",
+      "tool": "run",
+      "request": {
+        "action": "resume",
+        "dataset_ref": "dataset:example-001",
+        "run_ref": "precheck-run:example-001",
+        "decision": "decline"
+      },
+      "response": {
+        "state": "cancelled"
+      }
+    },
+    {
+      "name": "bad-request-error",
+      "tool": "run",
+      "request": {
+        "action": "status",
+        "dataset_ref": "dataset:example-001",
+        "run_ref": "precheck-run:example-001"
+      },
+      "response": {
+        "error": {
+          "code": "run_not_found",
+          "message": "未找到该Run。"
+        }
       }
     }
   ]

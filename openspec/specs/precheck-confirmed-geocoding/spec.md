@@ -6,79 +6,72 @@ representative-coordinate set is frozen, including zero-egress defaults, effect
 evidence, candidate meaning, and safe reuse.
 ## Requirements
 ### Requirement: PreCheck remains local-first with one bounded external exception
-PreCheck SHALL perform zero external calls by default. After compression has
-selected and frozen its representative-coordinate batch, an enabled Run MAY
-perform coordinate-level reverse geocoding under authority bound to that exact
-Run batch. It MUST NOT transmit source media, renditions, embeddings, paths,
-filenames, prompts, or general metadata. PreCheck MAY use its own batch engine and
-fixed Run profile; it is not required to expose Plan's per-request interaction or
-to invoke `mediasense.geo.query`.
+PreCheck SHALL perform zero external effects until matching trusted authority exists. It SHALL use media-aware conservative geographic acquisition units and the shared mediasense.geo.query boundary for selected coordinate-only work. It SHALL NOT transmit source media, renditions, embeddings, paths, filenames, prompts or general metadata. Missing location SHALL NOT itself prevent planning.
 
 #### Scenario: Default run
-- **WHEN** a Run does not explicitly enable reverse geocoding
-- **THEN** it performs zero provider requests and can complete through the local path
+- **WHEN** geographic acquisition is disabled by the selected local policy
+- **THEN** no Provider requests occur and truthful not_checked observations do not alone block Plan
 
 #### Scenario: Authorized frozen batch
-- **WHEN** a Run freezes a deduplicated coordinate batch and obtains matching Run-scoped authority
-- **THEN** PreCheck may execute the batch under its selected fixed provider/routing profile and records its exact effects
+- **WHEN** a media-aware compressed query set receives matching trusted authority
+- **THEN** the shared Geo Tool executes only within its declared request and retry ceilings
 
 #### Scenario: Disallowed payload
-- **WHEN** an enabled producer would transmit anything beyond normalized coordinates and required lookup parameters
-- **THEN** PreCheck refuses that external work before transmission
+- **WHEN** acquisition would transmit unauthorized data classes
+- **THEN** it is rejected before transmission
 
 ### Requirement: Query scope is frozen after compression
-The runtime SHALL derive reverse-geocode inputs only from the completed
-compression frontier, normalize and deduplicate identical coordinates, and
-freeze the ordered logical-query set before requesting Run-scoped authorization.
-Selection, authorization binding, Work reuse, and Result projection SHALL remain
-owned by that PreCheck Run and SHALL NOT be inherited from Plan state.
+PreCheck SHALL use local companion, bundle, time, coordinate and trajectory evidence to derive conservative acquisition units, then apply exact-coordinate deduplication as final request defense. It SHALL freeze the effective query set and profile before confirmation, and project outcomes to every covered Source Item without promoting bundle membership to location truth.
 
 #### Scenario: Duplicate representative coordinates
-- **WHEN** multiple selected representatives have the same normalized coordinate
-- **THEN** the frozen set contains one logical query and retains all represented Source Item links
+- **WHEN** multiple acquisition units have the same effective coordinate
+- **THEN** one authorized logical query may cover them while every Source Item retains a qualified projected outcome
 
 #### Scenario: Changed frozen set
-- **WHEN** the query set or effective provider profile changes after an earlier decision
-- **THEN** the earlier decision does not authorize the changed work and the Run pauses again
+- **WHEN** coordinate membership, bounds or effective retry/profile semantics change
+- **THEN** earlier authority cannot authorize changed effects
 
 ### Requirement: Confirmation is an automatic Run checkpoint
-Before the first provider request, the Run SHALL enter `paused` and report the
-exact number of pending logical queries. One matching `proceed` decision SHALL
-authorize the complete fingerprinted frozen batch; PreCheck SHALL NOT require
-per-coordinate confirmation. `skip_optional_work` SHALL continue without calls.
+Before admitting external requests PreCheck SHALL enter its confirmation pause, expose the full exact disclosure and use trusted Host elicitation. Proceed SHALL bind the full disclosure and request identity, decline SHALL terminate without publication, and dismissal SHALL leave the Run paused. There SHALL be no skip_optional_work bypass under this contract.
 
 #### Scenario: Confirmation required
-- **WHEN** enabled reverse geocoding has uncomputed logical queries
-- **THEN** status reports their exact count and no provider request occurs before a matching `proceed`
+- **WHEN** authorized geographic work is pending
+- **THEN** no new request occurs before the exact Provider, coordinate, ceiling, cost-unknown and retention disclosure is accepted
 
 #### Scenario: Skip or cancel
-- **WHEN** the user skips the optional work or cancels the Run
-- **THEN** no new provider request is admitted and PreCheck records no fictitious Geo Tool refusal
+- **WHEN** the Human declines or caller cancels
+- **THEN** no new Provider request is admitted and no fictitious Provider refusal or successful Result is produced
+
+#### Scenario: Disclosure exceeds a response page
+- **WHEN** the frozen coordinates require several read pages
+- **THEN** all pages bind one content identity and no partial or per-page consent substitutes for complete Human confirmation
 
 ### Requirement: Effects and candidate semantics remain observable
-The Result SHALL identify reverse-geocode output as provider-derived candidate
-Evidence and retain provider, language, input and provider datum, observation
-time, route attempts, fallback or partial failure, logical-query count, actual
-provider-request count, and an explicit billable-cost value or `unknown`.
+The Result SHALL preserve per-Source-Item address_candidate and nearby_place_candidates Observations, original sources and limits, and an auditable execution boundary. available SHALL have a usable value; non-available statuses SHALL have no value. no_result SHALL map to missing, terminal known failure to failed with basis, and partial useful results SHALL remain independently available. Ordinary missing locations SHALL NOT invalidate publication or Plan readiness.
 
 #### Scenario: Provider fallback
-- **WHEN** one logical query uses more than one provider request
-- **THEN** the Result distinguishes the one logical query from every observed provider request and its outcome
+- **WHEN** one logical query makes multiple Provider requests
+- **THEN** audit distinguishes actual attempts, historical reused requests and current effects without exposing those as Plan-required fields
 
 #### Scenario: Provider returns no result or failure
-- **WHEN** an authorized lookup returns no candidate, partial data, or failure
-- **THEN** the corresponding observation state is distinguishable and is not promoted to confirmed place truth
+- **WHEN** both components yield no_result or end in known failure
+- **THEN** normalized non-available observations seal successfully, remain distinguishable, and do not alone block Plan
+
+#### Scenario: Only one component succeeds
+- **WHEN** address succeeds while nearby places fail
+- **THEN** address value survives, nearby_places is failed without value, and its limitation is visible
 
 ### Requirement: Reuse includes routing semantics but excludes credentials
-Reusable geocode Work SHALL depend on the normalized coordinate, effective
-provider/routing profile, and preceding route-observation Work when continuity
-affects the next lookup. Credentials MUST NOT enter Work identity, persisted
-output, Result content, or logs.
+Geo reuse SHALL depend on coordinate and effective operation/profile/bounds, not previous unrelated batch position. New and retained results SHALL pass the same pure normalization boundary; unsupported legacy component facts SHALL remain not_checked rather than invented no_result. Credentials SHALL NOT enter identity or evidence. Reuse SHALL NOT confer new external authority.
 
 #### Scenario: Reused prefix
-- **WHEN** a prior query is reused in an otherwise equivalent ordered batch
-- **THEN** its recorded next provider/language state drives the following query without repeating the reused provider call
+- **WHEN** previously committed equivalent observations can satisfy current acquisition
+- **THEN** they are reused with original provenance, zero new requests and complete per-source projection
 
 #### Scenario: Different sequence context
-- **WHEN** the same coordinate follows a different route-observation Work
-- **THEN** it does not silently reuse a result whose provider/language context differs
+- **WHEN** another coordinate is inserted or reordered without changing this coordinate's effective semantics
+- **THEN** valid reuse and normalized meaning remain stable
+
+#### Scenario: Legacy aggregate missing
+- **WHEN** an old aggregate record cannot prove both components were executed
+- **THEN** unknown components are explicitly not_checked with historical_geo_unrecorded and no network request or fabricated candidate is generated

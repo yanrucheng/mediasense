@@ -47,7 +47,8 @@ def _opened_host_with_plan_ready_result(
         "mediasense.precheck.read",
         dataset_ref=dataset_ref,
         request={
-            "operation": "resolve",
+            "dataset_ref": dataset_ref,
+            "action": "resolve",
             "result_ref": result.result_ref,
             "source_set": {
                 "kind": "precheck_relation",
@@ -62,7 +63,8 @@ def _opened_host_with_plan_ready_result(
         "mediasense.precheck.read",
         dataset_ref=dataset_ref,
         request={
-            "operation": "expand",
+            "dataset_ref": dataset_ref,
+            "action": "expand",
             "result_ref": result.result_ref,
             "source_item_refs": [source_item_ref],
             "include": ["source_item"],
@@ -76,6 +78,23 @@ def _opened_host_with_plan_ready_result(
         source,
         source_before,
     )
+
+
+def test_precheck_confirmation_does_not_hide_store_errors(tmp_path, monkeypatch):
+    source = tmp_path / "source"
+    source.mkdir()
+    host = RuntimeHost()
+    dataset_ref = host.open_dataset(str(source), str(tmp_path / "workspace"))[
+        "dataset_ref"
+    ]
+    store = host._datasets[dataset_ref].precheck_run._store
+
+    def invalid_record(_run_ref):
+        raise KeyError("confirmation")
+
+    monkeypatch.setattr(store, "get", invalid_record)
+    with pytest.raises(KeyError, match="confirmation"):
+        host.precheck_confirmation(dataset_ref, "precheck-run:not-found")
 
 
 def test_composition_root_constructs_all_tools_offline(tmp_path: Path) -> None:
@@ -113,17 +132,26 @@ def test_opened_dataset_can_start_precheck_immediately(tmp_path: Path) -> None:
         },
     )
 
-    assert started["outcome"] == "ok"
+    assert set(started) == {"run_ref"}
     assert str(started["run_ref"]).startswith("precheck-run:")
-    assert started["dataset_ref"] == dataset_ref
-    assert started["state"] == "running"
+    assert (
+        host._datasets[dataset_ref].precheck_run._store.get(started["run_ref"])[
+            "dataset_ref"
+        ]
+        == dataset_ref
+    )
+    assert started["run_ref"].startswith("precheck-run:")
     status = host.call_tool(
         "mediasense.precheck.run",
         dataset_ref=dataset_ref,
-        request={"action": "status", "run_ref": started["run_ref"]},
+        request={
+            "dataset_ref": dataset_ref,
+            "action": "status",
+            "run_ref": started["run_ref"],
+        },
     )
     if status["state"] == "running":
-        assert status["activity"]["state"] in {"working", "no_recent_progress"}
+        assert status.get("reason", {}).get("code") != "suspected_stalled"
 
 
 def test_precheck_status_never_schedules_an_ownerless_run(
@@ -150,11 +178,15 @@ def test_precheck_status_never_schedules_an_ownerless_run(
     status = host.call_tool(
         "mediasense.precheck.run",
         dataset_ref=dataset_ref,
-        request={"action": "status", "run_ref": started["run_ref"]},
+        request={
+            "dataset_ref": dataset_ref,
+            "action": "status",
+            "run_ref": started["run_ref"],
+        },
     )
 
-    assert status["activity"]["state"] == "suspected_stalled"
-    assert status["reason"]["code"] == "execution_owner_missing"
+    assert status["reason"]["code"] == "suspected_stalled"
+    assert status["reason"]["code"] == "suspected_stalled"
     assert set(status["allowed_actions"]) == {"resume", "cancel"}
 
 
@@ -169,21 +201,26 @@ def test_successor_start_creates_work_and_never_reports_queued(
         "mediasense.precheck.run",
         dataset_ref=dataset_ref,
         request={
+            "dataset_ref": dataset_ref,
             "action": "start",
             "prior_result_ref": result_ref,
             "request_id": "request:successor-runtime",
         },
     )
-    assert started["outcome"] == "ok"
+    assert set(started) == {"run_ref"}
 
     deadline = 200
     while deadline:
         status = host.call_tool(
             "mediasense.precheck.run",
             dataset_ref=dataset_ref,
-            request={"action": "status", "run_ref": started["run_ref"]},
+            request={
+                "dataset_ref": dataset_ref,
+                "action": "status",
+                "run_ref": started["run_ref"],
+            },
         )
-        assert status["activity"]["state"] != "queued"
+        assert status["state"] != "queued"
         if status["state"] != "running":
             break
         sleep(0.01)
@@ -233,11 +270,12 @@ def test_scope_confirmation_resume_reuses_the_bound_accounting_run(
         "mediasense.precheck.run",
         dataset_ref=dataset_ref,
         request={
+            "dataset_ref": dataset_ref,
             "action": "resume",
             "run_ref": started["run_ref"],
             "decision": {
                 "kind": "source_scope",
-                "inventory_fingerprint": paused["confirmation"]["inventory"][
+                "inventory_fingerprint": paused["confirmation"][
                     "inventory_fingerprint"
                 ],
                 "default_disposition": "include",
@@ -245,14 +283,14 @@ def test_scope_confirmation_resume_reuses_the_bound_accounting_run(
             },
         },
     )
-    assert resumed["outcome"] == "accepted"
-    assert resumed["target_state"] == "running"
+    assert "error" not in resumed
+    assert resumed["state"] == "running"
 
     finished = _wait_for_precheck_attention(
         host, dataset_ref, str(started["run_ref"]), attempts=1000
     )
     assert finished["state"] == "completed", finished
-    assert finished["activity"]["phase"] == "complete"
+    assert "progress" not in finished
     with sqlite3.connect(database) as connection:
         after = connection.execute(
             "SELECT run_id, status FROM working_runs ORDER BY started_at"
@@ -313,11 +351,12 @@ def test_scope_resume_initialization_failure_has_no_orphan_accounting_run(
         "mediasense.precheck.run",
         dataset_ref=dataset_ref,
         request={
+            "dataset_ref": dataset_ref,
             "action": "resume",
             "run_ref": started["run_ref"],
             "decision": {
                 "kind": "source_scope",
-                "inventory_fingerprint": paused["confirmation"]["inventory"][
+                "inventory_fingerprint": paused["confirmation"][
                     "inventory_fingerprint"
                 ],
                 "default_disposition": "include",
@@ -326,18 +365,27 @@ def test_scope_resume_initialization_failure_has_no_orphan_accounting_run(
         },
     )
 
-    assert failed["outcome"] == "error"
-    assert failed["error"]["code"] == "operation_failed"
+    assert "error" in failed
+    assert failed["error"]["code"] == "execution_start_failed"
     assert failed["error"]["current_state"] == "failed"
-    assert failed["error"]["allowed_actions"] == []
+    assert "allowed_actions" not in failed["error"]
     status = host.call_tool(
         "mediasense.precheck.run",
         dataset_ref=dataset_ref,
-        request={"action": "status", "run_ref": started["run_ref"]},
+        request={
+            "dataset_ref": dataset_ref,
+            "action": "status",
+            "run_ref": started["run_ref"],
+        },
     )
     assert status["state"] == "failed"
     assert status["reason"]["code"] == "execution_initialization_failed"
-    assert status["scope_selection"]["provenance"] == "accepted"
+    assert (
+        host._datasets[dataset_ref].precheck_run._store.latest_scope_review(
+            started["run_ref"]
+        )["state"]
+        == "accepted"
+    )
     with sqlite3.connect(workspace / "precheck" / "work.sqlite3") as connection:
         accounting = connection.execute(
             "SELECT status FROM working_runs ORDER BY started_at"
@@ -387,11 +435,12 @@ def test_scope_resume_reports_recoverable_source_rebind_as_blocked(
         "mediasense.precheck.run",
         dataset_ref=dataset_ref,
         request={
+            "dataset_ref": dataset_ref,
             "action": "resume",
             "run_ref": started["run_ref"],
             "decision": {
                 "kind": "source_scope",
-                "inventory_fingerprint": paused["confirmation"]["inventory"][
+                "inventory_fingerprint": paused["confirmation"][
                     "inventory_fingerprint"
                 ],
                 "default_disposition": "include",
@@ -400,9 +449,10 @@ def test_scope_resume_reports_recoverable_source_rebind_as_blocked(
         },
     )
 
-    assert response["outcome"] == "error"
+    assert "error" in response
     assert response["error"] == {
-        "code": "operation_failed",
+        "code": "execution_start_failed",
+        "run_ref": started["run_ref"],
         "message": "source attachment changed",
         "current_state": "blocked",
         "allowed_actions": ["resume", "cancel"],
@@ -410,7 +460,11 @@ def test_scope_resume_reports_recoverable_source_rebind_as_blocked(
     status = host.call_tool(
         "mediasense.precheck.run",
         dataset_ref=dataset_ref,
-        request={"action": "status", "run_ref": started["run_ref"]},
+        request={
+            "dataset_ref": dataset_ref,
+            "action": "status",
+            "run_ref": started["run_ref"],
+        },
     )
     assert status["state"] == "blocked"
     assert status["reason"]["code"] == "source_rebind_required"
@@ -442,12 +496,16 @@ def test_worker_launch_failure_is_returned_and_retained(
         },
     )
 
-    assert failed["outcome"] == "error"
-    assert failed["error"]["code"] == "operation_failed"
+    assert "error" in failed
+    assert failed["error"]["code"] == "execution_start_failed"
     status = host.call_tool(
         "mediasense.precheck.run",
         dataset_ref=dataset_ref,
-        request={"action": "status", "run_ref": failed["run_ref"]},
+        request={
+            "dataset_ref": dataset_ref,
+            "action": "status",
+            "run_ref": failed["error"]["run_ref"],
+        },
     )
     assert status["state"] == "failed"
     assert status["reason"]["code"] == "execution_worker_start_failed"
@@ -461,11 +519,11 @@ def test_worker_launch_failure_is_returned_and_retained(
               ON accounting.run_id = public.accounting_run_id
             WHERE public.run_ref = ?
             """,
-            (failed["run_ref"],),
+            (failed["error"]["run_ref"],),
         ).fetchone()[0]
         checkpoint = connection.execute(
             "SELECT execution_checkpoint FROM precheck_runs WHERE run_ref = ?",
-            (failed["run_ref"],),
+            (failed["error"]["run_ref"],),
         ).fetchone()[0]
     assert accounting_status == "paused"
     assert '"worker":null' in checkpoint
@@ -501,7 +559,7 @@ def test_start_preparation_failure_pauses_the_unowned_accounting_run(
         },
     )
 
-    assert failed["outcome"] == "error"
+    assert "error" in failed
     assert failed["error"]["current_state"] == "failed"
     with sqlite3.connect(workspace / "precheck" / "work.sqlite3") as connection:
         accounting = connection.execute(
@@ -509,7 +567,7 @@ def test_start_preparation_failure_pauses_the_unowned_accounting_run(
         ).fetchall()
         public = connection.execute(
             "SELECT state FROM precheck_runs WHERE run_ref = ?",
-            (failed["run_ref"],),
+            (failed["error"]["run_ref"],),
         ).fetchone()[0]
     assert accounting == [("paused",)]
     assert public == "failed"
@@ -526,7 +584,11 @@ def _wait_for_precheck_attention(
         status = host.call_tool(
             "mediasense.precheck.run",
             dataset_ref=dataset_ref,
-            request={"action": "status", "run_ref": run_ref},
+            request={
+                "dataset_ref": dataset_ref,
+                "action": "status",
+                "run_ref": run_ref,
+            },
         )
         if status["state"] != "running":
             return status
@@ -609,13 +671,18 @@ def test_real_composition_accepts_qualified_represented_source_result(
     inspected = host.call_tool(
         "mediasense.precheck.read",
         dataset_ref=dataset_ref,
-        request={"operation": "review", "result_ref": result.result_ref},
+        request={
+            "dataset_ref": dataset_ref,
+            "action": "review",
+            "result_ref": result.result_ref,
+        },
     )
     accounts = host.call_tool(
         "mediasense.precheck.read",
         dataset_ref=dataset_ref,
         request={
-            "operation": "resolve",
+            "dataset_ref": dataset_ref,
+            "action": "resolve",
             "result_ref": result.result_ref,
             "source_set": {
                 "kind": "precheck_relation",

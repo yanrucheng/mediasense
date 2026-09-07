@@ -4,7 +4,7 @@ title: "MediaSense Geo Query Tool Contract"
 type: spec
 status: active
 created: 2026-08-30
-updated: 2026-08-30
+updated: 2026-09-07
 timezone: "Asia/Shanghai"
 parent: ""
 depends-on:
@@ -49,10 +49,11 @@ radius and result count are hard upper bounds. A versioned Provider profile may
 use a narrower effective radius or result count, but never exceed the authorized
 bounds.
 
-For the current adapters, one expanded coordinate costs at most one AMap request
-or two Google requests. If both Providers are authorized for fallback, the
-request-wide hard ceiling therefore reserves at most three Provider requests per
-logical coordinate; actual effects report only requests that were sent. A single
+For the current adapters, one execute attempt costs at most one AMap request
+or two Google requests per expanded coordinate. The immutable retry policy allows
+at most three execute attempts per Provider. When both Providers are authorized,
+the request-wide ceiling reserves at most nine Provider requests per logical
+coordinate; actual effects count requests that were sent. A single
 Provider request that supplies both components is recorded as a `resolve_place`
 attempt, while the returned evidence remains two separately statused components.
 
@@ -130,3 +131,26 @@ coordinate-conversion methods are not permanent contract.
 - [`geo-query.tool.json`](geo-query.tool.json) — callable input and output contract.
 - [`geo-query.mock.json`](geo-query.mock.json) — authorization-required,
   authorization-mismatch, success, partial, and continuation examples.
+
+
+### D6. 有限重试归 Tool，费用预先受限
+
+共享 GeoCapability 接受内部不可变 RetryPolicy（配置值，不是新公开字段/Tool）。
+本轮实现策略：每坐标、每候选 Provider 最多3次 execute，瞬态失败后等待1秒、3秒；
+每坐标单调时钟120秒墙钟预算，每个实际 HTTP timeout 不超过剩余时间及原 Provider timeout。
+成功组件保留，no_result 不在同 Provider 重试；只有 transient(限流/服务5xx/安全可重试网络错误)重试。
+permanent 不重试；indeterminate 立即停止。回退按现有已授权 Provider 路由，不新增 Provider。
+“安全可重试网络错误”只包括证明请求未发送的连接失败；发送后的timeout/未知完成仍按现有
+Geo契约归indeterminate，不能把计费未知当作可盲重试失败。HTTP已响应的429/5xx可重试，
+其请求数照实记录；认证/参数等永久错误立即终结。GeoProvider.execute增加内部deadline及cancelled
+参数，所有真实adapter与fake遵守同一端口；每个HTTP admission前重新校验剩余deadline。
+扩展操作一次可有两次 HTTP，全部受 Provider 声明 ceiling；重试会重复读已成功组件时照实计费，
+不丢失已得候选。Sleep 可取消，deadline或额度耗尽时终结带具体 qualification 的失败。
+
+预检请求 ceiling = coordinates × sum(provider.execute ceiling × max_attempts)，已知 billable
+ceiling同样上界；配置策略描述加入有效请求 fingerprint 与 journal admission identity并随披露返回。
+纯 request 数据保持现有 Geo公共输入，Host/Tool 以 request+effective profile 的 canonical值计算最终
+fingerprint，不让客户端自行猜摘要。变更策略使旧授权不匹配；较小的既有授权不能被扩大，
+不足以再发一次时直接终结。效果最终失败后的相同 request_id 重放只读 journal，不重做外部调用。
+失败证明与安全重试资格由adapter返回的attempt/error类别决定；缺分类默认不可重试，不能靠自由message猜测。
+PreCheck 外层 Work 不重复重试已经终结的 Geo失败，只有未发送且可安全恢复的工作走本地恢复。

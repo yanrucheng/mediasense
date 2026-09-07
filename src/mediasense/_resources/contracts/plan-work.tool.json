@@ -504,6 +504,8 @@
                   "result_not_found",
                   "result_not_ready",
                   "result_untrusted",
+                  "result_unavailable",
+                  "result_inconsistent",
                   "work_not_found",
                   "work_closed",
                   "revision_conflict",

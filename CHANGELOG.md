@@ -6,6 +6,28 @@ Versioning, with documented breaking changes permitted in minor releases before
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-09-08
+
+### Changed
+
+- PreCheck run/read retain two Tools and nine actions with flat `action` and
+  `dataset_ref` inputs. Removed the nested `request` wrapper, `operation` alias,
+  and redundant successful-response fields. Upgrade the CLI and Skills together.
+- Unified phase progress while preserving source accounting, liveness, bounded
+  diagnostics, exact pagination, member identities, and Plan/Apply safety checks.
+- Address and nearby-place candidates use separate standard Observations.
+  Missing GPS, no-result queries, and known terminal location failures do not
+  independently block Result publication or Plan entry.
+- Geo Tools own bounded retries within the authorized effect ceiling; audit
+  reads distinguish current and historical requests and preserve unknown costs.
+
+### Fixed
+
+- Normalized fresh, reused v3, and provable legacy Geo evidence before Result
+  projection, preventing non-available Observations from carrying a value.
+- Preserved GPS/GPX conflict semantics, unknown journal-replay effects and costs,
+  and expected MCP `run_not_found` errors without suppressing implementation errors.
+
 ## [0.7.2] - 2026-09-06
 
 ### Added

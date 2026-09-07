@@ -65,7 +65,7 @@ class MockPrecheckReader:
         review = next(
             exchange["response"]
             for exchange in mock["exchanges"]
-            if exchange["request"]["operation"] == "review"
+            if exchange["request"]["action"] == "review"
         )
         self.result = deepcopy(review["result"])
         self.review_response = deepcopy(review)
@@ -75,13 +75,15 @@ class MockPrecheckReader:
         self.calls: list[dict[str, Any]] = []
         for exchange in mock["exchanges"]:
             response = exchange["response"]
-            if response.get("operation") == "expand":
+            if exchange["request"].get("action") == "expand":
                 self._remember_expansion(response)
-            if response.get("operation") == "resolve":
+            if exchange["request"].get("action") == "resolve":
                 source_set = exchange["request"]["source_set"]
                 refs = tuple(item["source_item_ref"] for item in response["members"])
                 if source_set.get("kind") == "precheck_relation":
-                    self.relationships[(source_set["origin"], source_set["relation"])] = refs
+                    self.relationships[
+                        (source_set["origin"], source_set["relation"])
+                    ] = refs
                 for member in response["members"]:
                     self.source_views.setdefault(
                         member["source_item_ref"], _view_from_member(member)
@@ -92,11 +94,11 @@ class MockPrecheckReader:
         self.relationships[(self.result_ref, "accounts_for")] = tuple(
             sorted(self.source_views)
         )
-        for card in review["coverage_cards"]:
-            ref = card["anchor_evidence_ref"]
+        for card in review["cards"]:
+            ref = card["evidence_ref"]
             self.evidence_views.setdefault(ref, _synthetic_evidence(ref, card))
             represented = self.relationships.get((ref, "represents"), ())
-            for refs in card["evidence_roles"].values():
+            for refs in card["roles"].values():
                 for evidence_ref in refs:
                     self.evidence_views.setdefault(
                         evidence_ref,
@@ -118,33 +120,21 @@ class MockPrecheckReader:
         self.calls.append(deepcopy(request))
         if request.get("result_ref") != self.result_ref:
             return _read_error(request, "result_not_found")
-        operation = request.get("operation")
+        operation = request.get("action")
         if operation == "review":
             return deepcopy(self.review_response)
         if operation == "geo_summary":
             return {
-                "outcome": "ok",
-                "operation": "geo_summary",
-                "result_ref": self.result_ref,
                 "acquisition_status": "not_applicable",
                 "coordinate_evidence": {
                     "gps": {},
                     "gpx": {},
                     "combined": {},
                 },
-                "deduplication": {
-                    "rule": "exact_normalized_coordinate_v1",
-                    "fields": ["latitude", "longitude", "datum"],
-                    "rounding": "none",
-                },
-                "unique_coordinate_count": 0,
                 "coordinate_groups": [],
                 "page": {
-                    "returned": 0,
                     "total": 0,
-                    "complete": True,
-                    "stop_reason": "complete",
-                    "order": "latitude_longitude_datum",
+                    "next_cursor": None,
                 },
             }
         if operation == "expand":
@@ -159,11 +149,16 @@ class MockPrecheckReader:
             source = included.get("source_item")
             if isinstance(source, dict):
                 view = deepcopy(source)
+                view.update(kind="source_item", ref=item["source_item_ref"])
                 view["observations"] = deepcopy(included.get("observations", []))
                 self.source_views[view["ref"]] = view
             evidence = included.get("anchor_evidence")
             if isinstance(evidence, dict):
-                self.evidence_views[evidence["ref"]] = deepcopy(evidence)
+                self.evidence_views[item["evidence_ref"]] = {
+                    **deepcopy(evidence),
+                    "kind": "evidence",
+                    "ref": item["evidence_ref"],
+                }
             for prepared in included.get("prepared_targets", []):
                 target = prepared.get("target", {})
                 if target.get("kind") == "evidence":
@@ -189,7 +184,7 @@ class MockPrecheckReader:
                     included["source_item"] = {
                         key: deepcopy(value)
                         for key, value in view.items()
-                        if key != "observations"
+                        if key not in {"observations", "kind", "ref"}
                     }
                 if "observations" in request["include"]:
                     included["observations"] = deepcopy(view.get("observations", []))
@@ -207,7 +202,12 @@ class MockPrecheckReader:
                     return _read_error(request, "reference_not_in_result")
                 included = {}
                 if "anchor_evidence" in request["include"]:
-                    included["anchor_evidence"] = deepcopy(view)
+                    included["anchor_evidence"] = {
+                        key: deepcopy(value)
+                        for key, value in view.items()
+                        if key not in {"kind", "ref"}
+                    }
+                    included["anchor_evidence"].setdefault("roles", [])
                 if "prepared_targets" in request["include"]:
                     included["prepared_targets"] = []
                 if "provenance" in request["include"]:
@@ -215,24 +215,17 @@ class MockPrecheckReader:
                 if "coverage_basis" in request["include"]:
                     count = len(self.relationships.get((ref, "represents"), ()))
                     included["coverage_basis"] = {
-                        "relationship": "represents",
                         "member_count": count,
-                        "unqualified_member_count": count,
                         "qualified_member_count": 0,
                         "qualification_groups": [],
                         "member_specific_basis": False,
                     }
-                items.append({"anchor_evidence_ref": ref, "included": included})
+                items.append({"evidence_ref": ref, "included": included})
         return {
-            "outcome": "ok",
-            "operation": "expand",
-            "result_ref": self.result_ref,
             "items": items,
             "page": {
-                "returned": len(items),
                 "total": len(items),
-                "complete": True,
-                "stop_reason": "complete",
+                "next_cursor": None,
             },
         }
 
@@ -248,9 +241,9 @@ class MockPrecheckReader:
             sort_keys=True,
             separators=(",", ":"),
         )
-        source_set_identity = "sha256:" + hashlib.sha256(
-            source_set_json.encode("utf-8")
-        ).hexdigest()
+        source_set_identity = (
+            "sha256:" + hashlib.sha256(source_set_json.encode("utf-8")).hexdigest()
+        )
         membership_payload = json.dumps(
             {
                 "result_ref": self.result_ref,
@@ -261,25 +254,16 @@ class MockPrecheckReader:
             sort_keys=True,
             separators=(",", ":"),
         ).encode("utf-8")
-        membership_identity = "sha256:" + hashlib.sha256(
-            membership_payload
-        ).hexdigest()
+        membership_identity = "sha256:" + hashlib.sha256(membership_payload).hexdigest()
         return {
-            "outcome": "ok",
-            "operation": "resolve",
-            "result_ref": self.result_ref,
             "resolution": {
                 "source_set_identity": source_set_identity,
                 "membership_identity": membership_identity,
-                "ordering": "source_item_ref_ascending",
-                "total": len(members),
             },
             "members": members,
             "page": {
-                "returned": len(members),
                 "total": len(members),
-                "complete": True,
-                "stop_reason": "complete",
+                "next_cursor": None,
             },
         }
 
@@ -292,7 +276,9 @@ class MockPrecheckReader:
                 self.relationships[(source_set["origin"], source_set["relation"])]
             )
         elif kind == "union":
-            refs = set().union(*(self._resolve_set(child) for child in source_set["sets"]))
+            refs = set().union(
+                *(self._resolve_set(child) for child in source_set["sets"])
+            )
         elif kind == "difference":
             refs = self._resolve_set(source_set["base"]) - self._resolve_set(
                 source_set["subtract"]
@@ -336,13 +322,13 @@ def _read_error(request: dict[str, Any], code: str) -> dict[str, Any]:
 def _synthetic_evidence(ref: str, card: dict[str, Any]) -> dict[str, Any]:
     observations = [
         {"name": "evidence_role", "status": "available", "value": {"role": role}}
-        for role, refs in card["evidence_roles"].items()
+        for role, refs in card["roles"].items()
         if ref in refs
     ]
     return {
         "kind": "evidence",
         "ref": ref,
-        "access": deepcopy(card["anchor_access"]),
+        "access": deepcopy(card["access"]),
         "observations": observations,
         "roles": [item["value"]["role"] for item in observations],
     }

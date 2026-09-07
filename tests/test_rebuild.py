@@ -81,11 +81,12 @@ def test_manual_rebuild_selects_exact_work_and_invalidates_dependents_only(
         WorkStore(database).get_work(unrelated.work.work_id).status
         is WorkStatus.SUCCEEDED
     )
-    assert (
-        PrecheckReadTool(database).read(
-            {"operation": "review", "result_ref": sealed.result_ref}
-        )["outcome"]
-        == "ok"
+    assert "error" not in PrecheckReadTool(database).read(
+        {
+            "dataset_ref": "dataset:dataset-a",
+            "action": "review",
+            "result_ref": sealed.result_ref,
+        }
     )
     assert sealed.path.read_bytes() == sealed_before
 

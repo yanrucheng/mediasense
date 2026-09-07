@@ -6,29 +6,18 @@
   "exchanges": [
     {
       "request": {
-        "operation": "review",
         "result_ref": "precheck-result:hk-review-slice-002",
-        "page": { "limit": 2 }
+        "page": {
+          "limit": 2
+        },
+        "action": "review",
+        "dataset_ref": "dataset:hong-kong-food-trip"
       },
       "response": {
-        "outcome": "ok",
-        "operation": "review",
-        "result_ref": "precheck-result:hk-review-slice-002",
         "result": {
-          "kind": "result",
           "ref": "precheck-result:hk-review-slice-002",
-          "dataset_ref": "dataset:hong-kong-food-trip",
           "coverage": "partial",
           "readiness": "plan_ready",
-          "integrity": "valid",
-      "execution_boundary": {
-        "billable_calls": "unknown",
-        "logical_external_queries": 1,
-        "network_access": true,
-        "provider_requests": 1,
-        "remote_models": false,
-        "source_read_only": true
-          },
           "qualifications": [
             {
               "code": "selected_slice_only",
@@ -37,48 +26,48 @@
             }
           ]
         },
-        "reconciliation": {
-          "accounted_total": 5,
-          "partition": {
+        "accounting": {
+          "total": 5,
+          "routes": {
             "frontier_only": 4,
             "exception_only": 1,
             "frontier_and_exception": 0,
             "residual": 0
           },
-          "frontier": {
-            "entry_evidence_count": 2,
-            "coverage_memberships": 4,
-            "represented_unique_source_items": 4,
-            "overlap_count": 0
-          },
-          "exception_routes": [
+          "scope_condition": [
             {
               "scope": "source_media",
               "condition": "invalid",
               "count": 1
+            },
+            {
+              "scope": "source_media",
+              "condition": "usable",
+              "count": 4
             }
           ],
-          "closure_check": {
-            "status": "passed",
-            "equation": { "left": 5, "right": 5 }
+          "frontier": {
+            "entry_evidence_count": 2,
+            "coverage_memberships": 4,
+            "represented_unique_source_items": 4
           }
         },
-        "coverage_cards": [
+        "cards": [
           {
-            "anchor_evidence_ref": "evidence:bundle61-entry",
-            "anchor_access": {
+            "evidence_ref": "evidence:bundle61-entry",
+            "access": {
               "kind": "source_item",
               "source_item_ref": "source-item:13"
             },
-            "represented": {
-              "relationship": "represents",
-              "membership_count": 3,
-              "unique_source_item_count": 3,
-              "scope_condition": [
-                { "scope": "source_media", "condition": "usable", "count": 3 }
-              ]
-            },
-            "projected_facts": {
+            "source_count": 3,
+            "scope_condition": [
+              {
+                "scope": "source_media",
+                "condition": "usable",
+                "count": 3
+              }
+            ],
+            "facts": {
               "capture_time": {
                 "status_counts": {
                   "available": 3,
@@ -101,19 +90,30 @@
                   "unreported": 0
                 },
                 "values": [
-                  { "value": "image/jpeg", "count": 1 },
-                  { "value": "video/mp4", "count": 2 }
+                  {
+                    "value": "image/jpeg",
+                    "count": 1
+                  },
+                  {
+                    "value": "video/mp4",
+                    "count": 2
+                  }
                 ]
               }
             },
-            "evidence_roles": {
-              "representative": ["evidence:bundle61-entry"],
-              "boundary": ["evidence:bundle61-boundary"],
-              "outlier": ["evidence:bundle61-outlier"],
-              "conflict": []
+            "roles": {
+              "representative": [
+                "evidence:bundle61-entry"
+              ],
+              "boundary": [
+                "evidence:bundle61-boundary"
+              ],
+              "outlier": [
+                "evidence:bundle61-outlier"
+              ]
             },
             "unassigned_prepared_evidence": [],
-            "qualification_summary": [
+            "qualifications": [
               {
                 "applies_to": "anchor_evidence",
                 "code": "historical_group_candidate",
@@ -122,18 +122,30 @@
                 "occurrences": 1
               }
             ],
-            "projection_scope": {
-              "projected_observations": ["capture_time", "media_type", "evidence_role"],
-              "other_observations_available": true
-            },
+            "other_observations_available": true,
             "available_expansions": [
-              { "include": "anchor_evidence", "estimated_items": 1 },
-              { "include": "prepared_targets", "estimated_items": 2 },
-              { "include": "provenance", "estimated_items": 0 },
-              { "include": "coverage_basis", "estimated_items": 3 },
-              { "include": "member_observations", "estimated_items": 3 }
+              {
+                "include": "anchor_evidence",
+                "estimated_items": 1
+              },
+              {
+                "include": "prepared_targets",
+                "estimated_items": 2
+              },
+              {
+                "include": "provenance",
+                "estimated_items": 0
+              },
+              {
+                "include": "coverage_basis",
+                "estimated_items": 3
+              },
+              {
+                "include": "member_observations",
+                "estimated_items": 3
+              }
             ],
-            "resolvable_source_set": {
+            "source_set": {
               "kind": "precheck_relation",
               "origin": "evidence:bundle61-entry",
               "relation": "represents",
@@ -141,20 +153,20 @@
             }
           },
           {
-            "anchor_evidence_ref": "evidence:repair-patched",
-            "anchor_access": {
+            "evidence_ref": "evidence:repair-patched",
+            "access": {
               "kind": "source_item",
               "source_item_ref": "source-item:217"
             },
-            "represented": {
-              "relationship": "represents",
-              "membership_count": 1,
-              "unique_source_item_count": 1,
-              "scope_condition": [
-                { "scope": "source_media", "condition": "usable", "count": 1 }
-              ]
-            },
-            "projected_facts": {
+            "source_count": 1,
+            "scope_condition": [
+              {
+                "scope": "source_media",
+                "condition": "usable",
+                "count": 1
+              }
+            ],
+            "facts": {
               "capture_time": {
                 "status_counts": {
                   "available": 0,
@@ -175,30 +187,44 @@
                   "unreported": 0
                 },
                 "values": [
-                  { "value": "video/mp4", "count": 1 }
+                  {
+                    "value": "video/mp4",
+                    "count": 1
+                  }
                 ]
               }
             },
-            "evidence_roles": {
-              "representative": ["evidence:repair-patched"],
-              "boundary": [],
-              "outlier": [],
-              "conflict": []
+            "roles": {
+              "representative": [
+                "evidence:repair-patched"
+              ]
             },
             "unassigned_prepared_evidence": [],
-            "qualification_summary": [],
-            "projection_scope": {
-              "projected_observations": ["capture_time", "media_type", "evidence_role"],
-              "other_observations_available": true
-            },
+            "qualifications": [],
+            "other_observations_available": true,
             "available_expansions": [
-              { "include": "anchor_evidence", "estimated_items": 1 },
-              { "include": "prepared_targets", "estimated_items": 1 },
-              { "include": "provenance", "estimated_items": 0 },
-              { "include": "coverage_basis", "estimated_items": 1 },
-              { "include": "member_observations", "estimated_items": 1 }
+              {
+                "include": "anchor_evidence",
+                "estimated_items": 1
+              },
+              {
+                "include": "prepared_targets",
+                "estimated_items": 1
+              },
+              {
+                "include": "provenance",
+                "estimated_items": 0
+              },
+              {
+                "include": "coverage_basis",
+                "estimated_items": 1
+              },
+              {
+                "include": "member_observations",
+                "estimated_items": 1
+              }
             ],
-            "resolvable_source_set": {
+            "source_set": {
               "kind": "precheck_relation",
               "origin": "evidence:repair-patched",
               "relation": "represents",
@@ -207,32 +233,31 @@
           }
         ],
         "page": {
-          "order": "frontier_order",
-          "returned": 2,
           "total": 2,
-          "complete": true,
-          "stop_reason": "complete"
+          "next_cursor": null
         }
       }
     },
     {
       "request": {
-        "operation": "expand",
         "result_ref": "precheck-result:hk-review-slice-002",
-        "evidence_refs": ["evidence:bundle61-entry"],
-        "include": ["anchor_evidence", "prepared_targets", "coverage_basis"]
+        "evidence_refs": [
+          "evidence:bundle61-entry"
+        ],
+        "include": [
+          "anchor_evidence",
+          "prepared_targets",
+          "coverage_basis"
+        ],
+        "action": "expand",
+        "dataset_ref": "dataset:hong-kong-food-trip"
       },
       "response": {
-        "outcome": "ok",
-        "operation": "expand",
-        "result_ref": "precheck-result:hk-review-slice-002",
         "items": [
           {
-            "anchor_evidence_ref": "evidence:bundle61-entry",
+            "evidence_ref": "evidence:bundle61-entry",
             "included": {
               "anchor_evidence": {
-                "kind": "evidence",
-                "ref": "evidence:bundle61-entry",
                 "access": {
                   "kind": "source_item",
                   "source_item_ref": "source-item:13"
@@ -241,7 +266,9 @@
                   {
                     "name": "evidence_role",
                     "status": "available",
-                    "value": { "role": "representative" }
+                    "value": {
+                      "role": "representative"
+                    }
                   }
                 ],
                 "qualifications": [
@@ -251,26 +278,36 @@
                     "message": "The membership is a reviewable compression claim, not semantic truth."
                   }
                 ],
-                "roles": ["representative"]
+                "roles": [
+                  "representative"
+                ]
               },
               "prepared_targets": [
                 {
-                  "target": { "kind": "evidence", "ref": "evidence:bundle61-boundary" },
+                  "target": {
+                    "kind": "evidence",
+                    "ref": "evidence:bundle61-boundary"
+                  },
                   "basis": "Prepared boundary Evidence.",
-                  "roles": ["boundary"],
+                  "roles": [
+                    "boundary"
+                  ],
                   "access_status": "available"
                 },
                 {
-                  "target": { "kind": "evidence", "ref": "evidence:bundle61-outlier" },
+                  "target": {
+                    "kind": "evidence",
+                    "ref": "evidence:bundle61-outlier"
+                  },
                   "basis": "Prepared outlier Evidence.",
-                  "roles": ["outlier"],
+                  "roles": [
+                    "outlier"
+                  ],
                   "access_status": "available"
                 }
               ],
               "coverage_basis": {
-                "relationship": "represents",
                 "member_count": 3,
-                "unqualified_member_count": 3,
                 "qualified_member_count": 0,
                 "qualification_groups": [],
                 "member_specific_basis": true
@@ -279,31 +316,32 @@
           }
         ],
         "page": {
-          "returned": 1,
           "total": 1,
-          "complete": true,
-          "stop_reason": "complete"
+          "next_cursor": null
         }
       }
     },
     {
       "request": {
-        "operation": "expand",
         "result_ref": "precheck-result:hk-review-slice-002",
-        "source_item_refs": ["source-item:215", "source-item:217"],
-        "include": ["source_item", "observations", "covering_evidence"]
+        "source_item_refs": [
+          "source-item:215",
+          "source-item:217"
+        ],
+        "include": [
+          "source_item",
+          "observations",
+          "covering_evidence"
+        ],
+        "action": "expand",
+        "dataset_ref": "dataset:hong-kong-food-trip"
       },
       "response": {
-        "outcome": "ok",
-        "operation": "expand",
-        "result_ref": "precheck-result:hk-review-slice-002",
         "items": [
           {
             "source_item_ref": "source-item:215",
             "included": {
               "source_item": {
-                "kind": "source_item",
-                "ref": "source-item:215",
                 "locator": {
                   "kind": "source_root_relative_path",
                   "source_root_ref": "source-root:hk-representative-v1",
@@ -318,9 +356,20 @@
                 ]
               },
               "observations": [
-                { "name": "media_type", "status": "available", "value": "video/mp4" },
-                { "name": "media_readability", "status": "failed", "basis": "No usable moov atom." },
-                { "name": "capture_time", "status": "missing" }
+                {
+                  "name": "media_type",
+                  "status": "available",
+                  "value": "video/mp4"
+                },
+                {
+                  "name": "media_readability",
+                  "status": "failed",
+                  "basis": "No usable moov atom."
+                },
+                {
+                  "name": "capture_time",
+                  "status": "missing"
+                }
               ],
               "covering_evidence": []
             }
@@ -329,8 +378,6 @@
             "source_item_ref": "source-item:217",
             "included": {
               "source_item": {
-                "kind": "source_item",
-                "ref": "source-item:217",
                 "locator": {
                   "kind": "source_root_relative_path",
                   "source_root_ref": "source-root:hk-representative-v1",
@@ -338,9 +385,20 @@
                 }
               },
               "observations": [
-                { "name": "media_type", "status": "available", "value": "video/mp4" },
-                { "name": "media_readability", "status": "available", "value": "readable" },
-                { "name": "capture_time", "status": "missing" }
+                {
+                  "name": "media_type",
+                  "status": "available",
+                  "value": "video/mp4"
+                },
+                {
+                  "name": "media_readability",
+                  "status": "available",
+                  "value": "readable"
+                },
+                {
+                  "name": "capture_time",
+                  "status": "missing"
+                }
               ],
               "covering_evidence": [
                 {
@@ -352,35 +410,42 @@
           }
         ],
         "page": {
-          "returned": 2,
           "total": 2,
-          "complete": true,
-          "stop_reason": "complete"
+          "next_cursor": null
         }
       }
     },
     {
       "request": {
-        "operation": "geo_summary",
         "result_ref": "precheck-result:hk-review-slice-002",
-        "page": { "limit": 50 }
+        "page": {
+          "limit": 50
+        },
+        "action": "geo_summary",
+        "dataset_ref": "dataset:hong-kong-food-trip"
       },
       "response": {
-        "outcome": "ok",
-        "operation": "geo_summary",
-        "result_ref": "precheck-result:hk-review-slice-002",
-        "acquisition_status": "complete",
+        "acquisition_status": "incomplete",
         "coordinate_evidence": {
-          "gps": { "available": 3, "missing": 2, "failed": 0, "conflicting": 0 },
-          "gpx": { "available": 0, "missing": 5, "failed": 0, "conflicting": 0 },
-          "combined": { "available": 3, "missing": 2, "failed": 0, "conflicting": 0 }
+          "gps": {
+            "available": 3,
+            "missing": 2,
+            "failed": 0,
+            "conflict": 0
+          },
+          "gpx": {
+            "available": 0,
+            "missing": 5,
+            "failed": 0,
+            "conflict": 0
+          },
+          "combined": {
+            "available": 3,
+            "missing": 2,
+            "failed": 0,
+            "conflict": 0
+          }
         },
-        "deduplication": {
-          "rule": "exact_normalized_coordinate_v1",
-          "fields": ["latitude", "longitude", "datum"],
-          "rounding": "none"
-        },
-        "unique_coordinate_count": 1,
         "coordinate_groups": [
           {
             "coordinate": {
@@ -398,8 +463,9 @@
               },
               "selection_rule": "gpx_over_gps_exact_normalized_v1"
             },
-            "reverse_geocode": "success",
-            "candidate_evidence_refs": ["evidence:geo-hong-kong-candidate"],
+            "candidate_evidence_refs": [
+              "evidence:geo-hong-kong-candidate"
+            ],
             "provenance": [
               {
                 "method": "adaptive_reverse_geocode_v1",
@@ -413,21 +479,25 @@
                 "effect": "limits_interpretation",
                 "message": "The Provider response is a candidate observation, not confirmed place truth."
               }
-            ]
+            ],
+            "components": {
+              "address": {
+                "not_requested": 3
+              },
+              "nearby_places": {
+                "not_requested": 3
+              }
+            }
           }
         ],
         "page": {
-          "order": "latitude_longitude_datum",
-          "returned": 1,
           "total": 1,
-          "complete": true,
-          "stop_reason": "complete"
+          "next_cursor": null
         }
       }
     },
     {
       "request": {
-        "operation": "resolve",
         "result_ref": "precheck-result:hk-review-slice-002",
         "source_set": {
           "kind": "precheck_relation",
@@ -435,17 +505,16 @@
           "relation": "represents",
           "direction": "outbound"
         },
-        "page": { "limit": 250 }
+        "page": {
+          "limit": 250
+        },
+        "action": "resolve",
+        "dataset_ref": "dataset:hong-kong-food-trip"
       },
       "response": {
-        "outcome": "ok",
-        "operation": "resolve",
-        "result_ref": "precheck-result:hk-review-slice-002",
         "resolution": {
-          "source_set_identity": "sha256:32d48dd259af711f25aa6d6f5abbf142175d60feb8f119fc6a2e244bcc25e034",
-          "membership_identity": "sha256:10e3fb4229359a2c028544173386b562e7387e7b7b385f81581ec367aec133ec",
-          "ordering": "source_item_ref_ascending",
-          "total": 3
+          "source_set_identity": "sha256:7696583768ac5f8f466337f035db72a868dd71dbe1b094be9b3261c3e93f1a56",
+          "membership_identity": "sha256:7f7c9f1b92952eff7859c16f5a5b6bf021a0ffbcd8ccba29303d21f501df2bb6"
         },
         "members": [
           {
@@ -457,7 +526,9 @@
             },
             "scope": "source_media",
             "condition": "usable",
-            "source_content_verification": { "status": "not_checked" }
+            "source_content_verification": {
+              "status": "not_checked"
+            }
           },
           {
             "source_item_ref": "source-item:14",
@@ -468,7 +539,9 @@
             },
             "scope": "source_media",
             "condition": "usable",
-            "source_content_verification": { "status": "not_checked" }
+            "source_content_verification": {
+              "status": "not_checked"
+            }
           },
           {
             "source_item_ref": "source-item:15",
@@ -479,14 +552,14 @@
             },
             "scope": "source_media",
             "condition": "usable",
-            "source_content_verification": { "status": "not_checked" }
+            "source_content_verification": {
+              "status": "not_checked"
+            }
           }
         ],
         "page": {
-          "returned": 3,
           "total": 3,
-          "complete": true,
-          "stop_reason": "complete"
+          "next_cursor": null
         }
       }
     }

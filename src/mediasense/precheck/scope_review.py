@@ -9,8 +9,7 @@ import json
 from pathlib import PurePosixPath
 
 
-_DEFAULT_MAX_DEPTH = 2
-_DEFAULT_MAX_NODES = 64
+_DEFAULT_MAX_ENTRIES = 63
 _REPRESENTATIVE_LIMIT = 3
 _EXCEPTION_LIMIT = 256
 
@@ -20,9 +19,8 @@ class ScopeSelectionError(ValueError):
 
 
 @dataclass(slots=True)
-class _TreeNode:
+class _ScopeEntry:
     path: str
-    name: str
     node_type: str = "directory"
     file_count: int = 0
     byte_count: int = 0
@@ -30,9 +28,7 @@ class _TreeNode:
     kind_counts: dict[str, int] = field(default_factory=dict)
     size_buckets: dict[str, int] = field(default_factory=dict)
     representative_paths: list[str] = field(default_factory=list)
-    children: list[str] = field(default_factory=list)
     immediate_child_count: int = 0
-    last_immediate_child: str | None = None
 
     def observe(self, fact: Mapping[str, object]) -> None:
         self.file_count += 1
@@ -56,79 +52,56 @@ def build_scope_inventory(
     scan_generation: int,
     scope_path: str = ".",
     scope_after: str | None = None,
-    max_depth: int = _DEFAULT_MAX_DEPTH,
-    max_nodes: int = _DEFAULT_MAX_NODES,
+    cursor_ref: str = "",
+    max_entries: int = _DEFAULT_MAX_ENTRIES,
 ) -> dict[str, object]:
-    """Build one bounded tree view while hashing the complete factual inventory."""
+    """Build immediate entries while hashing the complete factual inventory."""
 
-    if max_depth < 1:
-        raise ValueError("scope inventory max_depth must be positive")
-    if max_nodes < 2:
-        raise ValueError("scope inventory max_nodes must be at least two")
+    if max_entries < 1:
+        raise ValueError("scope bounds must allow at least one entry")
     root_path = normalize_scope_path(scope_path, allow_root=True)
     root_parts = () if root_path == "." else PurePosixPath(root_path).parts
-    after_name: str | None = None
+    # Decode only to obtain a candidate offset; the complete inventory below
+    # authenticates it before any data is returned.
+    after_path = None
     if scope_after is not None:
-        after_path = normalize_scope_path(scope_after, allow_root=False)
-        after_parts = PurePosixPath(after_path).parts
-        if after_parts[:-1] != root_parts:
-            raise ScopeSelectionError(
-                "scope_after must identify an immediate child of scope_path"
+        import base64
+
+        try:
+            payload = json.loads(
+                base64.urlsafe_b64decode(scope_after.removeprefix("scope-cursor:"))
             )
-        after_name = after_parts[-1]
-    root = _TreeNode(
-        path=root_path,
-        name="." if root_path == "." else PurePosixPath(root_path).name,
-    )
-    nodes = {root_path: root}
+            after_path = normalize_scope_path(payload["after"], allow_root=False)
+        except (ValueError, KeyError, TypeError) as error:
+            raise ScopeSelectionError("invalid scope cursor") from error
+    nodes: dict[str, _ScopeEntry] = {}
+    child_dirs: dict[str, str] = {}
     digest = hashlib.sha256()
     selected_seen = False
-    last_root_returned: str | None = None
-    root_has_more = False
-
+    has_more = False
     for fact in facts:
-        canonical = _canonical_fact(fact)
-        digest.update(_json(canonical).encode("utf-8"))
-        digest.update(b"\n")
-        relative_path = str(fact["relative_path"])
-        parts = PurePosixPath(relative_path).parts
+        digest.update((_json(_canonical_fact(fact)) + "\n").encode())
+        parts = PurePosixPath(str(fact["relative_path"])).parts
         if not _is_at_or_below(parts, root_parts):
             continue
         selected_seen = True
-        root.observe(fact)
         suffix = parts[len(root_parts) :]
-        if not suffix:
-            root.node_type = "file"
+        child_path = PurePosixPath(*root_parts, *suffix[:1]).as_posix()
+        if after_path is not None and child_path <= after_path:
             continue
-        root_child_name = suffix[0]
-        if root.last_immediate_child != root_child_name:
-            root.immediate_child_count += 1
-            root.last_immediate_child = root_child_name
-        if after_name is not None and root_child_name <= after_name:
-            continue
-        parent = root
-        for depth, name in enumerate(suffix[:max_depth], start=1):
-            child_parts = (*root_parts, *suffix[:depth])
-            child_path = PurePosixPath(*child_parts).as_posix()
-            if depth > 1 and parent.last_immediate_child != name:
-                parent.immediate_child_count += 1
-                parent.last_immediate_child = name
-            child = nodes.get(child_path)
-            if child is None:
-                if len(nodes) >= max_nodes:
-                    if depth == 1:
-                        root_has_more = True
-                    break
-                child = _TreeNode(path=child_path, name=name)
-                nodes[child_path] = child
-                parent.children.append(child_path)
-                if depth == 1:
-                    last_root_returned = child_path
-            child.observe(fact)
-            if depth == len(suffix):
-                child.node_type = "file"
-            parent = child
-
+        node = nodes.get(child_path)
+        if node is None:
+            if len(nodes) >= min(63, max_entries):
+                has_more = True
+                continue
+            node = _ScopeEntry(
+                path=child_path, node_type="file" if len(suffix) <= 1 else "directory"
+            )
+            nodes[child_path] = node
+        node.observe(fact)
+        if len(suffix) > 2 and child_dirs.get(child_path) != suffix[1]:
+            node.immediate_child_count += 1
+            child_dirs[child_path] = suffix[1]
     issue_values = []
     issue_count = 0
     for issue in issues:
@@ -139,34 +112,57 @@ def build_scope_inventory(
             "blocked": bool(issue["blocked"]),
             "basis": list(issue.get("basis", ())),
         }
-        digest.update(_json({"issue": canonical}).encode("utf-8"))
-        digest.update(b"\n")
-        if len(issue_values) < _REPRESENTATIVE_LIMIT:
-            issue_values.append(canonical)
-
+        digest.update((_json({"issue": canonical}) + "\n").encode())
+        if len(issue_values) < 3:
+            issue_values.append(
+                {
+                    "path": canonical["relative_path"],
+                    "code": canonical["code"],
+                    "message": "; ".join(map(str, canonical["basis"]))
+                    or canonical["code"],
+                }
+            )
     if root_path != "." and not selected_seen:
         raise ScopeSelectionError("scope_path does not identify an inventory node")
-
     fingerprint = "sha256:" + digest.hexdigest()
-    view: dict[str, object] = {
+    if scope_after is not None and payload != {
+        "fingerprint": fingerprint,
         "root": root_path,
-        "max_depth": max_depth,
-        "max_nodes": max_nodes,
-        "tree": _tree_value(root, nodes),
-    }
-    if root_has_more and last_root_returned is not None:
-        view["next_after"] = last_root_returned
-    return {
+        "after": after_path,
+        "run": cursor_ref,
+    }:
+        raise ScopeSelectionError("scope cursor is stale or belongs to another view")
+    entries = []
+    for node in nodes.values():
+        entries.append(_entry_value(node))
+    next_after = None
+    if has_more and entries:
+        import base64
+
+        next_after = (
+            "scope-cursor:"
+            + base64.urlsafe_b64encode(
+                _json(
+                    {
+                        "fingerprint": fingerprint,
+                        "root": root_path,
+                        "after": entries[-1]["path"],
+                        "run": cursor_ref,
+                    }
+                ).encode()
+            ).decode()
+        )
+    result = {
         "inventory_fingerprint": fingerprint,
         "scan_generation": scan_generation,
         "complete": issue_count == 0,
-        "view": view,
-        "issues": {
-            "count": issue_count,
-            "representative": issue_values,
-            "truncated": issue_count > len(issue_values),
-        },
+        "view": {"root": root_path, "entries": entries, "next_after": next_after},
     }
+    if issue_values:
+        result["issues"] = issue_values
+    if issue_count > len(issue_values):
+        result["issues_truncated"] = True
+    return result
 
 
 def inventory_fingerprint(
@@ -294,10 +290,9 @@ def _canonical_fact(fact: Mapping[str, object]) -> dict[str, object]:
     }
 
 
-def _tree_value(node: _TreeNode, nodes: Mapping[str, _TreeNode]) -> dict[str, object]:
+def _entry_value(node: _ScopeEntry) -> dict[str, object]:
     return {
         "path": node.path,
-        "name": node.name,
         "node_type": node.node_type,
         "file_count": node.file_count,
         "byte_count": node.byte_count,
@@ -319,8 +314,7 @@ def _tree_value(node: _TreeNode, nodes: Mapping[str, _TreeNode]) -> dict[str, ob
             if key in node.size_buckets
         ],
         "representative_paths": list(node.representative_paths),
-        "children": [_tree_value(nodes[path], nodes) for path in node.children],
-        "omitted_children": max(node.immediate_child_count - len(node.children), 0),
+        "child_count": node.immediate_child_count,
     }
 
 

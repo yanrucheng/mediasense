@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 import json
 from pathlib import Path
 import subprocess
@@ -162,8 +163,9 @@ def test_bad_gpx_is_localized_and_result_retains_selected_track_basis(
     reader = PrecheckReadTool(database)
     accounted = reader.read(
         {
+            "dataset_ref": "dataset:dataset-a",
             "result_ref": sealed.result_ref,
-            "operation": "resolve",
+            "action": "resolve",
             "source_set": {
                 "kind": "precheck_relation",
                 "origin": sealed.result_ref,
@@ -179,8 +181,9 @@ def test_bad_gpx_is_localized_and_result_retains_selected_track_basis(
     )
     response = reader.read(
         {
+            "dataset_ref": "dataset:dataset-a",
             "result_ref": sealed.result_ref,
-            "operation": "expand",
+            "action": "expand",
             "source_item_refs": [source_ref],
             "include": ["source_item", "observations"],
         }
@@ -198,3 +201,89 @@ def test_bad_gpx_is_localized_and_result_retains_selected_track_basis(
         ).read_text(encoding="utf-8")
     )
     Draft202012Validator(schema["outputSchema"]).validate(response)
+
+
+def test_geo_summary_conflict_keeps_gpx_priority_and_exact_members(
+    tmp_path: Path,
+) -> None:
+    database = tmp_path / "working.sqlite3"
+    source = tmp_path / "source"
+    source.mkdir()
+    Image.new("RGB", (80, 60), "blue").save(source / "photo.jpg")
+    gps_coordinate = {"datum": "WGS84", "latitude": 23.0, "longitude": 115.0}
+    gpx_coordinate = {"datum": "WGS84", "latitude": 22.3, "longitude": 114.1}
+    (source / "track.gpx").write_text(
+        _gpx([("2026-05-04T12:27:28Z", 22.3, 114.1)]), encoding="utf-8"
+    )
+    original = {path.name: path.read_bytes() for path in source.iterdir()}
+
+    run_id = _closed_run(database, source)
+    metadata = MetadataProducer(
+        database, command_runner=TimeOnlyExifTool(), exiftool_version="13.30"
+    ).produce(run_id, Path("photo.jpg"))
+    match = GPXMatchProducer(database).produce(
+        run_id, metadata.work.work_id, [Path("track.gpx")]
+    )
+    rendition = ImageRenditionProducer(database).produce(run_id, Path("photo.jpg"))
+    results = ResultStore(database)
+    draft = results.build_minimal(
+        run_id,
+        [rendition.work.work_id],
+        metadata_work_ids=[metadata.work.work_id],
+        gpx_work_ids=[match.work.work_id],
+    )
+    # Model retained GPS/GPX evidence together. Normal GPX production only fills gaps.
+    sealed = results.seal(
+        replace(
+            draft,
+            sources=tuple(
+                replace(
+                    item,
+                    observations=tuple(
+                        observation
+                        for observation in item.observations
+                        if observation["name"] != "gps_coordinates"
+                    )
+                    + (
+                        {
+                            "name": "gps_coordinates",
+                            "status": "available",
+                            "value": gps_coordinate,
+                        },
+                    ),
+                )
+                if item.relative_path == Path("photo.jpg")
+                else item
+                for item in draft.sources
+            ),
+        )
+    )
+    sealed_bytes = sealed.path.read_bytes()
+    reader = PrecheckReadTool(database)
+    request = {"dataset_ref": "dataset:dataset-a", "result_ref": sealed.result_ref}
+    summary = reader.read({**request, "action": "geo_summary"})
+    assert summary["coordinate_evidence"] == {
+        "gps": {"available": 1},
+        "gpx": {"available": 1},
+        "combined": {"available": 1, "conflict": 1},
+    }
+    assert len(summary["coordinate_groups"]) == 1
+    group = summary["coordinate_groups"][0]
+    assert group["coordinate"] == gpx_coordinate
+    assert group["member_count"] == 1
+    members = reader.read(
+        {**request, "action": "resolve", "source_set": group["source_set"]}
+    )
+    assert members["page"]["total"] == 1
+    assert members["members"][0]["locator"]["value"] == "photo.jpg"
+    gps_members = reader.read(
+        {
+            **request,
+            "action": "resolve",
+            "source_set": {**group["source_set"], "coordinate": gps_coordinate},
+        }
+    )
+    assert gps_members["page"]["total"] == 0
+    assert gps_members["members"] == []
+    assert sealed.path.read_bytes() == sealed_bytes
+    assert {path.name: path.read_bytes() for path in source.iterdir()} == original

@@ -23,10 +23,6 @@ from ._result_types import (
     SealedResult,
     source_root_reference,
 )
-from ._result_work_projection import (
-    _has_available_coordinate,
-    _has_complete_place_outcome,
-)
 from ._working_schema import SCHEMA_VERSION
 from ._work_types import DependencyKind, WorkStatus
 from .artifact import ArtifactStore
@@ -251,8 +247,8 @@ class SQLiteResultStore:
             raise ResultSealError("unknown Result coverage")
         if draft.readiness not in {"plan_ready", "blocked"}:
             raise ResultSealError("unknown Result readiness")
-        if draft.integrity not in {"valid", "invalid"}:
-            raise ResultSealError("unknown Result integrity")
+        if draft.integrity != "valid":
+            raise ResultSealError("Only a valid Result may be sealed")
         if (
             draft.coverage == "partial"
             or draft.readiness == "blocked"
@@ -329,14 +325,6 @@ class SQLiteResultStore:
                 raise ResultSealError("unknown accounts_for condition")
             if source.scope != accounted[source.relative_path.as_posix()]:
                 raise ResultSealError("Result cannot rewrite accounted source scope")
-            if (
-                draft.readiness == "plan_ready"
-                and
-                source.scope == "source_media"
-                and _has_available_coordinate(source.observations)
-                and not _has_complete_place_outcome(source.observations)
-            ):
-                raise ResultSealError("located Source Item lacks a complete place outcome")
 
         sources = {source.ref: source for source in draft.sources}
         evidence = {item.ref: item for item in draft.evidence}
@@ -880,7 +868,7 @@ def _validate_execution_boundary(boundary: object) -> None:
         "remote_models",
         "source_read_only",
     }
-    if network_access is not True or set(boundary) != required:
+    if network_access is not True or set(boundary) - {"audit"} != required:
         raise ResultSealError("external Result has incomplete effect evidence")
     logical_queries = boundary["logical_external_queries"]
     provider_requests = boundary["provider_requests"]
@@ -888,9 +876,14 @@ def _validate_execution_boundary(boundary: object) -> None:
         not isinstance(logical_queries, int)
         or isinstance(logical_queries, bool)
         or logical_queries < 1
-        or not isinstance(provider_requests, int)
-        or isinstance(provider_requests, bool)
-        or provider_requests < logical_queries
+        or (
+            provider_requests is not None
+            and (
+                not isinstance(provider_requests, int)
+                or isinstance(provider_requests, bool)
+                or provider_requests < 0
+            )
+        )
     ):
         raise ResultSealError("external Result request counts are invalid")
     billable_calls = boundary["billable_calls"]
@@ -911,7 +904,9 @@ def _validate_execution_boundary(boundary: object) -> None:
     if not isinstance(authorizations, list) or not authorizations:
         raise ResultSealError("external Result lacks authorization evidence")
     for authorization in authorizations:
-        if not isinstance(authorization, Mapping) or set(authorization) != {
+        if not isinstance(authorization, Mapping) or set(authorization) - {
+            "disclosure_identity"
+        } != {
             "confirmed_at",
             "confirmed_content_identity",
             "confirmed_logical_queries",
@@ -932,7 +927,7 @@ def _validate_execution_boundary(boundary: object) -> None:
             "authorization pending fingerprint",
         )
         if authorization.get("confirmed_content_identity") != authorization.get(
-            "pending_fingerprint"
+            "disclosure_identity", authorization.get("pending_fingerprint")
         ):
             raise ResultSealError("external Result authorization identity is invalid")
         _nonempty(authorization.get("principal_ref"), "authorization principal")
@@ -994,7 +989,35 @@ def _validate_observations(observations: tuple[dict[str, object], ...]) -> None:
         "provenance",
     }
     statuses = {"available", "missing", "failed", "not_checked", "not_applicable"}
+    component_names = {"address_candidate", "nearby_place_candidates"}
+    seen_components: set[str] = set()
     for observation in observations:
+        if isinstance(observation, dict) and observation.get("name") in component_names:
+            name = observation["name"]
+            if name in seen_components:
+                raise ResultSealError(
+                    "Duplicate authoritative Geo component observation"
+                )
+            seen_components.add(name)
+            if "basis" not in observation:
+                raise ResultSealError("Geo component observation requires basis")
+            if observation.get("status") == "available":
+                value = observation.get("value")
+                if name == "address_candidate" and (
+                    not isinstance(value, dict)
+                    or not isinstance(value.get("formatted_address"), str)
+                    or not value["formatted_address"]
+                    or not isinstance(value.get("components"), dict)
+                ):
+                    raise ResultSealError("Available address candidate must be usable")
+                if name == "nearby_place_candidates" and (
+                    not isinstance(value, list)
+                    or not value
+                    or any(not isinstance(item, dict) or not item for item in value)
+                ):
+                    raise ResultSealError(
+                        "Available nearby candidates must be nonempty"
+                    )
         if not isinstance(observation, dict) or set(observation) - allowed:
             raise ResultSealError("Observation contains unknown fields")
         _nonempty(observation.get("name"), "Observation name")
@@ -1085,8 +1108,10 @@ def _validate_basis(basis: object) -> None:
         return
     if not isinstance(basis, dict) or not {"summary"} <= basis.keys():
         raise ResultSealError("basis must be text or a summary object")
-    if set(basis) - {"summary", "refs"}:
-        raise ResultSealError("basis contains unknown fields")
+    try:
+        json.dumps(basis, allow_nan=False)
+    except (TypeError, ValueError) as error:
+        raise ResultSealError("basis must contain JSON values") from error
     _nonempty(basis["summary"], "basis summary")
     refs = basis.get("refs", ())
     if not isinstance(refs, (list, tuple)):

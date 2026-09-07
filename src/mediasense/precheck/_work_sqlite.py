@@ -123,7 +123,7 @@ class SQLiteWorkStore:
                         for dependency in spec.dependencies
                     ),
                 )
-            connection.execute(
+            attached = connection.execute(
                 """
                 INSERT OR IGNORE INTO run_work_records (
                     run_id, work_id, requested_at
@@ -131,6 +131,12 @@ class SQLiteWorkStore:
                 """,
                 (run_id, work_id, observed_at),
             )
+            if attached.rowcount:
+                from ._run_sqlite import record_work_scope_change
+
+                record_work_scope_change(
+                    connection, run_id, spec.capability, observed_at
+                )
             return self._get_work(connection, work_id)
 
     def claim_ready_work(
@@ -648,7 +654,7 @@ class SQLiteWorkStore:
             for work_id in selected:
                 row = connection.execute(
                     """
-                    SELECT work_records.status, work_records.lease_run_id
+                    SELECT work_records.status, work_records.lease_run_id, work_records.capability
                     FROM run_work_records
                     JOIN work_records USING (work_id)
                     WHERE run_work_records.run_id = ?
@@ -671,6 +677,11 @@ class SQLiteWorkStore:
                     WHERE run_id = ? AND work_id = ?
                     """,
                     (run_id, work_id),
+                )
+                from ._run_sqlite import record_work_scope_change
+
+                record_work_scope_change(
+                    connection, run_id, row["capability"], _utc(None)
                 )
                 detached.append(work_id)
         return tuple(detached)

@@ -56,8 +56,9 @@ def test_narrow_real_chain_is_local_reusable_and_failure_isolated(
     reader = PrecheckReadTool(database)
     accounts = reader.read(
         {
+            "dataset_ref": "dataset:dataset-a",
             "result_ref": first_result.result_ref,
-            "operation": "resolve",
+            "action": "resolve",
             "source_set": {
                 "kind": "precheck_relation",
                 "origin": first_result.result_ref,
@@ -71,9 +72,13 @@ def test_narrow_real_chain_is_local_reusable_and_failure_isolated(
         "usable",
     }
     assert (
-        reader.read({"result_ref": first_result.result_ref, "operation": "review"})[
-            "result"
-        ]["readiness"]
+        reader.read(
+            {
+                "dataset_ref": "dataset:dataset-a",
+                "result_ref": first_result.result_ref,
+                "action": "review",
+            }
+        )["result"]["readiness"]
         == "plan_ready"
     )
 

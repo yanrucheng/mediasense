@@ -1,0 +1,1367 @@
+{
+  "kind": "synthetic-contract-transcript",
+  "exchanges": [
+    {
+      "name": "start",
+      "tool": "run",
+      "request": {
+        "action": "start",
+        "dataset_ref": "dataset:example-001",
+        "request_id": "request:start-001"
+      },
+      "response": {
+        "run_ref": "precheck-run:example-001"
+      }
+    },
+    {
+      "name": "start-successor",
+      "tool": "run",
+      "request": {
+        "action": "start",
+        "dataset_ref": "dataset:example-001",
+        "request_id": "request:start-002",
+        "prior_result_ref": "precheck-result:example-001"
+      },
+      "response": {
+        "run_ref": "precheck-run:002"
+      }
+    },
+    {
+      "name": "running",
+      "tool": "run",
+      "request": {
+        "action": "status",
+        "dataset_ref": "dataset:example-001",
+        "run_ref": "precheck-run:example-001"
+      },
+      "response": {
+        "state": "running",
+        "progress": {
+          "phase": "geo",
+          "unit": "location_query",
+          "processed": 1,
+          "total": 2,
+          "last_progress_at": "2026-09-07T12:00:00+08:00"
+        },
+        "allowed_actions": [
+          "pause",
+          "cancel"
+        ]
+      }
+    },
+    {
+      "name": "completed-no-place",
+      "tool": "run",
+      "request": {
+        "action": "status",
+        "dataset_ref": "dataset:example-001",
+        "run_ref": "precheck-run:example-001"
+      },
+      "response": {
+        "state": "completed",
+        "result": {
+          "ref": "precheck-result:example-001",
+          "coverage": "complete",
+          "readiness": "plan_ready",
+          "qualifications": [
+            {
+              "code": "location_query_failed",
+              "effect": "limits_interpretation",
+              "message": "地点查询终结失败，仍可规划。"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "failed",
+      "tool": "run",
+      "request": {
+        "action": "status",
+        "dataset_ref": "dataset:example-001",
+        "run_ref": "precheck-run:example-001"
+      },
+      "response": {
+        "state": "failed",
+        "reason": {
+          "code": "result_validation_failed",
+          "message": "Result结构矛盾。"
+        }
+      }
+    },
+    {
+      "name": "cancelled",
+      "tool": "run",
+      "request": {
+        "action": "status",
+        "dataset_ref": "dataset:example-001",
+        "run_ref": "precheck-run:example-001"
+      },
+      "response": {
+        "state": "cancelled"
+      }
+    },
+    {
+      "name": "blocked",
+      "tool": "run",
+      "request": {
+        "action": "status",
+        "dataset_ref": "dataset:example-001",
+        "run_ref": "precheck-run:example-001"
+      },
+      "response": {
+        "state": "blocked",
+        "reason": {
+          "code": "source_unavailable",
+          "message": "源磁盘不可用。",
+          "resume_when": "重新连接同一磁盘。"
+        },
+        "allowed_actions": [
+          "cancel",
+          "resume"
+        ]
+      }
+    },
+    {
+      "name": "pause-accepted",
+      "tool": "run",
+      "request": {
+        "action": "pause",
+        "dataset_ref": "dataset:example-001",
+        "run_ref": "precheck-run:example-001"
+      },
+      "response": {
+        "state": "running"
+      }
+    },
+    {
+      "name": "resume",
+      "tool": "run",
+      "request": {
+        "action": "resume",
+        "dataset_ref": "dataset:example-001",
+        "run_ref": "precheck-run:example-001"
+      },
+      "response": {
+        "state": "running"
+      }
+    },
+    {
+      "name": "cancel",
+      "tool": "run",
+      "request": {
+        "action": "cancel",
+        "dataset_ref": "dataset:example-001",
+        "run_ref": "precheck-run:example-001"
+      },
+      "response": {
+        "state": "cancelled"
+      }
+    },
+    {
+      "name": "paused",
+      "tool": "run",
+      "request": {
+        "action": "status",
+        "dataset_ref": "dataset:example-001",
+        "run_ref": "precheck-run:example-001"
+      },
+      "response": {
+        "state": "paused",
+        "reason": {
+          "code": "pause_requested",
+          "message": "已暂停。"
+        },
+        "allowed_actions": [
+          "resume",
+          "cancel"
+        ]
+      }
+    },
+    {
+      "name": "scope-resume",
+      "tool": "run",
+      "request": {
+        "action": "resume",
+        "dataset_ref": "dataset:example-001",
+        "run_ref": "precheck-run:example-001",
+        "decision": {
+          "kind": "source_scope",
+          "inventory_fingerprint": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "default_disposition": "exclude",
+          "exceptions": [
+            "旅行"
+          ]
+        }
+      },
+      "response": {
+        "state": "running"
+      }
+    },
+    {
+      "name": "trusted-proceed",
+      "tool": "run",
+      "request": {
+        "action": "resume",
+        "dataset_ref": "dataset:example-001",
+        "run_ref": "precheck-run:example-001",
+        "decision": "proceed"
+      },
+      "response": {
+        "state": "running"
+      }
+    },
+    {
+      "name": "decline",
+      "tool": "run",
+      "request": {
+        "action": "resume",
+        "dataset_ref": "dataset:example-001",
+        "run_ref": "precheck-run:example-001",
+        "decision": "decline"
+      },
+      "response": {
+        "state": "cancelled"
+      }
+    },
+    {
+      "name": "review",
+      "tool": "read",
+      "request": {
+        "action": "review",
+        "dataset_ref": "dataset:example-001",
+        "result_ref": "precheck-result:example-001"
+      },
+      "response": {
+        "result": {
+          "ref": "precheck-result:example-001",
+          "coverage": "complete",
+          "readiness": "plan_ready",
+          "qualifications": [
+            {
+              "code": "location_query_failed",
+              "effect": "limits_interpretation",
+              "message": "地点查询终结失败，仍可规划。"
+            }
+          ]
+        },
+        "accounting": {
+          "total": 1,
+          "scope_condition": [
+            {
+              "scope": "source_media",
+              "condition": "usable",
+              "count": 1
+            }
+          ],
+          "routes": {
+            "frontier_only": 1,
+            "exception_only": 0,
+            "frontier_and_exception": 0,
+            "residual": 0
+          },
+          "frontier": {
+            "entry_evidence_count": 1,
+            "coverage_memberships": 1,
+            "represented_unique_source_items": 1
+          }
+        },
+        "cards": [
+          {
+            "evidence_ref": "evidence:001",
+            "access": {
+              "kind": "source_item",
+              "source_item_ref": "source-item:001"
+            },
+            "source_count": 1,
+            "scope_condition": [
+              {
+                "scope": "source_media",
+                "condition": "usable",
+                "count": 1
+              }
+            ],
+            "facts": {
+              "capture_time": {
+                "status_counts": {
+                  "missing": 1
+                }
+              },
+              "media_type": {
+                "status_counts": {
+                  "available": 1
+                },
+                "values": [
+                  {
+                    "value": "image/jpeg",
+                    "count": 1
+                  }
+                ]
+              }
+            },
+            "roles": {
+              "representative": [
+                "evidence:001"
+              ]
+            },
+            "other_observations_available": true,
+            "available_expansions": [
+              {
+                "include": "member_observations",
+                "estimated_items": 1
+              }
+            ],
+            "source_set": {
+              "kind": "precheck_relation",
+              "origin": "evidence:001",
+              "relation": "represents",
+              "direction": "outbound"
+            }
+          }
+        ],
+        "page": {
+          "total": 1,
+          "next_cursor": null
+        }
+      }
+    },
+    {
+      "name": "expand-no-place",
+      "tool": "read",
+      "request": {
+        "action": "expand",
+        "dataset_ref": "dataset:example-001",
+        "result_ref": "precheck-result:example-001",
+        "source_item_refs": [
+          "source-item:001"
+        ],
+        "include": [
+          "observations"
+        ]
+      },
+      "response": {
+        "items": [
+          {
+            "source_item_ref": "source-item:001",
+            "included": {
+              "observations": [
+                {
+                  "name": "address_candidate",
+                  "status": "missing",
+                  "basis": {
+                    "summary": "地址查询已完成，无候选。"
+                  }
+                },
+                {
+                  "name": "nearby_place_candidates",
+                  "status": "failed",
+                  "basis": {
+                    "summary": "工具已结束有限重试。"
+                  },
+                  "qualifications": [
+                    {
+                      "code": "location_query_failed",
+                      "effect": "limits_interpretation",
+                      "message": "地点查询终结失败，仍可规划。"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ],
+        "page": {
+          "total": 1,
+          "next_cursor": null
+        }
+      }
+    },
+    {
+      "name": "expand-evidence",
+      "tool": "read",
+      "request": {
+        "action": "expand",
+        "dataset_ref": "dataset:example-001",
+        "result_ref": "precheck-result:example-001",
+        "evidence_refs": [
+          "evidence:001"
+        ],
+        "include": [
+          "anchor_evidence",
+          "prepared_targets",
+          "coverage_basis"
+        ]
+      },
+      "response": {
+        "items": [
+          {
+            "evidence_ref": "evidence:001",
+            "included": {
+              "anchor_evidence": {
+                "access": {
+                  "kind": "source_item",
+                  "source_item_ref": "source-item:001"
+                },
+                "roles": [
+                  "representative"
+                ]
+              },
+              "prepared_targets": [
+                {
+                  "target": {
+                    "kind": "source_item",
+                    "ref": "source-item:001"
+                  },
+                  "access_status": "available"
+                }
+              ],
+              "coverage_basis": {
+                "member_count": 1,
+                "qualified_member_count": 0,
+                "member_specific_basis": true
+              }
+            }
+          }
+        ],
+        "page": {
+          "total": 1,
+          "next_cursor": null
+        }
+      }
+    },
+    {
+      "name": "expand-members",
+      "tool": "read",
+      "request": {
+        "action": "expand",
+        "dataset_ref": "dataset:example-001",
+        "result_ref": "precheck-result:example-001",
+        "evidence_refs": [
+          "evidence:001"
+        ],
+        "include": [
+          "member_observations"
+        ],
+        "page": {
+          "limit": 50
+        }
+      },
+      "response": {
+        "items": [
+          {
+            "source_item_ref": "source-item:001",
+            "observations": [
+              {
+                "name": "address_candidate",
+                "status": "missing",
+                "basis": {
+                  "summary": "地址查询已完成，无候选。"
+                }
+              },
+              {
+                "name": "nearby_place_candidates",
+                "status": "failed",
+                "basis": {
+                  "summary": "工具已结束有限重试。"
+                },
+                "qualifications": [
+                  {
+                    "code": "location_query_failed",
+                    "effect": "limits_interpretation",
+                    "message": "地点查询终结失败，仍可规划。"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "page": {
+          "total": 1,
+          "next_cursor": null
+        }
+      }
+    },
+    {
+      "name": "resolve",
+      "tool": "read",
+      "request": {
+        "action": "resolve",
+        "dataset_ref": "dataset:example-001",
+        "result_ref": "precheck-result:example-001",
+        "source_set": {
+          "kind": "precheck_relation",
+          "origin": "evidence:001",
+          "relation": "represents",
+          "direction": "outbound"
+        }
+      },
+      "response": {
+        "resolution": {
+          "source_set_identity": "sha256:5f398e974a286072084e508d4c5d550c45d59c31aed5ba108fccf77b29651faa",
+          "membership_identity": "sha256:0c104093f39bf7c457bfabaae691a60a49c13e6ed1037f03ab91b58a7f083d95"
+        },
+        "members": [
+          {
+            "source_item_ref": "source-item:001",
+            "locator": {
+              "kind": "source_root_relative_path",
+              "source_root_ref": "source-root:001",
+              "value": "旅行/001.JPG"
+            },
+            "scope": "source_media",
+            "condition": "usable",
+            "source_content_verification": {
+              "status": "not_checked"
+            }
+          }
+        ],
+        "page": {
+          "total": 1,
+          "next_cursor": null
+        }
+      }
+    },
+    {
+      "name": "geo-summary",
+      "tool": "read",
+      "request": {
+        "action": "geo_summary",
+        "dataset_ref": "dataset:example-001",
+        "result_ref": "precheck-result:example-001"
+      },
+      "response": {
+        "acquisition_status": "complete",
+        "coordinate_evidence": {
+          "gps": {
+            "available": 1
+          },
+          "gpx": {
+            "missing": 1
+          },
+          "combined": {
+            "available": 1
+          }
+        },
+        "coordinate_groups": [
+          {
+            "coordinate": {
+              "latitude": 22.29,
+              "longitude": 114.17,
+              "datum": "WGS84"
+            },
+            "member_count": 1,
+            "source_set": {
+              "kind": "geo_coordinate",
+              "coordinate": {
+                "latitude": 22.29,
+                "longitude": 114.17,
+                "datum": "WGS84"
+              },
+              "selection_rule": "gpx_over_gps_exact_normalized_v1"
+            },
+            "components": {
+              "address": {
+                "no_result": 1
+              },
+              "nearby_places": {
+                "failed": 1
+              }
+            },
+            "candidate_evidence_refs": []
+          }
+        ],
+        "page": {
+          "total": 1,
+          "next_cursor": null
+        }
+      }
+    },
+    {
+      "name": "bad-request-error",
+      "tool": "run",
+      "request": {
+        "action": "status",
+        "dataset_ref": "dataset:example-001",
+        "run_ref": "precheck-run:example-001"
+      },
+      "response": {
+        "error": {
+          "code": "run_not_found",
+          "message": "未找到该Run。"
+        }
+      }
+    },
+    {
+      "name": "review-execution-audit",
+      "tool": "read",
+      "request": {
+        "action": "review",
+        "dataset_ref": "dataset:example-001",
+        "result_ref": "precheck-result:example-001",
+        "include": [
+          "execution_boundary"
+        ],
+        "execution_page": {
+          "limit": 50
+        }
+      },
+      "response": {
+        "result": {
+          "ref": "precheck-result:example-001",
+          "coverage": "complete",
+          "readiness": "plan_ready",
+          "qualifications": [
+            {
+              "code": "location_query_failed",
+              "effect": "limits_interpretation",
+              "message": "地点查询终结失败，仍可规划。"
+            }
+          ]
+        },
+        "accounting": {
+          "total": 1,
+          "scope_condition": [
+            {
+              "scope": "source_media",
+              "condition": "usable",
+              "count": 1
+            }
+          ],
+          "routes": {
+            "frontier_only": 1,
+            "exception_only": 0,
+            "frontier_and_exception": 0,
+            "residual": 0
+          },
+          "frontier": {
+            "entry_evidence_count": 1,
+            "coverage_memberships": 1,
+            "represented_unique_source_items": 1
+          }
+        },
+        "cards": [
+          {
+            "evidence_ref": "evidence:001",
+            "access": {
+              "kind": "source_item",
+              "source_item_ref": "source-item:001"
+            },
+            "source_count": 1,
+            "scope_condition": [
+              {
+                "scope": "source_media",
+                "condition": "usable",
+                "count": 1
+              }
+            ],
+            "facts": {
+              "capture_time": {
+                "status_counts": {
+                  "missing": 1
+                }
+              },
+              "media_type": {
+                "status_counts": {
+                  "available": 1
+                },
+                "values": [
+                  {
+                    "value": "image/jpeg",
+                    "count": 1
+                  }
+                ]
+              }
+            },
+            "roles": {
+              "representative": [
+                "evidence:001"
+              ]
+            },
+            "other_observations_available": true,
+            "available_expansions": [
+              {
+                "include": "member_observations",
+                "estimated_items": 1
+              }
+            ],
+            "source_set": {
+              "kind": "precheck_relation",
+              "origin": "evidence:001",
+              "relation": "represents",
+              "direction": "outbound"
+            }
+          }
+        ],
+        "page": {
+          "total": 1,
+          "next_cursor": null
+        },
+        "execution_boundary": {
+          "source_read_only": true,
+          "remote_models": false,
+          "logical_external_queries": 1,
+          "historical_provider_requests": 0,
+          "current_provider_requests": 1,
+          "billable_calls": null,
+          "transmitted_data_classes": [
+            "coordinate",
+            "datum",
+            "locale"
+          ],
+          "providers_attempted": [
+            "google_maps"
+          ],
+          "attempts": [
+            {
+              "origin": "current",
+              "provider": "google_maps",
+              "operation": "resolve_place",
+              "status": "failed",
+              "input_coordinate": {
+                "latitude": 22.29,
+                "longitude": 114.17,
+                "datum": "WGS84"
+              },
+              "provider_requests": 1,
+              "billable_units": null,
+              "observed_at": "2026-09-07T12:00:00+08:00",
+              "error_code": "permanent",
+              "source_set": {
+                "kind": "explicit",
+                "source_item_refs": [
+                  "source-item:001"
+                ]
+              }
+            }
+          ],
+          "page": {
+            "total": 1,
+            "next_cursor": null
+          }
+        }
+      }
+    },
+    {
+      "name": "expand-both-failed",
+      "tool": "read",
+      "request": {
+        "action": "expand",
+        "dataset_ref": "dataset:example-001",
+        "result_ref": "precheck-result:example-001",
+        "source_item_refs": [
+          "source-item:001"
+        ],
+        "include": [
+          "observations"
+        ]
+      },
+      "response": {
+        "items": [
+          {
+            "source_item_ref": "source-item:001",
+            "included": {
+              "observations": [
+                {
+                  "name": "address_candidate",
+                  "status": "failed",
+                  "basis": {
+                    "summary": "已终结的服务失败。"
+                  }
+                },
+                {
+                  "name": "nearby_place_candidates",
+                  "status": "failed",
+                  "basis": {
+                    "summary": "已终结的服务失败。"
+                  },
+                  "qualifications": [
+                    {
+                      "code": "location_query_failed",
+                      "effect": "limits_interpretation",
+                      "message": "地点查询终结失败，仍可规划。"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ],
+        "page": {
+          "total": 1,
+          "next_cursor": null
+        }
+      }
+    },
+    {
+      "name": "expand-both-no-result",
+      "tool": "read",
+      "request": {
+        "action": "expand",
+        "dataset_ref": "dataset:example-001",
+        "result_ref": "precheck-result:example-001",
+        "source_item_refs": [
+          "source-item:001"
+        ],
+        "include": [
+          "observations"
+        ]
+      },
+      "response": {
+        "items": [
+          {
+            "source_item_ref": "source-item:001",
+            "included": {
+              "observations": [
+                {
+                  "name": "address_candidate",
+                  "status": "missing",
+                  "basis": {
+                    "summary": "已查询但没有候选。"
+                  }
+                },
+                {
+                  "name": "nearby_place_candidates",
+                  "status": "missing",
+                  "basis": {
+                    "summary": "已查询但没有候选。"
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "page": {
+          "total": 1,
+          "next_cursor": null
+        }
+      }
+    },
+    {
+      "name": "expand-no-coordinate",
+      "tool": "read",
+      "request": {
+        "action": "expand",
+        "dataset_ref": "dataset:example-001",
+        "result_ref": "precheck-result:example-001",
+        "source_item_refs": [
+          "source-item:001"
+        ],
+        "include": [
+          "observations"
+        ]
+      },
+      "response": {
+        "items": [
+          {
+            "source_item_ref": "source-item:001",
+            "included": {
+              "observations": [
+                {
+                  "name": "address_candidate",
+                  "status": "not_applicable",
+                  "basis": {
+                    "summary": "源媒体没有可用坐标。"
+                  }
+                },
+                {
+                  "name": "nearby_place_candidates",
+                  "status": "not_applicable",
+                  "basis": {
+                    "summary": "源媒体没有可用坐标。"
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "page": {
+          "total": 1,
+          "next_cursor": null
+        }
+      }
+    },
+    {
+      "name": "expand-partial-place",
+      "tool": "read",
+      "request": {
+        "action": "expand",
+        "dataset_ref": "dataset:example-001",
+        "result_ref": "precheck-result:example-001",
+        "source_item_refs": [
+          "source-item:001"
+        ],
+        "include": [
+          "observations"
+        ]
+      },
+      "response": {
+        "items": [
+          {
+            "source_item_ref": "source-item:001",
+            "included": {
+              "observations": [
+                {
+                  "name": "address_candidate",
+                  "status": "available",
+                  "value": {
+                    "formatted_address": "香港",
+                    "components": {}
+                  },
+                  "basis": {
+                    "summary": "地址查询成功。"
+                  }
+                },
+                {
+                  "name": "nearby_place_candidates",
+                  "status": "failed",
+                  "basis": {
+                    "summary": "已终结的服务失败。"
+                  },
+                  "qualifications": [
+                    {
+                      "code": "location_query_failed",
+                      "effect": "limits_interpretation",
+                      "message": "地点查询终结失败，仍可规划。"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ],
+        "page": {
+          "total": 1,
+          "next_cursor": null
+        }
+      }
+    }
+  ],
+  "negative": [
+    {
+      "name": "legacy-wrapper",
+      "tool": "run",
+      "side": "inputSchema",
+      "value": {
+        "dataset_ref": "dataset:example-001",
+        "request": {
+          "action": "status",
+          "run_ref": "precheck-run:example-001"
+        }
+      }
+    },
+    {
+      "name": "legacy-operation",
+      "tool": "read",
+      "side": "inputSchema",
+      "value": {
+        "dataset_ref": "dataset:example-001",
+        "operation": "review",
+        "result_ref": "precheck-result:example-001"
+      }
+    },
+    {
+      "name": "missing-dataset",
+      "tool": "run",
+      "side": "inputSchema",
+      "value": {
+        "action": "status",
+        "run_ref": "precheck-run:example-001"
+      }
+    },
+    {
+      "name": "caller-authority",
+      "tool": "run",
+      "side": "inputSchema",
+      "value": {
+        "action": "resume",
+        "dataset_ref": "dataset:example-001",
+        "run_ref": "precheck-run:example-001",
+        "decision": "proceed",
+        "authority": {
+          "confirmed": true
+        }
+      }
+    },
+    {
+      "name": "missing-plus-value",
+      "tool": "read",
+      "side": "outputSchema",
+      "value": {
+        "items": [
+          {
+            "source_item_ref": "source-item:001",
+            "included": {
+              "observations": [
+                {
+                  "name": "address_candidate",
+                  "status": "missing",
+                  "basis": {
+                    "summary": "地址查询已完成，无候选。"
+                  },
+                  "value": {
+                    "component_outcomes": {
+                      "reverse_geocode": "no_result",
+                      "nearby_places": "no_result"
+                    }
+                  }
+                },
+                {
+                  "name": "nearby_place_candidates",
+                  "status": "failed",
+                  "basis": {
+                    "summary": "工具已结束有限重试。"
+                  },
+                  "qualifications": [
+                    {
+                      "code": "location_query_failed",
+                      "effect": "limits_interpretation",
+                      "message": "地点查询终结失败，仍可规划。"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ],
+        "page": {
+          "total": 1,
+          "next_cursor": null
+        }
+      }
+    },
+    {
+      "name": "failed-without-basis",
+      "tool": "read",
+      "side": "outputSchema",
+      "value": {
+        "items": [
+          {
+            "source_item_ref": "source-item:001",
+            "included": {
+              "observations": [
+                {
+                  "name": "address_candidate",
+                  "status": "missing",
+                  "basis": {
+                    "summary": "地址查询已完成，无候选。"
+                  }
+                },
+                {
+                  "name": "nearby_place_candidates",
+                  "status": "failed",
+                  "qualifications": [
+                    {
+                      "code": "location_query_failed",
+                      "effect": "limits_interpretation",
+                      "message": "地点查询终结失败，仍可规划。"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ],
+        "page": {
+          "total": 1,
+          "next_cursor": null
+        }
+      }
+    },
+    {
+      "name": "foreign-include",
+      "tool": "read",
+      "side": "inputSchema",
+      "value": {
+        "action": "expand",
+        "dataset_ref": "dataset:example-001",
+        "result_ref": "precheck-result:example-001",
+        "source_item_refs": [
+          "source-item:001"
+        ],
+        "include": [
+          "private_database"
+        ]
+      }
+    },
+    {
+      "name": "two-selectors",
+      "tool": "read",
+      "side": "inputSchema",
+      "value": {
+        "action": "expand",
+        "dataset_ref": "dataset:example-001",
+        "result_ref": "precheck-result:example-001",
+        "source_item_refs": [
+          "source-item:001"
+        ],
+        "evidence_refs": [
+          "evidence:001"
+        ],
+        "include": [
+          "observations"
+        ]
+      }
+    },
+    {
+      "name": "integrity-constant",
+      "tool": "read",
+      "side": "outputSchema",
+      "value": {
+        "result": {
+          "ref": "precheck-result:example-001",
+          "coverage": "complete",
+          "readiness": "plan_ready",
+          "qualifications": [
+            {
+              "code": "location_query_failed",
+              "effect": "limits_interpretation",
+              "message": "地点查询终结失败，仍可规划。"
+            }
+          ],
+          "integrity": "valid"
+        },
+        "accounting": {
+          "total": 1,
+          "scope_condition": [
+            {
+              "scope": "source_media",
+              "condition": "usable",
+              "count": 1
+            }
+          ],
+          "routes": {
+            "frontier_only": 1,
+            "exception_only": 0,
+            "frontier_and_exception": 0,
+            "residual": 0
+          },
+          "frontier": {
+            "entry_evidence_count": 1,
+            "coverage_memberships": 1,
+            "represented_unique_source_items": 1
+          }
+        },
+        "cards": [
+          {
+            "evidence_ref": "evidence:001",
+            "access": {
+              "kind": "source_item",
+              "source_item_ref": "source-item:001"
+            },
+            "source_count": 1,
+            "scope_condition": [
+              {
+                "scope": "source_media",
+                "condition": "usable",
+                "count": 1
+              }
+            ],
+            "facts": {
+              "capture_time": {
+                "status_counts": {
+                  "missing": 1
+                }
+              },
+              "media_type": {
+                "status_counts": {
+                  "available": 1
+                },
+                "values": [
+                  {
+                    "value": "image/jpeg",
+                    "count": 1
+                  }
+                ]
+              }
+            },
+            "roles": {
+              "representative": [
+                "evidence:001"
+              ]
+            },
+            "other_observations_available": true,
+            "available_expansions": [
+              {
+                "include": "member_observations",
+                "estimated_items": 1
+              }
+            ],
+            "source_set": {
+              "kind": "precheck_relation",
+              "origin": "evidence:001",
+              "relation": "represents",
+              "direction": "outbound"
+            }
+          }
+        ],
+        "page": {
+          "total": 1,
+          "next_cursor": null
+        }
+      }
+    },
+    {
+      "name": "missing-page-boundary",
+      "tool": "read",
+      "side": "outputSchema",
+      "value": {
+        "result": {
+          "ref": "precheck-result:example-001",
+          "coverage": "complete",
+          "readiness": "plan_ready",
+          "qualifications": [
+            {
+              "code": "location_query_failed",
+              "effect": "limits_interpretation",
+              "message": "地点查询终结失败，仍可规划。"
+            }
+          ]
+        },
+        "accounting": {
+          "total": 1,
+          "scope_condition": [
+            {
+              "scope": "source_media",
+              "condition": "usable",
+              "count": 1
+            }
+          ],
+          "routes": {
+            "frontier_only": 1,
+            "exception_only": 0,
+            "frontier_and_exception": 0,
+            "residual": 0
+          },
+          "frontier": {
+            "entry_evidence_count": 1,
+            "coverage_memberships": 1,
+            "represented_unique_source_items": 1
+          }
+        },
+        "cards": [
+          {
+            "evidence_ref": "evidence:001",
+            "access": {
+              "kind": "source_item",
+              "source_item_ref": "source-item:001"
+            },
+            "source_count": 1,
+            "scope_condition": [
+              {
+                "scope": "source_media",
+                "condition": "usable",
+                "count": 1
+              }
+            ],
+            "facts": {
+              "capture_time": {
+                "status_counts": {
+                  "missing": 1
+                }
+              },
+              "media_type": {
+                "status_counts": {
+                  "available": 1
+                },
+                "values": [
+                  {
+                    "value": "image/jpeg",
+                    "count": 1
+                  }
+                ]
+              }
+            },
+            "roles": {
+              "representative": [
+                "evidence:001"
+              ]
+            },
+            "other_observations_available": true,
+            "available_expansions": [
+              {
+                "include": "member_observations",
+                "estimated_items": 1
+              }
+            ],
+            "source_set": {
+              "kind": "precheck_relation",
+              "origin": "evidence:001",
+              "relation": "represents",
+              "direction": "outbound"
+            }
+          }
+        ],
+        "page": {
+          "total": 1
+        }
+      }
+    },
+    {
+      "name": "status-is-not-control",
+      "tool": "run",
+      "side": "response:status",
+      "value": {
+        "state": "running"
+      }
+    },
+    {
+      "name": "two-paged-status-includes",
+      "tool": "run",
+      "side": "inputSchema",
+      "value": {
+        "action": "status",
+        "dataset_ref": "dataset:001",
+        "run_ref": "precheck-run:001",
+        "include": [
+          "diagnostics",
+          "confirmation"
+        ],
+        "page": {
+          "limit": 50
+        }
+      }
+    },
+    {
+      "name": "available-address-empty",
+      "tool": "read",
+      "side": "outputSchema",
+      "value": {
+        "items": [
+          {
+            "source_item_ref": "source-item:001",
+            "included": {
+              "observations": [
+                {
+                  "name": "address_candidate",
+                  "status": "available",
+                  "value": {},
+                  "basis": {
+                    "summary": "地址查询成功。"
+                  }
+                },
+                {
+                  "name": "nearby_place_candidates",
+                  "status": "failed",
+                  "basis": {
+                    "summary": "已终结的服务失败。"
+                  },
+                  "qualifications": [
+                    {
+                      "code": "location_query_failed",
+                      "effect": "limits_interpretation",
+                      "message": "地点查询终结失败，仍可规划。"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ],
+        "page": {
+          "total": 1,
+          "next_cursor": null
+        }
+      }
+    }
+  ]
+}

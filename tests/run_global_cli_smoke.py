@@ -18,6 +18,7 @@ EXPECTED_TOOLS = {
     "mediasense.precheck.run",
     "mediasense.precheck.read",
     "mediasense.plan.work",
+    "mediasense.geo.query",
     "mediasense.apply.run",
     "mediasense.apply.read",
 }
@@ -93,17 +94,17 @@ async def _probe_mcp(
             started = await session.call_tool(
                 "mediasense.precheck.run",
                 {
-                    "dataset_ref": dataset_ref,
-                    "request": {
+                    **{
                         "action": "start",
                         "dataset_ref": dataset_ref,
                         "request_id": "request:installed-global-first-use",
                     },
+                    "dataset_ref": dataset_ref,
                 },
             )
             if started.is_error or started.structured_content is None:
                 raise AssertionError("installed PreCheck Start failed")
-            if started.structured_content.get("outcome") != "ok" or not str(
+            if "error" in started.structured_content or not str(
                 started.structured_content.get("run_ref", "")
             ).startswith("precheck-run:"):
                 raise AssertionError(

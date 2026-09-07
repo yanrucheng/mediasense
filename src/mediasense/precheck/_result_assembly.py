@@ -30,7 +30,6 @@ from ._result_types import (
 from ._result_work_projection import (
     _connect,
     _has_available_coordinate,
-    _has_complete_place_outcome,
     _load_compression_groups,
     _load_mapped_observation_work,
     _load_source_artifact_work,
@@ -138,6 +137,13 @@ def build_minimal_result(
             """,
             (run_id,),
         ).fetchall()
+        public_run_refs = {
+            str(row["run_ref"])
+            for row in connection.execute(
+                "SELECT run_ref FROM precheck_runs WHERE accounting_run_id = ?",
+                (run_id,),
+            )
+        }
         source_paths = _RunSourcePaths(connection, run_id)
         verification_rows = {
             str(row["relative_path"]): row
@@ -371,6 +377,16 @@ def build_minimal_result(
                     label="reverse geocode",
                 )
             )
+        elif scope == "source_media":
+            from .geocode import normalize_geo_observations
+
+            observations.extend(
+                normalize_geo_observations(
+                    None,
+                    coordinate_available=_has_available_coordinate(observations),
+                    unrequested_reason="geo_not_requested",
+                )
+            )
         for sensitivity_work in sensitivity_works:
             if WorkStatus(sensitivity_work["status"]) is WorkStatus.SUCCEEDED:
                 sensitivity_output = json.loads(sensitivity_work["output_json"])
@@ -489,7 +505,11 @@ def build_minimal_result(
                 qualifications=tuple(qualifications),
             )
         )
-        if geocode_work is not None:
+        if geocode_work is not None and any(
+            item.get("name") in {"address_candidate", "nearby_place_candidates"}
+            and item.get("status") == "available"
+            for item in observations
+        ):
             geocode_work_id = str(geocode_work["work_id"])
             geo_evidence_ref = result_local_reference(
                 "evidence",
@@ -661,19 +681,8 @@ def build_minimal_result(
         for source in sources
         if source.scope == "source_media" and source.condition == "unresolved"
     )
-    unresolved_geo_source_media = tuple(
-        source.ref
-        for source in sources
-        if source.scope == "source_media"
-        and _has_available_coordinate(source.observations)
-        and not _has_complete_place_outcome(source.observations)
-    )
     readiness = (
-        "plan_ready"
-        if entry_evidence
-        and not unresolved_source_media
-        and not unresolved_geo_source_media
-        else "blocked"
+        "plan_ready" if entry_evidence and not unresolved_source_media else "blocked"
     )
     result_qualifications: list[dict[str, object]] = []
     coverage = "partial" if unaccounted_issues else "complete"
@@ -692,12 +701,6 @@ def build_minimal_result(
         if unresolved_source_media:
             code = "unresolved_source_media"
             message = "Source media remains unresolved and requires more PreCheck work."
-        elif unresolved_geo_source_media:
-            code = "reverse_geocode_incomplete"
-            message = (
-                f"{len(unresolved_geo_source_media)} Source Item(s) have coordinates "
-                "but no complete address-and-nearby-place outcome."
-            )
         else:
             code = "no_entry_evidence"
             message = "No usable default Evidence is available for planning."
@@ -708,7 +711,9 @@ def build_minimal_result(
                 "message": message,
             }
         )
-    external_boundary = _external_effect_boundary(geocode_rows.values())
+    external_boundary = _external_effect_boundary(
+        geocode_rows.values(), geocode_rows, run_id, public_run_refs
+    )
     if external_boundary is not None:
         result_qualifications.append(
             {
@@ -809,11 +814,19 @@ def _source_verification_observation(row: sqlite3.Row) -> dict[str, object]:
 
 def _external_effect_boundary(
     rows: Iterable[sqlite3.Row],
+    by_source: Mapping[str, sqlite3.Row],
+    run_id: str,
+    public_run_refs: set[str],
 ) -> dict[str, object] | None:
     unique = {str(row["work_id"]): row for row in rows}
     if not unique:
         return None
     provider_requests = 0
+    requests_unknown = current_unknown = historical_unknown = False
+    audit_attempts = []
+    historical_requests = current_requests = 0
+    audit_billable = 0
+    billable_known = True
     authorizations: dict[tuple[str, str], dict[str, object]] = {}
     providers: set[str] = set()
     for work in unique.values():
@@ -825,7 +838,11 @@ def _external_effect_boundary(
                 "reverse geocode Work lacks effect or authorization evidence"
             )
         request_count = result.get("provider_request_count")
-        if not isinstance(request_count, int) or isinstance(request_count, bool):
+        if request_count is not None and (
+            not isinstance(request_count, int)
+            or isinstance(request_count, bool)
+            or request_count < 0
+        ):
             raise ResultSealError(
                 "reverse geocode Work has an invalid provider request count"
             )
@@ -851,14 +868,62 @@ def _external_effect_boundary(
                     "reverse geocode Work has invalid provider provenance"
                 )
             providers.update(result_providers)
-        provider_requests += request_count
+        origin = "current" if run_ref in public_run_refs else "historical"
+        if origin == "current":
+            current_requests += request_count or 0
+            current_unknown |= request_count is None
+        else:
+            historical_requests += request_count or 0
+            historical_unknown |= request_count is None
+        source_refs = sorted(
+            result_local_reference("source-item", run_id, path)
+            for path, row in by_source.items()
+            if row["work_id"] == work["work_id"]
+        )
+        for attempt in result.get("attempts", ()):
+            audit_attempts.append(
+                {
+                    "origin": origin,
+                    "provider": attempt["provider"],
+                    "operation": attempt.get("operation", "reverse_geocode"),
+                    "status": attempt["status"],
+                    "input_coordinate": result["input_coordinate"],
+                    "provider_requests": attempt.get("provider_requests"),
+                    "billable_units": attempt.get("billable_units"),
+                    "observed_at": result.get("observed_at")
+                    if result.get("observed_at") != "unknown"
+                    else None,
+                    "source_set": {"kind": "explicit", "source_item_refs": source_refs},
+                    **(
+                        {"error_code": attempt["error_code"]}
+                        if attempt.get("error_code")
+                        else {}
+                    ),
+                }
+            )
+            if attempt.get("billable_units") is None:
+                billable_known = False
+            else:
+                audit_billable += attempt["billable_units"]
+        if not result.get("attempts"):
+            billable_known = False
+        provider_requests += request_count or 0
+        requests_unknown |= request_count is None
         authorizations[(run_ref, fingerprint)] = dict(authorization)
     return {
+        "audit": {
+            "historical_provider_requests": None
+            if historical_unknown
+            else historical_requests,
+            "current_provider_requests": None if current_unknown else current_requests,
+            "billable_calls": audit_billable if billable_known else None,
+            "attempts": audit_attempts,
+        },
         "authorizations": [authorizations[key] for key in sorted(authorizations)],
         "billable_calls": "unknown",
         "logical_external_queries": len(unique),
         "network_access": True,
-        "provider_requests": provider_requests,
+        "provider_requests": None if requests_unknown else provider_requests,
         "providers": sorted(providers),
         "remote_models": False,
         "source_read_only": True,

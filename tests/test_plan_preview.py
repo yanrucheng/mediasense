@@ -187,7 +187,7 @@ def test_preview_uses_only_read_contract_and_asset_resolver(tmp_path) -> None:
         asset_resolver=lambda ref, view: resolver_calls.append((ref, view)) or None,
     )
     renderer.build(created["work_ref"], updated["revision"])
-    assert {request["operation"] for request in reader.calls} <= {
+    assert {request["action"] for request in reader.calls} <= {
         "review",
         "expand",
         "resolve",

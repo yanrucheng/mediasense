@@ -196,15 +196,17 @@ def test_video_key_frame_candidate_can_be_the_frontier_without_contact_sheet(
     reader = PrecheckReadTool(database)
     entry = reader.read(
         {
-            "operation": "review",
+            "dataset_ref": "dataset:dataset-a",
+            "action": "review",
             "result_ref": sealed.result_ref,
         }
     )
-    assert len(entry["coverage_cards"]) == 1
-    evidence_ref = entry["coverage_cards"][0]["anchor_evidence_ref"]
+    assert len(entry["cards"]) == 1
+    evidence_ref = entry["cards"][0]["evidence_ref"]
     view = reader.read(
         {
-            "operation": "expand",
+            "dataset_ref": "dataset:dataset-a",
+            "action": "expand",
             "result_ref": sealed.result_ref,
             "evidence_refs": [evidence_ref],
             "include": ["anchor_evidence"],
@@ -273,16 +275,18 @@ def test_contact_sheet_is_default_evidence_and_expands_to_frames(
 
     entry = reader.read(
         {
+            "dataset_ref": "dataset:dataset-a",
             "result_ref": sealed.result_ref,
-            "operation": "review",
+            "action": "review",
         }
     )
-    assert len(entry["coverage_cards"]) == 1
-    sheet_ref = entry["coverage_cards"][0]["anchor_evidence_ref"]
+    assert len(entry["cards"]) == 1
+    sheet_ref = entry["cards"][0]["evidence_ref"]
     sheet_view = reader.read(
         {
+            "dataset_ref": "dataset:dataset-a",
             "result_ref": sealed.result_ref,
-            "operation": "expand",
+            "action": "expand",
             "evidence_refs": [sheet_ref],
             "include": ["anchor_evidence"],
         }
@@ -290,8 +294,9 @@ def test_contact_sheet_is_default_evidence_and_expands_to_frames(
     assert sheet_view["observations"][0]["name"] == "video_contact_sheet"
     expanded = reader.read(
         {
+            "dataset_ref": "dataset:dataset-a",
             "result_ref": sealed.result_ref,
-            "operation": "expand",
+            "action": "expand",
             "evidence_refs": [sheet_ref],
             "include": ["prepared_targets"],
         }
@@ -304,15 +309,15 @@ def test_contact_sheet_is_default_evidence_and_expands_to_frames(
     assert len(frame_refs) == 2
     frame_views = reader.read(
         {
+            "dataset_ref": "dataset:dataset-a",
             "result_ref": sealed.result_ref,
-            "operation": "expand",
+            "action": "expand",
             "evidence_refs": frame_refs,
             "include": ["anchor_evidence"],
         }
     )
     assert all(
-        item["included"]["anchor_evidence"]["observations"][0]["name"]
-        == "video_frame"
+        item["included"]["anchor_evidence"]["observations"][0]["name"] == "video_frame"
         for item in frame_views["items"]
     )
 

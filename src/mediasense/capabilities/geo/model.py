@@ -54,9 +54,41 @@ class GeoRetention(StrEnum):
 class GeoLookupError(RuntimeError):
     """Base error for one provider attempt."""
 
-    def __init__(self, message: str, *, request_count: int = 0) -> None:
+    def __init__(
+        self, message: str, *, request_count: int = 0, safe_to_retry: bool = False
+    ) -> None:
         self.request_count = request_count
+        self.safe_to_retry = safe_to_retry
         super().__init__(message)
+
+
+@dataclass(frozen=True, slots=True)
+class RetryPolicy:
+    max_attempts: int = 3
+    backoff_seconds: tuple[float, ...] = (1, 3)
+    coordinate_deadline_seconds: float = 120
+
+    def __post_init__(self) -> None:
+        from math import isfinite
+
+        object.__setattr__(self, "backoff_seconds", tuple(self.backoff_seconds))
+        if (
+            not isinstance(self.max_attempts, int)
+            or isinstance(self.max_attempts, bool)
+            or not 1 <= self.max_attempts <= 3
+            or len(self.backoff_seconds) != self.max_attempts - 1
+            or any(not isfinite(delay) or delay < 0 for delay in self.backoff_seconds)
+            or not isfinite(self.coordinate_deadline_seconds)
+            or not 0 < self.coordinate_deadline_seconds <= 120
+        ):
+            raise ValueError("Invalid Geo retry policy")
+
+    def value(self) -> dict[str, object]:
+        return {
+            "max_attempts": self.max_attempts,
+            "backoff_seconds": list(self.backoff_seconds),
+            "coordinate_deadline_seconds": self.coordinate_deadline_seconds,
+        }
 
 
 class GeoTransientError(GeoLookupError):

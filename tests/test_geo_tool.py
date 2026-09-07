@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 import json
 from pathlib import Path
 
+import pytest
 from jsonschema import Draft202012Validator
 
 from mediasense.capabilities.geo import (
@@ -40,6 +41,8 @@ class FakeProvider:
         locale: str,
         radius_meters: float | None = None,
         max_places: int | None = None,
+        deadline: float | None = None,
+        cancelled=None,
     ) -> GeoProviderExecution:
         self.calls += 1
         if self.fail_after_effect:
@@ -120,7 +123,9 @@ class FakeProvider:
         )
 
 
-def _tool(tmp_path: Path, *, fail_after_effect: bool = False) -> tuple[GeoQueryTool, FakeProvider]:
+def _tool(
+    tmp_path: Path, *, fail_after_effect: bool = False
+) -> tuple[GeoQueryTool, FakeProvider]:
     provider = FakeProvider(
         GeoProviderCapabilities(
             "provider-a",
@@ -202,13 +207,15 @@ def _authorization(tool: GeoQueryTool, request: dict[str, object]) -> GeoAuthori
     parsed = _parse_request(request)
     return GeoAuthorization(
         "human:one",
-        parsed.fingerprint(),
+        tool.capability.fingerprint(parsed),
         datetime.now(timezone.utc),
         tool.capability.proposed_envelope(parsed),
     )
 
 
-def test_tool_preflight_is_effect_free_and_describes_authorization(tmp_path: Path) -> None:
+def test_tool_preflight_is_effect_free_and_describes_authorization(
+    tmp_path: Path,
+) -> None:
     tool, provider = _tool(tmp_path)
 
     result = tool.handle(_request())
@@ -220,7 +227,7 @@ def test_tool_preflight_is_effect_free_and_describes_authorization(tmp_path: Pat
 
     expanded = tool.handle(_expanded_request())
     assert expanded["outcome"] == "authorization_required"
-    assert expanded["required_authorization"]["max_provider_requests"] == 2
+    assert expanded["required_authorization"]["max_provider_requests"] == 6
     assert expanded["effects"]["provider_requests"] == 0
     assert provider.calls == 0
 
@@ -250,7 +257,12 @@ def test_geo_reference_outputs_conform_to_contract() -> None:
     output_validator = Draft202012Validator(_contract()["outputSchema"])
 
     for key, value in _mock().items():
-        if key in {"authorization_required", "authorization_mismatch", "success", "partial_result"}:
+        if key in {
+            "authorization_required",
+            "authorization_mismatch",
+            "success",
+            "partial_result",
+        }:
             output_validator.validate(value)
 
 
@@ -323,7 +335,9 @@ def test_all_public_outcomes_conform_to_output_schema(tmp_path: Path) -> None:
     output_validator.validate(tool.handle(invalid))
 
 
-def test_tool_replays_terminal_result_without_repeating_provider_effect(tmp_path: Path) -> None:
+def test_tool_replays_terminal_result_without_repeating_provider_effect(
+    tmp_path: Path,
+) -> None:
     tool, provider = _tool(tmp_path)
     request = _request()
     authorization = _authorization(tool, request)
@@ -398,6 +412,8 @@ def test_tool_keeps_interrupted_effect_indeterminate_on_retry(tmp_path: Path) ->
     request = _expanded_request()
     authorization = _authorization(tool, request)
 
+    with pytest.raises(RuntimeError, match="lost provider response"):
+        tool.handle(request, authorization=authorization)
     first = tool.handle(request, authorization=authorization)
     replay = tool.handle(request, authorization=authorization)
 
@@ -428,7 +444,9 @@ def test_tool_cancellation_prevents_new_provider_effect(tmp_path: Path) -> None:
     assert provider.calls == 0
 
 
-def test_tool_refuses_uncontracted_context_before_provider_effect(tmp_path: Path) -> None:
+def test_tool_refuses_uncontracted_context_before_provider_effect(
+    tmp_path: Path,
+) -> None:
     tool, provider = _tool(tmp_path)
     request = {**_request(), "source_path": "/private/photos/secret.jpg"}
 
@@ -443,7 +461,10 @@ def test_nearby_continuation_requires_its_own_request_identity(tmp_path: Path) -
     tool, provider = _tool(tmp_path)
     resolved = _request()
     resolved_authorization = _authorization(tool, resolved)
-    assert tool.handle(resolved, authorization=resolved_authorization)["outcome"] == "success"
+    assert (
+        tool.handle(resolved, authorization=resolved_authorization)["outcome"]
+        == "success"
+    )
 
     nearby = _request("nearby_places")
     stale = tool.handle(nearby, authorization=resolved_authorization)

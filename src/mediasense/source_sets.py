@@ -41,7 +41,7 @@ class ResultSourceSetResolver:
             response = self._call(
                 {
                     "result_ref": self.result_ref,
-                    "operation": "expand",
+                    "action": "expand",
                     "source_item_refs": [ref],
                     "include": ["source_item", "observations"],
                 }
@@ -58,7 +58,12 @@ class ResultSourceSetResolver:
             observations = included.get("observations")
             if not isinstance(base, Mapping) or not isinstance(observations, list):
                 raise SourceSetResolutionError("Source Item expansion is incomplete")
-            view = {**dict(base), "observations": observations}
+            view = {
+                **dict(base),
+                "kind": "source_item",
+                "ref": ref,
+                "observations": observations,
+            }
             if view.get("kind") != "source_item" or view.get("ref") != ref:
                 raise SourceSetResolutionError(f"unexpected source_item view for {ref}")
             self.source_views[ref] = view
@@ -71,13 +76,13 @@ class ResultSourceSetResolver:
             response = self._call(
                 {
                     "result_ref": self.result_ref,
-                    "operation": "expand",
+                    "action": "expand",
                     "evidence_refs": [ref],
                     "include": ["anchor_evidence"],
                 }
             )
             item = _single_item(response, "Evidence")
-            if item.get("anchor_evidence_ref") != ref:
+            if item.get("evidence_ref") != ref:
                 raise SourceSetResolutionError(
                     f"PreCheck read returned the wrong Evidence for {ref}"
                 )
@@ -87,12 +92,9 @@ class ResultSourceSetResolver:
                 if isinstance(included, Mapping)
                 else None
             )
-            if (
-                not isinstance(target, Mapping)
-                or target.get("kind") != "evidence"
-                or target.get("ref") != ref
-            ):
+            if not isinstance(target, Mapping):
                 raise SourceSetResolutionError(f"unexpected evidence view for {ref}")
+            target = {**target, "kind": "evidence", "ref": ref}
             self.evidence_views[ref] = target
             return target
         raise SourceSetResolutionError(f"unsupported Result target kind: {kind}")
@@ -126,17 +128,13 @@ class ResultSourceSetResolver:
         while True:
             request: dict[str, Any] = {
                 "result_ref": self.result_ref,
-                "operation": "resolve",
+                "action": "resolve",
                 "source_set": dict(source_set),
                 "page": {"limit": 1000},
             }
             if cursor is not None:
                 request["page"]["cursor"] = cursor
             response = self._call(request)
-            if response.get("operation") != "resolve":
-                raise SourceSetResolutionError(
-                    "PreCheck read returned the wrong operation"
-                )
             resolution = response.get("resolution")
             page = response.get("page")
             values = response.get("members")
@@ -150,17 +148,17 @@ class ResultSourceSetResolver:
                 )
             current_set_identity = resolution.get("source_set_identity")
             current_membership_identity = resolution.get("membership_identity")
-            ordering = resolution.get("ordering")
-            total = resolution.get("total")
+            total = page.get("total")
             if (
                 not isinstance(current_set_identity, str)
                 or not isinstance(current_membership_identity, str)
-                or ordering != "source_item_ref_ascending"
                 or isinstance(total, bool)
                 or not isinstance(total, int)
                 or total < 0
             ):
-                raise SourceSetResolutionError("PreCheck resolution identity is invalid")
+                raise SourceSetResolutionError(
+                    "PreCheck resolution identity is invalid"
+                )
             if current_set_identity != expected_source_set_identity:
                 raise SourceSetResolutionError(
                     "PreCheck resolution does not match the requested Source Set"
@@ -195,23 +193,18 @@ class ResultSourceSetResolver:
                 members.append(ref)
                 self.source_views.setdefault(ref, _resolved_member_view(value))
 
-            returned = page.get("returned")
-            page_total = page.get("total")
-            complete = page.get("complete")
-            if (
-                isinstance(returned, bool)
-                or not isinstance(returned, int)
-                or returned != len(values)
-                or page_total != expected_total
-                or not isinstance(complete, bool)
-            ):
+            if "next_cursor" not in page or len(values) > 1000:
                 raise SourceSetResolutionError("PreCheck resolution page is invalid")
-            if complete:
-                if len(members) != expected_total or page.get("next_cursor") is not None:
+            if page["next_cursor"] is None:
+                if len(members) != expected_total:
                     raise SourceSetResolutionError(
                         "PreCheck resolution completed without its declared members"
                     )
                 break
+            if not values:
+                raise SourceSetResolutionError(
+                    "PreCheck resolution did not make member progress"
+                )
             next_cursor = page.get("next_cursor")
             if (
                 not isinstance(next_cursor, str)
@@ -293,20 +286,41 @@ class ResultSourceSetResolver:
                 "PreCheck read failed while resolving a Source Set"
             ) from error
         if not isinstance(response, Mapping):
-            raise SourceSetResolutionError("PreCheck read returned a non-object response")
-        if response.get("outcome") != "ok":
+            raise SourceSetResolutionError(
+                "PreCheck read returned a non-object response"
+            )
+        if "error" in response:
             error = response.get("error")
             code = error.get("code") if isinstance(error, Mapping) else "unknown_error"
             raise SourceSetResolutionError(f"PreCheck read failed: {code}")
-        if response.get("result_ref") != self.result_ref:
-            raise SourceSetResolutionError("PreCheck read crossed the bound Result")
+        from mediasense.runtime.resources import contract_validator
+
+        if not contract_validator(
+            "mediasense.precheck.read", request["action"]
+        ).is_valid(response):
+            raise SourceSetResolutionError(
+                "PreCheck read returned an invalid action response"
+            )
         return response
 
 
 def _single_item(response: Mapping[str, Any], label: str) -> Mapping[str, Any]:
     items = response.get("items")
-    if not isinstance(items, list) or len(items) != 1 or not isinstance(items[0], Mapping):
+    if (
+        not isinstance(items, list)
+        or len(items) != 1
+        or not isinstance(items[0], Mapping)
+    ):
         raise SourceSetResolutionError(f"{label} expansion did not return one item")
+    page = response.get("page")
+    if (
+        not isinstance(page, Mapping)
+        or page.get("total") != 1
+        or page.get("next_cursor") is not None
+    ):
+        raise SourceSetResolutionError(
+            f"{label} expansion is not a complete one-item page"
+        )
     return items[0]
 
 

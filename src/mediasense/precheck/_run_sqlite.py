@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from collections.abc import Callable, Mapping
 from datetime import datetime, timedelta, timezone
 import json
@@ -14,6 +14,12 @@ from uuid import uuid4
 from mediasense.dataset_reference import dataset_ref_from_id
 
 from ._working_schema import SCHEMA_VERSION
+
+
+class RunAlreadyActive(RuntimeError):
+    def __init__(self, run_ref: str) -> None:
+        self.run_ref = run_ref
+        super().__init__("The Dataset already has an unfinished Run.")
 
 
 class RunIdempotencyConflict(ValueError):
@@ -73,6 +79,12 @@ class SQLiteRunStore:
                 if str(existing["request_json"]) != request_json:
                     raise RunIdempotencyConflict(request_id)
                 return _record(existing), False
+            active = connection.execute(
+                "SELECT run_ref FROM precheck_runs WHERE dataset_ref = ? AND state IN ('running', 'paused', 'blocked') LIMIT 1",
+                (dataset_ref,),
+            ).fetchone()
+            if active is not None:
+                raise RunAlreadyActive(str(active["run_ref"]))
             run_ref = f"precheck-run:{uuid4().hex}"
             connection.execute(
                 """
@@ -221,6 +233,9 @@ class SQLiteRunStore:
                     else observed_at
                 ),
                 "worker": previous["worker"],
+                "progress_scope_changed": previous.get("progress_scope_changed", False)
+                if previous_phase == checkpoint
+                else False,
             }
             self._write_execution_checkpoint(
                 connection, run_ref, value, observed_at=observed_at
@@ -351,12 +366,21 @@ class SQLiteRunStore:
                 reason=reason,
             )
 
-    def execution_facts(self, accounting_run_id: str | None) -> dict[str, object]:
+    def execution_facts(
+        self,
+        accounting_run_id: str | None,
+        *,
+        connection: sqlite3.Connection | None = None,
+    ) -> dict[str, object]:
         """Read bounded aggregate facts used by the public activity projection."""
 
         if accounting_run_id is None:
             return {"accounting": None, "work": ()}
-        with self._connect() as connection:
+        with (
+            self._connect()
+            if connection is None
+            else nullcontext(connection) as connection
+        ):
             accounting = connection.execute(
                 "SELECT status, updated_at FROM working_runs WHERE run_id = ?",
                 (accounting_run_id,),
@@ -372,7 +396,8 @@ class SQLiteRunStore:
             ).fetchall()
             work_rows = connection.execute(
                 """
-                SELECT work_records.capability, work_records.status,
+                SELECT work_records.capability, work_records.status, work_records.last_failure_code,
+                       CASE WHEN work_records.capability = 'reverse-geocode-observation' THEN json_extract(work_records.output_json, '$.result.status') ELSE NULL END AS geo_status,
                        CASE WHEN EXISTS (
                            SELECT 1 FROM work_attempts
                            WHERE work_attempts.work_id = work_records.work_id
@@ -388,12 +413,34 @@ class SQLiteRunStore:
                 FROM run_work_records
                 JOIN work_records USING (work_id)
                 WHERE run_work_records.run_id = ?
-                GROUP BY work_records.capability, work_records.status, attempted_here
+                GROUP BY work_records.capability, work_records.status, work_records.last_failure_code, geo_status, attempted_here
                 ORDER BY work_records.capability, work_records.status, attempted_here
                 """,
                 (accounting_run_id,),
             ).fetchall()
+            geo_effects = [
+                dict(row)
+                for row in connection.execute(
+                    """
+                SELECT json_extract(output_json, '$.authorization.run_ref') AS owner,
+                       json_extract(output_json, '$.result.component_outcomes') AS components,
+                       json_extract(output_json, '$.result.providers') AS providers,
+                       json_extract(output_json, '$.result.provider') AS provider,
+                       COUNT(*) AS count,
+                       SUM(json_extract(output_json, '$.result.provider_request_count')) AS requests,
+                       SUM(CASE WHEN json_extract(output_json, '$.result.provider_request_count') IS NULL THEN 1 ELSE 0 END) AS requests_unknown,
+                       SUM(json_extract(output_json, '$.result.billable_units')) AS bills,
+                       SUM(CASE WHEN json_extract(output_json, '$.result.billable_units') IS NULL THEN 1 ELSE 0 END) AS bills_unknown
+                FROM run_work_records JOIN work_records USING (work_id)
+                WHERE run_work_records.run_id = ? AND capability = 'reverse-geocode-observation'
+                  AND output_json IS NOT NULL
+                GROUP BY owner, components, providers, provider
+                """,
+                    (accounting_run_id,),
+                )
+            ]
         return {
+            "geo_effects": geo_effects,
             "accounting": {
                 "state": str(accounting["status"]),
                 "last_progress_at": str(accounting["updated_at"]),
@@ -405,7 +452,9 @@ class SQLiteRunStore:
             "work": tuple(
                 {
                     "capability": str(row["capability"]),
+                    "error_code": row["last_failure_code"],
                     "status": str(row["status"]),
+                    "geo_status": row["geo_status"],
                     "attempted_here": bool(row["attempted_here"]),
                     "count": int(row["count"]),
                     "last_progress_at": str(row["last_progress_at"]),
@@ -451,6 +500,30 @@ class SQLiteRunStore:
             ).fetchone()
         return None if row is None else str(row["run_id"])
 
+    def accounting_detail(
+        self,
+        record: Mapping[str, object],
+        *,
+        connection: sqlite3.Connection | None = None,
+    ) -> dict[str, object]:
+        if record["accounting_run_id"] is None:
+            return {"discovered": None, "accounted": None, "scope_condition": None}
+        with (
+            self._connect()
+            if connection is None
+            else nullcontext(connection) as connection
+        ):
+            rows = connection.execute(
+                "SELECT scope, condition, COUNT(*) AS count FROM run_items WHERE run_id = ? GROUP BY scope, condition ORDER BY scope, condition",
+                (record["accounting_run_id"],),
+            ).fetchall()
+        counts = [dict(row) for row in rows]
+        return {
+            "discovered": sum(row["count"] for row in rows),
+            "accounted": sum(row["count"] for row in rows),
+            "scope_condition": counts,
+        }
+
     def accounting_progress(
         self, run_ref: str
     ) -> tuple[dict[str, object], str, str | None]:
@@ -488,6 +561,25 @@ class SQLiteRunStore:
             str(accounting["status"]),
             accounting["blocked_reason"],
         )
+
+    def observe(self, run_ref: str) -> dict[str, object]:
+        with self._connect() as connection:
+            connection.execute("BEGIN")
+            record = _record(self._require(connection, run_ref))
+            record["_facts"] = self.execution_facts(
+                record["accounting_run_id"], connection=connection
+            )
+            record["_accounting"] = self.accounting_detail(
+                record, connection=connection
+            )
+            scope = connection.execute(
+                "SELECT * FROM precheck_scope_reviews WHERE run_ref = ? ORDER BY revision DESC LIMIT 1",
+                (run_ref,),
+            ).fetchone()
+            record["_scope_review"] = (
+                None if scope is None else _scope_review_record(scope)
+            )
+        return record
 
     def get(self, run_ref: str) -> dict[str, object]:
         with self._connect() as connection:
@@ -747,9 +839,10 @@ class SQLiteRunStore:
                             raise RunDecisionError(
                                 "proceed requires trusted Human authorization"
                             )
-                        if authority.get("confirmed_content_identity") != observed[
-                            "confirmation_fingerprint"
-                        ]:
+                        if (
+                            authority.get("confirmed_content_identity")
+                            != confirmation["content_identity"]
+                        ):
                             raise RunDecisionError(
                                 "trusted authorization names different content"
                             )
@@ -796,8 +889,7 @@ class SQLiteRunStore:
                 "running",
                 confirmation=(
                     confirmation
-                    if isinstance(confirmation, dict)
-                    and generic_decision == "proceed"
+                    if isinstance(confirmation, dict) and generic_decision == "proceed"
                     else None
                 ),
                 confirmation_fingerprint=fingerprint,
@@ -833,17 +925,19 @@ class SQLiteRunStore:
             if (
                 observed["state"] == "running"
                 and observed["confirmation_fingerprint"] == fingerprint
-                and observed["confirmation_decision"]
-                == "proceed"
+                and observed["confirmation_decision"] == "proceed"
+                and isinstance(observed["confirmation"], dict)
+                and observed["confirmation"].get("content_identity")
+                == confirmation.get("content_identity")
             ):
                 return observed, False
-            if observed["state"] == "paused" and observed["confirmation"] is not None:
-                if observed["confirmation_fingerprint"] != fingerprint:
-                    raise RunStateConflict(observed)
-                if _json(observed["confirmation"]) != _json(confirmation):
-                    raise RunDecisionError(
-                        "confirmation fingerprint identifies different work"
-                    )
+            if (
+                observed["state"] == "paused"
+                and observed["confirmation"] is not None
+                and observed["confirmation_fingerprint"] == fingerprint
+                and observed["confirmation"].get("content_identity")
+                == confirmation.get("content_identity")
+            ):
                 return observed, True
             if observed["state"] not in {"running", "paused", "blocked"}:
                 raise RunStateConflict(observed)
@@ -1123,6 +1217,7 @@ def _execution_checkpoint(value: object, *, fallback_at: str) -> dict[str, objec
         "total": decoded.get("total", "unknown"),
         "last_progress_at": str(decoded.get("last_progress_at", fallback_at)),
         "worker": decoded.get("worker"),
+        "progress_scope_changed": bool(decoded.get("progress_scope_changed", False)),
     }
 
 
@@ -1140,3 +1235,30 @@ __all__ = [
     "RunStateConflict",
     "SQLiteRunStore",
 ]
+
+
+def record_work_scope_change(
+    connection: sqlite3.Connection, run_id: str, capability: str, observed_at: str
+) -> None:
+    """Persist membership changes in the same transaction that changes the Work set."""
+    from .run import _PHASE_NAMES, _PHASE_CAPABILITIES
+
+    for row in connection.execute(
+        "SELECT * FROM precheck_runs WHERE accounting_run_id = ? AND state IN ('running', 'paused', 'blocked')",
+        (run_id,),
+    ).fetchall():
+        checkpoint = _execution_checkpoint(
+            row["execution_checkpoint"], fallback_at=row["updated_at"]
+        )
+        phase = _PHASE_NAMES.get(checkpoint["phase"], "unknown")
+        if capability not in _PHASE_CAPABILITIES.get(phase, set()):
+            continue
+        checkpoint.update(progress_scope_changed=True, last_progress_at=observed_at)
+        reason = {
+            "code": "progress_scope_changed",
+            "message": "The current phase's logical Work membership changed.",
+        }
+        connection.execute(
+            "UPDATE precheck_runs SET execution_checkpoint = ?, updated_at = ?, reason_json = CASE WHEN state = 'running' THEN ? ELSE reason_json END WHERE run_ref = ?",
+            (_json(checkpoint), observed_at, _json(reason), row["run_ref"]),
+        )

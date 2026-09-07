@@ -237,7 +237,8 @@ def test_detector_failure_is_explicit_and_result_observations_remain_readable(
     reader = PrecheckReadTool(database)
     accounted = reader.read(
         {
-            "operation": "resolve",
+            "dataset_ref": "dataset:dataset-a",
+            "action": "resolve",
             "result_ref": sealed.result_ref,
             "source_set": {
                 "kind": "precheck_relation",
@@ -253,7 +254,8 @@ def test_detector_failure_is_explicit_and_result_observations_remain_readable(
     }
     source_response = reader.read(
         {
-            "operation": "expand",
+            "dataset_ref": "dataset:dataset-a",
+            "action": "expand",
             "result_ref": sealed.result_ref,
             "source_item_refs": [
                 source_by_path["good.jpg"],
@@ -265,8 +267,7 @@ def test_detector_failure_is_explicit_and_result_observations_remain_readable(
     schema = json.loads((SPEC_ROOT / "precheck-read.tool.json").read_text())
     Draft202012Validator(schema["outputSchema"]).validate(source_response)
     views = {
-        item["source_item_ref"]: item["included"]
-        for item in source_response["items"]
+        item["source_item_ref"]: item["included"] for item in source_response["items"]
     }
     good_view = views[source_by_path["good.jpg"]]
     failed_view = views[source_by_path["failed.jpg"]]

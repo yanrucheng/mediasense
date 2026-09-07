@@ -12,6 +12,8 @@ from mediasense.apply import (
     ReceiptStore,
 )
 from mediasense.apply.preparation import SourceSetExpansion
+from mediasense.precheck.read import bind_precheck_read
+
 from mediasense.precheck import (
     AccountingStore,
     ImageRenditionProducer,
@@ -87,12 +89,15 @@ def test_prepare_resolves_and_verifies_one_real_sealed_precheck_result(
     result = ResultStore(database).seal(
         ResultStore(database).build_minimal(run_id, [rendition.work.work_id])
     )
-    reader = PrecheckReadTool(database)
+    reader = bind_precheck_read(
+        PrecheckReadTool(database), "dataset:dataset-apply-integration"
+    )
 
     accounts = reader.read(
         {
+            "dataset_ref": "dataset:dataset-apply-integration",
             "result_ref": result.result_ref,
-            "operation": "resolve",
+            "action": "resolve",
             "source_set": {
                 "kind": "precheck_relation",
                 "origin": result.result_ref,
@@ -108,8 +113,9 @@ def test_prepare_resolves_and_verifies_one_real_sealed_precheck_result(
     )
     inspected = reader.read(
         {
+            "dataset_ref": "dataset:dataset-apply-integration",
             "result_ref": result.result_ref,
-            "operation": "expand",
+            "action": "expand",
             "source_item_refs": [source_item_ref],
             "include": ["source_item", "observations"],
         }
@@ -165,11 +171,12 @@ def test_real_sealed_precheck_result_executes_controlled_move_and_receipt(
     result = ResultStore(database).seal(
         ResultStore(database).build_minimal(run_id, [rendition.work.work_id])
     )
-    reader = PrecheckReadTool(database)
+    reader = bind_precheck_read(PrecheckReadTool(database), "dataset:dataset-apply-e2e")
     accounts = reader.read(
         {
+            "dataset_ref": "dataset:dataset-apply-e2e",
             "result_ref": result.result_ref,
-            "operation": "resolve",
+            "action": "resolve",
             "source_set": {
                 "kind": "precheck_relation",
                 "origin": result.result_ref,
@@ -185,8 +192,9 @@ def test_real_sealed_precheck_result_executes_controlled_move_and_receipt(
     )
     source_view = reader.read(
         {
+            "dataset_ref": "dataset:dataset-apply-e2e",
             "result_ref": result.result_ref,
-            "operation": "expand",
+            "action": "expand",
             "source_item_refs": [source_item_ref],
             "include": ["source_item"],
         }

@@ -62,13 +62,58 @@ class RuntimeHost:
         request: Mapping[str, Any],
         authority: Mapping[str, Any] | None = None,
     ) -> dict[str, object]:
+        if name in {"mediasense.precheck.run", "mediasense.precheck.read"}:
+            from .resources import contract_validator
+
+            if not contract_validator(name).is_valid(request):
+                return {
+                    "error": {
+                        "code": "invalid_request",
+                        "message": "Invalid PreCheck request.",
+                    }
+                }
+            if request["dataset_ref"] != dataset_ref:
+                return {
+                    "error": {
+                        "code": "reference_not_in_dataset",
+                        "message": "Conflicting Dataset references.",
+                    }
+                }
         with self._lock:
             runtime = self._datasets.get(dataset_ref)
         if runtime is None:
+            if name in {"mediasense.precheck.run", "mediasense.precheck.read"}:
+                return {
+                    "error": {
+                        "code": "dataset_not_open",
+                        "message": "Open this Dataset in the Host first.",
+                    }
+                }
             raise HostRequestError(
                 "Dataset is not open in this Host process; call mediasense.dataset.open first."
             )
-        return runtime.call(name, request, authority)
+        result = runtime.call(name, request, authority)
+        if name in {"mediasense.precheck.run", "mediasense.precheck.read"}:
+            contract_validator(name, str(request["action"])).validate(result)
+        return result
+
+    def precheck_confirmation(
+        self, dataset_ref: str, run_ref: str
+    ) -> Mapping[str, Any] | None:
+        with self._lock:
+            runtime = self._datasets.get(dataset_ref)
+        if runtime is None:
+            return None
+        try:
+            record = runtime.precheck_run._store.get(run_ref)
+        except KeyError as error:
+            if error.args != (run_ref,):
+                raise
+            # Missing Runs are reported by normal Tool dispatch, not elicitation.
+            return None
+        if record["dataset_ref"] != dataset_ref or record["state"] != "paused":
+            return None
+        return record["confirmation"]
 
     @staticmethod
     def tools() -> tuple[dict[str, object], ...]:

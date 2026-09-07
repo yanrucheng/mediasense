@@ -36,6 +36,21 @@ from .capabilities.geo.protocol import (
 )
 
 
+def _http_timeout(
+    timeout: float, deadline: float | None, cancelled: Callable[[], bool] | None
+) -> float:
+    if cancelled is not None and cancelled():
+        raise GeoPermanentError("Geo request cancelled before HTTP admission.")
+    remaining = (
+        timeout if deadline is None else min(timeout, deadline - time.monotonic())
+    )
+    if remaining <= 0:
+        raise GeoPermanentError(
+            "Geo coordinate deadline exhausted before HTTP admission."
+        )
+    return remaining
+
+
 class JsonTransport(Protocol):
     def get_json(
         self,
@@ -126,14 +141,21 @@ class UrllibJsonTransport:
         except HTTPError as error:
             if error.code in {408, 425, 429} or error.code >= 500:
                 raise GeoTransientError(
-                    f"provider HTTP {error.code}", request_count=1
+                    f"provider HTTP {error.code}", request_count=1, safe_to_retry=True
                 ) from error
             raise GeoPermanentError(
                 f"provider HTTP {error.code}", request_count=1
             ) from error
         except (TimeoutError, socket.timeout, URLError) as error:
+            unsent = isinstance(error, URLError) and isinstance(
+                error.reason, (ConnectionRefusedError, socket.gaierror)
+            )
             raise GeoTransientError(
-                str(error) or type(error).__name__, request_count=1
+                "Provider connection failed before sending."
+                if unsent
+                else "Provider completion is unknown after transport failure.",
+                request_count=0 if unsent else 1,
+                safe_to_retry=unsent,
             ) from error
         except (UnicodeError, json.JSONDecodeError) as error:
             raise GeoPermanentError(
@@ -154,14 +176,22 @@ class _RateLimiter:
     _last_call: float | None = None
     _lock: Lock = field(default_factory=Lock)
 
-    def wait(self) -> None:
+    def wait(
+        self,
+        *,
+        deadline: float | None = None,
+        cancelled: Callable[[], bool] | None = None,
+    ) -> None:
         with self._lock:
             now = self.clock()
             if self._last_call is not None:
                 remaining = self.minimum_interval - (now - self._last_call)
                 if remaining > 0:
-                    self.sleeper(remaining)
-                    now = self.clock()
+                    while remaining > 0:
+                        _http_timeout(remaining, deadline, cancelled)
+                        self.sleeper(min(0.1, remaining))
+                        now = self.clock()
+                        remaining = self.minimum_interval - (now - self._last_call)
             self._last_call = now
 
 
@@ -220,6 +250,8 @@ class AMapReverseGeocoder:
         locale: str,
         radius_meters: float | None = None,
         max_places: int | None = None,
+        deadline: float | None = None,
+        cancelled: Callable[[], bool] | None = None,
     ) -> GeoProviderExecution:
         operation = GeoOperation(operation)
         if operation not in self.capabilities.operations:
@@ -237,6 +269,8 @@ class AMapReverseGeocoder:
                     and radius_meters is not None
                     else radius_meters or self.radius_meters
                 ),
+                deadline=deadline,
+                cancelled=cancelled,
             )
         except GeoLookupError as error:
             failed = _provider_error_execution(
@@ -294,10 +328,12 @@ class AMapReverseGeocoder:
         language: str,
         include_nearby: bool,
         radius_meters: float,
+        deadline: float | None = None,
+        cancelled: Callable[[], bool] | None = None,
     ) -> GeoProviderResult:
         del language
         converted = self._converter.convert(coordinate, self.datum)
-        self._limiter.wait()
+        self._limiter.wait(deadline=deadline, cancelled=cancelled)
         response = self._transport.get_json(
             self.endpoint,
             params={
@@ -308,13 +344,13 @@ class AMapReverseGeocoder:
                 "location": f"{converted.longitude:.6f},{converted.latitude:.6f}",
             },
             headers={"Accept-Language": "zh"},
-            timeout=self.timeout,
+            timeout=_http_timeout(self.timeout, deadline, cancelled),
         )
         if response.get("status") != "1":
             code = str(response.get("infocode") or "amap_error")
             message = str(response.get("info") or "AMap request failed")
             if code in {"10019", "10020", "10021"}:
-                raise GeoTransientError(message, request_count=1)
+                raise GeoTransientError(message, request_count=1, safe_to_retry=True)
             return GeoProviderResult(
                 "failed",
                 self.provider_id,
@@ -465,6 +501,8 @@ class GoogleMapsReverseGeocoder:
         locale: str,
         radius_meters: float | None = None,
         max_places: int | None = None,
+        deadline: float | None = None,
+        cancelled: Callable[[], bool] | None = None,
     ) -> GeoProviderExecution:
         operation = GeoOperation(operation)
         if operation not in self.capabilities.operations:
@@ -474,6 +512,8 @@ class GoogleMapsReverseGeocoder:
                 GeoOperation.REVERSE_GEOCODE,
                 coordinate,
                 locale=locale,
+                deadline=deadline,
+                cancelled=cancelled,
             )
             if reverse.component.status is GeoComponentStatus.INDETERMINATE:
                 return GeoProviderExecution(
@@ -506,6 +546,8 @@ class GoogleMapsReverseGeocoder:
                     self.nearby_radius_meters,
                 ),
                 max_places=min(max_places or self.max_pois, self.max_pois),
+                deadline=deadline,
+                cancelled=cancelled,
             )
             return GeoProviderExecution(
                 reverse.component,
@@ -518,7 +560,7 @@ class GoogleMapsReverseGeocoder:
         try:
             if operation is GeoOperation.REVERSE_GEOCODE:
                 converted, normalized_language, response = self._reverse(
-                    coordinate, language=locale
+                    coordinate, language=locale, deadline=deadline, cancelled=cancelled
                 )
                 location = _google_location(response)
                 reverse_error = None
@@ -548,6 +590,8 @@ class GoogleMapsReverseGeocoder:
                     language=normalized_language,
                     radius_meters=radius_meters or self.nearby_radius_meters,
                     max_places=max_places or self.max_pois,
+                    deadline=deadline,
+                    cancelled=cancelled,
                 )
                 places = response.get("places")
                 pois = tuple(
@@ -591,11 +635,16 @@ class GoogleMapsReverseGeocoder:
         return _provider_execution(result, operation, max_places=max_places)
 
     def _reverse(
-        self, coordinate: GeoCoordinate, *, language: str
+        self,
+        coordinate: GeoCoordinate,
+        *,
+        language: str,
+        deadline: float | None = None,
+        cancelled: Callable[[], bool] | None = None,
     ) -> tuple[GeoCoordinate, str, Mapping[str, object]]:
         converted = self._converter.convert(coordinate, self.datum)
         normalized_language = _google_language(language)
-        self._limiter.wait()
+        self._limiter.wait(deadline=deadline, cancelled=cancelled)
         reverse = self._transport.get_json(
             self.reverse_endpoint,
             params={
@@ -604,7 +653,7 @@ class GoogleMapsReverseGeocoder:
                 "language": normalized_language,
             },
             headers=None,
-            timeout=self.timeout,
+            timeout=_http_timeout(self.timeout, deadline, cancelled),
         )
         return converted, normalized_language, reverse
 
@@ -615,8 +664,10 @@ class GoogleMapsReverseGeocoder:
         language: str,
         radius_meters: float,
         max_places: int,
+        deadline: float | None = None,
+        cancelled: Callable[[], bool] | None = None,
     ) -> Mapping[str, object]:
-        self._limiter.wait()
+        self._limiter.wait(deadline=deadline, cancelled=cancelled)
         return self._transport.post_json(
             self.nearby_endpoint,
             payload={
@@ -641,7 +692,7 @@ class GoogleMapsReverseGeocoder:
                     "places.primaryTypeDisplayName,places.location,places.types"
                 ),
             },
-            timeout=self.timeout,
+            timeout=_http_timeout(self.timeout, deadline, cancelled),
         )
 
 
@@ -1173,7 +1224,9 @@ def _provider_error_execution(
 ) -> GeoProviderExecution:
     status = (
         GeoComponentStatus.INDETERMINATE
-        if isinstance(error, GeoTransientError) and error.request_count
+        if isinstance(error, GeoTransientError)
+        and error.request_count
+        and not error.safe_to_retry
         else GeoComponentStatus.FAILED
     )
     code = "transient" if isinstance(error, GeoTransientError) else "permanent"

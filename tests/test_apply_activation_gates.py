@@ -19,15 +19,21 @@ PRECHECK_TOOL = (
 )
 
 
-def _source_item_validator() -> Draft202012Validator:
+def _validate_public_source_item(item: dict) -> None:
     tool = json.loads(PRECHECK_TOOL.read_text(encoding="utf-8"))
-    output = tool["outputSchema"]
     schema = {
-        "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$ref": "#/$defs/source_item_view",
-        "$defs": output["$defs"],
+        "$defs": tool["outputSchema"]["$defs"],
+        "$ref": "#/$defs/source_expansion_item",
     }
-    return Draft202012Validator(schema)
+    Draft202012Validator(schema).validate(
+        {
+            "source_item_ref": item["ref"],
+            "included": {
+                "source_item": {"locator": item["locator"]},
+                "observations": item.get("observations", []),
+            },
+        }
+    )
 
 
 def _verified_source_item() -> dict:
@@ -58,7 +64,7 @@ def _verified_source_item() -> dict:
 
 def test_apply_consumer_conforms_to_accepted_precheck_verification_shape() -> None:
     item = _verified_source_item()
-    _source_item_validator().validate(item)
+    _validate_public_source_item(item)
 
     evidence = SourceItemEvidence.from_precheck_view(
         result_ref="precheck-result:gate-probe",
@@ -79,7 +85,7 @@ def test_apply_can_establish_exact_proof_when_precheck_has_no_verification() -> 
 
     # PreCheck intentionally accounts for excluded, unsupported, invalid, error,
     # unresolved, and otherwise non-selected Source Items without requiring proof.
-    _source_item_validator().validate(item)
+    _validate_public_source_item(item)
     evidence = SourceItemEvidence.from_precheck_view(
         result_ref="precheck-result:gate-probe",
         view=item,
@@ -94,7 +100,7 @@ def test_unknown_precheck_profile_does_not_block_fresh_apply_proof() -> None:
     # The public contract leaves algorithms replaceable. An unsupported
     # PreCheck profile is not treated as exact evidence; Apply establishes its
     # own supported exact proof before authorization.
-    _source_item_validator().validate(item)
+    _validate_public_source_item(item)
     evidence = SourceItemEvidence.from_precheck_view(
         result_ref="precheck-result:gate-probe",
         view=item,

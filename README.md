@@ -38,7 +38,7 @@ The three durable handoff roles are the precheck result, the frozen organization
 
 ## Current phase
 
-The `0.7.2` distribution provides the installed `mediasense` executable, portable-
+The `0.8.0` distribution provides the installed `mediasense` executable, portable-
 first Dataset discovery, one local composition root, a packaged product entry
 Skill and three stage Skills, Tool contracts, and an on-demand stdio MCP Host.
 `mediasense mcp` is part of that same
@@ -47,10 +47,12 @@ contains the packaged Skill sources but is not itself an activated MediaSense
 Honeycomb. Installing the executable does not install Skills, edit any Agent
 client's configuration, or enable external providers by default.
 
-This release replaces the public `mediasense.precheck.read` graph-reading
-operations with the consumer-oriented `review`, `expand`, and `resolve`
-operations. It intentionally provides no `inspect` or `traverse` compatibility
-layer.
+This release keeps the PreCheck run/read Tools and their nine actions, with flat
+`action` and `dataset_ref` inputs, consistent progress, and bounded audit reads.
+Address and nearby-place evidence use separate standard Observations; missing
+locations and known terminal lookup failures do not by themselves block Plan.
+The former nested PreCheck request wrapper and `operation` alias are unsupported;
+upgrade the CLI and all four packaged Skills together, then start a new Agent session.
 
 PreCheck, Plan, and the first Apply `move_originals` slice are implemented against active contracts. Apply supports its user-facing Skill, durable preparation, exact authorization, same-filesystem moves, the evidence-bounded Darwin cross-filesystem route, pause/resume/cancel, restart reconciliation, immutable Receipts, bounded Receipt reads, and whole-Run rewind. Original-file copy is not a c90 runtime capability despite legacy README wording; persistent relative symbolic links are intentionally deferred because their preview purpose is now Plan-owned and their dangling/rebinding lifecycle is not accepted. Broader cross-filesystem platforms, ACL-bearing cross-filesystem sources, and representative user-storage throughput remain uncertified.
 

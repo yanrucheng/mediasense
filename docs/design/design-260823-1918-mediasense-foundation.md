@@ -4,7 +4,7 @@ title: "MediaSense Foundation"
 type: design
 status: active
 created: 2026-08-23
-updated: 2026-09-03
+updated: 2026-09-07
 timezone: "Asia/Shanghai"
 parent: "index-design"
 depends-on: []
@@ -53,7 +53,7 @@ stages are not required to map one-to-one to internal Tool calls.
 
 - Source media is read-only. Derived artifacts are written to a separate workspace.
 - Remote calls, uploads, reverse-geocoding services, and billable model access are disabled by default and reported explicitly.
-- For every Source Item with an available final coordinate, PreCheck produces that item's address and nearby-place outcomes before a Result becomes Plan-ready. It first uses local asset, bundle, time, and trajectory evidence to form conservative acquisition units, then calls the shared Geo Tool and projects observations back to every covered Source Item. Exact-coordinate deduplication remains a final request defense; neither one representative per bundle nor one query per Source Item is a stage invariant. Authorization binds the compressed pending query set and never authorizes media, rendition, embedding, path, filename, prompt, or general-metadata egress.
+- For every Source Item, PreCheck records separate address and nearby-place Observations. Missing coordinates, no_result, policy-disabled lookup, and known terminal service failure do not alone block Plan, even when every item lacks location. Pending confirmation, in-flight acquisition, indeterminate effects and invalid Results remain distinct barriers. It first uses local asset, bundle, time, and trajectory evidence to form conservative acquisition units, then calls the shared Geo Tool and projects observations back to every covered Source Item. Exact-coordinate deduplication remains a final request defense; neither one representative per bundle nor one query per Source Item is a stage invariant. Authorization binds the compressed pending query set and never authorizes media, rendition, embedding, path, filename, prompt, or general-metadata egress.
 - Metadata extraction, decoding, thumbnailing, frame selection, fingerprinting, embedding, indexing, and grouping reuse completed work where valid.
 - Work is observable, bounded in resource use, resumable after interruption, and incrementally invalidated.
 - A disconnected volume is treated as unavailable, not as evidence that its files were deleted.
@@ -71,9 +71,9 @@ and conflict evidence under explicit visual, model, cost, and user-attention
 budgets. If a complete PreCheck Result contains a suspiciously broad location
 assignment, Plan may issue a bounded, separately authorized query to the shared
 Geo Tool for selected coordinates. That local investigation neither mutates the
-Result nor repairs missing PreCheck coverage. If upstream coverage itself is
+Result nor repairs missing PreCheck coverage. If source coverage itself is
 incomplete, Plan asks the Human for semantic judgment or requires a successor
-PreCheck; Human input never impersonates provider evidence.
+PreCheck; ordinary recorded location gaps do not require reacquisition; Human input never impersonates provider evidence.
 
 It must keep these meanings separate:
 

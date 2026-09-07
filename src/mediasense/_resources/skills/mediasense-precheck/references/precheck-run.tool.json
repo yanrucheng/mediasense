@@ -1,39 +1,256 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:mediasense:tool:precheck-run",
   "name": "mediasense.precheck.run",
-  "description": "Manage one mutable, durable PreCheck Working Run, report observable execution activity, and report automatic immutable Result publication without exposing private working records.",
+  "description": "控制一次 PreCheck 或只读观察其状态；外部效果必须另行可信确认。",
   "inputSchema": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "$id": "urn:mediasense:tool:precheck-run-input",
     "oneOf": [
-      { "$ref": "#/$defs/start_request" },
-      { "$ref": "#/$defs/status_request" },
-      { "$ref": "#/$defs/pause_request" },
-      { "$ref": "#/$defs/resume_request" },
-      { "$ref": "#/$defs/cancel_request" }
+      {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "action",
+          "dataset_ref",
+          "request_id"
+        ],
+        "properties": {
+          "action": {
+            "const": "start"
+          },
+          "dataset_ref": {
+            "$ref": "#/$defs/dataset_ref"
+          },
+          "request_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "prior_result_ref": {
+            "$ref": "#/$defs/result_ref"
+          }
+        }
+      },
+      {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "action",
+          "dataset_ref",
+          "run_ref"
+        ],
+        "properties": {
+          "action": {
+            "const": "status"
+          },
+          "dataset_ref": {
+            "$ref": "#/$defs/dataset_ref"
+          },
+          "run_ref": {
+            "$ref": "#/$defs/run_ref"
+          },
+          "include": {
+            "type": "array",
+            "uniqueItems": true,
+            "minItems": 1,
+            "items": {
+              "enum": [
+                "accounting",
+                "diagnostics",
+                "confirmation"
+              ]
+            }
+          },
+          "page": {
+            "$ref": "#/$defs/page_request"
+          },
+          "scope_path": {
+            "type": "string",
+            "minLength": 1
+          },
+          "scope_after": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "dependentRequired": {
+          "scope_after": [
+            "scope_path"
+          ]
+        },
+        "allOf": [
+          {
+            "if": {
+              "required": [
+                "page"
+              ]
+            },
+            "then": {
+              "required": [
+                "include"
+              ],
+              "properties": {
+                "include": {
+                  "contains": {
+                    "enum": [
+                      "diagnostics",
+                      "confirmation"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          {
+            "not": {
+              "properties": {
+                "include": {
+                  "allOf": [
+                    {
+                      "contains": {
+                        "const": "diagnostics"
+                      }
+                    },
+                    {
+                      "contains": {
+                        "const": "confirmation"
+                      }
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "include"
+              ]
+            }
+          },
+          {
+            "if": {
+              "required": [
+                "scope_path"
+              ]
+            },
+            "then": {
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "page"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "include"
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "action",
+          "dataset_ref",
+          "run_ref"
+        ],
+        "properties": {
+          "action": {
+            "const": "pause"
+          },
+          "dataset_ref": {
+            "$ref": "#/$defs/dataset_ref"
+          },
+          "run_ref": {
+            "$ref": "#/$defs/run_ref"
+          }
+        }
+      },
+      {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "action",
+          "dataset_ref",
+          "run_ref"
+        ],
+        "properties": {
+          "action": {
+            "const": "resume"
+          },
+          "dataset_ref": {
+            "$ref": "#/$defs/dataset_ref"
+          },
+          "run_ref": {
+            "$ref": "#/$defs/run_ref"
+          },
+          "decision": {
+            "oneOf": [
+              {
+                "enum": [
+                  "proceed",
+                  "decline"
+                ]
+              },
+              {
+                "$ref": "#/$defs/selection"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "action",
+          "dataset_ref",
+          "run_ref"
+        ],
+        "properties": {
+          "action": {
+            "const": "cancel"
+          },
+          "dataset_ref": {
+            "$ref": "#/$defs/dataset_ref"
+          },
+          "run_ref": {
+            "$ref": "#/$defs/run_ref"
+          }
+        }
+      }
     ],
     "$defs": {
       "dataset_ref": {
         "type": "string",
         "pattern": "^dataset:[^\\s]+$"
       },
-      "result_ref": {
-        "type": "string",
-        "pattern": "^precheck-result:[^\\s]+$"
-      },
       "run_ref": {
         "type": "string",
         "pattern": "^precheck-run:[^\\s]+$"
       },
-      "request_id": {
+      "result_ref": {
         "type": "string",
-        "pattern": "^request:[^\\s]+$"
+        "pattern": "^precheck-result:[^\\s]+$"
       },
-      "external_effect_decision": {
-        "enum": ["proceed", "decline"]
+      "page_request": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [],
+        "properties": {
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 200
+          },
+          "cursor": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
       },
-      "source_scope_selection": {
+      "selection": {
         "type": "object",
         "additionalProperties": false,
         "required": [
@@ -43,213 +260,87 @@
           "exceptions"
         ],
         "properties": {
-          "kind": { "const": "source_scope" },
+          "kind": {
+            "const": "source_scope"
+          },
           "inventory_fingerprint": {
             "type": "string",
             "pattern": "^sha256:[0-9a-f]{64}$"
           },
-          "default_disposition": { "enum": ["include", "exclude"] },
+          "default_disposition": {
+            "enum": [
+              "include",
+              "exclude"
+            ]
+          },
           "exceptions": {
             "type": "array",
             "maxItems": 256,
             "uniqueItems": true,
-            "items": { "type": "string", "minLength": 1 }
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
           }
-        }
-      },
-      "confirmation_decision": {
-        "oneOf": [
-          { "$ref": "#/$defs/external_effect_decision" },
-          { "$ref": "#/$defs/source_scope_selection" }
-        ]
-      },
-      "start_request": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["action", "request_id"],
-        "properties": {
-          "action": { "const": "start" },
-          "dataset_ref": { "$ref": "#/$defs/dataset_ref" },
-          "prior_result_ref": { "$ref": "#/$defs/result_ref" },
-          "request_id": { "$ref": "#/$defs/request_id" }
-        },
-        "oneOf": [
-          { "required": ["dataset_ref"] },
-          { "required": ["prior_result_ref"] }
-        ]
-      },
-      "status_request": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["action", "run_ref"],
-        "properties": {
-          "action": { "const": "status" },
-          "run_ref": { "$ref": "#/$defs/run_ref" },
-          "scope_path": { "type": "string", "minLength": 1 },
-          "scope_after": { "type": "string", "minLength": 1 }
-        },
-        "dependentRequired": {
-          "scope_after": ["scope_path"]
-        }
-      },
-      "pause_request": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["action", "run_ref"],
-        "properties": {
-          "action": { "const": "pause" },
-          "run_ref": { "$ref": "#/$defs/run_ref" }
-        }
-      },
-      "resume_request": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["action", "run_ref"],
-        "properties": {
-          "action": { "const": "resume" },
-          "run_ref": { "$ref": "#/$defs/run_ref" },
-          "decision": { "$ref": "#/$defs/confirmation_decision" }
-        }
-      },
-      "cancel_request": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["action", "run_ref"],
-        "properties": {
-          "action": { "const": "cancel" },
-          "run_ref": { "$ref": "#/$defs/run_ref" }
         }
       }
     }
   },
   "outputSchema": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "$id": "urn:mediasense:tool:precheck-run-output",
-    "oneOf": [
-      { "$ref": "#/$defs/start_response" },
-      { "$ref": "#/$defs/running_status" },
-      { "$ref": "#/$defs/paused_status" },
-      { "$ref": "#/$defs/blocked_status" },
-      { "$ref": "#/$defs/completed_status" },
-      { "$ref": "#/$defs/cancelled_status" },
-      { "$ref": "#/$defs/failed_status" },
-      { "$ref": "#/$defs/pause_response" },
-      { "$ref": "#/$defs/resume_response" },
-      { "$ref": "#/$defs/cancel_response" },
-      { "$ref": "#/$defs/error_response" }
+    "anyOf": [
+      {
+        "$ref": "#/$defs/error_response"
+      },
+      {
+        "$ref": "#/$defs/started"
+      },
+      {
+        "$ref": "#/$defs/control"
+      },
+      {
+        "$ref": "#/$defs/running"
+      },
+      {
+        "$ref": "#/$defs/paused"
+      },
+      {
+        "$ref": "#/$defs/blocked"
+      },
+      {
+        "$ref": "#/$defs/completed"
+      },
+      {
+        "$ref": "#/$defs/failed"
+      },
+      {
+        "$ref": "#/$defs/cancelled"
+      }
     ],
     "$defs": {
-      "dataset_ref": {
+      "run_ref": {
         "type": "string",
-        "pattern": "^dataset:[^\\s]+$"
+        "pattern": "^precheck-run:[^\\s]+$"
       },
       "result_ref": {
         "type": "string",
         "pattern": "^precheck-result:[^\\s]+$"
       },
-      "run_ref": {
+      "identity": {
         "type": "string",
-        "pattern": "^precheck-run:[^\\s]+$"
+        "pattern": "^sha256:[0-9a-f]{64}$"
       },
-      "public_state": {
-        "enum": ["running", "paused", "blocked", "completed", "cancelled", "failed"]
-      },
-      "external_effect_decision": {
-        "enum": ["proceed", "decline"]
-      },
-      "source_scope_selection": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "kind",
-          "inventory_fingerprint",
-          "default_disposition",
-          "exceptions"
-        ],
-        "properties": {
-          "kind": { "const": "source_scope" },
-          "inventory_fingerprint": {
-            "type": "string",
-            "pattern": "^sha256:[0-9a-f]{64}$"
-          },
-          "default_disposition": { "enum": ["include", "exclude"] },
-          "exceptions": {
-            "type": "array",
-            "maxItems": 256,
-            "uniqueItems": true,
-            "items": { "type": "string", "minLength": 1 }
-          }
-        }
-      },
-      "confirmation_decision": {
-        "oneOf": [
-          { "$ref": "#/$defs/external_effect_decision" },
-          { "$ref": "#/$defs/source_scope_selection" }
+      "state": {
+        "enum": [
+          "running",
+          "paused",
+          "blocked",
+          "completed",
+          "cancelled",
+          "failed"
         ]
       },
-      "accepted_scope_selection": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "kind",
-          "inventory_fingerprint",
-          "default_disposition",
-          "exceptions",
-          "provenance"
-        ],
-        "properties": {
-          "kind": { "const": "source_scope" },
-          "inventory_fingerprint": {
-            "type": "string",
-            "pattern": "^sha256:[0-9a-f]{64}$"
-          },
-          "default_disposition": { "enum": ["include", "exclude"] },
-          "exceptions": {
-            "type": "array",
-            "maxItems": 256,
-            "uniqueItems": true,
-            "items": { "type": "string", "minLength": 1 }
-          },
-          "provenance": { "enum": ["accepted", "reused"] },
-          "reused_from_run_ref": { "$ref": "#/$defs/run_ref" }
-        }
-      },
-      "control_action": {
-        "enum": ["pause", "resume", "cancel"]
-      },
-      "running_actions": {
-        "type": "array",
-        "minItems": 2,
-        "maxItems": 2,
-        "uniqueItems": true,
-        "items": { "$ref": "#/$defs/control_action" },
-        "allOf": [
-          { "contains": { "const": "pause" }, "minContains": 1, "maxContains": 1 },
-          { "contains": { "const": "cancel" }, "minContains": 1, "maxContains": 1 }
-        ]
-      },
-      "resumable_actions": {
-        "type": "array",
-        "minItems": 2,
-        "maxItems": 2,
-        "uniqueItems": true,
-        "items": { "$ref": "#/$defs/control_action" },
-        "allOf": [
-          { "contains": { "const": "resume" }, "minContains": 1, "maxContains": 1 },
-          { "contains": { "const": "cancel" }, "minContains": 1, "maxContains": 1 }
-        ]
-      },
-      "no_actions": {
-        "type": "array",
-        "maxItems": 0
-      },
-      "count_or_unknown": {
-        "oneOf": [
-          { "type": "integer", "minimum": 0 },
-          { "const": "unknown" }
-        ]
-      },
-      "execution_phase": {
+      "phase": {
         "enum": [
           "source_accounting",
           "scope_review",
@@ -261,129 +352,696 @@
           "sensitivity",
           "bundling",
           "compression",
-          "external_evidence",
+          "geo",
           "publishing",
           "complete",
           "unknown"
         ]
       },
-      "activity_state": {
-        "enum": [
-          "working",
-          "no_recent_progress",
-          "suspected_stalled",
-          "waiting",
-          "paused",
-          "finished"
-        ]
-      },
-      "phase_work": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["completed", "reused", "failed", "remaining", "total"],
-        "properties": {
-          "completed": { "$ref": "#/$defs/count_or_unknown" },
-          "reused": { "$ref": "#/$defs/count_or_unknown" },
-          "failed": { "$ref": "#/$defs/count_or_unknown" },
-          "remaining": { "$ref": "#/$defs/count_or_unknown" },
-          "total": { "$ref": "#/$defs/count_or_unknown" }
-        }
-      },
-      "error_phase_summary": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["phase", "count"],
-        "properties": {
-          "phase": { "$ref": "#/$defs/execution_phase" },
-          "count": { "type": "integer", "minimum": 1 }
-        }
-      },
-      "error_summary": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["total", "by_phase", "truncated"],
-        "properties": {
-          "total": { "type": "integer", "minimum": 0 },
-          "by_phase": {
-            "type": "array",
-            "maxItems": 5,
-            "items": { "$ref": "#/$defs/error_phase_summary" }
-          },
-          "truncated": { "type": "boolean" }
-        }
-      },
-      "activity": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["state", "phase", "work", "last_progress_at", "errors"],
-        "properties": {
-          "state": { "$ref": "#/$defs/activity_state" },
-          "phase": { "$ref": "#/$defs/execution_phase" },
-          "work": { "$ref": "#/$defs/phase_work" },
-          "last_progress_at": {
-            "anyOf": [
-              { "type": "string", "format": "date-time" },
-              { "const": "unknown" }
-            ]
-          },
-          "errors": { "$ref": "#/$defs/error_summary" }
-        }
-      },
-      "progress": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["discovered", "accounted", "usable", "exceptional", "unresolved"],
-        "properties": {
-          "discovered": { "$ref": "#/$defs/count_or_unknown" },
-          "accounted": { "$ref": "#/$defs/count_or_unknown" },
-          "usable": { "$ref": "#/$defs/count_or_unknown" },
-          "exceptional": { "$ref": "#/$defs/count_or_unknown" },
-          "unresolved": { "$ref": "#/$defs/count_or_unknown" }
-        }
+      "controls": {
+        "type": "array",
+        "uniqueItems": true,
+        "items": {
+          "enum": [
+            "pause",
+            "resume",
+            "cancel"
+          ]
+        },
+        "minItems": 1
       },
       "reason": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["code", "message"],
+        "required": [
+          "code",
+          "message"
+        ],
         "properties": {
-          "code": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
-          "message": { "type": "string", "minLength": 1 },
-          "resume_when": { "type": "string", "minLength": 1 }
+          "code": {
+            "type": "string",
+            "minLength": 1
+          },
+          "message": {
+            "type": "string",
+            "minLength": 1
+          },
+          "resume_when": {
+            "type": "string",
+            "minLength": 1
+          }
         }
       },
-      "kind_count": {
+      "qualification": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["kind", "count"],
+        "required": [
+          "code",
+          "effect",
+          "message"
+        ],
         "properties": {
-          "kind": { "type": "string", "minLength": 1 },
-          "count": { "type": "integer", "minimum": 1 }
-        }
-      },
-      "size_bucket": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["bucket", "count"],
-        "properties": {
-          "bucket": {
+          "code": {
+            "type": "string",
+            "minLength": 1
+          },
+          "effect": {
             "enum": [
-              "unknown",
-              "zero",
-              "under_1_mib",
-              "1_to_10_mib",
-              "10_to_100_mib",
-              "100_mib_or_more"
+              "limits_interpretation",
+              "blocks_use"
             ]
           },
-          "count": { "type": "integer", "minimum": 1 }
+          "message": {
+            "type": "string",
+            "minLength": 1
+          },
+          "basis": {
+            "$ref": "#/$defs/basis"
+          }
         }
       },
-      "scope_tree_node": {
+      "basis": {
+        "$ref": "#/$defs/json_value"
+      },
+      "json_value": {
+        "oneOf": [
+          {
+            "type": "null"
+          },
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "number"
+          },
+          {
+            "type": "string"
+          },
+          {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/json_value"
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/$defs/json_value"
+            }
+          }
+        ]
+      },
+      "issue": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "phase",
+          "code",
+          "unit",
+          "count",
+          "message"
+        ],
+        "properties": {
+          "phase": {
+            "$ref": "#/$defs/phase"
+          },
+          "code": {
+            "type": "string",
+            "minLength": 1
+          },
+          "unit": {
+            "type": "string",
+            "minLength": 1
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "message": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "qualifications": {
+        "type": "array",
+        "minItems": 1,
+        "items": {
+          "$ref": "#/$defs/qualification"
+        }
+      },
+      "error": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "code",
+          "message"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "minLength": 1
+          },
+          "message": {
+            "type": "string",
+            "minLength": 1
+          },
+          "diagnostic_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "run_ref": {
+            "$ref": "#/$defs/run_ref"
+          },
+          "current_state": {
+            "$ref": "#/$defs/state"
+          },
+          "allowed_actions": {
+            "$ref": "#/$defs/controls"
+          },
+          "reason": {
+            "$ref": "#/$defs/reason"
+          }
+        }
+      },
+      "error_response": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "$ref": "#/$defs/error"
+          }
+        }
+      },
+      "page": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "total",
+          "next_cursor"
+        ],
+        "properties": {
+          "total": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "stop_reason": {
+            "const": "byte_limit"
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "next_cursor": {
+                  "type": "null"
+                }
+              },
+              "required": [
+                "next_cursor"
+              ]
+            },
+            "then": {
+              "not": {
+                "required": [
+                  "stop_reason"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "progress": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "phase",
+          "unit",
+          "processed",
+          "total",
+          "last_progress_at"
+        ],
+        "properties": {
+          "phase": {
+            "$ref": "#/$defs/phase"
+          },
+          "unit": {
+            "type": "string",
+            "minLength": 1
+          },
+          "processed": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "last_progress_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "result": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "ref",
+          "coverage",
+          "readiness"
+        ],
+        "properties": {
+          "ref": {
+            "$ref": "#/$defs/result_ref"
+          },
+          "coverage": {
+            "enum": [
+              "complete",
+              "partial"
+            ]
+          },
+          "readiness": {
+            "enum": [
+              "plan_ready",
+              "blocked"
+            ]
+          },
+          "qualifications": {
+            "$ref": "#/$defs/qualifications"
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "anyOf": [
+                {
+                  "properties": {
+                    "coverage": {
+                      "const": "partial"
+                    }
+                  },
+                  "required": [
+                    "coverage"
+                  ]
+                },
+                {
+                  "properties": {
+                    "readiness": {
+                      "const": "blocked"
+                    }
+                  },
+                  "required": [
+                    "readiness"
+                  ]
+                }
+              ]
+            },
+            "then": {
+              "required": [
+                "qualifications"
+              ]
+            }
+          }
+        ]
+      },
+      "accepted_selection": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "inventory_fingerprint",
+          "default_disposition",
+          "exceptions",
+          "provenance"
+        ],
+        "properties": {
+          "kind": {
+            "const": "source_scope"
+          },
+          "inventory_fingerprint": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          },
+          "default_disposition": {
+            "enum": [
+              "include",
+              "exclude"
+            ]
+          },
+          "exceptions": {
+            "type": "array",
+            "maxItems": 256,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "provenance": {
+            "enum": [
+              "accepted",
+              "reused"
+            ]
+          },
+          "reused_from_run_ref": {
+            "$ref": "#/$defs/run_ref"
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "provenance": {
+                  "const": "reused"
+                }
+              },
+              "required": [
+                "provenance"
+              ]
+            },
+            "then": {
+              "required": [
+                "reused_from_run_ref"
+              ]
+            },
+            "else": {
+              "not": {
+                "required": [
+                  "reused_from_run_ref"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "execution_boundary": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "source_read_only",
+          "remote_models",
+          "logical_external_queries",
+          "historical_provider_requests",
+          "current_provider_requests",
+          "billable_calls",
+          "transmitted_data_classes",
+          "providers_attempted"
+        ],
+        "properties": {
+          "source_read_only": {
+            "const": true
+          },
+          "remote_models": {
+            "type": "boolean"
+          },
+          "logical_external_queries": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "historical_provider_requests": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "current_provider_requests": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "billable_calls": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "transmitted_data_classes": {
+            "type": "array",
+            "minItems": 0,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "providers_attempted": {
+            "type": "array",
+            "minItems": 0,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "qualifications": {
+            "$ref": "#/$defs/qualifications"
+          }
+        }
+      },
+      "accounting_run": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "discovered",
+          "accounted",
+          "scope_condition"
+        ],
+        "properties": {
+          "discovered": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "accounted": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "scope_condition": {
+            "anyOf": [
+              {
+                "type": "array",
+                "minItems": 0,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "scope",
+                    "condition",
+                    "count"
+                  ],
+                  "properties": {
+                    "scope": {
+                      "enum": [
+                        "source_media",
+                        "auxiliary",
+                        "excluded"
+                      ]
+                    },
+                    "condition": {
+                      "enum": [
+                        "usable",
+                        "unsupported",
+                        "invalid",
+                        "error",
+                        "unresolved"
+                      ]
+                    },
+                    "count": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "selection": {
+            "$ref": "#/$defs/accepted_selection"
+          }
+        }
+      },
+      "diagnostic_work": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "phase",
+          "unit",
+          "completed",
+          "reused",
+          "failed",
+          "remaining",
+          "total"
+        ],
+        "properties": {
+          "phase": {
+            "$ref": "#/$defs/phase"
+          },
+          "unit": {
+            "type": "string",
+            "minLength": 1
+          },
+          "completed": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reused": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "failed": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "remaining": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "diagnostics": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "work",
+          "issues",
+          "page"
+        ],
+        "properties": {
+          "work": {
+            "$ref": "#/$defs/diagnostic_work"
+          },
+          "issues": {
+            "type": "array",
+            "minItems": 0,
+            "items": {
+              "$ref": "#/$defs/issue"
+            }
+          },
+          "page": {
+            "$ref": "#/$defs/page"
+          },
+          "execution_boundary": {
+            "$ref": "#/$defs/execution_boundary"
+          }
+        }
+      },
+      "scope_entry": {
         "type": "object",
         "additionalProperties": false,
         "required": [
           "path",
-          "name",
           "node_type",
           "file_count",
           "byte_count",
@@ -391,48 +1049,93 @@
           "kind_counts",
           "size_buckets",
           "representative_paths",
-          "children",
-          "omitted_children"
+          "child_count"
         ],
         "properties": {
-          "path": { "type": "string", "minLength": 1 },
-          "name": { "type": "string", "minLength": 1 },
-          "node_type": { "enum": ["directory", "file"] },
-          "file_count": { "type": "integer", "minimum": 0 },
-          "byte_count": { "type": "integer", "minimum": 0 },
-          "unknown_size_count": { "type": "integer", "minimum": 0 },
+          "path": {
+            "type": "string",
+            "minLength": 1
+          },
+          "node_type": {
+            "enum": [
+              "directory",
+              "file"
+            ]
+          },
+          "file_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "byte_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "unknown_size_count": {
+            "type": "integer",
+            "minimum": 0
+          },
           "kind_counts": {
             "type": "array",
-            "items": { "$ref": "#/$defs/kind_count" }
+            "minItems": 0,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "kind",
+                "count"
+              ],
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "count": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            }
           },
           "size_buckets": {
             "type": "array",
-            "items": { "$ref": "#/$defs/size_bucket" }
+            "minItems": 0,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "bucket",
+                "count"
+              ],
+              "properties": {
+                "bucket": {
+                  "enum": [
+                    "unknown",
+                    "zero",
+                    "under_1_mib",
+                    "1_to_10_mib",
+                    "10_to_100_mib",
+                    "100_mib_or_more"
+                  ]
+                },
+                "count": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            }
           },
           "representative_paths": {
             "type": "array",
-            "maxItems": 3,
-            "items": { "type": "string", "minLength": 1 }
+            "minItems": 0,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "maxItems": 3
           },
-          "children": {
-            "type": "array",
-            "maxItems": 63,
-            "items": { "$ref": "#/$defs/scope_tree_node" }
-          },
-          "omitted_children": { "type": "integer", "minimum": 0 }
-        }
-      },
-      "scope_issue": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["relative_path", "code", "blocked", "basis"],
-        "properties": {
-          "relative_path": { "type": "string", "minLength": 1 },
-          "code": { "type": "string", "minLength": 1 },
-          "blocked": { "type": "boolean" },
-          "basis": {
-            "type": "array",
-            "items": { "type": "string", "minLength": 1 }
+          "child_count": {
+            "type": "integer",
+            "minimum": 0
           }
         }
       },
@@ -440,210 +1143,404 @@
         "type": "object",
         "additionalProperties": false,
         "required": [
-          "inventory_fingerprint",
-          "scan_generation",
           "complete",
-          "view",
-          "issues"
+          "view"
         ],
         "properties": {
-          "inventory_fingerprint": {
-            "type": "string",
-            "pattern": "^sha256:[0-9a-f]{64}$"
+          "complete": {
+            "type": "boolean"
           },
-          "scan_generation": { "type": "integer", "minimum": 1 },
-          "complete": { "type": "boolean" },
           "view": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["root", "max_depth", "max_nodes", "tree"],
+            "required": [
+              "root",
+              "entries",
+              "next_after"
+            ],
             "properties": {
-              "root": { "type": "string", "minLength": 1 },
-              "max_depth": { "type": "integer", "minimum": 1 },
-              "max_nodes": { "type": "integer", "minimum": 2 },
-              "tree": { "$ref": "#/$defs/scope_tree_node" },
-              "next_after": { "type": "string", "minLength": 1 }
+              "root": {
+                "type": "string",
+                "minLength": 1
+              },
+              "entries": {
+                "type": "array",
+                "minItems": 0,
+                "items": {
+                  "$ref": "#/$defs/scope_entry"
+                },
+                "maxItems": 63
+              },
+              "next_after": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
             }
           },
           "issues": {
+            "type": "array",
+            "minItems": 0,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "path",
+                "code",
+                "message"
+              ],
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "code": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "message": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          },
+          "issues_truncated": {
+            "const": true
+          }
+        }
+      },
+      "coordinate": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "latitude",
+          "longitude",
+          "datum"
+        ],
+        "properties": {
+          "latitude": {
+            "type": "number",
+            "minimum": -90,
+            "maximum": 90
+          },
+          "longitude": {
+            "type": "number",
+            "minimum": -180,
+            "maximum": 180
+          },
+          "datum": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "disclosure": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "geo_request_fingerprint",
+          "operation",
+          "coordinates",
+          "pending_logical_queries",
+          "source_item_outcomes",
+          "nearby_radius_meters",
+          "max_places",
+          "transmitted_data_classes",
+          "providers",
+          "max_provider_requests",
+          "max_billable_units",
+          "billable_calls",
+          "result_retention",
+          "retry_policy"
+        ],
+        "properties": {
+          "geo_request_fingerprint": {
+            "$ref": "#/$defs/identity"
+          },
+          "operation": {
+            "enum": [
+              "resolve_place",
+              "reverse_geocode",
+              "nearby_places"
+            ]
+          },
+          "coordinates": {
+            "type": "array",
+            "minItems": 0,
+            "items": {
+              "$ref": "#/$defs/coordinate"
+            }
+          },
+          "pending_logical_queries": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "source_item_outcomes": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "nearby_radius_meters": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "max_places": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "transmitted_data_classes": {
+            "type": "array",
+            "minItems": 0,
+            "items": {
+              "enum": [
+                "coordinate",
+                "datum",
+                "locale"
+              ]
+            }
+          },
+          "providers": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "provider",
+                "data_handling"
+              ],
+              "properties": {
+                "provider": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "data_handling": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          },
+          "max_provider_requests": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "max_billable_units": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "billable_calls": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "result_retention": {
+            "const": "immutable_precheck_result"
+          },
+          "retry_policy": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["count", "representative", "truncated"],
+            "required": [
+              "max_attempts",
+              "backoff_seconds",
+              "coordinate_deadline_seconds"
+            ],
             "properties": {
-              "count": { "type": "integer", "minimum": 0 },
-              "representative": {
-                "type": "array",
-                "maxItems": 3,
-                "items": { "$ref": "#/$defs/scope_issue" }
+              "max_attempts": {
+                "const": 3
               },
-              "truncated": { "type": "boolean" }
+              "backoff_seconds": {
+                "const": [
+                  1,
+                  3
+                ]
+              },
+              "coordinate_deadline_seconds": {
+                "const": 120
+              }
             }
           }
         }
       },
-      "external_effect_confirmation": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["kind", "summary", "quantity", "unit", "skip_allowed", "content_identity", "disclosure"],
-        "properties": {
-          "kind": { "const": "external_effect" },
-          "summary": { "type": "string", "minLength": 1 },
-          "quantity": { "type": "integer", "minimum": 1 },
-          "unit": { "type": "string", "minLength": 1 },
-          "skip_allowed": { "const": false },
-          "content_identity": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
-          "disclosure": { "type": "object", "minProperties": 1 },
-          "accepted_authority": { "type": "object", "minProperties": 3 }
-        }
-      },
-      "source_scope_confirmation": {
+      "scope_confirmation": {
         "type": "object",
         "additionalProperties": false,
         "required": [
           "kind",
-          "summary",
           "inventory_fingerprint",
-          "scan_generation",
           "inventory"
         ],
         "properties": {
-          "kind": { "const": "source_scope" },
-          "summary": { "type": "string", "minLength": 1 },
-          "inventory_fingerprint": {
-            "type": "string",
-            "pattern": "^sha256:[0-9a-f]{64}$"
+          "kind": {
+            "const": "source_scope"
           },
-          "scan_generation": { "type": "integer", "minimum": 1 },
-          "inventory": { "$ref": "#/$defs/scope_inventory" }
+          "inventory_fingerprint": {
+            "$ref": "#/$defs/identity"
+          },
+          "inventory": {
+            "$ref": "#/$defs/scope_inventory"
+          }
         }
+      },
+      "effect_confirmation": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "content_identity",
+          "summary"
+        ],
+        "properties": {
+          "kind": {
+            "const": "external_effect"
+          },
+          "content_identity": {
+            "$ref": "#/$defs/identity"
+          },
+          "disclosure": {
+            "$ref": "#/$defs/disclosure"
+          },
+          "page": {
+            "$ref": "#/$defs/page"
+          },
+          "summary": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "required": [
+                "disclosure"
+              ]
+            },
+            "then": {
+              "required": [
+                "page"
+              ]
+            }
+          }
+        ]
       },
       "confirmation": {
         "oneOf": [
-          { "$ref": "#/$defs/external_effect_confirmation" },
-          { "$ref": "#/$defs/source_scope_confirmation" }
+          {
+            "$ref": "#/$defs/scope_confirmation"
+          },
+          {
+            "$ref": "#/$defs/effect_confirmation"
+          }
         ]
       },
-      "published_result": {
+      "running": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["result_ref", "coverage", "readiness", "integrity"],
-        "properties": {
-          "result_ref": { "$ref": "#/$defs/result_ref" },
-          "coverage": { "enum": ["complete", "partial"] },
-          "readiness": { "enum": ["plan_ready", "blocked"] },
-          "integrity": { "const": "valid" }
-        }
-      },
-      "start_response": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["outcome", "action", "run_ref", "dataset_ref", "state"],
-        "properties": {
-          "outcome": { "const": "ok" },
-          "action": { "const": "start" },
-          "run_ref": { "$ref": "#/$defs/run_ref" },
-          "dataset_ref": { "$ref": "#/$defs/dataset_ref" },
-          "prior_result_ref": { "$ref": "#/$defs/result_ref" },
-          "state": { "const": "running" }
-        }
-      },
-      "status_base": {
-        "type": "object",
         "required": [
-          "outcome",
-          "action",
-          "run_ref",
-          "dataset_ref",
           "state",
           "progress",
-          "activity",
           "allowed_actions"
         ],
         "properties": {
-          "outcome": { "const": "ok" },
-          "action": { "const": "status" },
-          "run_ref": { "$ref": "#/$defs/run_ref" },
-          "dataset_ref": { "$ref": "#/$defs/dataset_ref" },
-          "prior_result_ref": { "$ref": "#/$defs/result_ref" },
-          "state": { "$ref": "#/$defs/public_state" },
-          "progress": { "$ref": "#/$defs/progress" },
-          "activity": { "$ref": "#/$defs/activity" },
-          "scope_selection": { "$ref": "#/$defs/accepted_scope_selection" },
-          "allowed_actions": {
+          "issues": {
             "type": "array",
-            "uniqueItems": true,
-            "items": { "$ref": "#/$defs/control_action" }
+            "minItems": 0,
+            "items": {
+              "$ref": "#/$defs/issue"
+            },
+            "maxItems": 5
+          },
+          "issues_truncated": {
+            "const": true
+          },
+          "accounting": {
+            "$ref": "#/$defs/accounting_run"
+          },
+          "diagnostics": {
+            "$ref": "#/$defs/diagnostics"
+          },
+          "state": {
+            "const": "running"
+          },
+          "progress": {
+            "$ref": "#/$defs/progress"
+          },
+          "reason": {
+            "$ref": "#/$defs/reason"
+          },
+          "allowed_actions": {
+            "$ref": "#/$defs/controls"
           }
         }
       },
-      "running_status": {
-        "allOf": [
-          { "$ref": "#/$defs/status_base" },
-          {
-            "oneOf": [
-              {
-                "type": "object",
-                "required": ["state", "allowed_actions"],
-                "properties": {
-                  "state": { "const": "running" },
-                  "activity": {
-                    "allOf": [
-                      { "$ref": "#/$defs/activity" },
-                      {
-                        "properties": {
-                          "state": {
-                            "enum": ["working", "no_recent_progress"]
-                          }
-                        }
-                      }
-                    ]
-                  },
-                  "allowed_actions": { "$ref": "#/$defs/running_actions" }
-                }
-              },
-              {
-                "type": "object",
-                "required": ["state", "allowed_actions", "reason"],
-                "properties": {
-                  "state": { "const": "running" },
-                  "activity": {
-                    "allOf": [
-                      { "$ref": "#/$defs/activity" },
-                      { "properties": { "state": { "const": "suspected_stalled" } } }
-                    ]
-                  },
-                  "allowed_actions": { "$ref": "#/$defs/resumable_actions" },
-                  "reason": { "$ref": "#/$defs/reason" }
-                }
-              }
-            ]
-          }
+      "paused": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "state",
+          "reason",
+          "allowed_actions"
         ],
-        "unevaluatedProperties": false
-      },
-      "paused_status": {
-        "allOf": [
-          { "$ref": "#/$defs/status_base" },
-          {
-            "type": "object",
-            "required": ["state", "allowed_actions", "reason"],
-            "properties": {
-              "state": { "const": "paused" },
-              "activity": {
-                "allOf": [
-                  { "$ref": "#/$defs/activity" },
-                  {
-                    "properties": {
-                      "state": { "enum": ["waiting", "paused"] }
-                    }
-                  }
-                ]
-              },
-              "allowed_actions": { "$ref": "#/$defs/resumable_actions" },
-              "reason": { "$ref": "#/$defs/reason" },
-              "confirmation": { "$ref": "#/$defs/confirmation" }
+        "properties": {
+          "issues": {
+            "type": "array",
+            "minItems": 0,
+            "items": {
+              "$ref": "#/$defs/issue"
+            },
+            "maxItems": 5
+          },
+          "issues_truncated": {
+            "const": true
+          },
+          "accounting": {
+            "$ref": "#/$defs/accounting_run"
+          },
+          "diagnostics": {
+            "$ref": "#/$defs/diagnostics"
+          },
+          "state": {
+            "const": "paused"
+          },
+          "reason": {
+            "$ref": "#/$defs/reason"
+          },
+          "allowed_actions": {
+            "type": "array",
+            "uniqueItems": true,
+            "minItems": 2,
+            "maxItems": 2,
+            "items": {
+              "enum": [
+                "resume",
+                "cancel"
+              ]
             }
           },
+          "confirmation": {
+            "$ref": "#/$defs/confirmation"
+          }
+        },
+        "allOf": [
           {
             "if": {
               "properties": {
@@ -655,192 +1552,262 @@
                         "scope_confirmation_required"
                       ]
                     }
-                  },
-                  "required": ["code"]
+                  }
                 }
-              },
-              "required": ["reason"]
-            },
-            "then": { "required": ["confirmation"] },
-            "else": { "properties": { "confirmation": false } }
-          }
-        ],
-        "unevaluatedProperties": false
-      },
-      "blocked_status": {
-        "allOf": [
-          { "$ref": "#/$defs/status_base" },
-          {
-            "type": "object",
-            "required": ["state", "allowed_actions", "reason"],
-            "properties": {
-              "state": { "const": "blocked" },
-              "activity": {
-                "allOf": [
-                  { "$ref": "#/$defs/activity" },
-                  { "properties": { "state": { "const": "waiting" } } }
-                ]
-              },
-              "allowed_actions": { "$ref": "#/$defs/resumable_actions" },
-              "reason": { "$ref": "#/$defs/reason" }
-            }
-          }
-        ],
-        "unevaluatedProperties": false
-      },
-      "completed_status": {
-        "allOf": [
-          { "$ref": "#/$defs/status_base" },
-          {
-            "type": "object",
-            "required": ["state", "allowed_actions", "published_result"],
-            "properties": {
-              "state": { "const": "completed" },
-              "activity": {
-                "allOf": [
-                  { "$ref": "#/$defs/activity" },
-                  {
-                    "properties": {
-                      "state": { "const": "finished" },
-                      "phase": { "const": "complete" }
-                    }
-                  }
-                ]
-              },
-              "allowed_actions": { "$ref": "#/$defs/no_actions" },
-              "progress": {
-                "allOf": [
-                  { "$ref": "#/$defs/progress" },
-                  {
-                    "properties": {
-                      "accounted": { "type": "integer", "minimum": 0 }
-                    }
-                  }
-                ]
-              },
-              "published_result": { "$ref": "#/$defs/published_result" }
-            }
-          }
-        ],
-        "unevaluatedProperties": false
-      },
-      "cancelled_status": {
-        "allOf": [
-          { "$ref": "#/$defs/status_base" },
-          {
-            "type": "object",
-            "required": ["state", "allowed_actions"],
-            "properties": {
-              "state": { "const": "cancelled" },
-              "activity": {
-                "allOf": [
-                  { "$ref": "#/$defs/activity" },
-                  { "properties": { "state": { "const": "finished" } } }
-                ]
-              },
-              "allowed_actions": { "$ref": "#/$defs/no_actions" },
-              "reason": { "$ref": "#/$defs/reason" }
-            }
-          }
-        ],
-        "unevaluatedProperties": false
-      },
-      "failed_status": {
-        "allOf": [
-          { "$ref": "#/$defs/status_base" },
-          {
-            "type": "object",
-            "required": ["state", "allowed_actions", "reason"],
-            "properties": {
-              "state": { "const": "failed" },
-              "activity": {
-                "allOf": [
-                  { "$ref": "#/$defs/activity" },
-                  { "properties": { "state": { "const": "finished" } } }
-                ]
-              },
-              "allowed_actions": { "$ref": "#/$defs/no_actions" },
-              "reason": { "$ref": "#/$defs/reason" }
-            }
-          }
-        ],
-        "unevaluatedProperties": false
-      },
-      "pause_response": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["outcome", "action", "run_ref", "observed_state", "target_state"],
-        "properties": {
-          "outcome": { "const": "accepted" },
-          "action": { "const": "pause" },
-          "run_ref": { "$ref": "#/$defs/run_ref" },
-          "observed_state": { "$ref": "#/$defs/public_state" },
-          "target_state": { "const": "paused" }
-        }
-      },
-      "resume_response": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["outcome", "action", "run_ref", "observed_state", "target_state"],
-        "properties": {
-          "outcome": { "const": "accepted" },
-          "action": { "const": "resume" },
-          "run_ref": { "$ref": "#/$defs/run_ref" },
-          "decision": { "$ref": "#/$defs/confirmation_decision" },
-          "observed_state": { "$ref": "#/$defs/public_state" },
-          "target_state": { "enum": ["running", "cancelled"] }
-        }
-      },
-      "cancel_response": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["outcome", "action", "run_ref", "observed_state", "target_state"],
-        "properties": {
-          "outcome": { "const": "accepted" },
-          "action": { "const": "cancel" },
-          "run_ref": { "$ref": "#/$defs/run_ref" },
-          "observed_state": { "$ref": "#/$defs/public_state" },
-          "target_state": { "const": "cancelled" }
-        }
-      },
-      "error_response": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["outcome", "action", "error"],
-        "properties": {
-          "outcome": { "const": "error" },
-          "action": { "enum": ["start", "status", "pause", "resume", "cancel"] },
-          "run_ref": { "$ref": "#/$defs/run_ref" },
-          "error": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": ["code", "message"],
-            "properties": {
-              "code": {
-                "enum": [
-                  "invalid_request",
-                  "dataset_not_found",
-                  "result_not_found",
-                  "result_untrusted",
-                  "run_not_found",
-                  "invalid_state",
-                  "idempotency_conflict",
-                  "access_denied",
-                  "operation_failed",
-                  "authorization_required"
-                ]
-              },
-              "message": { "type": "string", "minLength": 1 },
-              "current_state": { "$ref": "#/$defs/public_state" },
-              "allowed_actions": {
-                "type": "array",
-                "uniqueItems": true,
-                "items": { "$ref": "#/$defs/control_action" }
               }
+            },
+            "then": {
+              "required": [
+                "confirmation"
+              ]
             }
+          }
+        ]
+      },
+      "blocked": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "state",
+          "reason",
+          "allowed_actions"
+        ],
+        "properties": {
+          "issues": {
+            "type": "array",
+            "minItems": 0,
+            "items": {
+              "$ref": "#/$defs/issue"
+            },
+            "maxItems": 5
+          },
+          "issues_truncated": {
+            "const": true
+          },
+          "accounting": {
+            "$ref": "#/$defs/accounting_run"
+          },
+          "diagnostics": {
+            "$ref": "#/$defs/diagnostics"
+          },
+          "state": {
+            "const": "blocked"
+          },
+          "reason": {
+            "allOf": [
+              {
+                "$ref": "#/$defs/reason"
+              },
+              {
+                "required": [
+                  "resume_when"
+                ]
+              }
+            ]
+          },
+          "allowed_actions": {
+            "type": "array",
+            "uniqueItems": true,
+            "minItems": 2,
+            "maxItems": 2,
+            "items": {
+              "enum": [
+                "resume",
+                "cancel"
+              ]
+            }
+          }
+        }
+      },
+      "completed": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "state",
+          "result"
+        ],
+        "properties": {
+          "issues": {
+            "type": "array",
+            "minItems": 0,
+            "items": {
+              "$ref": "#/$defs/issue"
+            },
+            "maxItems": 5
+          },
+          "issues_truncated": {
+            "const": true
+          },
+          "accounting": {
+            "$ref": "#/$defs/accounting_run"
+          },
+          "diagnostics": {
+            "$ref": "#/$defs/diagnostics"
+          },
+          "state": {
+            "const": "completed"
+          },
+          "result": {
+            "$ref": "#/$defs/result"
+          }
+        }
+      },
+      "failed": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "state",
+          "reason"
+        ],
+        "properties": {
+          "issues": {
+            "type": "array",
+            "minItems": 0,
+            "items": {
+              "$ref": "#/$defs/issue"
+            },
+            "maxItems": 5
+          },
+          "issues_truncated": {
+            "const": true
+          },
+          "accounting": {
+            "$ref": "#/$defs/accounting_run"
+          },
+          "diagnostics": {
+            "$ref": "#/$defs/diagnostics"
+          },
+          "state": {
+            "const": "failed"
+          },
+          "reason": {
+            "$ref": "#/$defs/reason"
+          }
+        }
+      },
+      "cancelled": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "state"
+        ],
+        "properties": {
+          "issues": {
+            "type": "array",
+            "minItems": 0,
+            "items": {
+              "$ref": "#/$defs/issue"
+            },
+            "maxItems": 5
+          },
+          "issues_truncated": {
+            "const": true
+          },
+          "accounting": {
+            "$ref": "#/$defs/accounting_run"
+          },
+          "diagnostics": {
+            "$ref": "#/$defs/diagnostics"
+          },
+          "state": {
+            "const": "cancelled"
+          },
+          "reason": {
+            "$ref": "#/$defs/reason"
+          }
+        }
+      },
+      "control": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "state"
+        ],
+        "properties": {
+          "state": {
+            "$ref": "#/$defs/state"
+          }
+        }
+      },
+      "started": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "run_ref"
+        ],
+        "properties": {
+          "run_ref": {
+            "$ref": "#/$defs/run_ref"
           }
         }
       }
+    }
+  },
+  "responseSchemas": {
+    "start": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/started"
+        },
+        {
+          "$ref": "#/$defs/error_response"
+        }
+      ]
+    },
+    "status": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/running"
+        },
+        {
+          "$ref": "#/$defs/paused"
+        },
+        {
+          "$ref": "#/$defs/blocked"
+        },
+        {
+          "$ref": "#/$defs/completed"
+        },
+        {
+          "$ref": "#/$defs/cancelled"
+        },
+        {
+          "$ref": "#/$defs/failed"
+        },
+        {
+          "$ref": "#/$defs/error_response"
+        }
+      ]
+    },
+    "pause": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/control"
+        },
+        {
+          "$ref": "#/$defs/error_response"
+        }
+      ]
+    },
+    "resume": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/control"
+        },
+        {
+          "$ref": "#/$defs/error_response"
+        }
+      ]
+    },
+    "cancel": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/control"
+        },
+        {
+          "$ref": "#/$defs/error_response"
+        }
+      ]
     }
   }
 }
