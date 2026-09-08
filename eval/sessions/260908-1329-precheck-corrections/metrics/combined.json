@@ -1,0 +1,105 @@
+{
+  "source_head": "a9ba4a0908510e8594b1d6afb04dad02f78830c8",
+  "implementation": "uncommitted corrections; see linked evaluation report",
+  "fixture": {
+    "manifest_sha256_passed": true,
+    "package_size_check_passed": false,
+    "observed_bytes": 3188633792,
+    "limit_bytes": 2000000000,
+    "verified_manifest_media": 2134,
+    "media_hash_mismatches": 0,
+    "checksum_manifest_sha256": "f56caa6b1f1dd56e1b02850a5bfc17567d11f5617899db166eb8d670889d67fe"
+  },
+  "full_input_boundary": {
+    "source_media": 2134,
+    "gpx_files": 0,
+    "additional_raw_fixtures": 0,
+    "human_semantic_paths": "allowed",
+    "old_outputs_captions_reports_caches": "not_in_staged_input",
+    "independent_blind_evaluation": false
+  },
+  "temporal_comparison_to_audited_result": {
+    "unchanged": 1851,
+    "quicktime_utc_interpretation_changed_by_28800_seconds": 281,
+    "filename_fallback_replacing_copy_mtime": 2,
+    "timezone_assumption_qualifications": 299,
+    "conflict_qualifications": 1
+  },
+  "full_local_work": {
+    "bundle_candidates": 167,
+    "without_embedding_candidate_entries": 167,
+    "with_embedding_candidate_entries": 117,
+    "final_sources_represented": 2134,
+    "first_embedding_execution_records": 366,
+    "subsequent_embedding_execution_records": 0,
+    "subsequent_embedding_reused_records": 366,
+    "representative_comparisons": 160,
+    "maximum_group_sources": 201,
+    "ordinary_images": 99,
+    "high_resolution_images": 99,
+    "successful_video_frames": 267,
+    "video_contact_sheets": 181,
+    "video_probe_failures": 1,
+    "video_frame_failures": 184,
+    "remote_provider_admissions": 0,
+    "run_outcome": "failed/provider_unavailable after local evidence",
+    "sealed_result": false,
+    "first_embedding_session_seconds": 222.664,
+    "final_reuse_session_seconds": 52.559,
+    "first_run_note": "Before unavailable representative fallback; final runs reuse the same model outputs and correct coverage from 2131 to 2134."
+  },
+  "installed_mcp_controlled_experiment": {
+    "input_sources": 9,
+    "distinct_pixel_scenes": 3,
+    "candidate_entries_without_embedding": 9,
+    "candidate_entries_with_embedding": 3,
+    "first_execution_records": 9,
+    "repeat_execution_records": 0,
+    "repeat_reused_records": 9,
+    "representative_comparisons": 18,
+    "all_three_runs_completed": true,
+    "session_seconds": [6.433, 42.406, 12.197]
+  },
+  "new_plan_experiment": {
+    "executed": false,
+    "different_sources_seen": 0,
+    "different_derived_images_seen": 0,
+    "collage_attachments": 0,
+    "repeat_presentations": 0,
+    "model_requests": 0,
+    "tokens": 0,
+    "cached_tokens": 0,
+    "developer_agent_model_usage": "not_measured_here",
+    "end_to_end_quality_and_cost": "not_proven"
+  },
+  "acceptance_followup": {
+    "status": "partial_acceptance",
+    "operator_manifest_dotdot_and_symlink_tests": "passed",
+    "completed_metric_references_repaired": 9,
+    "failed_metric_references_kept_null": 6,
+    "daily_installation": {
+      "updated": true,
+      "executable": "/Users/chengyanru/.local/bin/mediasense",
+      "version_label": "0.8.0",
+      "verification": "key source, Skill and contract SHA-256 match current checkout",
+      "python": "3.13",
+      "torch": "2.13.0",
+      "transformers": "4.57.6",
+      "controlled_sources": 9,
+      "controlled_entries": 3,
+      "executed_first_run": 9,
+      "reused_second_run": 9,
+      "result_refs": [
+        "precheck-result:e11b12e663476b873f2e1954549c455a303845768e446e4d3d141b01912cc4dc",
+        "precheck-result:8db13cc4541b1071846307cbf69b945a3e79a1ed80b68e193d207b50265c79af"
+      ]
+    },
+    "new_plan_comparison": "awaiting provider/model authorization and environment credentials",
+    "installed_controlled_result_refs": {
+      "without_embedding": "precheck-result:20d363eacdb5c9b606f1a1be23702d6ddced05ff218186e695bb5d1bdc09ee9a",
+      "with_embedding": "precheck-result:7af60f11636a3ad376195f9b6b4c2d1a5f1906801b1a569f5b0582d7c90afeea",
+      "reuse": "precheck-result:828ab3a08ca6323c6312717a812ba6c83d8cd363fe1fa354f19ec969a21f5ffa"
+    }
+  },
+  "validation": {"pytest_passed": 725, "pytest_deselected": 16, "ruff": "passed", "diff_check": "passed"}
+}

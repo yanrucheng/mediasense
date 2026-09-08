@@ -4,7 +4,7 @@ title: "Migration Capability Ledger"
 type: eval
 status: active
 created: 2026-08-23
-updated: 2026-09-01
+updated: 2026-09-08
 timezone: "Asia/Shanghai"
 parent: "eval-260823-1918-ai-album-migration-baseline"
 depends-on:
@@ -106,6 +106,21 @@ This table is deliberately narrower than the inventory above. A row marked `impl
 | Adaptive local compression and multiple Results | `implemented` | `intentionally_changed` | AI Album c90 applies a fixed date → 3,000 m/500 m location → cosine-content hierarchy with distance `0.311`, minimum weights and opaque final naming. MediaSense preserves local temporal, WGS84 spatial, cosine-content and c90 top-half representative signals but treats them as replaceable candidate methods. A declared target ranks adjacent boundaries, retains limitations and axis conflicts, emits exact-member group Work, and projects challengeable `represents`/`expands_to` paths without naming or final organization judgment. Lower-level Work is reused across profiles. The public-Run generated acceptance seals three immutable Results with entry frontiers `500 → 3 → 200` in 62.00 s on the development host, reuses the same 500 low-level rendition Work records and Artifact references, and leaves source bytes unchanged. Result comparison reports source-boundary, entry-count, compression-ratio, shared-Artifact and identical-group metrics from sealed projections without exposing Work. | Compare compression quality, hidden variation, group balance, reopen/user-correction burden and Hong Kong legacy groups; complete production-scale profiling |
 | Coordinate reverse geocoding and nearby-place lookup | `implemented` | `intentionally_changed` | AI Album c90 establishes WGS84/GCJ02 conversion, AMap/Google lookup, same-asset and temporal pre-compression, fallback, and rate limiting. MediaSense preserves those useful capabilities through the public stage-neutral `mediasense.geo.query` Tool and a PreCheck-owned media-aware acquisition policy. Bundle candidates seed conservative stationary units; moving, temporally conflicting, or datum-conflicting members split; exact coordinate deduplication follows. Every located Source Item receives a Result outcome even when many reuse one observation. Stable Work identity excludes batch position and membership, and an explicit compatibility path reuses matching 0.7.1 successes. On the paused Hong Kong Run, read-only evaluation yields 225 queries for 1,838 located Source Items instead of 1,611 exact-coordinate queries; 98 of those queries reuse compatible historical observations and 127 remain pending, with zero new Provider attempts. | A user-confirmed live-provider smoke, Provider policy/terms review, boundary-quality sampling around the current local thresholds, and real quota/error observations remain environment-specific |
 | Live reverse-geocode deployment certification | `characterized_only` | `not_comparable` | c90 source/tests and the current fake-provider suite characterize routing, fallback, counts, authorization, and failure behavior without issuing a live request in this acceptance run | Confirm provider terms, quotas, retention, keys, regional coverage, route quality, and observed billing in an explicitly authorized production check |
+
+### 2026-09-08 temporal, visual-entry and evaluation correction
+
+Evidence and exact limitations: [HK audit corrections](../eval-260908-1329-precheck-corrections.md).
+
+| Capability / difference | Classification | Delivered evidence and operating qualities |
+| --- | --- | --- |
+| Naive QuickTime integer timestamp interpreted as local time | `regression` (fixed) | Actual c90 standard conversion treated it as UTC; typed field interpretation restores that behavior. 281 fixture video timestamps change, 1,851 others do not. No extra remote cost; interpretation and rejected fields now remain inspectable. |
+| Local camera times, offsets, sidecars, DJI/Canon photo cases | `preserved` | Local EXIF semantics and explicit offsets are retained without copying a mandatory vendor rule table. Tests distinguish camera fields from container fields. |
+| Generic naive-time handling and timestamp provenance | `intentionally_changed` | Avoid c90's blanket UTC behavior for ordinary EXIF. Preserve raw candidates, uncertainty and filename/mtime fallback qualifications. Versioned metadata Work invalidates dependent GPX/bundle/compression work; old Results remain immutable. |
+| Filename recovery after absent/invalid capture metadata | `regression` (fixed) | TimestampService had a basename fallback; migrated selection could instead select copied mtime. Generic timestamp patterns now precede filesystem fallback without overriding valid camera fields. |
+| Local embedding reachable through installed Host | `regression` (fixed) | Internal adapter existed but runtime configuration/composition and optional dependencies prevented ordinary use. The real MCP path now executes and reuses a pinned local profile. No AI Album runtime dependency or automatic model download. |
+| Optional models, content-driven frontier and unavailable representative fallback | `intentionally_changed` | Local cost remains explicit; no model is universally enabled. 167→117 candidates with 366 real encodings, and complete reuse later. Failed preferred representatives can use verified prepared members; failures remain visible. |
+| Historical 168 representatives versus new frontier / total cost | `not_comparable` | Different boundaries and no new independent Plan quality/cost experiment. CPU work, hidden members and residual investigation are disclosed, not counted as proven savings. |
+| Immutable accounting and independent evaluation boundary | `intentionally_changed` | Keep excluded source identity; remove automatic descendant samples and stage exact allowed inputs outside fixture. Clean judging context is separately required. No original media movement/deletion. |
 
 ### 2026-09 PreCheck scale correction
 

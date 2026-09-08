@@ -1,0 +1,346 @@
+{
+  "sessions": [
+    {
+      "id": "01a07d01-3958-73a3-aca5-19cc5cc8882c",
+      "file": "/Users/chengyanru/.codex/sessions/2026/09/08/rollout-2026-09-08T01-53-47-01a07d01-3958-73a3-aca5-19cc5cc8882c.jsonl",
+      "sha256": "202e5597ae2424acc8ab373cc4745aca91ad9e332d6e412e5e5c4170f21c4e40",
+      "first": "2026-09-07T17:53:48.158Z",
+      "last": "2026-09-08T02:05:57.449Z"
+    },
+    {
+      "id": "01a07ec4-2697-7921-873e-07764288c7e6",
+      "file": "/Users/chengyanru/.codex/sessions/2026/09/08/rollout-2026-09-08T10-06-19-01a07ec4-2697-7921-873e-07764288c7e6.jsonl",
+      "sha256": "49727d23f849786150277e475c6c6ab9e061928b21582abc24807b99a68f76b3",
+      "first": "2026-09-08T02:06:19.374Z",
+      "last": "2026-09-08T02:06:54.820Z"
+    },
+    {
+      "id": "01a07ec4-db61-72f2-af79-69c5405381a9",
+      "file": "/Users/chengyanru/.codex/sessions/2026/09/08/rollout-2026-09-08T10-07-05-01a07ec4-db61-72f2-af79-69c5405381a9.jsonl",
+      "sha256": "33dcfe73f1ad23352b3c8e2168a91999b39709358ae3778d5ea57a3e8b123c66",
+      "first": "2026-09-08T02:07:05.658Z",
+      "last": "2026-09-08T02:08:02.661Z"
+    },
+    {
+      "id": "01a07ed0-86a0-7312-94ba-748e62747fe2",
+      "file": "/Users/chengyanru/.codex/sessions/2026/09/08/rollout-2026-09-08T10-19-50-01a07ed0-86a0-7312-94ba-748e62747fe2.jsonl",
+      "sha256": "e2440bca0e0139d95faf2886609eb28db23a4da52dd159283c57b7c7b6bfaffa",
+      "first": "2026-09-08T02:19:50.373Z",
+      "last": "2026-09-08T03:07:44.972Z"
+    }
+  ],
+  "sealed_result": {
+    "ref": "precheck-result:876d5056651a2f836364865796f07819ac9c329534819c8b13759127abb62204",
+    "file": "/Users/chengyanru/Library/Application Support/MediaSense/datasets/dataset-b9f71c8826d891a534c33b7e/precheck/_results/sealed/876d5056651a2f836364865796f07819ac9c329534819c8b13759127abb62204.json",
+    "file_sha256": "dd014de51cf5d4de24bf7ad63e4b7fc318d7ae100dd061b8ab4b008b706fb7be",
+    "published_at": "2026-09-08T02:26:48.316393+00:00"
+  },
+  "source": {
+    "discovered": 6373,
+    "source_media": 2136,
+    "precheck_runs": 1,
+    "fixture_manifest_media": 2134,
+    "fixture_media_hash_mismatches": [],
+    "checksum_manifest_sha256": "f56caa6b1f1dd56e1b02850a5bfc17567d11f5617899db166eb8d670889d67fe"
+  },
+  "work": {
+    "capabilities": {
+      "adaptive-compression-group": 200,
+      "bundle-candidate": 241,
+      "gpx-location-candidate": 2136,
+      "image-rendition": 150,
+      "reverse-geocode-observation": 225,
+      "source-metadata": 2136,
+      "video-contact-sheet": 241,
+      "video-frame": 572,
+      "video-probe": 242
+    },
+    "status": {
+      "succeeded": 5898,
+      "terminal_failure": 245
+    },
+    "embedding_profile": null,
+    "compression_target": 200,
+    "representative_methods": {
+      "extension-priority-v1": 200
+    },
+    "qualifications": {
+      "limited_similarity_evidence": 200
+    },
+    "representative_comparisons": 0,
+    "outlier_paths": 0,
+    "max_group_members": 195,
+    "singleton_groups": 83
+  },
+  "geo": {
+    "source_coordinate_observations": 1838,
+    "source_exact_coordinates": 1611,
+    "coordinate_producers": {
+      "source-metadata": 102,
+      "gpx-location-candidate": 1736
+    },
+    "zero_coordinate_source_items": 19,
+    "covered_source_items": 1838,
+    "logical_queries": 225,
+    "provider_requests": 454,
+    "attempts": {
+      "amap/resolve_place/no_result": 1,
+      "amap/resolve_place/success": 3,
+      "google_maps/nearby_places/no_result": 4,
+      "google_maps/nearby_places/success": 221,
+      "google_maps/reverse_geocode/no_result": 1,
+      "google_maps/reverse_geocode/success": 224
+    },
+    "requests_per_coordinate": {
+      "2": 221,
+      "3": 4
+    },
+    "components": {
+      "nearby_places/no_result": 2,
+      "nearby_places/success": 223,
+      "reverse_geocode/no_result": 1,
+      "reverse_geocode/success": 224
+    },
+    "journal_operations": 1,
+    "journal_state": "completed",
+    "journal_matches_sealed_attempts": true,
+    "billable_units": null,
+    "historical_provider_requests": 0
+  },
+  "agent": {
+    "mcp_tools": {
+      "ctx_batch_execute": 2,
+      "ctx_execute": 9,
+      "ctx_execute_file": 8,
+      "ctx_search": 4,
+      "mediasense.dataset.open": 3,
+      "mediasense.plan.work": 6,
+      "mediasense.precheck.read": 57,
+      "mediasense.precheck.run": 30
+    },
+    "precheck_read_actions": {
+      "expand": 35,
+      "resolve": 19,
+      "review": 3
+    },
+    "image_view_events": 32,
+    "image_batches": [
+      {
+        "line": 177,
+        "images": 1
+      },
+      {
+        "line": 221,
+        "images": 13
+      },
+      {
+        "line": 399,
+        "images": 5
+      },
+      {
+        "line": 419,
+        "images": 5
+      },
+      {
+        "line": 523,
+        "images": 2
+      },
+      {
+        "line": 573,
+        "images": 6
+      }
+    ],
+    "entry_image_artifacts": 200,
+    "boundary_image_artifacts": 31,
+    "direct_image_artifacts": 20,
+    "direct_also_in_sheets": 17,
+    "unique_image_artifacts": 234,
+    "unique_visual_source_items": 232,
+    "visual_artifact_presentations": 251,
+    "all_visual_origins_in_source_media": true,
+    "expanded_anchor_refs": 234,
+    "expanded_source_observations": 200,
+    "expanded_mixed_member_observations": 150,
+    "resolve_rows": 2336,
+    "unique_resolved_items": 2266,
+    "unique_resolved_source_media": 2135,
+    "excluded_member_fetches": [
+      {
+        "line": 383,
+        "count": 131,
+        "old_output_paths": 8
+      },
+      {
+        "line": 531,
+        "count": 1,
+        "old_output_paths": 0
+      }
+    ],
+    "old_output_scope_samples": [
+      "representative-run-clustered/000114/DJI_20000114013849_0001_D_highres_thumbnail_634db49ea7b3cdf58d99e15a58e8b8c8.jpg",
+      "representative-run-clustered/260428/DJI_20260428201430_0001_D_highres_thumbnail_e0017e304d7e465703527ed74aad6b39.jpg",
+      "representative-run-clustered/260501/1-室内纸箱物品整理/DJI_20260501183924_0002_D_highres_thumbnail_3926f8ae4045a352323dedbcec9fd5b0.jpg"
+    ],
+    "plan_model_requests": 52,
+    "plan_usage": {
+      "input_tokens": 7742513,
+      "cached_input_tokens": 7461068,
+      "cache_write_input_tokens": 281289,
+      "output_tokens": 31325,
+      "reasoning_output_tokens": 14460,
+      "total_tokens": 7773838
+    },
+    "plan_uncached_input_tokens": 281445,
+    "plan_start_line": 135,
+    "plan_start_timestamp": "2026-09-08T02:27:56.234Z"
+  },
+  "candidate": {
+    "groups": 32,
+    "paths": [
+      [
+        "00 行前记录",
+        "04-28 器材单据"
+      ],
+      [
+        "00 行前记录",
+        "05-01 收拾物品"
+      ],
+      [
+        "05-01 西餐与夜间出行",
+        "01 西餐晚餐·牛排与意面"
+      ],
+      [
+        "05-01 西餐与夜间出行",
+        "02 夜间出行与随拍"
+      ],
+      [
+        "05-02 乘车与中餐晚餐",
+        "01 乘车途中"
+      ],
+      [
+        "05-02 乘车与中餐晚餐",
+        "02 中餐晚餐·入席与合影"
+      ],
+      [
+        "05-02 乘车与中餐晚餐",
+        "03 中餐晚餐·菜品与用餐"
+      ],
+      [
+        "05-03 抵港与街头美食",
+        "01 机场与乘机"
+      ],
+      [
+        "05-03 抵港与街头美食",
+        "02 酒店入住与出门"
+      ],
+      [
+        "05-03 抵港与街头美食",
+        "03 华姐清汤腩"
+      ],
+      [
+        "05-03 抵港与街头美食",
+        "04 街边小吃与合影"
+      ],
+      [
+        "05-03 抵港与街头美食",
+        "05 首饰随拍"
+      ],
+      [
+        "05-03 抵港与街头美食",
+        "06 雨夜街市与买水果"
+      ],
+      [
+        "05-03 抵港与街头美食",
+        "07 炸鸡晚餐"
+      ],
+      [
+        "05-04 旺角与 Amber",
+        "01 烧味点心午餐"
+      ],
+      [
+        "05-04 旺角与 Amber",
+        "02 旺角街拍与冰淇淋"
+      ],
+      [
+        "05-04 旺角与 Amber",
+        "03 酒店休息"
+      ],
+      [
+        "05-04 旺角与 Amber",
+        "04 中环商场与赴宴途中"
+      ],
+      [
+        "05-04 旺角与 Amber",
+        "05 Amber 晚餐",
+        "01 入席·菜单与开胃酒"
+      ],
+      [
+        "05-04 旺角与 Amber",
+        "05 Amber 晚餐",
+        "02 前菜·海鲜与鱼子酱"
+      ],
+      [
+        "05-04 旺角与 Amber",
+        "05 Amber 晚餐",
+        "03 厨房体验与合影"
+      ],
+      [
+        "05-04 旺角与 Amber",
+        "05 Amber 晚餐",
+        "04 面包与主菜"
+      ],
+      [
+        "05-04 旺角与 Amber",
+        "05 Amber 晚餐",
+        "05 甜点与餐后交流"
+      ],
+      [
+        "05-05 茶餐厅与牛排晚餐",
+        "01 地铁与街行"
+      ],
+      [
+        "05-05 茶餐厅与牛排晚餐",
+        "02 茶餐厅·三明治与牛肉面"
+      ],
+      [
+        "05-05 茶餐厅与牛排晚餐",
+        "03 酒店合影与餐前饮品"
+      ],
+      [
+        "05-05 茶餐厅与牛排晚餐",
+        "04 牛排晚餐",
+        "01 入席·酒藏与菜单"
+      ],
+      [
+        "05-05 茶餐厅与牛排晚餐",
+        "04 牛排晚餐",
+        "02 选刀·牛排与配菜"
+      ],
+      [
+        "05-05 茶餐厅与牛排晚餐",
+        "04 牛排晚餐",
+        "03 甜点·合影与离店"
+      ],
+      [
+        "05-05 茶餐厅与牛排晚餐",
+        "05 酒店夜间随拍"
+      ],
+      [
+        "05-06 街行与拉面",
+        "01 街景与合影"
+      ],
+      [
+        "05-06 街行与拉面",
+        "02 拉面早餐"
+      ]
+    ],
+    "decision_summaries": [
+      "Agent 选择事件记忆组织方式：以这次美食旅行及行前记录为事件，以日期为章节，再按可见餐饮和活动场景细分。未把此默认选择写成 Human 偏好。已审阅完整 200 个入口 Evidence，并检查 31 个大组边界和混合组成员；照片与视频共同组织，原文件名保留，最多三级。",
+      "预检覆盖完整且 plan_ready：6373 个发现项全量记账，2135 个媒体可用，1 个媒体无效；244 次视频帧解码失败与 1 次探测失败是操作数，不等同于媒体数。准备图像为缩小图、视频为抽帧，有限相似性证据不能保证组内每张画面一致。",
+      "时间取舍：多个 QuickTime 视频时间与 DJI 文件名及同行场景相差约 8 小时；仅用文件名、目录和可见场景辅助归组，不改写源元数据。remux-faststart 视频采用 FileModifyDate 2026-08-31，依据 20260504 文件名、Amber 目录及画面放回 Amber 甜点阶段。2000 年模糊视频保留原处。",
+      "已把四个因时间冲突形成的混合压缩组拆开：午餐/街拍组中 5 段 Amber 视频回归主菜或甜点，茶餐厅组中 1 段牛排餐厅视频回归入席。RAW 与可确认的对应照片留在相同场景。",
+      "地址与附近地点仅作候选。使用已完成的 225 次逻辑地理查询、454 次 provider 请求；计费未知，无新增查询。存在北京、香港及不适用结果，不据最近 POI 认定餐厅。Amber 名称由菜单 FULL AMBER EXPERIENCE 和目录、画面共同支持；华姐清汤腩由店招支持，其余不确定餐厅使用可见场景名称。",
+      "检索检查：回忆厨房合影可进入 05-04／Amber 晚餐／厨房体验与合影；回忆选牛排刀可进入 05-05／牛排晚餐／选刀·牛排与配菜；回忆旺角红墙合影可进入 05-04／旺角街拍与冰淇淋。单个就餐过程在有必要时细分，短而单一场景保持浅层。"
+    ]
+  }
+}
