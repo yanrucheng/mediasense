@@ -64,11 +64,10 @@ def test_naive_time_is_explicitly_interpreted_and_invalid_time_is_not_epoch_zero
 
     assert naive["value"] == "2025-09-30T16:39:34+08:00"
     assert naive["provenance"]["timezone_assumed"] is True
-    assert invalid == {
-        "name": "capture_time",
-        "status": "failed",
-        "provenance": {"method": "exiftool", "reason": "unparseable_time"},
-    }
+    assert invalid["status"] == "failed"
+    assert invalid["provenance"]["reason"] == "unparseable_time"
+    assert invalid["provenance"]["candidates"][0]["raw_value"] == 0
+    assert "value" not in invalid
 
 
 @pytest.mark.characterization

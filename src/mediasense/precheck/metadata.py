@@ -44,10 +44,13 @@ class MetadataProfile:
     timezone: str = "Asia/Shanghai"
     time_tags: tuple[str, ...] = (
         "XMP:DateTimeOriginal",
-        "QuickTime:CreateDate",
+        "Composite:SubSecDateTimeOriginal",
+        "QuickTime:CreationDate",
+        "QuickTime:DateTimeOriginal",
+        "EXIF:DateTimeOriginal",
         "Composite:SubSecCreateDate",
         "XMP:CreateDate",
-        "EXIF:DateTimeOriginal",
+        "QuickTime:CreateDate",
         "File:FileModifyDate",
     )
     latitude_tags: tuple[str, ...] = (
@@ -85,6 +88,7 @@ class MetadataProfile:
                 "sidecar_precedence": _SIDECAR_SUFFIXES,
                 "time_tags": self.time_tags,
                 "timezone": self.timezone,
+                "time_interpretation": "field-semantics-v2",
             },
             ensure_ascii=False,
             separators=(",", ":"),
@@ -269,9 +273,7 @@ class _MetadataLeaseHeartbeat:
     def _record_renewal_failure(self, error: BaseException) -> None:
         self._error = error
         self._stop.set()
-        raise MetadataLeaseRenewalError(
-            "metadata lease renewal failed"
-        ) from error
+        raise MetadataLeaseRenewalError("metadata lease renewal failed") from error
 
 
 class MetadataProducer:
@@ -424,7 +426,7 @@ class MetadataProducer:
         )
         spec = WorkSpec(
             capability="source-metadata",
-            producer_identity="builtin-exiftool-metadata-v1",
+            producer_identity="builtin-field-aware-exiftool-metadata-v1",
             dependencies=tuple(dependencies),
         )
         record = self.work.ensure_work(run_id, spec)
@@ -529,9 +531,7 @@ class MetadataProducer:
                 invalidated = heartbeat.invalidate(
                     item, "source changed during metadata extraction"
                 )
-                outcomes[item.subject] = MetadataOutcome(
-                    invalidated, (), False
-                )
+                outcomes[item.subject] = MetadataOutcome(invalidated, (), False)
             except (
                 MetadataExtractionError,
                 OSError,
@@ -584,6 +584,9 @@ class MetadataProducer:
                     "XMP:Make",
                     "EXIF:Model",
                     "XMP:Model",
+                    "QuickTime:Make",
+                    "QuickTime:Model",
+                    "EXIF:OffsetTimeOriginal",
                     "EXIF:Orientation",
                     "XMP:Orientation",
                     "File:MIMEType",
@@ -597,6 +600,8 @@ class MetadataProducer:
             "-n",
             "-api",
             "largefilesupport=1",
+            "-api",
+            "QuickTimeUTC=0",
             *(f"-{tag}" for tag in tags),
             "--",
             *(str(proof.source_path) for proof in proofs),
@@ -652,12 +657,12 @@ def select_metadata_observations(
         path.as_posix() for path in source_precedence if path.as_posix() in indexed
     ]
     observations = [
-        _time_observation(indexed, ordered, profile),
+        _time_observation(indexed, ordered, profile, subject),
         _gps_observation(indexed, ordered, profile),
     ]
     for name, tags in (
-        ("camera_make", ("XMP:Make", "EXIF:Make")),
-        ("camera_model", ("XMP:Model", "EXIF:Model")),
+        ("camera_make", ("XMP:Make", "EXIF:Make", "QuickTime:Make")),
+        ("camera_model", ("XMP:Model", "EXIF:Model", "QuickTime:Model")),
         ("orientation", ("XMP:Orientation", "EXIF:Orientation")),
         ("media_type", ("File:MIMEType",)),
     ):
@@ -681,35 +686,139 @@ def _time_observation(
     indexed: Mapping[str, Mapping[str, Any]],
     ordered: Sequence[str],
     profile: MetadataProfile,
+    subject: Path,
 ) -> dict[str, Any]:
-    saw_value = False
+    candidates = []
     for tag in profile.time_tags:
         for relative in ordered:
             value = indexed[relative].get(tag)
             if value in (None, ""):
                 continue
-            saw_value = True
-            normalized = _normalize_datetime(value, profile.timezone)
-            if normalized is None:
-                continue
-            iso_value, assumed = normalized
-            return {
-                "name": "capture_time",
-                "status": "available",
-                "value": iso_value,
-                "provenance": {
-                    **_provenance(relative, tag),
-                    "timezone_assumed": assumed,
-                    "timezone_policy": profile.timezone,
-                },
-            }
-    if saw_value:
+            interpreted = value
+            interpretation = "explicit_offset_or_configured_local_time"
+            if tag.startswith("File:"):
+                interpretation = "filesystem_modification_time_fallback"
+            if tag == "EXIF:DateTimeOriginal" and isinstance(value, str):
+                offset = indexed[relative].get("EXIF:OffsetTimeOriginal")
+                if isinstance(offset, str) and re.fullmatch(r"[+-]\d{2}:\d{2}", offset):
+                    if not re.search(r"(?:Z|[+-]\d{2}:?\d{2})$", value):
+                        interpreted = value + offset
+                        interpretation = "EXIF:OffsetTimeOriginal"
+            normalized = _normalize_datetime(interpreted, profile.timezone)
+            if (
+                normalized is not None
+                and normalized[1]
+                and tag == "QuickTime:CreateDate"
+            ):
+                # ExifTool deliberately returns the unconverted integer-container
+                # clock. Do not let the host's TZ or a video suffix set its meaning.
+                normalized = _normalize_datetime(
+                    str(value) + "+00:00", profile.timezone
+                )
+                assert normalized is not None
+                normalized = (normalized[0], True)
+                interpretation = "quicktime_integer_utc_assumption"
+            candidates.append(
+                {
+                    "relative_path": relative,
+                    "tag": tag,
+                    "raw_value": value,
+                    "value": normalized[0] if normalized else None,
+                    "timezone_assumed": normalized[1] if normalized else None,
+                    "interpretation": interpretation,
+                }
+            )
+
+    # Basenames can supply a lower-confidence fallback, never overwrite a
+    # parseable capture field. Directory semantics play no part in this rule.
+    filename = re.search(r"(?<!\d)(\d{8})[_-]?(\d{6})(?!\d)", subject.name)
+    if filename:
+        try:
+            naive = datetime.strptime("".join(filename.groups()), "%Y%m%d%H%M%S")
+        except ValueError:
+            pass
+        else:
+            candidates.append(
+                {
+                    "relative_path": subject.as_posix(),
+                    "tag": "filename",
+                    "raw_value": filename.group(),
+                    "value": naive.replace(
+                        tzinfo=ZoneInfo(profile.timezone)
+                    ).isoformat(),
+                    "timezone_assumed": True,
+                    "interpretation": "filename_local_time_fallback",
+                }
+            )
+    valid = [candidate for candidate in candidates if candidate["value"] is not None]
+    capture = [
+        candidate for candidate in valid if not candidate["tag"].startswith("File:")
+    ]
+    selected = next(iter(capture or valid), None)
+    if selected is None and candidates:
         return {
             "name": "capture_time",
             "status": "failed",
-            "provenance": {"method": "exiftool", "reason": "unparseable_time"},
+            "provenance": {
+                "method": "exiftool",
+                "reason": "unparseable_time",
+                "candidates": candidates,
+            },
         }
-    return {"name": "capture_time", "status": "missing"}
+    if selected is None:
+        return {"name": "capture_time", "status": "missing"}
+    qualifications = []
+    code = None
+    if selected["tag"] == "filename":
+        code = "filename_time_fallback"
+    elif selected["tag"].startswith("File:"):
+        code = "filesystem_time_fallback"
+    elif selected["timezone_assumed"]:
+        code = "capture_timezone_assumed"
+    if code:
+        qualifications.append(
+            {
+                "code": code,
+                "effect": "limits_interpretation",
+                "message": "Capture time is interpreted using "
+                + selected["interpretation"]
+                + "; it is not an original offset-bearing camera timestamp.",
+            }
+        )
+    selected_time = datetime.fromisoformat(selected["value"])
+    conflicts = [
+        candidate
+        for candidate in capture
+        if abs(
+            (datetime.fromisoformat(candidate["value"]) - selected_time).total_seconds()
+        )
+        > 2
+    ]
+    if conflicts:
+        qualifications.append(
+            {
+                "code": "capture_time_conflict",
+                "effect": "limits_interpretation",
+                "message": "Capture fields or filename disagree; inspect retained candidates before relying on chronology.",
+            }
+        )
+    observation = {
+        "name": "capture_time",
+        "status": "available",
+        "value": selected["value"],
+        "provenance": {
+            **_provenance(selected["relative_path"], selected["tag"]),
+            "method": "filename" if selected["tag"] == "filename" else "exiftool",
+            "raw_value": selected["raw_value"],
+            "interpretation": selected["interpretation"],
+            "timezone_assumed": selected["timezone_assumed"],
+            "timezone_policy": profile.timezone,
+            "candidates": candidates,
+        },
+    }
+    if qualifications:
+        observation["qualifications"] = qualifications
+    return observation
 
 
 def _gps_observation(

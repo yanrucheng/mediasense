@@ -129,13 +129,17 @@ def _metadata_result_observations(
             details = ", ".join(
                 f"{key}={value}"
                 for key, value in provenance.items()
-                if key not in {"relative_path", "sources"}
+                if key not in {"relative_path", "sources", "candidates"}
             )
             basis: dict[str, object] = {
                 "summary": details or "local ExifTool metadata extraction"
             }
             if refs:
                 basis["refs"] = refs
+            if "candidates" in provenance:
+                # Preserve conflicting and rejected raw observations as structured
+                # evidence, rather than flattening them into a lossy summary.
+                observation["provenance"] = provenance
             observation["basis"] = basis
         projected.append(observation)
     return projected
