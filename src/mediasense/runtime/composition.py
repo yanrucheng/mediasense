@@ -31,12 +31,15 @@ from mediasense.geo import AMapReverseGeocoder, GoogleMapsReverseGeocoder
 from mediasense.plan import ConfirmationContext, PlanWorkTool
 from mediasense.precheck import (
     AccountingStore,
+    ChineseCLIPEncoder,
+    EmbeddingProfile,
     PrecheckConfirmationContext,
     PrecheckExecutionDependencies,
     PrecheckReadTool,
     PrecheckRunTool,
 )
 from mediasense.precheck.read import bind_precheck_read
+from mediasense.precheck._orchestrator import PrecheckExecutionConfig
 
 from mediasense.precheck.source_attachment import (
     SourceAttachmentError,
@@ -109,10 +112,35 @@ class DatasetRuntime:
         self.dataset_id = opened.manifest.dataset_id
         AccountingStore(precheck_database).register_dataset(self.dataset_id)
         self.geo_query = _geo_tool(workspace / "geo", config)
+        embedding = config.embedding
+        encoder = (
+            None
+            if embedding is None
+            else ChineseCLIPEncoder(
+                model_id=embedding["model_id"],
+                revision=embedding["revision"],
+                device=embedding["device"],
+            )
+        )
+        execution_config = (
+            PrecheckExecutionConfig()
+            if embedding is None
+            else PrecheckExecutionConfig(
+                embedding_profile=EmbeddingProfile(
+                    name=embedding["model_id"] + "@" + embedding["revision"],
+                    dimensions=embedding["dimensions"],
+                    normalization="unit_length",
+                ),
+                embedding_encoder_identity=encoder.identity,
+                model_batch_size=embedding["batch_size"],
+            )
+        )
         self.precheck_run = PrecheckRunTool(
             precheck_database,
+            execution_config=execution_config,
             execution_dependencies=PrecheckExecutionDependencies(
-                geo_tool=self.geo_query
+                geo_tool=self.geo_query,
+                embedding_encoder=encoder,
             ),
         )
         self.precheck_read = PrecheckReadTool(precheck_database)

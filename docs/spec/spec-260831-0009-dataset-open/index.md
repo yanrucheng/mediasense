@@ -4,7 +4,7 @@ title: "MediaSense Dataset Open Tool Contract"
 type: spec
 status: active
 created: 2026-08-31
-updated: 2026-08-31
+updated: 2026-09-08
 timezone: "Asia/Shanghai"
 parent: ""
 depends-on:
@@ -38,6 +38,13 @@ The response always reports the selected workspace, selection tier, effective
 non-secret configuration provenance, manifest version, and component store
 versions. A corrupt or incompatible higher-priority workspace is reported rather
 than silently bypassed.
+
+`configuration.local_embedding` reports disabled/configured state, reason and the
+effective pinned local profile. `execution=not_checked` explicitly avoids claiming
+that configuration proves model execution or semantic compression. Local model
+downloads are disabled. The existing PreCheck Work records and sealed Dataset
+context own execution, reuse and failure facts; this Tool owns configuration
+discovery only. No new model registry or model-facing Tool is introduced.
 
 ## Identity and safety
 

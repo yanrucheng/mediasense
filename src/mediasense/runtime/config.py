@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import sys
 import tomllib
 from dataclasses import dataclass
@@ -19,10 +20,20 @@ class RuntimeConfig:
     amap_api_key_env: str
     google_maps_api_key_env: str
     sources: tuple[Path, ...]
+    embedding: dict[str, Any] | None = None
 
     def public_value(self) -> dict[str, object]:
         return {
             "sources": [str(path) for path in self.sources],
+            "local_embedding": {
+                "state": "configured" if self.embedding else "disabled",
+                "reason": "explicit_local_profile"
+                if self.embedding
+                else "no_local_profile_configured",
+                "profile": self.embedding,
+                "execution": "not_checked",
+                "model_downloads": False,
+            },
             "providers": {
                 "amap": {
                     "credential": "configured"
@@ -94,6 +105,7 @@ def load_runtime_config(
         amap_api_key_env=str(values["amap_api_key_env"]),
         google_maps_api_key_env=str(values["google_maps_api_key_env"]),
         sources=tuple(sources),
+        embedding=values.get("embedding"),
     )
 
 
@@ -104,7 +116,7 @@ def _read_config(path: Path) -> dict[str, object]:
         raise ConfigurationError(
             f"Cannot read configuration {path}: {error}"
         ) from error
-    if set(value) - {"providers"}:
+    if set(value) - {"providers", "embedding"}:
         raise ConfigurationError(f"Unknown configuration section in {path}")
     providers = value.get("providers", {})
     if not isinstance(providers, dict):
@@ -112,6 +124,55 @@ def _read_config(path: Path) -> dict[str, object]:
     if set(providers) - {"amap_api_key_env", "google_maps_api_key_env"}:
         raise ConfigurationError(f"Unknown provider configuration key in {path}")
     result: dict[str, object] = {}
+    if "embedding" in value:
+        embedding = value["embedding"]
+        if not isinstance(embedding, dict):
+            raise ConfigurationError("embedding must be a table")
+        if set(embedding) - {
+            "enabled",
+            "model_id",
+            "revision",
+            "dimensions",
+            "device",
+            "batch_size",
+        }:
+            raise ConfigurationError("Unknown embedding configuration key")
+        enabled = embedding.get("enabled", True)
+        if not isinstance(enabled, bool):
+            raise ConfigurationError("embedding.enabled must be a boolean")
+        if not enabled:
+            result["embedding"] = None
+        else:
+            model_id = embedding.get("model_id")
+            revision = embedding.get("revision")
+            dimensions = embedding.get("dimensions")
+            device = embedding.get("device", "cpu")
+            batch_size = embedding.get("batch_size", 4)
+            if not isinstance(model_id, str) or not re.fullmatch(
+                r"[\w.-]+/[\w.-]+", model_id
+            ):
+                raise ConfigurationError(
+                    "embedding.model_id must name a Hugging Face model repository"
+                )
+            if not isinstance(revision, str) or not re.fullmatch(
+                r"[0-9a-f]{40}", revision
+            ):
+                raise ConfigurationError(
+                    "embedding.revision must be an immutable 40-character commit"
+                )
+            if type(dimensions) is not int or dimensions < 1:
+                raise ConfigurationError("embedding.dimensions must be positive")
+            if device not in {"cpu", "mps", "cuda"}:
+                raise ConfigurationError("embedding.device must be cpu, mps, or cuda")
+            if type(batch_size) is not int or batch_size < 1:
+                raise ConfigurationError("embedding.batch_size must be positive")
+            result["embedding"] = dict(
+                model_id=model_id,
+                revision=revision,
+                dimensions=dimensions,
+                device=device,
+                batch_size=batch_size,
+            )
     for key in ("amap_api_key_env", "google_maps_api_key_env"):
         if key in providers:
             item = providers[key]

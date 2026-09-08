@@ -46,8 +46,9 @@ the current session reloaded a newly written project configuration.
 The first local discovery pass may pause with
 `reason.code=scope_confirmation_required`. Treat the returned inventory as Tool
 facts, not a Tool judgment about what the user wants. It reports a bounded
-source-relative entries view with counts, bytes, kinds, size buckets, representative
-paths, and discovery limitations. Use `status.scope_path` to expand a collapsed
+source-relative entries view with counts, bytes, kinds, size buckets and discovery
+limitations. Directory entries do not preview descendant filenames; explicit
+navigation can reveal semantic names. Use `status.scope_path` to expand a collapsed
 subtree and `status.scope_after` to continue its child list when the current
 confirmation permits it.
 
@@ -70,7 +71,30 @@ selection, generalize it to future descendants, or turn silence into consent.
 An unattended caller without an exact reusable or delegated selection remains
 paused before expensive work.
 
+Scope exclusion preserves accounting and is not an evaluation isolation boundary.
+An independent evaluation must start from its declared allowed-input source in a
+clean context; historical outputs, captions, reference Plans, reports and retrieval
+memory must be outside that context's access. Existing human directory semantics
+are usable only if that evaluation permits them. Do not claim blindness after
+seeing a historical label, even if it was excluded afterwards.
+
 ## Begin without an arbitrary count target
+
+Read `dataset.open.configuration.local_embedding` before attributing visual
+compression to a model. `configured` means requested, not executed. If local
+embedding is appropriate, the Host must have the `embeddings` dependencies and an
+explicit pinned `[embedding]` configuration; see the installation guide. A missing
+model/device is a reported prerequisite, never permission to download or use a
+remote model. An explicitly disabled profile remains a valid lower-evidence run.
+The sealed Dataset context reports actual embedding Work, execution/reuse and
+failure counts. Compare those with the representative method, hidden variation
+and Plan's actual inspection burden; no fixed entry count proves useful compression.
+
+Capture-time observations retain raw candidates and interpretation. Distinguish
+explicit offsets, timezone assumptions, conflicts, filename fallback and file
+mtime fallback. Do not treat interpreted time as an original camera timestamp;
+target unresolved conflicts rather than routinely repairing the same upstream
+timezone issue through image inspection.
 
 Learn enough about the Dataset and intended Plan use to select a suitable
 available initial configuration, then start through `mediasense.precheck.run`.

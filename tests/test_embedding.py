@@ -204,6 +204,31 @@ def test_invalid_embedding_is_a_local_terminal_failure(tmp_path: Path) -> None:
     assert outcome.artifact is None
 
 
+def test_unexpected_encoder_bug_is_not_reported_as_normal_degradation(tmp_path):
+    database = tmp_path / "work.sqlite3"
+    source = tmp_path / "source"
+    source.mkdir()
+    Image.new("RGB", (24, 24), "red").save(source / "photo.jpg")
+    run_id = _closed_run(database, source)
+    rendition = ImageRenditionProducer(database).produce(run_id, Path("photo.jpg"))
+
+    class BrokenEncoder:
+        identity = "broken-test"
+
+        def encode_image(self, _path):
+            raise RuntimeError("implementation invariant violated")
+
+    producer = EmbeddingProducer(database, BrokenEncoder())
+    with pytest.raises(RuntimeError, match="implementation invariant"):
+        producer.produce(
+            run_id,
+            rendition.work.work_id,
+            profile=EmbeddingProfile(name="test", dimensions=4),
+        )
+    records = list(producer.work.iter_run_work(run_id, capability="image-embedding"))
+    assert records[0].status is WorkStatus.TERMINAL_FAILURE
+
+
 def test_chinese_clip_adapter_requires_pinned_local_model_files(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

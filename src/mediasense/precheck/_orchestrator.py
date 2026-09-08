@@ -24,7 +24,12 @@ from ._compression_strategy import AdaptiveCompressionProfile
 from ._work_types import DependencyKind, WorkRecord, WorkStatus
 from .accounting import AccountingStore
 from .bundling import BundleCandidateOutcome, BundleCandidateProducer
-from .embedding import EmbeddingProfile, EmbeddingProducer, ImageEmbeddingEncoder
+from .embedding import (
+    EmbeddingBackendUnavailable,
+    EmbeddingProfile,
+    EmbeddingProducer,
+    ImageEmbeddingEncoder,
+)
 from .geocode import (
     ReverseGeocodeBatchOutcome,
     ReverseGeocodeProducer,
@@ -143,6 +148,7 @@ class PrecheckExecutionConfig:
     model_batch_size: int | None = None
     directed_evidence_paths: tuple[Path, ...] = ()
     embedding_profile: EmbeddingProfile | None = None
+    embedding_encoder_identity: str | None = None
     sensitivity_profile: SensitivityProfile | None = None
     reverse_geocode_profile: ReverseGeocodeProfile = field(
         default_factory=ReverseGeocodeProfile
@@ -202,6 +208,7 @@ class PrecheckExecutionConfig:
                 path.as_posix() for path in self.directed_evidence_paths
             ],
             "embedding_profile": _embedding_profile_value(self.embedding_profile),
+            "embedding_encoder_identity": self.embedding_encoder_identity,
             "ffmpeg_threads": self.ffmpeg_threads,
             "gpx": self.gpx,
             "image_renditions": self.image_renditions,
@@ -330,6 +337,7 @@ class PrecheckExecutionConfig:
             embedding_profile=_embedding_profile_from_value(
                 cast(Mapping[str, object] | None, value["embedding_profile"])
             ),
+            embedding_encoder_identity=value.get("embedding_encoder_identity"),
             sensitivity_profile=_sensitivity_profile_from_value(
                 cast(Mapping[str, object] | None, value["sensitivity_profile"])
             ),
@@ -657,10 +665,72 @@ class PrecheckOrchestrator:
                 outcome.work.work_id for outcome in key_frames.values()
             ],
             dataset_name=config.dataset_name,
+            dataset_context=(
+                {
+                    "provided_by": "mediasense.precheck",
+                    "content": self._visual_execution_summary(
+                        accounting_run_id, config
+                    ),
+                },
+            ),
             external_policy_status=geocode.status,
         )
         self._checkpoint(run_ref, "publishing", total=1)
         return self.run_control.publish_result(run_ref, draft)
+
+    def _visual_execution_summary(
+        self, run_id: str, config: PrecheckExecutionConfig
+    ) -> dict[str, object]:
+        work = WorkStore(self.database_path)
+        records = tuple(work.iter_run_work(run_id, capability="image-embedding"))
+        succeeded = sum(record.status is WorkStatus.SUCCEEDED for record in records)
+        executed = sum(
+            any(
+                attempt.run_id == run_id
+                for attempt in work.get_attempts(record.work_id)
+            )
+            for record in records
+        )
+        failures: dict[str, int] = {}
+        for record in records:
+            if record.last_failure_code:
+                failures[record.last_failure_code] = (
+                    failures.get(record.last_failure_code, 0) + 1
+                )
+        return {
+            "name": "visual_compression_execution",
+            "embedding": {
+                "requested": config.embedding_profile is not None,
+                "effective_profile": _embedding_profile_value(config.embedding_profile),
+                "encoder_identity": config.embedding_encoder_identity,
+                "state": "disabled"
+                if config.embedding_profile is None
+                else (
+                    "no_eligible_inputs"
+                    if not records
+                    else "completed"
+                    if succeeded == len(records)
+                    else "degraded"
+                ),
+                "reason": "no_local_profile_configured"
+                if config.embedding_profile is None
+                else None,
+                "work_records": len(records),
+                "succeeded": succeeded,
+                "executed_this_run": executed,
+                "reused_without_execution": sum(
+                    record.status is WorkStatus.SUCCEEDED
+                    and not any(
+                        attempt.run_id == run_id
+                        for attempt in work.get_attempts(record.work_id)
+                    )
+                    for record in records
+                ),
+                "failure_codes": failures,
+            },
+            "coverage_limit": "Embeddings compare prepared bundle representatives and sampled video frames; unprepared members remain unverified.",
+            "plan_inspection_and_model_cost": "not_observed_by_precheck",
+        }
 
     def _metadata(
         self,
@@ -920,6 +990,25 @@ class PrecheckOrchestrator:
                 "The configured local embedding backend is unavailable.",
                 "Configure the pinned local embedding backend and resume.",
             )
+        if (
+            config.embedding_encoder_identity is not None
+            and config.embedding_encoder_identity != encoder.identity
+        ):
+            raise _BlockedExecution(
+                "embedding_backend_changed",
+                "The encoder differs from this Run's retained configuration.",
+                "Restore the retained encoder, or cancel and start a new Run.",
+            )
+        check_available = getattr(encoder, "check_available", None)
+        if callable(check_available):
+            try:
+                check_available()
+            except EmbeddingBackendUnavailable as error:
+                raise _BlockedExecution(
+                    "embedding_backend_unavailable",
+                    str(error),
+                    "Install the configured local dependencies/model and resume this Run.",
+                ) from error
         visual = tuple(
             outcome
             for outcome in (*renditions, *frames)
@@ -1106,7 +1195,11 @@ class PrecheckOrchestrator:
             member_paths = _bundle_member_paths(bundle_work)
             visual = visual_by_path.get(representative_path)
             if visual is None:
-                continue
+                alternatives = sorted(path for path in member_paths if path in visual_by_path)
+                if not alternatives:
+                    continue
+                representative_path = alternatives[0]
+                visual = visual_by_path[representative_path]
             inputs.append(
                 self._compression_input(
                     representative_path,
@@ -1131,7 +1224,8 @@ class PrecheckOrchestrator:
             run_id,
             inputs,
             profile=AdaptiveCompressionProfile(
-                target_entries=config.compression_target
+                target_entries=config.compression_target,
+                content_based_boundaries=config.embedding_profile is not None,
             ),
         )
         representatives = tuple(

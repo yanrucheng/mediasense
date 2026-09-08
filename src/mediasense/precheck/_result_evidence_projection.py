@@ -147,7 +147,7 @@ def _role_observation(role: str, group_id: str) -> dict[str, object]:
         "name": "evidence_role",
         "status": "available",
         "value": {"group_ref": group_id, "role": role},
-        "basis": "builtin-ranked-adjacent-compression-v1",
+        "basis": "prepared compression candidate",
     }
 
 

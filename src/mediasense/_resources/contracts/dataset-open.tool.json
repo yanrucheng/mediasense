@@ -59,6 +59,19 @@
                 "type": "array",
                 "items": { "type": "string", "minLength": 1 }
               },
+              "local_embedding": {
+                "description": "Local encoder configuration, not proof of execution. Run Work and sealed Result context report execution/reuse/failure.",
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["state", "reason", "profile", "execution", "model_downloads"],
+                "properties": {
+                  "state": { "enum": ["disabled", "configured"] },
+                  "reason": { "type": "string" },
+                  "profile": { "type": ["object", "null"] },
+                  "execution": { "const": "not_checked" },
+                  "model_downloads": { "const": false }
+                }
+              },
               "providers": {
                 "type": "object",
                 "additionalProperties": false,

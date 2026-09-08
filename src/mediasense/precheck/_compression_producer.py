@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 import json
 from pathlib import Path
@@ -96,6 +96,21 @@ class AdaptiveCompressionProducer:
                 for item in group_inputs
                 for record in work_by_path[item.relative_path]
             }
+            if any(
+                item.bundle_work_id is not None
+                and _mapping_value(
+                    attached[item.bundle_work_id].output, "candidate"
+                ).get("representative_path")
+                != item.relative_path.as_posix()
+                for item in group_inputs
+            ):
+                group = replace(
+                    group,
+                    qualifications=(
+                        *group.qualifications,
+                        "unavailable_bundle_representative_replaced",
+                    ),
+                )
             source_dependencies = {
                 (dependency.kind, dependency.key): dependency
                 for record in upstream_records.values()
@@ -105,6 +120,16 @@ class AdaptiveCompressionProducer:
                 and _source_dependency_path(dependency) in group.members
             }
             dependencies = [
+                WorkDependency(
+                    DependencyKind.PARAMETER,
+                    "selection_basis",
+                    json.dumps(group.basis, sort_keys=True),
+                ),
+                WorkDependency(
+                    DependencyKind.PARAMETER,
+                    "content_based_boundaries",
+                    str(profile.content_based_boundaries),
+                ),
                 *source_dependencies.values(),
                 *(upstream_dependency(record) for record in upstream_records.values()),
                 WorkDependency(DependencyKind.PARAMETER, "group_id", group.group_id),
@@ -152,7 +177,7 @@ class AdaptiveCompressionProducer:
                 )
             spec = WorkSpec(
                 capability="adaptive-compression-group",
-                producer_identity="builtin-ranked-adjacent-compression-v1",
+                producer_identity="builtin-adaptive-compression-v2",
                 dependencies=tuple(dependencies),
             )
             record = self.work.ensure_work(run_id, spec)
@@ -200,9 +225,9 @@ class AdaptiveCompressionProducer:
                 attached, item.bundle_work_id, {"bundle-candidate"}, "bundle"
             )
             records.append(bundle)
-            candidate = _mapping_value(bundle.output, "candidate")
-            if candidate.get("representative_path") != item.relative_path.as_posix():
-                raise ValueError("bundle Work representative does not match input")
+            _mapping_value(bundle.output, "candidate")
+            # A bundle's preferred representative is a candidate, not a guarantee
+            # of decodability. Any verified visual member can represent it.
             if _record_source_paths(bundle) != set(item.member_paths):
                 raise ValueError("bundle Work membership does not match input")
         elif item.member_paths != (item.relative_path,):
@@ -384,6 +409,7 @@ def _group_value(group: CompressionGroup) -> dict[str, object]:
 
 def _profile_value(profile: AdaptiveCompressionProfile) -> dict[str, object]:
     return {
+        "content_based_boundaries": profile.content_based_boundaries,
         "content_distance_scale": profile.content_distance_scale,
         "exact_representative_limit": profile.exact_representative_limit,
         "representative_comparison_budget": (profile.representative_comparison_budget),

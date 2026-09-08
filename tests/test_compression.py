@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from pathlib import Path
+from datetime import datetime, timedelta, timezone
+import math
 
 from PIL import Image, ImageStat
 
@@ -19,6 +21,45 @@ from mediasense.precheck import (
     WorkStatus,
     build_adaptive_groups,
 )
+
+
+def test_content_boundaries_reduce_duplicates_and_preserve_rare_change_over_budget():
+    points = tuple(
+        CompressionPoint(
+            Path(f"item-{i}.jpg"),
+            datetime(2026, 5, 1, tzinfo=timezone.utc) + timedelta(minutes=2 * i),
+            embedding=vector,
+        )
+        for i, vector in enumerate([(1, 0)] * 5 + [(0, 1)] + [(1, 0)] * 5)
+    )
+    profile = AdaptiveCompressionProfile(
+        target_entries=1, content_based_boundaries=True
+    )
+    groups = build_adaptive_groups(points, profile)
+    assert len(groups) == 3
+    assert groups[1].members == (Path("item-5.jpg"),)
+    assert sum(len(group.members) for group in groups) == 11
+    assert sum(group.basis["representative_comparison_count"] for group in groups) > 0
+    assert len(build_adaptive_groups(points[:5], profile)) == 1
+
+
+def test_content_boundaries_detect_drift_and_missing_evidence_remains_visible():
+    points = tuple(
+        CompressionPoint(
+            Path(f"item-{i}.jpg"), embedding=(math.cos(i * 0.2), math.sin(i * 0.2))
+        )
+        for i in range(10)
+    )
+    groups = build_adaptive_groups(
+        points,
+        AdaptiveCompressionProfile(target_entries=1, content_based_boundaries=True),
+    )
+    assert len(groups) >= 2
+    missing = build_adaptive_groups(
+        [CompressionPoint(Path("missing.jpg"))],
+        AdaptiveCompressionProfile(target_entries=1, content_based_boundaries=True),
+    )
+    assert "limited_similarity_evidence" in missing[0].qualifications
 
 
 def _closed_run(database: Path, source: Path) -> str:
@@ -267,7 +308,12 @@ def test_bundle_members_are_covered_by_one_compressed_representative(
             "code": "limited_similarity_evidence",
             "effect": "limits_interpretation",
             "message": "This compression claim has incomplete comparison evidence.",
-        }
+        },
+        {
+            "code": "bundle_members_not_visually_compared",
+            "effect": "limits_interpretation",
+            "message": "This compression claim has incomplete comparison evidence.",
+        },
     ]
     assert raw_account["condition"] == "usable"
     assert result_view["readiness"] == "plan_ready"

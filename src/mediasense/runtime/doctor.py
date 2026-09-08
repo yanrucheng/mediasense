@@ -153,6 +153,19 @@ def diagnose() -> dict[str, object]:
     local_models = all(
         find_spec(name) is not None for name in ("torch", "transformers", "nudenet")
     )
+    embedding_dependencies = all(
+        find_spec(name) is not None for name in ("torch", "transformers")
+    )
+    checks.append(
+        Diagnostic(
+            "embedding",
+            "ok" if embedding_dependencies else "warning",
+            "Encoder dependencies available; pinned model/device availability is checked locally at execution."
+            if embedding_dependencies
+            else "Embedding unavailable: install the embeddings extra in this Host environment.",
+            False,
+        )
+    )
     checks.append(
         Diagnostic(
             "local_models",

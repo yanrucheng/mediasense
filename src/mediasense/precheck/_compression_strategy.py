@@ -25,6 +25,7 @@ class AdaptiveCompressionProfile:
     representative_top_k: float = 0.5
     exact_representative_limit: int = 256
     representative_comparison_budget: int = 65_536
+    content_based_boundaries: bool = False
 
     def __post_init__(self) -> None:
         if self.target_entries < 1:
@@ -131,6 +132,38 @@ def build_adaptive_groups(
             reverse=True,
         )[: target - 1]
     }
+    if profile.content_based_boundaries:
+        # Missing comparisons retain the bounded fallback. Available content can
+        # collapse redundant entries, but a strong discontinuity always survives
+        # the count budget. Anchor comparison prevents gradual adjacent drift.
+        fallback_cuts = selected_cuts
+        selected_cuts = set()
+        anchor = ordered[0]
+        for index, boundary in enumerate(boundaries, 1):
+            right = ordered[index]
+            left = ordered[index - 1]
+            missing = (
+                left.embedding is None
+                or right.embedding is None
+                or anchor.embedding is None
+            )
+            discontinuity = any(
+                boundary[key] >= 1
+                for key in (
+                    "date_change",
+                    "time_distance",
+                    "spatial_distance",
+                    "content_distance",
+                )
+            )
+            drift = (
+                not missing
+                and (1 - cosine_similarity(anchor.embedding, right.embedding))
+                >= profile.content_distance_scale
+            )
+            if discontinuity or drift or (missing and index in fallback_cuts):
+                selected_cuts.add(index)
+                anchor = right
     partitions: list[tuple[CompressionPoint, ...]] = []
     start = 0
     for index in range(1, len(ordered)):
@@ -291,6 +324,8 @@ def _compression_group(
         qualifications.append("limited_similarity_evidence")
     if representative_method == "bounded-even-sample-v1":
         qualifications.append("bounded_representative_selection")
+    if any(len(point.members) > 1 for point in points):
+        qualifications.append("bundle_members_not_visually_compared")
     conflicts = _conflict_paths(points, profile)
     if conflicts:
         qualifications.append("candidate_axes_disagree")
@@ -308,7 +343,11 @@ def _compression_group(
         qualifications=tuple(qualifications),
         basis={
             "left_boundary": left_boundary,
-            "method": "ranked-adjacent-boundaries-v1",
+            "method": "content-boundaries-with-anchor-v1"
+            if profile.content_based_boundaries
+            else "ranked-adjacent-boundaries-v1",
+            "embedded_point_count": len(embedded),
+            "candidate_point_count": len(points),
             "representative_comparison_budget": (
                 profile.representative_comparison_budget
             ),

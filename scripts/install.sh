@@ -3,14 +3,16 @@ set -euo pipefail
 
 usage() {
   printf '%s\n' \
-    'Usage: ./scripts/install.sh [--offline] [--force]' \
+    'Usage: ./scripts/install.sh [--offline] [--force] [--embeddings]' \
     '' \
     'Installs the current trusted checkout with uv.' \
-    'The script never installs uv, system packages, optional models, or Agent configuration.'
+    '--embeddings installs local encoder dependencies; model weights remain separately provisioned.' \
+    'The script never installs uv, system packages, model weights, or Agent configuration.'
 }
 
 offline=false
 force=false
+embeddings=false
 while (($#)); do
   case "$1" in
     --offline)
@@ -18,6 +20,9 @@ while (($#)); do
       ;;
     --force)
       force=true
+      ;;
+    --embeddings)
+      embeddings=true
       ;;
     -h|--help)
       usage
@@ -50,6 +55,10 @@ fi
 if [[ "$force" == true ]]; then
   arguments+=(--force)
 fi
-arguments+=("$project_root")
+if [[ "$embeddings" == true ]]; then
+  arguments+=("$project_root[embeddings]")
+else
+  arguments+=("$project_root")
+fi
 
 exec uv "${arguments[@]}"

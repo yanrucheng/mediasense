@@ -36,6 +36,23 @@ models, Agent Skills, user-level configuration, or project-level configuration.
 Use `--offline` to prohibit dependency downloads or `--force` to explicitly
 replace an existing MediaSense tool environment.
 
+For local visual embeddings, use `./scripts/install.sh --embeddings` (add `--force`
+when replacing an existing installation). This installs the encoder dependencies
+into the same environment as the MCP Host, not into a separate shell environment.
+It does not download model weights. Provision a trusted pinned ChineseCLIP model
+locally, then use the `[embedding]` table documented under [Configuration](#configuration).
+
+The model is an adapter choice, not the compression contract. Use a revision that
+is fully present in the local model cache and dimensions appropriate to that
+model. `mps` and `cuda` require a usable corresponding device. The CPU default
+avoids silently assuming an accelerator; measure its local cost before adopting
+a large model for routine use. Set `[embedding] enabled = false` to disable it.
+Absent configuration remains disabled and is reported as such. Dataset Open
+reports the effective configuration; model loading is local-only and Run status
+reports unavailable prerequisites. Restore the same encoder to resume a Run;
+changing its model, library version or device requires a new Run. Sealed Result
+context distinguishes actual execution, reuse, failure and comparison limits.
+
 For a built release artifact, install the exact wheel instead:
 
 ```bash
@@ -113,20 +130,39 @@ The workspace must not be inside the declared source root.
 
 ## Configuration
 
-The initial configuration files are optional. MediaSense reads values in this
-order, with later layers overriding earlier ones:
+The configuration files are optional. The runtime configuration loader reads
+values in this order, with later layers overriding earlier ones:
 
 1. built-in defaults;
 2. `~/Library/Application Support/MediaSense/config.toml`;
-3. `<dataset-workspace>/config.toml`;
-4. explicit command options.
+3. `<dataset-workspace>/config.toml`.
 
-Supported initial keys are:
+Provider keys override individually. A Dataset `[embedding]` table replaces the
+user-level embedding table as a whole: supply a complete enabled profile or
+`enabled = false`. Command options such as `--workspace` select operation inputs;
+there is no generic CLI override for every configuration key.
+
+The complete currently supported TOML key set is:
+
+| Section | Keys | Default / interpretation |
+| --- | --- | --- |
+| `providers` | `amap_api_key_env`, `google_maps_api_key_env` | Names of credential environment variables; defaults below |
+| `embedding` | `enabled`, `model_id`, `revision`, `dimensions`, `device`, `batch_size` | Absent table disables embedding. Enabled profiles require model ID, pinned revision and dimensions; device defaults to `cpu`, batch size to `4` |
+
+Example with local embedding explicitly enabled:
 
 ```toml
 [providers]
 amap_api_key_env = "AMAP_API_KEY"
 google_maps_api_key_env = "GOOGLE_MAPS_API_KEY"
+
+[embedding]
+enabled = true
+model_id = "OFA-Sys/chinese-clip-vit-huge-patch14"
+revision = "503e16b560aff94c1922f13a86a7693d36957a4f"
+dimensions = 1024
+device = "cpu"
+batch_size = 4
 ```
 
 Configuration names environment variables that contain credentials; credentials
@@ -136,6 +172,21 @@ Human authorizes the exact frozen Provider request batch and disclosed policy.
 Diagnostics report credential and capability status plus Provider data handling;
 an unknown policy is reported as `unknown`, never as `none`.
 `MEDIASENSE_CONFIG_HOME` may select another machine-local configuration base.
+
+Other setup has distinct owners: `MEDIASENSE_DATA_HOME` selects the default
+Dataset storage base; the Agent client's MCP registration selects its executable
+and inherited environment; ExifTool, FFmpeg, Python extras and local model weights
+are installation prerequisites. They are not additional `config.toml` keys.
+Scope decisions, external-effect authorization and Plan preferences belong to
+their Dataset/Run/Plan operations rather than persistent provider configuration.
+
+Internal producer parameters are not all exposed as user configuration. In
+particular, the installed Host still uses the internal metadata timezone default
+(`Asia/Shanghai`), and the sensitivity adapter has no Host configuration/wiring.
+Do not treat these as options a user forgot to configure. Dataset Open reports
+the effective supported TOML configuration; `doctor` checks installation facts,
+but neither currently provides a complete inventory of every internal capability
+and its missing product integration.
 
 ## Upgrade and rollback
 

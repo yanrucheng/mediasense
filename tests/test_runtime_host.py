@@ -596,6 +596,114 @@ def _wait_for_precheck_attention(
     raise AssertionError("PreCheck Run did not reach an attention or terminal state")
 
 
+def test_unavailable_preferred_representative_uses_prepared_member(
+    tmp_path, monkeypatch
+):
+    import json
+
+    monkeypatch.setenv("MEDIASENSE_CONFIG_HOME", str(tmp_path / "config"))
+    source = tmp_path / "source"
+    source.mkdir()
+    (source / "pair.JPG").write_bytes(b"broken jpeg")
+    Image.new("RGB", (24, 24), "blue").save(source / "pair.PNG")
+    host = RuntimeHost()
+    opened = host.open_dataset(str(source), str(tmp_path / "workspace"))
+    dataset = opened["dataset_ref"]
+
+    def call(request):
+        return host.call_tool(
+            "mediasense.precheck.run",
+            dataset_ref=dataset,
+            request={"dataset_ref": dataset, **request},
+        )
+
+    run = call({"action": "start", "request_id": "request:fallback"})["run_ref"]
+    paused = _wait_for_precheck_attention(host, dataset, run)
+    call(
+        {
+            "action": "resume",
+            "run_ref": run,
+            "decision": {
+                "kind": "source_scope",
+                "inventory_fingerprint": paused["confirmation"][
+                    "inventory_fingerprint"
+                ],
+                "default_disposition": "include",
+                "exceptions": [],
+            },
+        }
+    )
+    finished = _wait_for_precheck_attention(host, dataset, run)
+    assert finished["state"] == "completed", finished
+    assert (source / "pair.JPG").read_bytes() == b"broken jpeg"
+    database = tmp_path / "workspace/precheck/work.sqlite3"
+    with sqlite3.connect(database) as db:
+        group = json.loads(
+            db.execute(
+                "SELECT output_json FROM work_records WHERE capability='adaptive-compression-group'"
+            ).fetchone()[0]
+        )["group"]
+    assert group["representative_path"] == "pair.PNG"
+    assert group["member_count"] == 2
+    assert "unavailable_bundle_representative_replaced" in group["qualifications"]
+
+
+def test_configured_unavailable_encoder_reports_blocked_not_success(
+    tmp_path, monkeypatch
+):
+    from mediasense.precheck.embedding import EmbeddingBackendUnavailable
+
+    config = tmp_path / "config"
+    config.mkdir()
+    (config / "config.toml").write_text(
+        '[embedding]\nmodel_id="test/model"\nrevision="'
+        + "a" * 40
+        + '"\ndimensions=4\n'
+    )
+    monkeypatch.setenv("MEDIASENSE_CONFIG_HOME", str(config))
+
+    def unavailable(_self):
+        raise EmbeddingBackendUnavailable("test local weights missing")
+
+    monkeypatch.setattr(
+        "mediasense.precheck.embedding.ChineseCLIPEncoder.check_available", unavailable
+    )
+    source = tmp_path / "source"
+    source.mkdir()
+    Image.new("RGB", (24, 24), "blue").save(source / "photo.jpg")
+    host = RuntimeHost()
+    opened = host.open_dataset(str(source), str(tmp_path / "workspace"))
+    assert opened["configuration"]["local_embedding"]["state"] == "configured"
+    dataset = opened["dataset_ref"]
+
+    def call(request):
+        return host.call_tool(
+            "mediasense.precheck.run",
+            dataset_ref=dataset,
+            request={"dataset_ref": dataset, **request},
+        )
+
+    run = call({"action": "start", "request_id": "request:unavailable"})["run_ref"]
+    paused = _wait_for_precheck_attention(host, dataset, run)
+    call(
+        {
+            "action": "resume",
+            "run_ref": run,
+            "decision": {
+                "kind": "source_scope",
+                "inventory_fingerprint": paused["confirmation"][
+                    "inventory_fingerprint"
+                ],
+                "default_disposition": "include",
+                "exceptions": [],
+            },
+        }
+    )
+    blocked = _wait_for_precheck_attention(host, dataset, run)
+    assert blocked["state"] == "blocked"
+    assert blocked["reason"]["code"] == "embedding_backend_unavailable"
+
+
 def test_real_composition_creates_plan_from_precheck_result(tmp_path: Path) -> None:
     host, dataset_ref, result_ref, _root_ref, source, source_before = (
         _opened_host_with_plan_ready_result(tmp_path)

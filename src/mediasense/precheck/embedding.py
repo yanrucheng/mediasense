@@ -117,6 +117,10 @@ class ChineseCLIPEncoder:
     def encode_image(self, image_path: Path) -> Sequence[float]:
         return self.encode_images((image_path,))[0]
 
+    def check_available(self) -> None:
+        """Check the actual local backend before admitting per-image Work."""
+        self._load()
+
     def encode_images(self, image_paths: Sequence[Path]) -> Sequence[Sequence[float]]:
         model, processor, torch = self._load()
         images = []
@@ -151,6 +155,14 @@ class ChineseCLIPEncoder:
             raise EmbeddingBackendUnavailable(
                 "ChineseCLIP requires the local-models optional dependencies"
             ) from error
+        if self.device == "mps" and not torch.backends.mps.is_available():
+            raise EmbeddingBackendUnavailable(
+                "The configured MPS device is unavailable"
+            )
+        if self.device == "cuda" and not torch.cuda.is_available():
+            raise EmbeddingBackendUnavailable(
+                "The configured CUDA device is unavailable"
+            )
         try:
             self._model = ChineseCLIPModel.from_pretrained(
                 self.model_id,
@@ -165,7 +177,7 @@ class ChineseCLIPEncoder:
             )
         except (OSError, ValueError) as error:
             raise EmbeddingBackendUnavailable(
-                "the pinned ChineseCLIP model is not available locally"
+                "the pinned ChineseCLIP model or requested device is not available locally"
             ) from error
         return self._model, self._processor, torch
 
@@ -299,6 +311,10 @@ class EmbeddingProducer:
                     "embedding batch output count does not match input"
                 )
         except Exception as error:
+            if not isinstance(error, (EmbeddingError, OSError, ValueError)):
+                for item in prepared:
+                    self._fail_prepared(item, error)
+                raise
             if len(prepared) > 1:
                 midpoint = len(prepared) // 2
                 return {
@@ -344,6 +360,9 @@ class EmbeddingProducer:
             return EmbeddingOutcome(completed, artifact, False)
         except Exception as error:
             draft.path.unlink(missing_ok=True)
+            if not isinstance(error, (EmbeddingError, OSError, ValueError)):
+                self._fail_prepared(prepared, error)
+                raise
             return self._fail_prepared(prepared, error)
 
     def _fail_prepared(
