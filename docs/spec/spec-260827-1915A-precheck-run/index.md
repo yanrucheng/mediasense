@@ -4,7 +4,7 @@ title: "MediaSense PreCheck Run Tool Contract"
 type: spec
 status: active
 created: 2026-08-27
-updated: 2026-09-07
+updated: 2026-09-08
 timezone: "Asia/Shanghai"
 parent: "index-spec"
 depends-on:
@@ -22,6 +22,11 @@ tags: ["mediasense", "precheck", "tool-contract", "run-lifecycle"]
 [lifecycle.mock.json](lifecycle.mock.json) 是合成调用示例。
 本合约采用零公开 API 兼容政策；旧 request 包装、operation 别名及冗余返回不再公开。
 源媒体只读；不可变 Result 的封存内容和引用不因接口更新而改写。
+
+范围清单只揭示请求层级：目录的 `representative_paths` 为空，文件项可重复其自身路径。
+更深的名称需要显式 `scope_path` 展开；发现错误只返回该层级路径和错误代码，不回显隐藏后代的诊断文本。
+这减少提前暴露，不提供盲测隔离：正常 `accounts_for` 仍保留排除项的精确身份和追溯。
+独立评估的允许输入和干净上下文由评估入口负责，不能把 scope exclusion 当作检索访问控制。
 
 ### D1. MCP 方案 A 与单一规范
 

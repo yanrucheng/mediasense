@@ -4,7 +4,7 @@ title: "MediaSense PreCheck 最小接口草图"
 type: spec
 status: draft
 created: 2026-09-07
-updated: 2026-09-07
+updated: 2026-09-08
 timezone: "Asia/Shanghai"
 parent: "index-spec"
 depends-on:
@@ -518,11 +518,11 @@ Command：`mediasense.precheck.run resume`
           { "path": "旅行", "node_type": "directory", "file_count": 4, "byte_count": 12500000,
             "unknown_size_count": 0, "kind_counts": { "image": 2, "video": 1, "gpx": 1 },
             "size_buckets": { "under_1_mib": 1, "1_to_10_mib": 3, "over_10_mib": 0 },
-            "representative_paths": ["旅行/001.JPG"], "child_count": 0 },
+            "representative_paths": [], "child_count": 0 },
           { "path": "历史输出", "node_type": "directory", "file_count": 1, "byte_count": 2000000,
             "unknown_size_count": 0, "kind_counts": { "image": 1 },
             "size_buckets": { "under_1_mib": 0, "1_to_10_mib": 1, "over_10_mib": 0 },
-            "representative_paths": ["历史输出/001.JPG"], "child_count": 0 }
+            "representative_paths": [], "child_count": 0 }
         ],
         "next_after": null
       }

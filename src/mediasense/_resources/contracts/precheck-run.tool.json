@@ -1125,6 +1125,7 @@
             }
           },
           "representative_paths": {
+            "description": "Only the path of a file entry at the requested level; empty for directories. Descendant names require explicit scope_path navigation.",
             "type": "array",
             "minItems": 0,
             "items": {

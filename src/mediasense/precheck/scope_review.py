@@ -41,7 +41,13 @@ class _ScopeEntry:
             self.byte_count += size
         else:
             self.unknown_size_count += 1
-        if len(self.representative_paths) < _REPRESENTATIVE_LIMIT:
+        # Scope review reveals only the requested level. Descendant filenames
+        # may themselves contain previous semantic answers, even when excluded
+        # immediately afterwards. Explicit navigation still exposes exact paths.
+        if (
+            self.node_type == "file"
+            and len(self.representative_paths) < _REPRESENTATIVE_LIMIT
+        ):
             self.representative_paths.append(str(fact["relative_path"]))
 
 
@@ -114,12 +120,15 @@ def build_scope_inventory(
         }
         digest.update((_json({"issue": canonical}) + "\n").encode())
         if len(issue_values) < 3:
+            issue_parts = PurePosixPath(canonical["relative_path"]).parts
+            if not _is_at_or_below(issue_parts, root_parts):
+                continue
+            visible_path = PurePosixPath(*issue_parts[: len(root_parts) + 1]).as_posix()
             issue_values.append(
                 {
-                    "path": canonical["relative_path"],
+                    "path": visible_path,
                     "code": canonical["code"],
-                    "message": "; ".join(map(str, canonical["basis"]))
-                    or canonical["code"],
+                    "message": canonical["code"],
                 }
             )
     if root_path != "." and not selected_seen:
