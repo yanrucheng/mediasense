@@ -4,7 +4,7 @@ title: "MediaSense PreCheck Compression Boundary"
 type: design
 status: active
 created: 2026-08-26
-updated: 2026-09-09
+updated: 2026-09-10
 timezone: "Asia/Shanghai"
 parent: "design-260825-2235-mediasense-information-architecture"
 depends-on:
@@ -166,7 +166,7 @@ Tool 的默认代表阅读把 E 的读取入口、E 自身属性、R 的关联�
 
 长任务的进度、暂停、恢复、失效与复用属于可变 Working Run；状态仍遵守 Foundation 的 execution-state honesty。源只读和外部效果授权由 Tool 执行保证。必要来源与效果证据可以进入 Result，但完整日志、缓存和数据库表不是另一套 Plan 输入。
 
-本页说明已确认的稳定概念；[Read 合约](../../spec/contract/precheck-read/index.md)说明当前调用格式和语义，其第一里程碑已完成；第二里程碑才同步实现、消费者与发布副本，不引入版本路由或双写。零公开 API 兼容政策不授权实现 Agent 自行改变已经确认的承诺，也不授权改写旧 Result。
+本页说明已确认的稳定概念；[Read 合约](../../spec/contract/precheck-read/index.md)说明当前调用格式和语义，其第一、第二里程碑均已通过用户验收，实现、消费者与发布副本以 0.9.0 同步交付，不引入版本路由或双写。零公开 API 兼容政策不授权实现 Agent 自行改变已经确认的承诺，也不授权改写旧 Result。
 
 每次新增字段、层级或实体，都应说明稳定目的、权威来源、删除损失，以及能否复用或推导。更强的 Agent 应能换用更好的调查方法，而不必先拆掉今天固定的流程。
 

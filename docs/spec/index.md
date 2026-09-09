@@ -4,7 +4,7 @@ title: "Specifications"
 type: index
 status: active
 created: 2026-08-26
-updated: 2026-09-09
+updated: 2026-09-10
 timezone: "Asia/Shanghai"
 parent: "index-docs"
 depends-on: []

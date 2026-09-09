@@ -47,7 +47,7 @@ Implementation status is independent of the difference class:
 | 60-second adjacent chaining | Chained adjacent groups without limiting total span | `precheck` | Intentionally change or bound after evaluation; never hide span | Over-merge/under-merge review, span and boundary metrics |
 | Representative selection | Chose one preferred file per bundle | `precheck` and `plan` | Preserve stable identity; improve semantic evidence selection separately | Representative stability and coverage |
 | Batch metadata extraction | Used ExifTool and configured tags | `precheck` | Preserve and strengthen provenance/error semantics | Value equality, source tags, failures, throughput |
-| Coordinate reverse geocoding and nearby-place lookup | Reverse-geocoded each GPS-bearing bundle representative; AMap returned address/POI in one logical lookup, while Google called reverse and nearby endpoints and could switch provider/language across neighboring media | Shared Geo capability, consumed by `precheck` and available to `plan` for bounded investigation | Preserve datum conversion, address/POI normalization, fallback, and rate limiting; replace hidden continuity state, unstable per-file cache identity, failure ambiguity, and uncounted requests with a stage-neutral Tool, explicit authorization, stable observation identity, and enforced budgets. Existing PreCheck acquisition units and per-Source-Item projection are the current design to compare in M2; contract finalization does not approve their thresholds or applicability | Located Source Item outcome coverage, query-point/source-coordinate differences and reuse limits, unique logical-query count, actual provider requests, switching hit rate, normalized values, reuse, privacy, user confirmation, and failure/partial semantics |
+| Coordinate reverse geocoding and nearby-place lookup | Reverse-geocoded each GPS-bearing bundle representative; AMap returned address/POI in one logical lookup, while Google called reverse and nearby endpoints and could switch provider/language across neighboring media | Shared Geo capability, consumed by `precheck` and available to `plan` for bounded investigation | Preserve datum conversion, address/POI normalization, fallback, and rate limiting; replace hidden continuity state, unstable per-file cache identity, failure ambiguity, and uncounted requests with a stage-neutral Tool, explicit authorization, stable observation identity, and enforced budgets. The accepted M2 evidence below covers acquisition-unit boundaries and per-Source-Item projection; real-place threshold quality and applicability remain uncertified | Located Source Item outcome coverage, query-point/source-coordinate differences and reuse limits, unique logical-query count, actual provider requests, switching hit rate, normalized values, reuse, privacy, user confirmation, and failure/partial semantics |
 | Timestamp fallback | Batch and single-item paths behaved differently | `precheck` | Intentionally change: unified typed candidates and confidence | `000114`, `260428`, missing-time fixtures |
 | Video frame sampling | Up to 20 frames, roughly 10-second interval | `precheck` | Preserve the capability, leave sampling strategy open | Decode coverage, representative quality, cost |
 | Thumbnail generation | Cached ordinary and high-resolution thumbnails | `precheck` | Preserve with versioned profiles and exact invalidation | Visual fidelity, cache hits, regenerated work |
@@ -98,7 +98,35 @@ Implementation status is independent of the difference class:
 
 应用升为 **0.9.0**，同步项目锁版本和四个 Skill 的 `0.9.x` 声明；Read 是不兼容协议变化，不能继续作为 0.8.0 或兼容 patch 发布。机器合约和已验收运行时代码保持不变；Dataset manifest 3、PreCheck store 17、Plan store 3、Geo journal 1、Apply store 2 与 Result artifact 2 均不随应用机械升版。
 
-下方三轮 wheel 都是**标记为 0.8.0 的 M2 验收候选**，不是最终 0.9.0 发布包；其哈希、原日志与产物保留。原 848 项默认测试、96 项合约专项、33 项安装回归和受控双模型执行沿用各自原验证范围。本次版本检查、隔离包验证及实际安装证据在完成后记录于本节。
+下方三轮 wheel 都是**标记为 0.8.0 的 M2 验收候选**，不是最终 0.9.0 发布包；其哈希、原日志与产物保留。原 848 项默认测试、96 项合约专项、33 项安装回归和受控双模型执行沿用各自原验证范围。本次版本检查、隔离包验证及实际安装证据如下；未重跑模型或真实 Dataset，也未将旧日志冒充本次执行。
+
+最终发布源码为 `8a3df9fa9a96b7057a706e13936f91b983c6b773` 的干净 Git 导出，构建不读取混有无关评测引用的工作区 README。最终 wheel：
+
+- 路径：`/Users/chengyanru/repos/personal/mediasense/dist/mediasense-0.9.0-py3-none-any.whl`
+- SHA-256：**`66745af1eed9fe4d2d0ae7f9dc31fa47c1a9a84a5826559d2ab8551c9371344a`**
+- 源码／导出／wheel／隔离安装／实际安装的 **105 个 package 文件逐字节一致**。与已验收 `121949a6…` 候选相比，仅四个 Skill 的兼容版本声明改变；Python 实现、全部机器合约与 Skill schema 引用保持原字节。wheel 元数据为 0.9.0，README 来自干净提交，不含无关评测入口。后续证据文档提交不改变这个 wheel。
+
+本次重新执行的检查：
+
+| 检查 | 本次结果与范围 |
+| --- | --- |
+| `uv lock --check --offline`、`ruff check src tests`、`git diff --check` | 通过；锁文件只有 mediasense 项目版本变化，无新依赖下载 |
+| 隔离 3.13 环境运行版本、CLI、Host/config、Honeycomb、Skill 与合约检查 | **155 passed，10.92 s**；使用已安装 wheel，`-o pythonpath=''` 禁用源码注入，包含原96项合约专项。发布快照一致性检查已取消 M1 时对 Read 的豁免，九份机器定义全部检查 |
+| `run_distribution_smoke.py <0.9.0-wheel> --offline` | **distribution smoke: ok**；已有 Python 3.11、独立 uv tool/Honeycomb 环境，CLI/doctor、7 Tool、MCP dispatch、schema 和四个 Skill 通过 |
+| `run_precheck_corrections_smoke.py --host <isolated-install>/bin/mediasense` | Python 3.13 安装 Host 通过；metadata 拒绝依据、合法524278/524288字节终页、真正超限局部故障、同一 limit=2 的两种中间项完整续读、历史3条缺口与1条可证明输入均保留；source/legacy 原字节不变 |
+| 实际 CLI 和已有注册的 MCP 启动命令 | version/doctor 为 **0.9.0 / ok**；新建的验证 MCP 进程 initialize 报0.9.0，7个 Tool 可发现；临时合成 Dataset 的 **10份完整 Read 返回与隔离保存产物逐对象相同**，单份 structuredContent、content=[] |
+
+实际安装收尾：
+
+- CLI 仍是 `/Users/chengyanru/.local/bin/mediasense`，指向 `/Users/chengyanru/.local/share/uv/tools/mediasense/bin/mediasense`，由原 `uv tool` 管理。使用上述确切 wheel 离线替换，保留 Python **3.13.5**、`embeddings` extra 及全部 **53个依赖的原版本**（含 Torch 2.13.0、Transformers 4.57.6）；uv 安装日志确认只替换 mediasense。receipt 保留 wheel 路径、extra 和已展开的依赖版本约束，不依赖临时约束文件存活。
+- 真正在用的四个 Skill 在 `/Users/chengyanru/.agents/skills/{mediasense,mediasense-precheck,mediasense-plan,mediasense-apply}`。升级前11个文件均精确匹配仓库历史版本，无本地定制；由 **0.9.0 自带的 `mediasense skills upgrade --target /Users/chengyanru/.agents/skills --json`** 整组升级。升级后11个文件与 wheel 完全一致。未迁移为 repo/Honeycomb 目录，未触碰其他 Skill。
+- 实际 MCP 注册位于 `/Users/chengyanru/Downloads/ai-album-hk-representative-v1/.codex/config.toml`，保留原 `/bin/sh -c` 加载既有密钥环境后 `exec /Users/chengyanru/.local/bin/mediasense mcp` 的命令。本次只读取并使用其启动配置，未修改或遍历该 fixture 的媒体和 Dataset。MCP 配置、密钥脚本、用户配置及已记录的无关 Skill 文件共 **32项原哈希/缺失状态不变**；未输出密钥值，也未调用地图服务。
+- `doctor` 确认 embeddings 依赖可用；`local-models` 仍未安装，敏感性检测仍 disabled。未更改模型配置、既有授权或 Dataset/Result。全程使用离线缓存，无新网络下载、模型运行、地图/付费调用、真实 Dataset 从零验收或 Apply 全量审计。
+- **磁盘升级已完成，当前主 Agent 会话未重启、未宣称已重新加载。** 用户下一次在原操作位置新建 Agent 会话后，才会加载0.9.x Skill 与新 Host；这次独立 MCP 验证进程的成功不代替当前客户端会话切换。没有修改其他 MCP 服务，也没有推送或远程 release。
+
+本次临时证据统一保留于 `/tmp/mediasense-0.9.0-release/`：`package-verification.json`、`release-checks-verified.log`、`distribution-smoke.log`、`isolated-mcp/{summary.json,responses.json}`、`actual-install.log`、`actual-verification-verified.log`、`actual-verification.json`、`actual-doctor.json`、`actual-tools.json`、`actual-mcp-responses.json` 与升级前后依赖/配置指纹。`verify_actual.py` 保留真实注册启动及合成结果重读的复核步骤；临时输出、wheel 和原日志均不入 Git。首次验证脚本误用了未存在的测试文件名，未运行测试；使用正确清单得到上表155项。实际 Host 初次对合成 workspace 的 `/tmp` 别名请求按原合约拒绝为 source_mismatch，使用封存的 `/private/tmp` 精确定位后通过；没有为此改实现或旧 Result。
+
+仍未认证的质量／吞吐／客户端边界沿用下方记录，不由升版或安装成功扩展：模型与代表/关键帧质量、广泛 codec/RAW/HEIF/HDR 矩阵、Geo 15m/120s 的真实地点适用性及 live 服务条款/配额/费用、大数据吞吐与长故障 soak、全量真实 Dataset、具体 Agent 客户端大页完整交付与语义使用质量。
 
 ### M2 中间页续读补修与已通过验收的历史候选（2026-09-10）
 

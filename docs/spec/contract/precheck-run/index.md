@@ -4,7 +4,7 @@ title: "MediaSense PreCheck Run Tool Contract"
 type: spec
 status: active
 created: 2026-08-27
-updated: 2026-09-09
+updated: 2026-09-10
 timezone: "Asia/Shanghai"
 parent: "index-contract"
 depends-on:
@@ -142,7 +142,7 @@ PreCheck 对每个 Source Item 投影地址与附近地点两个 Observation。
 
 ## 本期准备深度与配置
 
-本节是第一里程碑确认的准备义务，第二里程碑实现后才能声明生产可用。start/status/pause/resume/cancel 的请求字段继续使用现有 schema；不增加任意 producer 参数或新的 stage。
+本节是第一里程碑确认的准备义务；第二里程碑已完成实现和安装入口验证，并通过用户验收，具体范围与仍未认证事项见既有迁移台账。start/status/pause/resume/cancel 的请求字段继续使用现有 schema；不增加任意 producer 参数或新的 stage。
 
 | 能力 | 默认准备范围 | 必须保留的边界 |
 | --- | --- | --- |
