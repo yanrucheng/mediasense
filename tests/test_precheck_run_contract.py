@@ -10,8 +10,8 @@ from mediasense.runtime.resources import FORMAT_CHECKER
 
 ROOT = Path(__file__).parents[1]
 PACKET = ROOT / "openspec/changes/simplify-precheck-contract"
-RUN = ROOT / "docs/spec/spec-260827-1915A-precheck-run"
-READ = ROOT / "docs/spec/spec-260826-1546-precheck-read"
+RUN = ROOT / "docs/spec/contract/precheck-run"
+READ = ROOT / "docs/spec/contract/precheck-read"
 
 
 def load(path):
@@ -33,7 +33,9 @@ NEGATIVE = load(PACKET / "contracts/examples.json")["negative"]
 
 
 def test_schemas_compile_and_match_packaged_authority():
-    for kind, root in (("run", RUN), ("read", READ)):
+    # Run exchange shape is unchanged. The earlier Read packet is only a release
+    # snapshot; M1 conformance is tested against the stable home separately.
+    for kind, root in (("run", RUN),):
         tool = load(root / f"precheck-{kind}.tool.json")
         assert tool == load(PACKET / f"contracts/precheck-{kind}.tool.json")
         assert tool == load(

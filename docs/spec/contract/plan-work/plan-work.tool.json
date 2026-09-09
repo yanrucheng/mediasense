@@ -1,0 +1,530 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:mediasense:tool:plan-work",
+  "name": "mediasense.plan.work",
+  "description": "Manage one mutable, revisioned Plan Working State and seal an exact Human-confirmed revision into a conforming immutable Frozen Plan.",
+  "inputSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "urn:mediasense:tool:plan-work-input",
+    "oneOf": [
+      { "$ref": "#/$defs/create_request" },
+      { "$ref": "#/$defs/update_request" },
+      { "$ref": "#/$defs/inspect_request" },
+      { "$ref": "#/$defs/seal_request" }
+    ],
+    "$defs": {
+      "result_ref": {
+        "type": "string",
+        "pattern": "^precheck-result:[^\\s]+$"
+      },
+      "work_ref": {
+        "type": "string",
+        "pattern": "^plan-work:[^\\s]+$"
+      },
+      "revision": {
+        "type": "string",
+        "pattern": "^work-revision:[^\\s]+$"
+      },
+      "request_id": {
+        "type": "string",
+        "pattern": "^request:[^\\s]+$"
+      },
+      "content_identity": {
+        "type": "string",
+        "pattern": "^sha256:[0-9a-f]{64}$"
+      },
+      "json_value": {
+        "oneOf": [
+          { "type": "null" },
+          { "type": "boolean" },
+          { "type": "number" },
+          { "type": "string" },
+          { "type": "array", "items": { "$ref": "#/$defs/json_value" } },
+          {
+            "type": "object",
+            "additionalProperties": { "$ref": "#/$defs/json_value" }
+          }
+        ]
+      },
+      "organization_preferences": {
+        "type": "object",
+        "propertyNames": { "type": "string", "minLength": 1 },
+        "additionalProperties": { "$ref": "#/$defs/json_value" }
+      },
+      "candidate_content": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["result_ref", "scope", "logical_root", "groups", "other_outcomes"],
+        "properties": {
+          "result_ref": { "$ref": "#/$defs/result_ref" },
+          "scope": {
+            "$ref": "https://mediasense.local/spec/frozen-plan.schema.json#/$defs/sourceSet"
+          },
+          "logical_root": {
+            "$ref": "https://mediasense.local/spec/frozen-plan.schema.json#/$defs/pathSegment"
+          },
+          "groups": {
+            "type": "array",
+            "items": {
+              "$ref": "https://mediasense.local/spec/frozen-plan.schema.json#/$defs/logicalGroup"
+            }
+          },
+          "other_outcomes": {
+            "type": "array",
+            "items": {
+              "$ref": "https://mediasense.local/spec/frozen-plan.schema.json#/$defs/otherOutcome"
+            }
+          },
+          "decision_notes": {
+            "type": "array",
+            "items": {
+              "$ref": "https://mediasense.local/spec/frozen-plan.schema.json#/$defs/decisionNote"
+            }
+          }
+        },
+        "anyOf": [
+          { "properties": { "groups": { "minItems": 1 } } },
+          { "properties": { "other_outcomes": { "minItems": 1 } } }
+        ]
+      },
+      "create_request": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["action", "result_ref", "request_id"],
+        "properties": {
+          "action": { "const": "create" },
+          "result_ref": { "$ref": "#/$defs/result_ref" },
+          "organization_preferences": { "$ref": "#/$defs/organization_preferences" },
+          "request_id": { "$ref": "#/$defs/request_id" }
+        }
+      },
+      "update_request": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "action",
+          "work_ref",
+          "base_revision",
+          "candidate_content",
+          "request_id"
+        ],
+        "properties": {
+          "action": { "const": "update" },
+          "work_ref": { "$ref": "#/$defs/work_ref" },
+          "base_revision": { "$ref": "#/$defs/revision" },
+          "candidate_content": { "$ref": "#/$defs/candidate_content" },
+          "organization_preferences": { "$ref": "#/$defs/organization_preferences" },
+          "request_id": { "$ref": "#/$defs/request_id" }
+        }
+      },
+      "section": {
+        "enum": ["overview", "preferences", "content", "validation"]
+      },
+      "page_request": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["collection"],
+        "properties": {
+          "collection": { "enum": ["groups", "other_outcomes", "decision_notes"] },
+          "limit": { "type": "integer", "minimum": 1, "maximum": 500, "default": 100 },
+          "cursor": { "type": "string", "pattern": "^plan-cursor:[^\\s]+$" }
+        }
+      },
+      "inspect_request": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["action", "work_ref"],
+        "properties": {
+          "action": { "const": "inspect" },
+          "work_ref": { "$ref": "#/$defs/work_ref" },
+          "revision": { "$ref": "#/$defs/revision" },
+          "sections": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": { "$ref": "#/$defs/section" }
+          },
+          "page": { "$ref": "#/$defs/page_request" }
+        },
+        "allOf": [
+          {
+            "if": { "required": ["page"] },
+            "then": {
+              "required": ["sections"],
+              "properties": { "sections": { "const": ["content"] } }
+            }
+          }
+        ]
+      },
+      "seal_request": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["action", "work_ref", "revision", "candidate_content_identity", "request_id"],
+        "properties": {
+          "action": { "const": "seal" },
+          "work_ref": { "$ref": "#/$defs/work_ref" },
+          "revision": { "$ref": "#/$defs/revision" },
+          "candidate_content_identity": { "$ref": "#/$defs/content_identity" },
+          "request_id": { "$ref": "#/$defs/request_id" }
+        }
+      }
+    }
+  },
+  "outputSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "urn:mediasense:tool:plan-work-output",
+    "oneOf": [
+      { "$ref": "#/$defs/create_response" },
+      { "$ref": "#/$defs/update_response" },
+      { "$ref": "#/$defs/inspect_response" },
+      { "$ref": "#/$defs/seal_response" },
+      { "$ref": "#/$defs/error_response" }
+    ],
+    "$defs": {
+      "result_ref": {
+        "type": "string",
+        "pattern": "^precheck-result:[^\\s]+$"
+      },
+      "work_ref": {
+        "type": "string",
+        "pattern": "^plan-work:[^\\s]+$"
+      },
+      "revision": {
+        "type": "string",
+        "pattern": "^work-revision:[^\\s]+$"
+      },
+      "content_identity": {
+        "type": "string",
+        "pattern": "^sha256:[0-9a-f]{64}$"
+      },
+      "request_id": {
+        "type": "string",
+        "pattern": "^request:[^\\s]+$"
+      },
+      "json_value": {
+        "oneOf": [
+          { "type": "null" },
+          { "type": "boolean" },
+          { "type": "number" },
+          { "type": "string" },
+          { "type": "array", "items": { "$ref": "#/$defs/json_value" } },
+          {
+            "type": "object",
+            "additionalProperties": { "$ref": "#/$defs/json_value" }
+          }
+        ]
+      },
+      "organization_preferences": {
+        "type": "object",
+        "propertyNames": { "type": "string", "minLength": 1 },
+        "additionalProperties": { "$ref": "#/$defs/json_value" }
+      },
+      "create_response": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["outcome", "action", "work_ref", "result_ref", "revision", "state", "organization_preferences"],
+        "properties": {
+          "outcome": { "const": "ok" },
+          "action": { "const": "create" },
+          "work_ref": { "$ref": "#/$defs/work_ref" },
+          "result_ref": { "$ref": "#/$defs/result_ref" },
+          "revision": { "$ref": "#/$defs/revision" },
+          "state": { "const": "open" },
+          "organization_preferences": { "$ref": "#/$defs/organization_preferences" }
+        }
+      },
+      "update_response": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["outcome", "action", "work_ref", "result_ref", "revision", "state"],
+        "properties": {
+          "outcome": { "const": "ok" },
+          "action": { "const": "update" },
+          "work_ref": { "$ref": "#/$defs/work_ref" },
+          "result_ref": { "$ref": "#/$defs/result_ref" },
+          "revision": { "$ref": "#/$defs/revision" },
+          "state": { "const": "open" }
+        }
+      },
+      "issue": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["code", "severity", "message"],
+        "properties": {
+          "code": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+          "severity": { "enum": ["warning", "error"] },
+          "message": { "type": "string", "minLength": 1 }
+        }
+      },
+      "validation": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["seal_ready", "issues"],
+        "properties": {
+          "seal_ready": { "type": "boolean" },
+          "issues": { "type": "array", "items": { "$ref": "#/$defs/issue" } }
+        },
+        "allOf": [
+          {
+            "if": { "properties": { "seal_ready": { "const": true } }, "required": ["seal_ready"] },
+            "then": { "properties": { "issues": { "maxItems": 0 } } }
+          },
+          {
+            "if": { "properties": { "seal_ready": { "const": false } }, "required": ["seal_ready"] },
+            "then": { "properties": { "issues": { "minItems": 1 } } }
+          }
+        ]
+      },
+      "content_header": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["contract", "plan_ref", "result_ref", "scope", "logical_root"],
+        "properties": {
+          "contract": { "const": "mediasense.frozen-plan" },
+          "plan_ref": {
+            "$ref": "https://mediasense.local/spec/frozen-plan.schema.json#/$defs/planRef"
+          },
+          "result_ref": { "$ref": "#/$defs/result_ref" },
+          "scope": {
+            "$ref": "https://mediasense.local/spec/frozen-plan.schema.json#/$defs/sourceSet"
+          },
+          "logical_root": {
+            "$ref": "https://mediasense.local/spec/frozen-plan.schema.json#/$defs/pathSegment"
+          }
+        }
+      },
+      "page": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["collection", "returned", "complete"],
+        "properties": {
+          "collection": { "enum": ["groups", "other_outcomes", "decision_notes"] },
+          "returned": { "type": "integer", "minimum": 0 },
+          "complete": { "type": "boolean" },
+          "next_cursor": { "type": "string", "pattern": "^plan-cursor:[^\\s]+$" }
+        },
+        "allOf": [
+          {
+            "if": { "properties": { "complete": { "const": false } }, "required": ["complete"] },
+            "then": { "required": ["next_cursor"] },
+            "else": { "not": { "required": ["next_cursor"] } }
+          }
+        ]
+      },
+      "complete_content_section": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["mode", "value"],
+        "properties": {
+          "mode": { "const": "complete" },
+          "value": {
+            "$ref": "https://mediasense.local/spec/frozen-plan.schema.json#/$defs/sealedContent"
+          }
+        }
+      },
+      "paged_content_section": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["mode", "header", "collection", "items", "page"],
+        "properties": {
+          "mode": { "const": "page" },
+          "header": { "$ref": "#/$defs/content_header" },
+          "collection": { "enum": ["groups", "other_outcomes", "decision_notes"] },
+          "items": { "type": "array" },
+          "page": { "$ref": "#/$defs/page" }
+        },
+        "allOf": [
+          {
+            "if": { "properties": { "collection": { "const": "groups" } }, "required": ["collection"] },
+            "then": {
+              "properties": {
+                "items": {
+                  "items": {
+                    "$ref": "https://mediasense.local/spec/frozen-plan.schema.json#/$defs/logicalGroup"
+                  }
+                },
+                "page": { "properties": { "collection": { "const": "groups" } } }
+              }
+            }
+          },
+          {
+            "if": { "properties": { "collection": { "const": "other_outcomes" } }, "required": ["collection"] },
+            "then": {
+              "properties": {
+                "items": {
+                  "items": {
+                    "$ref": "https://mediasense.local/spec/frozen-plan.schema.json#/$defs/otherOutcome"
+                  }
+                },
+                "page": { "properties": { "collection": { "const": "other_outcomes" } } }
+              }
+            }
+          },
+          {
+            "if": { "properties": { "collection": { "const": "decision_notes" } }, "required": ["collection"] },
+            "then": {
+              "properties": {
+                "items": {
+                  "items": {
+                    "$ref": "https://mediasense.local/spec/frozen-plan.schema.json#/$defs/decisionNote"
+                  }
+                },
+                "page": { "properties": { "collection": { "const": "decision_notes" } } }
+              }
+            }
+          }
+        ]
+      },
+      "content_section": {
+        "oneOf": [
+          { "$ref": "#/$defs/complete_content_section" },
+          { "$ref": "#/$defs/paged_content_section" }
+        ]
+      },
+      "inspect_sections": {
+        "type": "object",
+        "additionalProperties": false,
+        "minProperties": 1,
+        "properties": {
+          "overview": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["state"],
+            "properties": { "state": { "enum": ["open", "closed"] } }
+          },
+          "preferences": { "$ref": "#/$defs/organization_preferences" },
+          "content": { "$ref": "#/$defs/content_section" },
+          "validation": { "$ref": "#/$defs/validation" }
+        }
+      },
+      "inspect_response": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["outcome", "action", "work_ref", "result_ref", "revision", "state", "returned_sections", "sections"],
+        "properties": {
+          "outcome": { "const": "ok" },
+          "action": { "const": "inspect" },
+          "work_ref": { "$ref": "#/$defs/work_ref" },
+          "result_ref": { "$ref": "#/$defs/result_ref" },
+          "revision": { "$ref": "#/$defs/revision" },
+          "state": { "enum": ["open", "closed"] },
+          "returned_sections": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": { "enum": ["overview", "preferences", "content", "validation"] }
+          },
+          "sections": { "$ref": "#/$defs/inspect_sections" },
+          "candidate_content_identity": { "$ref": "#/$defs/content_identity" }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "sections": {
+                  "properties": {
+                    "validation": {
+                      "properties": { "seal_ready": { "const": true } },
+                      "required": ["seal_ready"]
+                    }
+                  },
+                  "required": ["validation"]
+                }
+              },
+              "required": ["sections"]
+            },
+            "then": { "required": ["candidate_content_identity"] }
+          },
+          {
+            "if": {
+              "properties": {
+                "sections": {
+                  "properties": {
+                    "validation": {
+                      "properties": { "seal_ready": { "const": false } },
+                      "required": ["seal_ready"]
+                    }
+                  },
+                  "required": ["validation"]
+                }
+              },
+              "required": ["sections"]
+            },
+            "then": { "not": { "required": ["candidate_content_identity"] } }
+          }
+        ]
+      },
+      "seal_response": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "outcome",
+          "action",
+          "work_ref",
+          "revision",
+          "state",
+          "plan_ref",
+          "result_ref",
+          "content_identity",
+          "frozen_plan"
+        ],
+        "properties": {
+          "outcome": { "const": "ok" },
+          "action": { "const": "seal" },
+          "work_ref": { "$ref": "#/$defs/work_ref" },
+          "revision": { "$ref": "#/$defs/revision" },
+          "state": { "const": "closed" },
+          "plan_ref": {
+            "$ref": "https://mediasense.local/spec/frozen-plan.schema.json#/$defs/planRef"
+          },
+          "result_ref": { "$ref": "#/$defs/result_ref" },
+          "content_identity": { "$ref": "#/$defs/content_identity" },
+          "frozen_plan": {
+            "$ref": "https://mediasense.local/spec/frozen-plan.schema.json"
+          }
+        }
+      },
+      "error_response": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["outcome", "action", "error"],
+        "properties": {
+          "outcome": { "const": "error" },
+          "action": { "enum": ["create", "update", "inspect", "seal"] },
+          "work_ref": { "$ref": "#/$defs/work_ref" },
+          "revision": { "$ref": "#/$defs/revision" },
+          "error": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["code", "message"],
+            "properties": {
+              "code": {
+                "enum": [
+                  "invalid_request",
+                  "result_not_found",
+                  "result_not_ready",
+                  "result_untrusted",
+                  "result_unavailable",
+                  "result_inconsistent",
+                  "work_not_found",
+                  "work_closed",
+                  "revision_conflict",
+                  "idempotency_conflict",
+                  "invalid_cursor",
+                  "candidate_invalid",
+                  "content_identity_mismatch",
+                  "capability_unavailable",
+                  "confirmation_required",
+                  "access_denied",
+                  "operation_failed"
+                ]
+              },
+              "message": { "type": "string", "minLength": 1 },
+              "current_revision": { "$ref": "#/$defs/revision" }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,248 @@
+{
+  "mock_kind": "mediasense.apply.run.lifecycle",
+  "authority": "Human-authored review example; not runtime output or actual authorization.",
+  "exchanges": [
+    {
+      "name": "prepare forward move",
+      "request": {
+        "action": "prepare",
+        "request_id": "request:apply-prepare-001",
+        "forward": {
+          "frozen_plan": {
+            "sealed_content": {
+              "contract": "mediasense.frozen-plan",
+              "plan_ref": "frozen-plan:apply-lifecycle-example-001",
+              "result_ref": "precheck-result:hk-review-slice-002",
+              "scope": {
+                "kind": "explicit",
+                "source_item_refs": [
+                  "source-item:13",
+                  "source-item:14",
+                  "source-item:15",
+                  "source-item:211",
+                  "source-item:215",
+                  "source-item:216",
+                  "source-item:217"
+                ]
+              },
+              "logical_root": "Media",
+              "groups": [
+                {
+                  "relative_path": ["Example"],
+                  "members": {
+                    "kind": "explicit",
+                    "source_item_refs": [
+                      "source-item:13",
+                      "source-item:14",
+                      "source-item:15",
+                      "source-item:211",
+                      "source-item:215",
+                      "source-item:216",
+                      "source-item:217"
+                    ]
+                  },
+                  "source_naming": {
+                    "default": "preserve_source_basename"
+                  }
+                }
+              ],
+              "other_outcomes": []
+            },
+            "seal": {
+              "encoding_profile": "mediasense-json-strings-sha256-v1",
+              "content_identity": "sha256:ffdca432acb069443393c5ed6bd6946ad17bb5a9601f3fee2b49db297973fb09",
+              "final_confirmation": {
+                "confirmed_content_identity": "sha256:ffdca432acb069443393c5ed6bd6946ad17bb5a9601f3fee2b49db297973fb09",
+                "confirmed_at": "2026-08-29T00:00:00+08:00",
+                "confirmed_by": "human:mock-reviewer"
+              }
+            }
+          },
+          "effect": "move_originals",
+          "current_source_roots": [
+            {
+              "source_root_ref": "source-root:hk-fixture-root",
+              "current_root": "/Volumes/Archive/Inbox"
+            }
+          ],
+          "destination_parent": "/Volumes/Archive"
+        }
+      },
+      "response": {
+        "outcome": "ok",
+        "action": "prepare",
+        "run_ref": "apply-run:example-001",
+        "state": "preparing"
+      }
+    },
+    {
+      "name": "inspect ready summary",
+      "request": {
+        "action": "status",
+        "run_ref": "apply-run:example-001"
+      },
+      "response": {
+        "outcome": "ok",
+        "action": "status",
+        "run_ref": "apply-run:example-001",
+        "state": "ready_for_authorization",
+        "prepared_revision": "apply-revision:example-001",
+        "prepared_content_identity": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "summary": {
+          "frozen_plan_ref": "frozen-plan:apply-lifecycle-example-001",
+          "frozen_plan_content_identity": "sha256:ffdca432acb069443393c5ed6bd6946ad17bb5a9601f3fee2b49db297973fb09",
+          "effect": "move_originals",
+          "execution_binding": {
+            "kind": "forward",
+            "source_roots": [
+              {
+                "source_root_ref": "source-root:hk-fixture-root",
+                "current_root": "/Volumes/Archive/Inbox",
+                "observed_identity": "illustrative:volume-archive-inbox"
+              }
+            ],
+            "destination_parent": "/Volumes/Archive",
+            "resolved_logical_root": "/Volumes/Archive/Media",
+            "destination_observed_identity": "illustrative:volume-archive"
+          },
+          "execution_route": "same_filesystem_atomic_move",
+          "metadata_preservation_profile": "same_filesystem_rename_v1",
+          "content_verification_profile": "filesystem_identity_and_location",
+          "plan_scope_items": 7,
+          "materialization_operations": 7,
+          "no_effect_items": 0,
+          "verified_sources": 7,
+          "unique_targets": 7,
+          "blockers": 0,
+          "warnings": 1
+        },
+        "progress": {
+          "planned_operations": 7,
+          "completed_and_verified": 0,
+          "failed": 0,
+          "remaining": 7,
+          "indeterminate": 0
+        },
+        "warnings": [
+          {
+            "code": "media_unreadable_but_bytes_movable",
+            "message": "One invalid media container remains safely movable as an accounted byte object.",
+            "source_item_ref": "source-item:215"
+          }
+        ],
+        "allowed_actions": ["execute", "cancel"]
+      }
+    },
+    {
+      "name": "authorize and start effects",
+      "request": {
+        "action": "execute",
+        "run_ref": "apply-run:example-001",
+        "prepared_revision": "apply-revision:example-001",
+        "prepared_content_identity": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "request_id": "request:apply-execute-001"
+      },
+      "trusted_context": {
+        "human_confirmation": "illustrative:trusted-human-confirmation-001"
+      },
+      "response": {
+        "outcome": "accepted",
+        "action": "execute",
+        "run_ref": "apply-run:example-001",
+        "observed_state": "ready_for_authorization",
+        "target_state": "executing"
+      }
+    },
+    {
+      "name": "localized failure needs attention",
+      "request": {
+        "action": "status",
+        "run_ref": "apply-run:example-001"
+      },
+      "response": {
+        "outcome": "ok",
+        "action": "status",
+        "run_ref": "apply-run:example-001",
+        "state": "needs_attention",
+        "progress": {
+          "planned_operations": 7,
+          "completed_and_verified": 6,
+          "failed": 1,
+          "remaining": 0,
+          "indeterminate": 0
+        },
+        "reasons": [
+          {
+            "code": "source_read_failed",
+            "message": "source-item:217 could not be read; its source remains and final target is absent.",
+            "resume_when": [
+              "The source is readable and matches its verification basis.",
+              "The final target remains absent."
+            ]
+          }
+        ],
+        "allowed_actions": ["resume", "cancel"]
+      }
+    },
+    {
+      "name": "resume same prepared execution",
+      "request": {
+        "action": "resume",
+        "run_ref": "apply-run:example-001"
+      },
+      "response": {
+        "outcome": "accepted",
+        "action": "resume",
+        "run_ref": "apply-run:example-001",
+        "observed_state": "needs_attention",
+        "target_state": "executing"
+      }
+    },
+    {
+      "name": "observe immutable receipt publication",
+      "request": {
+        "action": "status",
+        "run_ref": "apply-run:example-001"
+      },
+      "response": {
+        "outcome": "ok",
+        "action": "status",
+        "run_ref": "apply-run:example-001",
+        "state": "closed",
+        "progress": {
+          "planned_operations": 7,
+          "completed_and_verified": 7,
+          "failed": 0,
+          "remaining": 0,
+          "indeterminate": 0
+        },
+        "allowed_actions": [],
+        "published_receipt": {
+          "receipt_ref": "apply-receipt:example-001",
+          "completion": "complete",
+          "closure": "automatic",
+          "plan_scope_items": 7,
+          "materialization_operations": 7,
+          "completed_and_verified": 7,
+          "exceptions": 0
+        }
+      }
+    },
+    {
+      "name": "prepare whole-run rewind",
+      "request": {
+        "action": "prepare",
+        "request_id": "request:apply-prepare-rewind-001",
+        "rewind": {
+          "receipt_ref": "apply-receipt:example-001"
+        }
+      },
+      "response": {
+        "outcome": "ok",
+        "action": "prepare",
+        "run_ref": "apply-run:rewind-example-001",
+        "state": "preparing"
+      }
+    }
+  ]
+}

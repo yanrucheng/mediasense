@@ -170,17 +170,17 @@ def test_adaptive_compression_reuses_inputs_across_different_result_targets(
         }
     )
     represented = set()
-    for entry in two_entries["cards"]:
+    for entry in two_entries["items"]:
         coverage = reader.read(
             {
                 "dataset_ref": "dataset:dataset-a",
                 "action": "resolve",
                 "result_ref": two_result.result_ref,
-                "source_set": entry["source_set"],
+                "source_set": entry["represents"]["source_set"],
             }
         )
         represented.update(item["source_item_ref"] for item in coverage["members"])
-    first_entry_ref = two_entries["cards"][0]["evidence_ref"]
+    first_entry_ref = two_entries["items"][0]["evidence_ref"]
     expanded = reader.read(
         {
             "dataset_ref": "dataset:dataset-a",
@@ -193,8 +193,8 @@ def test_adaptive_compression_reuses_inputs_across_different_result_targets(
     included = expanded["items"][0]["included"]
     first_entry = included["anchor_evidence"]
 
-    assert len(two_entries["cards"]) == 2
-    assert len(three_entries["cards"]) == 3
+    assert len(two_entries["items"]) == 2
+    assert len(three_entries["items"]) == 3
     assert len(represented) == 6
     assert any(
         observation["name"] == "evidence_role"

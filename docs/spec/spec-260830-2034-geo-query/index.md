@@ -2,18 +2,21 @@
 id: "spec-260830-2034-geo-query"
 title: "MediaSense Geo Query Tool Contract"
 type: spec
-status: active
+status: superseded
 created: 2026-08-30
-updated: 2026-09-07
+updated: 2026-09-09
 timezone: "Asia/Shanghai"
 parent: ""
 depends-on:
   - "design-260830-1527-reusable-capability-architecture"
   - "design-260830-1626-geo-capability-evolution"
-superseded-by: ""
+superseded-by: "geo-query"
 ---
 
 # MediaSense Geo Query Tool Contract
+
+> **历史记录，已退出当前规范。** 唯一当前合约在 [contract/geo-query](../contract/geo-query/index.md)。本目录的文字、schema 和示例保留为旧版本证据，不用于新开发；包内旧副本也不能替代新合约。
+
 
 ## Purpose and status
 

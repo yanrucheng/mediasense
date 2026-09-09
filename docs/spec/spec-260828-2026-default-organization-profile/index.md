@@ -2,9 +2,9 @@
 id: "spec-260828-2026-default-organization-profile"
 title: "MediaSense Default Organization Profile"
 type: spec
-status: active
+status: superseded
 created: 2026-08-28
-updated: 2026-09-04
+updated: 2026-09-09
 timezone: "Asia/Shanghai"
 parent: "index-spec"
 depends-on:
@@ -12,11 +12,14 @@ depends-on:
   - "eval-260823-1918-ai-album-migration-baseline"
   - "spec-260827-1138-frozen-plan"
   - "spec-260827-1915B-plan-work"
-superseded-by: ""
+superseded-by: "default-organization-profile"
 tags: ["mediasense", "plan", "organization-profile", "default-policy"]
 ---
 
 # MediaSense Default Organization Profile
+
+> **历史记录，已退出当前规范。** 唯一当前合约在 [contract/default-organization-profile](../contract/default-organization-profile/index.md)。本目录的文字、schema 和示例保留为旧版本证据，不用于新开发；包内旧副本也不能替代新合约。
+
 
 ## Decision
 

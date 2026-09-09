@@ -331,7 +331,7 @@ async def _mcp_scenario(
         if not status.is_error:
             raise AssertionError("installed MCP query failure did not set isError")
         if (
-            json.loads(status.content[0].text).get("error", {}).get("code")
+            status.structured_content.get("error", {}).get("code")
             != "run_not_found"
         ):
             raise AssertionError("installed MCP Tool returned an unexpected outcome")

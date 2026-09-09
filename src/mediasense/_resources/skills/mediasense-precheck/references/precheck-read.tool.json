@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "name": "mediasense.precheck.read",
-  "description": "只读查看一份确切 Result；不修复、不外部获取、不做规划决定。",
+  "description": "读取确切不可变 Result：review 共同交付材料路径、自身关联属性和压缩关系；可选读已准备 Evidence。不获取新证据，不强制看图。",
   "inputSchema": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "oneOf": [
@@ -57,6 +57,16 @@
               }
             },
             "required": []
+          },
+          "evidence_refs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/opaque_ref"
+            },
+            "minItems": 1,
+            "maxItems": 16,
+            "uniqueItems": true,
+            "description": "Omit for the sealed entry order; otherwise select prepared Evidence in sorted reference order. No acquisition."
           }
         },
         "required": [
@@ -659,7 +669,14 @@
             "then": {
               "required": [
                 "value"
-              ]
+              ],
+              "properties": {
+                "value": {
+                  "not": {
+                    "type": "null"
+                  }
+                }
+              }
             },
             "else": {
               "not": {
@@ -769,6 +786,1063 @@
                 }
               }
             }
+          },
+          {
+            "if": {
+              "properties": {
+                "status": {
+                  "enum": [
+                    "failed",
+                    "not_checked",
+                    "not_applicable"
+                  ]
+                }
+              },
+              "required": [
+                "status"
+              ]
+            },
+            "then": {
+              "required": [
+                "basis"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "name": {
+                  "const": "camera_make"
+                },
+                "status": {
+                  "const": "available"
+                }
+              },
+              "required": [
+                "name",
+                "status"
+              ]
+            },
+            "then": {
+              "properties": {
+                "value": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "name": {
+                  "const": "camera_model"
+                },
+                "status": {
+                  "const": "available"
+                }
+              },
+              "required": [
+                "name",
+                "status"
+              ]
+            },
+            "then": {
+              "properties": {
+                "value": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "name": {
+                  "const": "camera_serial_number"
+                },
+                "status": {
+                  "const": "available"
+                }
+              },
+              "required": [
+                "name",
+                "status"
+              ]
+            },
+            "then": {
+              "properties": {
+                "value": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "name": {
+                  "const": "camera_firmware"
+                },
+                "status": {
+                  "const": "available"
+                }
+              },
+              "required": [
+                "name",
+                "status"
+              ]
+            },
+            "then": {
+              "properties": {
+                "value": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "name": {
+                  "const": "lens_model"
+                },
+                "status": {
+                  "const": "available"
+                }
+              },
+              "required": [
+                "name",
+                "status"
+              ]
+            },
+            "then": {
+              "properties": {
+                "value": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "name": {
+                  "const": "lens_serial_number"
+                },
+                "status": {
+                  "const": "available"
+                }
+              },
+              "required": [
+                "name",
+                "status"
+              ]
+            },
+            "then": {
+              "properties": {
+                "value": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "name": {
+                  "const": "gps_version"
+                },
+                "status": {
+                  "const": "available"
+                }
+              },
+              "required": [
+                "name",
+                "status"
+              ]
+            },
+            "then": {
+              "properties": {
+                "value": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "name": {
+                  "const": "source_file_format"
+                },
+                "status": {
+                  "const": "available"
+                }
+              },
+              "required": [
+                "name",
+                "status"
+              ]
+            },
+            "then": {
+              "properties": {
+                "value": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "name": {
+                  "const": "media_type"
+                },
+                "status": {
+                  "const": "available"
+                }
+              },
+              "required": [
+                "name",
+                "status"
+              ]
+            },
+            "then": {
+              "properties": {
+                "value": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "name": {
+                  "const": "capture_time"
+                },
+                "status": {
+                  "const": "available"
+                }
+              },
+              "required": [
+                "name",
+                "status"
+              ]
+            },
+            "then": {
+              "properties": {
+                "value": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "name": {
+                  "const": "focal_length_mm"
+                },
+                "status": {
+                  "const": "available"
+                }
+              },
+              "required": [
+                "name",
+                "status"
+              ]
+            },
+            "then": {
+              "properties": {
+                "value": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "name": {
+                  "const": "focal_length_35mm_equivalent_mm"
+                },
+                "status": {
+                  "const": "available"
+                }
+              },
+              "required": [
+                "name",
+                "status"
+              ]
+            },
+            "then": {
+              "properties": {
+                "value": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "name": {
+                  "const": "aperture_f_number"
+                },
+                "status": {
+                  "const": "available"
+                }
+              },
+              "required": [
+                "name",
+                "status"
+              ]
+            },
+            "then": {
+              "properties": {
+                "value": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "name": {
+                  "const": "exposure_time_seconds"
+                },
+                "status": {
+                  "const": "available"
+                }
+              },
+              "required": [
+                "name",
+                "status"
+              ]
+            },
+            "then": {
+              "properties": {
+                "value": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "name": {
+                  "const": "iso"
+                },
+                "status": {
+                  "const": "available"
+                }
+              },
+              "required": [
+                "name",
+                "status"
+              ]
+            },
+            "then": {
+              "properties": {
+                "value": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "name": {
+                  "const": "orientation"
+                },
+                "status": {
+                  "const": "available"
+                }
+              },
+              "required": [
+                "name",
+                "status"
+              ]
+            },
+            "then": {
+              "properties": {
+                "value": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 8
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "name": {
+                  "const": "source_pixel_dimensions"
+                },
+                "status": {
+                  "const": "available"
+                }
+              },
+              "required": [
+                "name",
+                "status"
+              ]
+            },
+            "then": {
+              "properties": {
+                "value": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "properties": {
+                    "width": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "height": {
+                      "type": "integer",
+                      "minimum": 1
+                    }
+                  },
+                  "required": [
+                    "width",
+                    "height"
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "name": {
+                  "const": "pixel_dimensions"
+                },
+                "status": {
+                  "const": "available"
+                }
+              },
+              "required": [
+                "name",
+                "status"
+              ]
+            },
+            "then": {
+              "properties": {
+                "value": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "properties": {
+                    "width": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "height": {
+                      "type": "integer",
+                      "minimum": 1
+                    }
+                  },
+                  "required": [
+                    "width",
+                    "height"
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "name": {
+                  "const": "gps_coordinates"
+                },
+                "status": {
+                  "const": "available"
+                }
+              },
+              "required": [
+                "name",
+                "status"
+              ]
+            },
+            "then": {
+              "properties": {
+                "value": {
+                  "$ref": "#/$defs/coordinate"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "name": {
+                  "const": "gpx_coordinates"
+                },
+                "status": {
+                  "const": "available"
+                }
+              },
+              "required": [
+                "name",
+                "status"
+              ]
+            },
+            "then": {
+              "properties": {
+                "value": {
+                  "$ref": "#/$defs/coordinate"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "name": {
+                  "const": "gps_altitude_meters"
+                },
+                "status": {
+                  "const": "available"
+                }
+              },
+              "required": [
+                "name",
+                "status"
+              ]
+            },
+            "then": {
+              "properties": {
+                "value": {
+                  "type": "number"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "name": {
+                  "const": "capture_time_range"
+                },
+                "status": {
+                  "const": "available"
+                }
+              },
+              "required": [
+                "name",
+                "status"
+              ]
+            },
+            "then": {
+              "properties": {
+                "value": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "earliest": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "latest": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "status_counts": {
+                      "$ref": "#/$defs/status_counts"
+                    }
+                  },
+                  "required": [
+                    "earliest",
+                    "latest",
+                    "status_counts"
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "name": {
+                  "const": "media_type_counts"
+                },
+                "status": {
+                  "const": "available"
+                }
+              },
+              "required": [
+                "name",
+                "status"
+              ]
+            },
+            "then": {
+              "properties": {
+                "value": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "status_counts": {
+                      "$ref": "#/$defs/status_counts"
+                    },
+                    "values": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "value": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "count": {
+                            "type": "integer",
+                            "minimum": 1
+                          }
+                        },
+                        "required": [
+                          "value",
+                          "count"
+                        ]
+                      },
+                      "minItems": 0
+                    }
+                  },
+                  "required": [
+                    "status_counts",
+                    "values"
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "name": {
+                  "const": "video_probe"
+                },
+                "status": {
+                  "const": "available"
+                }
+              },
+              "required": [
+                "name",
+                "status"
+              ]
+            },
+            "then": {
+              "properties": {
+                "value": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "properties": {
+                    "duration_seconds": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "width": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "height": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "frame_count": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "minimum": 0
+                    },
+                    "frame_rate": {
+                      "type": [
+                        "number",
+                        "null"
+                      ],
+                      "minimum": 0
+                    }
+                  },
+                  "required": [
+                    "duration_seconds",
+                    "width",
+                    "height"
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "name": {
+                  "const": "video_frame"
+                },
+                "status": {
+                  "const": "available"
+                }
+              },
+              "required": [
+                "name",
+                "status"
+              ]
+            },
+            "then": {
+              "properties": {
+                "value": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "properties": {
+                    "sample_time_seconds": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "width": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "height": {
+                      "type": "integer",
+                      "minimum": 1
+                    }
+                  },
+                  "required": [
+                    "sample_time_seconds",
+                    "width",
+                    "height"
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "name": {
+                  "const": "video_contact_sheet"
+                },
+                "status": {
+                  "const": "available"
+                }
+              },
+              "required": [
+                "name",
+                "status"
+              ]
+            },
+            "then": {
+              "properties": {
+                "value": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "properties": {
+                    "columns": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "width": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "height": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "frames": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "evidence_ref": {
+                            "$ref": "#/$defs/opaque_ref"
+                          },
+                          "sample_time_seconds": {
+                            "type": "number",
+                            "minimum": 0
+                          }
+                        },
+                        "required": [
+                          "evidence_ref",
+                          "sample_time_seconds"
+                        ]
+                      },
+                      "minItems": 1
+                    }
+                  },
+                  "required": [
+                    "columns",
+                    "width",
+                    "height",
+                    "frames"
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "name": {
+                  "const": "content_sensitivity"
+                },
+                "status": {
+                  "const": "available"
+                }
+              },
+              "required": [
+                "name",
+                "status"
+              ]
+            },
+            "then": {
+              "properties": {
+                "value": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "detector_identity": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "profile": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "labels": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": true,
+                        "properties": {
+                          "label": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "score": {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 1
+                          },
+                          "threshold": {
+                            "type": "number",
+                            "minimum": 0,
+                            "description": "Effective nonnegative cutoff, not a probability. Values above 1 preserve profiles whose labels cannot trigger this comparison."
+                          },
+                          "mild_threshold": {
+                            "type": "number",
+                            "minimum": 0,
+                            "description": "Effective nonnegative mild cutoff, not a probability. Preserve the recorded value, including values above 1."
+                          },
+                          "sensitive": {
+                            "type": "boolean"
+                          },
+                          "mild_sensitive": {
+                            "type": "boolean"
+                          },
+                          "description": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "label",
+                          "score"
+                        ]
+                      },
+                      "minItems": 0
+                    }
+                  },
+                  "required": [
+                    "detector_identity",
+                    "profile",
+                    "labels"
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "name": {
+                  "const": "source_content_verification"
+                },
+                "status": {
+                  "const": "available"
+                }
+              },
+              "required": [
+                "name",
+                "status"
+              ]
+            },
+            "then": {
+              "properties": {
+                "value": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [],
+                  "properties": {
+                    "profile": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "value": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "size_bytes": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "observed_at": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "producer": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "description": "Preserve recorded verification fields and their actual strength. Legacy missing fields stay unknown; resolve uses the existing source_verification projection."
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "name": {
+                  "const": "content_sensitivity"
+                },
+                "status": {
+                  "const": "available"
+                }
+              },
+              "required": [
+                "name",
+                "status"
+              ]
+            },
+            "then": {
+              "required": [
+                "provenance"
+              ],
+              "properties": {
+                "provenance": {
+                  "type": "object",
+                  "required": [
+                    "input_evidence_ref"
+                  ],
+                  "properties": {
+                    "input_evidence_ref": {
+                      "$ref": "#/$defs/opaque_ref"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "name": {
+                  "const": "content_sensitivity"
+                },
+                "status": {
+                  "const": "failed"
+                }
+              },
+              "required": [
+                "name",
+                "status"
+              ]
+            },
+            "then": {
+              "required": [
+                "provenance"
+              ],
+              "properties": {
+                "provenance": {
+                  "type": "object",
+                  "required": [
+                    "detector_identity",
+                    "profile",
+                    "input_evidence_ref"
+                  ],
+                  "properties": {
+                    "detector_identity": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "profile": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "input_evidence_ref": {
+                      "$ref": "#/$defs/opaque_ref"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "name": {
+                  "const": "evidence_role"
+                },
+                "status": {
+                  "const": "available"
+                }
+              },
+              "required": [
+                "name",
+                "status"
+              ]
+            },
+            "then": {
+              "properties": {
+                "value": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "role"
+                  ],
+                  "properties": {
+                    "role": {
+                      "enum": [
+                        "representative",
+                        "boundary",
+                        "outlier",
+                        "conflict"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
           }
         ]
       },
@@ -794,8 +1868,70 @@
         }
       },
       "access": {
-        "type": "object",
-        "minProperties": 1
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "local_artifact"
+              },
+              "locator": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "const": "local_file_path"
+                  },
+                  "value": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "kind",
+                  "value"
+                ]
+              }
+            },
+            "required": [
+              "kind",
+              "locator"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "source_item"
+              },
+              "source_item_ref": {
+                "$ref": "#/$defs/opaque_ref"
+              }
+            },
+            "required": [
+              "kind",
+              "source_item_ref"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "inline"
+              },
+              "value": {
+                "$ref": "#/$defs/json_value"
+              }
+            },
+            "required": [
+              "kind",
+              "value"
+            ]
+          }
+        ]
       },
       "execution_boundary": {
         "type": "object",
@@ -935,6 +2071,7 @@
         },
         "required": [
           "access",
+          "observations",
           "roles"
         ]
       },
@@ -1046,47 +2183,6 @@
             "$ref": "#/$defs/geo_set"
           }
         ]
-      },
-      "qualification_summary": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "applies_to",
-          "code",
-          "effect",
-          "message",
-          "occurrences"
-        ],
-        "properties": {
-          "applies_to": {
-            "enum": [
-              "anchor_evidence",
-              "prepared_evidence",
-              "represents_member"
-            ]
-          },
-          "code": {
-            "type": "string",
-            "minLength": 1
-          },
-          "effect": {
-            "enum": [
-              "limits_interpretation",
-              "blocks_use"
-            ]
-          },
-          "message": {
-            "type": "string",
-            "minLength": 1
-          },
-          "basis": {
-            "$ref": "#/$defs/basis"
-          },
-          "occurrences": {
-            "type": "integer",
-            "minimum": 1
-          }
-        }
       },
       "available_expansion": {
         "type": "object",
@@ -1602,6 +2698,12 @@
           },
           "reason": {
             "$ref": "#/$defs/reason"
+          },
+          "evidence_ref": {
+            "$ref": "#/$defs/opaque_ref"
+          },
+          "source_item_ref": {
+            "$ref": "#/$defs/opaque_ref"
           }
         }
       },
@@ -1723,7 +2825,8 @@
           },
           "datum": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "pattern": "\\S"
           }
         }
       },
@@ -1797,164 +2900,6 @@
           "frontier"
         ]
       },
-      "card": {
-        "type": "object",
-        "additionalProperties": false,
-        "properties": {
-          "evidence_ref": {
-            "type": "string",
-            "minLength": 1
-          },
-          "access": {
-            "$ref": "#/$defs/access"
-          },
-          "source_count": {
-            "type": "integer",
-            "minimum": 0
-          },
-          "scope_condition": {
-            "$ref": "#/$defs/scope_condition"
-          },
-          "facts": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": [
-              "capture_time",
-              "media_type"
-            ],
-            "properties": {
-              "capture_time": {
-                "type": "object",
-                "required": [
-                  "status_counts"
-                ],
-                "properties": {
-                  "status_counts": {
-                    "$ref": "#/$defs/status_counts"
-                  },
-                  "earliest": {
-                    "type": "string",
-                    "format": "date-time"
-                  },
-                  "latest": {
-                    "type": "string",
-                    "format": "date-time"
-                  }
-                },
-                "additionalProperties": false
-              },
-              "media_type": {
-                "type": "object",
-                "additionalProperties": false,
-                "required": [
-                  "status_counts",
-                  "values"
-                ],
-                "properties": {
-                  "status_counts": {
-                    "$ref": "#/$defs/status_counts"
-                  },
-                  "values": {
-                    "type": "array",
-                    "items": {
-                      "type": "object",
-                      "additionalProperties": false,
-                      "required": [
-                        "value",
-                        "count"
-                      ],
-                      "properties": {
-                        "value": {
-                          "type": "string",
-                          "minLength": 3
-                        },
-                        "count": {
-                          "type": "integer",
-                          "minimum": 1
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "roles": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": [],
-            "properties": {
-              "representative": {
-                "type": "array",
-                "uniqueItems": true,
-                "items": {
-                  "$ref": "#/$defs/opaque_ref"
-                }
-              },
-              "boundary": {
-                "type": "array",
-                "uniqueItems": true,
-                "items": {
-                  "$ref": "#/$defs/opaque_ref"
-                }
-              },
-              "outlier": {
-                "type": "array",
-                "uniqueItems": true,
-                "items": {
-                  "$ref": "#/$defs/opaque_ref"
-                }
-              },
-              "conflict": {
-                "type": "array",
-                "uniqueItems": true,
-                "items": {
-                  "$ref": "#/$defs/opaque_ref"
-                }
-              }
-            }
-          },
-          "unassigned_prepared_evidence": {
-            "type": "array",
-            "items": {
-              "type": "string",
-              "minLength": 1
-            },
-            "minItems": 0
-          },
-          "qualifications": {
-            "type": "array",
-            "items": {
-              "$ref": "#/$defs/qualification_summary"
-            },
-            "minItems": 0
-          },
-          "other_observations_available": {
-            "type": "boolean"
-          },
-          "available_expansions": {
-            "type": "array",
-            "items": {
-              "$ref": "#/$defs/available_expansion"
-            },
-            "minItems": 0
-          },
-          "source_set": {
-            "$ref": "#/$defs/source_set"
-          }
-        },
-        "required": [
-          "evidence_ref",
-          "access",
-          "source_count",
-          "scope_condition",
-          "facts",
-          "roles",
-          "other_observations_available",
-          "available_expansions",
-          "source_set"
-        ]
-      },
       "review": {
         "type": "object",
         "additionalProperties": false,
@@ -1965,24 +2910,31 @@
           "accounting": {
             "$ref": "#/$defs/accounting_result"
           },
-          "cards": {
-            "type": "array",
-            "items": {
-              "$ref": "#/$defs/card"
-            },
-            "minItems": 0
-          },
           "page": {
             "$ref": "#/$defs/page"
           },
           "execution_boundary": {
             "$ref": "#/$defs/execution_boundary"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/review_item"
+                },
+                {
+                  "$ref": "#/$defs/review_item_failure"
+                }
+              ]
+            },
+            "minItems": 0
           }
         },
         "required": [
           "result",
           "accounting",
-          "cards",
+          "items",
           "page"
         ]
       },
@@ -2403,6 +3355,268 @@
           "observed_at",
           "source_set"
         ]
+      },
+      "review_source_item": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "source_item_ref": {
+            "$ref": "#/$defs/opaque_ref"
+          },
+          "locator": {
+            "$ref": "#/$defs/source_locator"
+          },
+          "observations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/observation"
+            },
+            "minItems": 0
+          },
+          "qualifications": {
+            "$ref": "#/$defs/qualifications"
+          }
+        },
+        "required": [
+          "source_item_ref",
+          "locator",
+          "observations"
+        ]
+      },
+      "representation_qualification": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "code",
+          "effect",
+          "message"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "minLength": 1
+          },
+          "effect": {
+            "enum": [
+              "limits_interpretation",
+              "blocks_use"
+            ]
+          },
+          "message": {
+            "type": "string",
+            "minLength": 1
+          },
+          "basis": {
+            "$ref": "#/$defs/basis"
+          },
+          "occurrences": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      },
+      "representation": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "source_set": {
+            "$ref": "#/$defs/represents_set"
+          },
+          "source_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "scope_condition": {
+            "$ref": "#/$defs/scope_condition"
+          },
+          "observations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/observation"
+            },
+            "minItems": 0
+          },
+          "basis": {
+            "$ref": "#/$defs/basis"
+          },
+          "qualifications": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/representation_qualification"
+            },
+            "minItems": 1
+          }
+        },
+        "required": [
+          "source_set",
+          "source_count",
+          "scope_condition",
+          "observations",
+          "basis"
+        ]
+      },
+      "related_roles": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "representative": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/opaque_ref"
+            },
+            "minItems": 1,
+            "uniqueItems": true
+          },
+          "boundary": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/opaque_ref"
+            },
+            "minItems": 1,
+            "uniqueItems": true
+          },
+          "outlier": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/opaque_ref"
+            },
+            "minItems": 1,
+            "uniqueItems": true
+          },
+          "conflict": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/opaque_ref"
+            },
+            "minItems": 1,
+            "uniqueItems": true
+          }
+        },
+        "required": [],
+        "minProperties": 1
+      },
+      "review_expansion": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "include",
+          "estimated_items"
+        ],
+        "properties": {
+          "include": {
+            "enum": [
+              "prepared_targets",
+              "provenance",
+              "coverage_basis",
+              "member_observations"
+            ]
+          },
+          "estimated_items": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "review_item_failure": {
+        "description": "A local read failure occupies this Evidence's position in the same page. It is not successful evidence delivery and does not change the sealed Result.",
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "evidence_ref": {
+            "$ref": "#/$defs/opaque_ref"
+          },
+          "error": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "code": {
+                "enum": [
+                  "evidence_unavailable",
+                  "response_item_too_large"
+                ]
+              },
+              "message": {
+                "$ref": "#/$defs/error/properties/message"
+              },
+              "diagnostic_id": {
+                "$ref": "#/$defs/error/properties/diagnostic_id"
+              }
+            },
+            "required": [
+              "code",
+              "message"
+            ]
+          }
+        },
+        "required": [
+          "evidence_ref",
+          "error"
+        ]
+      },
+      "review_item": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "evidence_ref": {
+            "$ref": "#/$defs/opaque_ref"
+          },
+          "access": {
+            "$ref": "#/$defs/access"
+          },
+          "observations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/observation"
+            },
+            "minItems": 0
+          },
+          "qualifications": {
+            "$ref": "#/$defs/qualifications"
+          },
+          "source_items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/review_source_item"
+            },
+            "minItems": 0
+          },
+          "represents": {
+            "$ref": "#/$defs/representation"
+          },
+          "roles": {
+            "$ref": "#/$defs/related_roles"
+          },
+          "unassigned_prepared_evidence": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/opaque_ref"
+            },
+            "minItems": 1,
+            "uniqueItems": true
+          },
+          "available_expansions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/review_expansion"
+            },
+            "minItems": 0
+          }
+        },
+        "required": [
+          "evidence_ref",
+          "access",
+          "observations",
+          "source_items",
+          "represents",
+          "available_expansions"
+        ]
       }
     }
   },
@@ -2447,5 +3661,6 @@
         }
       ]
     }
-  }
+  },
+  "$comment": "Development authority at docs/spec/contract/precheck-read. Runtime release snapshots are synchronized only with milestone-two implementation. No old/new public routing."
 }

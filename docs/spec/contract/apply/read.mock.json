@@ -1,0 +1,171 @@
+{
+  "mock_kind": "mediasense.apply.read.reference",
+  "authority": "Human-authored review example; not runtime output.",
+  "exchanges": [
+    {
+      "name": "inspect receipt summary",
+      "request": {
+        "receipt_ref": "apply-receipt:example-001",
+        "action": "inspect"
+      },
+      "response": {
+        "outcome": "ok",
+        "action": "inspect",
+        "receipt_ref": "apply-receipt:example-001",
+        "receipt": {
+          "receipt_ref": "apply-receipt:example-001",
+          "run_ref": "apply-run:example-001",
+          "frozen_plan_ref": "frozen-plan:local-artifact-example-002",
+          "effect": "move_originals",
+          "execution_binding": {
+            "kind": "forward",
+            "source_root_count": 1,
+            "destination_parent": "/Volumes/Archive",
+            "resolved_logical_root": "/Volumes/Archive/Media"
+          },
+          "completion": "complete",
+          "closure": "automatic",
+          "accounting": {
+            "plan_scope_items": 7,
+            "materialization_operations": 7,
+            "retained_without_effect": 0,
+            "excluded_without_effect": 0,
+            "completed_and_verified": 7,
+            "failed": 0,
+            "refused": 0,
+            "not_attempted": 0,
+            "indeterminate": 0
+          },
+          "verification": {
+            "unplanned_targets": 0,
+            "unplanned_renames": 0,
+            "unverified_items": 0
+          },
+          "metadata_preservation": {
+            "profile": "same_filesystem_rename_v1",
+            "content_verification_result": "verified",
+            "unpreserved_attribute_count": 0,
+            "accepted_discrepancy_count": 0
+          },
+          "rewind_window_ends_at": "2026-08-29T01:40:00+08:00",
+          "integrity": "valid"
+        }
+      }
+    },
+    {
+      "name": "traverse first operation page",
+      "request": {
+        "receipt_ref": "apply-receipt:example-001",
+        "action": "traverse",
+        "section": "operations",
+        "page": { "limit": 1 }
+      },
+      "response": {
+        "outcome": "ok",
+        "action": "traverse",
+        "receipt_ref": "apply-receipt:example-001",
+        "section": "operations",
+        "items": [
+          {
+            "source_item_ref": "source-item:217",
+            "source_before": "/Volumes/Archive/Inbox/dataset/260501-HK美食之旅/0504/DJI_001-action-sd-amber/DJI_20260504202728_0029_D.remux-faststart.MP4",
+            "intended_target": "/Volumes/Archive/Media/260501-示例复杂事件/0504-示例章节/Uncategorized/DJI_20260504202728_0029_D.remux-faststart.MP4",
+            "source_verification": { "profile": "illustrative:content-digest-v1", "result": "matched", "expected_basis": "illustrative:source-item-217", "observed_basis": "illustrative:source-item-217" },
+            "result": "completed_and_verified",
+            "attempts": 2,
+            "source_after": "absent",
+            "target_after": "verified_present",
+            "verification": { "profile": "same_filesystem_identity_and_location", "result": "verified", "basis": "Target identity matched and original location was absent." }
+          }
+        ],
+        "page": {
+          "returned": 1,
+          "total": 7,
+          "complete": false,
+          "next_cursor": "opaque:receipt-example-operations-after-1"
+        }
+      }
+    },
+    {
+      "name": "traverse created directories",
+      "request": {
+        "receipt_ref": "apply-receipt:example-001",
+        "action": "traverse",
+        "section": "created_directories",
+        "page": { "limit": 100 }
+      },
+      "response": {
+        "outcome": "ok",
+        "action": "traverse",
+        "receipt_ref": "apply-receipt:example-001",
+        "section": "created_directories",
+        "items": [
+          {
+            "path": "/Volumes/Archive/Media",
+            "rewind_rule": "remove_only_if_empty_and_unchanged"
+          }
+        ],
+        "page": {
+          "returned": 1,
+          "total": 1,
+          "complete": true
+        }
+      }
+    },
+    {
+      "name": "traverse metadata discrepancies",
+      "request": {
+        "receipt_ref": "apply-receipt:example-001",
+        "action": "traverse",
+        "section": "metadata_discrepancies",
+        "page": { "limit": 100 }
+      },
+      "response": {
+        "outcome": "ok",
+        "action": "traverse",
+        "receipt_ref": "apply-receipt:example-001",
+        "section": "metadata_discrepancies",
+        "items": [],
+        "page": {
+          "returned": 0,
+          "total": 0,
+          "complete": true
+        }
+      }
+    },
+    {
+      "name": "missing receipt",
+      "request": {
+        "receipt_ref": "apply-receipt:missing",
+        "action": "inspect"
+      },
+      "response": {
+        "outcome": "error",
+        "action": "inspect",
+        "receipt_ref": "apply-receipt:missing",
+        "error": {
+          "code": "receipt_not_found",
+          "message": "Receipt does not exist."
+        }
+      }
+    },
+    {
+      "name": "cursor does not match query",
+      "request": {
+        "receipt_ref": "apply-receipt:example-001",
+        "action": "traverse",
+        "section": "operations",
+        "page": { "cursor": "opaque:tampered" }
+      },
+      "response": {
+        "outcome": "error",
+        "action": "traverse",
+        "receipt_ref": "apply-receipt:example-001",
+        "error": {
+          "code": "invalid_cursor",
+          "message": "Receipt cursor is invalid or does not match this query."
+        }
+      }
+    }
+  ]
+}

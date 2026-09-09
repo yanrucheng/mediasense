@@ -1,3 +1,5 @@
+> Historical change packet. Current development authority is [`docs/spec/contract/`](../../../docs/spec/contract/index.md). Its pinned schemas/examples describe the earlier installed release and are not the current contract.
+
 # PreCheck 接口重构实施包
 
 2026-09-08 子工作线完成设计、实施及独立代码复验。首次验收发现的三个遗漏已修正，

@@ -381,13 +381,13 @@ def test_start_then_internal_worker_drives_mixed_source_to_readable_result(
             compression_target=3,
             model_batch_size=2,
             embedding_profile=EmbeddingProfile(name="test-vector-v1", dimensions=4),
-            sensitivity_profile=SensitivityProfile(
+            sensitivity_profiles=(SensitivityProfile(
                 name="test-sensitivity-v1",
                 thresholds=(
                     SensitivityThreshold("sensitive", 0.8),
                     SensitivityThreshold("ordinary", 99.0),
                 ),
-            ),
+            ),),
         ),
         execution_dependencies=PrecheckExecutionDependencies(
             metadata_runner=metadata,
@@ -396,7 +396,7 @@ def test_start_then_internal_worker_drives_mixed_source_to_readable_result(
             ffprobe_version="ffprobe 8.1",
             ffmpeg_version="ffmpeg 8.1",
             embedding_encoder=encoder,
-            sensitivity_detector=detector,
+            sensitivity_detectors=(detector,),
             geo_tool=_geo_tool(tmp_path, geo_provider),
         ),
     )
@@ -603,7 +603,7 @@ def test_later_run_can_direct_additional_visual_evidence(tmp_path: Path) -> None
             work.spec.capability == "image-rendition"
             for work in WorkStore(database).list_run_work(first_accounting)
         )
-        == 2
+        == 4
     )
 
     second_accounting = AccountingStore(database).start_or_resume_run(
@@ -630,7 +630,7 @@ def test_later_run_can_direct_additional_visual_evidence(tmp_path: Path) -> None
     renditions = [
         work for work in attached if work.spec.capability == "image-rendition"
     ]
-    assert len(renditions) == 3
+    assert len(renditions) == 6
 
 
 def test_metadata_batches_respect_configured_provider_ceiling(tmp_path: Path) -> None:
@@ -1136,11 +1136,11 @@ def test_local_item_failure_isolated_while_other_source_completes(
             for item in status["issues"]
             if item["phase"] == "renditions" and item["unit"] != "phase"
         )
-        == 1
+        == 2
     )
     works = WorkStore(database).list_run_work(accounting_run_id)
     assert sum(work.status.value == "succeeded" for work in works) >= 2
-    assert sum(work.status.value == "terminal_failure" for work in works) == 1
+    assert sum(work.status.value == "terminal_failure" for work in works) == 2
 
 
 def test_local_item_failure_is_visible_before_result_publication(
@@ -1200,7 +1200,7 @@ def test_local_item_failure_is_visible_before_result_publication(
             for item in status["issues"]
             if item["phase"] == "renditions" and item["unit"] != "phase"
         )
-        == 1
+        == 2
     )
 
     release_worker.set()
@@ -1425,7 +1425,7 @@ def test_process_interruption_resumes_without_repeating_completed_work(
         for work in WorkStore(database).list_run_work(accounting_run_id)
         if work.spec.capability == "image-rendition"
     }
-    assert len(before) == 1
+    assert len(before) == 2
 
     monkeypatch.setattr(PrecheckOrchestrator, "_after_phase", original)
     restarted = PrecheckRunTool(database, execution_config=config)
@@ -1517,7 +1517,7 @@ def test_crash_after_sealed_bytes_recovers_without_partial_result(
     )
 
     def crash_after_bytes(_store: ResultStore, _path: Path) -> None:
-        raise RuntimeError("simulated crash after sealed bytes")
+        raise KeyboardInterrupt("simulated crash after sealed bytes")
 
     monkeypatch.setattr(ResultStore, "_after_file_published", crash_after_bytes)
     tool = PrecheckRunTool(database, execution_config=config)
@@ -1529,7 +1529,8 @@ def test_crash_after_sealed_bytes_recovers_without_partial_result(
         }
     )
     _resume_with_default_scope(tool, str(started["run_ref"]))
-    tool.advance(str(started["run_ref"]))
+    with pytest.raises(KeyboardInterrupt):
+        tool.advance(str(started["run_ref"]))
     interrupted = tool.run(
         {
             "dataset_ref": "dataset:dataset-a",

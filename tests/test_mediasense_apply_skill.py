@@ -15,7 +15,7 @@ from test_apply_preparation import _fixture, _plan
 
 
 ROOT = Path(__file__).parents[1]
-APPLY_SPEC = ROOT / "docs" / "spec" / "spec-260829-0050-apply"
+APPLY_SPEC = ROOT / "docs" / "spec" / "contract/apply"
 APPLY_SKILL = (
     ROOT
     / "src"
@@ -26,7 +26,7 @@ APPLY_SKILL = (
     / "SKILL.md"
 )
 FROZEN_PLAN_SCHEMA = (
-    ROOT / "docs" / "spec" / "spec-260827-1138-frozen-plan" / "frozen-plan.schema.json"
+    ROOT / "docs" / "spec" / "contract/frozen-plan" / "frozen-plan.schema.json"
 )
 WORKFLOWS = json.loads(
     (ROOT / "tests" / "fixtures" / "apply-skill-workflows-v1.json").read_text(

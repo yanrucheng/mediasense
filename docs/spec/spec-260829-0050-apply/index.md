@@ -2,9 +2,9 @@
 id: "spec-260829-0050-apply"
 title: "MediaSense Apply Contract"
 type: spec
-status: active
+status: superseded
 created: 2026-08-29
-updated: 2026-08-30
+updated: 2026-09-09
 timezone: "Asia/Shanghai"
 parent: "index-spec"
 depends-on:
@@ -13,10 +13,13 @@ depends-on:
   - "spec-260826-1546-precheck-read"
   - "spec-260827-1138-frozen-plan"
   - "design-260829-0038-apply-reference-handoff"
-superseded-by: ""
+superseded-by: "apply"
 ---
 
 # MediaSense Apply Contract
+
+> **历史记录，已退出当前规范。** 唯一当前合约在 [contract/apply](../contract/apply/index.md)。本目录的文字、schema 和示例保留为旧版本证据，不用于新开发；包内旧副本也不能替代新合约。
+
 
 ## Decision and activation boundary
 

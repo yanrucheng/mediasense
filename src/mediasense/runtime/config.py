@@ -21,6 +21,7 @@ class RuntimeConfig:
     google_maps_api_key_env: str
     sources: tuple[Path, ...]
     embedding: dict[str, Any] | None = None
+    sensitivity: dict[str, Any] | None = None
 
     def public_value(self) -> dict[str, object]:
         return {
@@ -106,6 +107,7 @@ def load_runtime_config(
         google_maps_api_key_env=str(values["google_maps_api_key_env"]),
         sources=tuple(sources),
         embedding=values.get("embedding"),
+        sensitivity=values.get("sensitivity"),
     )
 
 
@@ -116,7 +118,7 @@ def _read_config(path: Path) -> dict[str, object]:
         raise ConfigurationError(
             f"Cannot read configuration {path}: {error}"
         ) from error
-    if set(value) - {"providers", "embedding"}:
+    if set(value) - {"providers", "embedding", "sensitivity"}:
         raise ConfigurationError(f"Unknown configuration section in {path}")
     providers = value.get("providers", {})
     if not isinstance(providers, dict):
@@ -173,6 +175,40 @@ def _read_config(path: Path) -> dict[str, object]:
                 device=device,
                 batch_size=batch_size,
             )
+    if "sensitivity" in value:
+        sensitivity = value["sensitivity"]
+        if not isinstance(sensitivity, dict) or set(sensitivity) - {
+            "enabled",
+            "device",
+            "nsfw_model_id",
+            "nsfw_revision",
+        }:
+            raise ConfigurationError("Invalid sensitivity configuration table")
+        enabled = sensitivity.get("enabled", False)
+        device = sensitivity.get("device", "cpu")
+        model_id = sensitivity.get("nsfw_model_id", "Falconsai/nsfw_image_detection")
+        revision = sensitivity.get("nsfw_revision")
+        if type(enabled) is not bool:
+            raise ConfigurationError("sensitivity.enabled must be a boolean")
+        if not isinstance(device, str) or device not in {"cpu", "mps", "cuda"}:
+            raise ConfigurationError("sensitivity.device must be cpu, mps, or cuda")
+        if not isinstance(model_id, str) or not re.fullmatch(
+            r"[\w.-]+/[\w.-]+", model_id
+        ):
+            raise ConfigurationError(
+                "sensitivity.nsfw_model_id must name a model repository"
+            )
+        if (enabled or revision is not None) and (
+            not isinstance(revision, str) or not re.fullmatch(r"[0-9a-f]{40}", revision)
+        ):
+            raise ConfigurationError(
+                "sensitivity.nsfw_revision must be an immutable 40-character commit"
+            )
+        result["sensitivity"] = (
+            dict(device=device, nsfw_model_id=model_id, nsfw_revision=revision)
+            if enabled
+            else None
+        )
     for key in ("amap_api_key_env", "google_maps_api_key_env"):
         if key in providers:
             item = providers[key]

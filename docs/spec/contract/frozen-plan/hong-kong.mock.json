@@ -1,0 +1,99 @@
+{
+  "mock_kind": "human-authored reference instance",
+  "authority": "illustrative only; not runtime output, actual user confirmation, or Apply authorization",
+  "frozen_plan": {
+    "sealed_content": {
+      "contract": "mediasense.frozen-plan",
+      "plan_ref": "frozen-plan:hk-review-slice-reference-001",
+      "result_ref": "precheck-result:hk-review-slice-002",
+      "scope": {
+        "kind": "union",
+        "sets": [
+          {
+            "kind": "precheck_relation",
+            "origin": "evidence:bundle61-boundary",
+            "relation": "represents",
+            "direction": "outbound"
+          },
+          {
+            "kind": "explicit",
+            "source_item_refs": [
+              "source-item:215",
+              "source-item:217"
+            ]
+          }
+        ]
+      },
+      "logical_root": "Hong Kong review slice",
+      "groups": [
+        {
+          "relative_path": ["Illustrative bundle 61 subset"],
+          "members": {
+            "kind": "precheck_relation",
+            "origin": "evidence:bundle61-boundary",
+            "relation": "represents",
+            "direction": "outbound"
+          },
+          "source_naming": {
+            "default": "preserve_source_basename",
+            "overrides": [
+              {"source_item_ref": "source-item:13", "name": "item-013.jpg"},
+              {"source_item_ref": "source-item:14", "name": "item-014.jpg"},
+              {"source_item_ref": "source-item:15", "name": "item-015.jpg"}
+            ]
+          }
+        },
+        {
+          "relative_path": ["Readable recovery candidate"],
+          "members": {
+            "kind": "explicit",
+            "source_item_refs": ["source-item:217"]
+          },
+          "source_naming": {
+            "default": "preserve_source_basename"
+          }
+        }
+      ],
+      "other_outcomes": [
+        {
+          "members": {
+            "kind": "explicit",
+            "source_item_refs": ["source-item:215"]
+          },
+          "outcome": "exclude_from_logical_organization",
+          "reason": "The media container is unreadable; keep the Source Item accounted and do not substitute a repaired candidate.",
+          "evidence_refs": ["evidence:repair-patched"]
+        }
+      ],
+      "decision_notes": [
+        {
+          "applies_to": {
+            "kind": "precheck_relation",
+            "origin": "evidence:bundle61-boundary",
+            "relation": "represents",
+            "direction": "outbound"
+          },
+          "summary": "Illustrative final grouping decision: reuse the complete PreCheck membership without treating that membership as semantic truth.",
+          "evidence_refs": ["evidence:bundle61-boundary"]
+        },
+        {
+          "applies_to": {
+            "kind": "explicit",
+            "source_item_refs": ["source-item:215"]
+          },
+          "summary": "The repair association is useful evidence but does not prove identity and must not replace the invalid Source Item.",
+          "evidence_refs": ["evidence:repair-patched"]
+        }
+      ]
+    },
+    "seal": {
+      "encoding_profile": "mediasense-json-strings-sha256-v1",
+      "content_identity": "sha256:9bf2f04a79aaf245143cfcb295c3a732575269c9aa1340edc78c3da167ffe006",
+      "final_confirmation": {
+        "confirmed_content_identity": "sha256:9bf2f04a79aaf245143cfcb295c3a732575269c9aa1340edc78c3da167ffe006",
+        "confirmed_at": "2026-08-27T11:38:00+08:00",
+        "confirmed_by": "user:illustrative-reviewer"
+      }
+    }
+  }
+}

@@ -61,6 +61,8 @@ def _mapped_result_observations(
     source_ref: str,
     *,
     label: str,
+    source_observations: Iterable[Mapping[str, object]] = (),
+    acquisition_policy: Mapping[str, object] | None = None,
 ) -> list[dict[str, object]]:
     from .geocode import normalize_geo_observations
 
@@ -72,6 +74,56 @@ def _mapped_result_observations(
             **item["basis"],
             "refs": [{"kind": "source_item", "ref": source_ref}],
         }
+        source_coordinates = {
+            o["name"]: o["value"]
+            for o in source_observations
+            if o.get("name") in {"gps_coordinates", "gpx_coordinates"}
+            and o.get("status") == "available"
+        }
+        selected_name = (
+            "gpx_coordinates"
+            if "gpx_coordinates" in source_coordinates
+            else "gps_coordinates"
+        )
+        coordinate = source_coordinates.get(selected_name)
+        query_coordinate = observation["basis"].get("query_coordinate")
+        projection = {
+            "source_item_ref": source_ref,
+            "source_coordinate_observation": selected_name,
+            "source_coordinate": coordinate,
+            "query_coordinate": query_coordinate,
+        }
+        if acquisition_policy is not None:
+            projection["acquisition_policy"] = dict(acquisition_policy)
+        if (
+            coordinate is not None
+            and query_coordinate is not None
+            and coordinate != query_coordinate
+        ):
+            from .geocode import _distance_meters
+            from mediasense.capabilities.geo import GeoCoordinate, MapDatum
+
+            if coordinate["datum"] == query_coordinate["datum"]:
+                projection["query_point_distance_meters"] = _distance_meters(
+                    GeoCoordinate(
+                        coordinate["latitude"],
+                        coordinate["longitude"],
+                        MapDatum(coordinate["datum"]),
+                    ),
+                    GeoCoordinate(
+                        query_coordinate["latitude"],
+                        query_coordinate["longitude"],
+                        MapDatum(query_coordinate["datum"]),
+                    ),
+                )
+            observation.setdefault("qualifications", []).append(
+                {
+                    "code": "geo_query_point_reused",
+                    "effect": "limits_interpretation",
+                    "message": "This candidate was acquired at another source coordinate. Candidate distances refer to the query point; nearby media can occupy different venues.",
+                }
+            )
+        observation["basis"]["projection"] = projection
         projected.append(observation)
     return projected
 
@@ -99,7 +151,15 @@ def _metadata_result_observations(
             raise ResultSealError("metadata Work contains an invalid observation")
         observation = {
             key: item[key]
-            for key in ("name", "status", "value", "confidence", "qualifications")
+            for key in (
+                "name",
+                "status",
+                "value",
+                "confidence",
+                "qualifications",
+                "basis",
+                "provenance",
+            )
             if key in item
         }
         provenance = item.get("provenance")
@@ -129,20 +189,42 @@ def _metadata_result_observations(
             details = ", ".join(
                 f"{key}={value}"
                 for key, value in provenance.items()
-                if key not in {"relative_path", "sources", "candidates"}
+                if key
+                not in {"relative_path", "sources", "candidates", "input_work_id"}
             )
             basis: dict[str, object] = {
                 "summary": details or "local ExifTool metadata extraction"
             }
             if refs:
                 basis["refs"] = refs
-            if "candidates" in provenance:
-                # Preserve conflicting and rejected raw observations as structured
-                # evidence, rather than flattening them into a lossy summary.
-                observation["provenance"] = provenance
-            observation["basis"] = basis
+
+            observation["provenance"] = _public_metadata_value(provenance, run_id)
+            # Selection/rejection evidence belongs to the producer. A fallback
+            # description of provenance must never replace that existing basis.
+            observation.setdefault("basis", basis)
+        if "basis" in observation:
+            observation["basis"] = _public_metadata_value(observation["basis"], run_id)
+        if isinstance(output.get("producer"), Mapping):
+            observation.setdefault("provenance", {})["producer"] = dict(
+                output["producer"]
+            )
         projected.append(observation)
     return projected
+
+
+def _public_metadata_value(value, run_id):
+    if isinstance(value, list):
+        return [_public_metadata_value(item, run_id) for item in value]
+    if isinstance(value, dict):
+        return {
+            ("source_item_ref" if key == "relative_path" else key): (
+                result_local_reference("source-item", run_id, child)
+                if key == "relative_path" and isinstance(child, str)
+                else _public_metadata_value(child, run_id)
+            )
+            for key, child in value.items()
+        }
+    return value
 
 
 def _load_source_observation_work(

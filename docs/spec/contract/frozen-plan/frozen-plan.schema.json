@@ -1,0 +1,264 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mediasense.local/spec/frozen-plan.schema.json",
+  "title": "MediaSense Frozen Organization Plan",
+  "description": "Minimal immutable organization result consumed by Apply. Semantic closure and digest verification require the companion specification.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["sealed_content", "seal"],
+  "properties": {
+    "sealed_content": { "$ref": "#/$defs/sealedContent" },
+    "seal": { "$ref": "#/$defs/seal" }
+  },
+  "$defs": {
+    "opaqueRef": {
+      "type": "string",
+      "minLength": 3,
+      "pattern": "^[^\\s]+:[^\\s]+$"
+    },
+    "planRef": {
+      "type": "string",
+      "pattern": "^frozen-plan:[^\\s]+$"
+    },
+    "resultRef": {
+      "type": "string",
+      "pattern": "^precheck-result:[^\\s]+$"
+    },
+    "sourceItemRef": {
+      "type": "string",
+      "pattern": "^source-item:[^\\s]+$"
+    },
+    "evidenceRef": {
+      "type": "string",
+      "pattern": "^evidence:[^\\s]+$"
+    },
+    "pathSegment": {
+      "type": "string",
+      "minLength": 1,
+      "not": {
+        "anyOf": [
+          { "const": "." },
+          { "const": ".." },
+          { "pattern": "[/\\\\]" }
+        ]
+      }
+    },
+    "explicitSet": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "source_item_refs"],
+      "properties": {
+        "kind": { "const": "explicit" },
+        "source_item_refs": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/sourceItemRef" }
+        }
+      }
+    },
+    "accountsForSet": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "origin", "relation", "direction"],
+      "properties": {
+        "kind": { "const": "precheck_relation" },
+        "origin": { "$ref": "#/$defs/resultRef" },
+        "relation": { "const": "accounts_for" },
+        "direction": { "const": "outbound" }
+      }
+    },
+    "representsSet": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "origin", "relation", "direction"],
+      "properties": {
+        "kind": { "const": "precheck_relation" },
+        "origin": { "$ref": "#/$defs/evidenceRef" },
+        "relation": { "const": "represents" },
+        "direction": { "const": "outbound" }
+      }
+    },
+    "unionSet": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "sets"],
+      "properties": {
+        "kind": { "const": "union" },
+        "sets": {
+          "type": "array",
+          "minItems": 2,
+          "items": { "$ref": "#/$defs/sourceSet" }
+        }
+      }
+    },
+    "differenceSet": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "base", "subtract"],
+      "properties": {
+        "kind": { "const": "difference" },
+        "base": { "$ref": "#/$defs/sourceSet" },
+        "subtract": { "$ref": "#/$defs/sourceSet" }
+      }
+    },
+    "sourceSet": {
+      "oneOf": [
+        { "$ref": "#/$defs/explicitSet" },
+        { "$ref": "#/$defs/accountsForSet" },
+        { "$ref": "#/$defs/representsSet" },
+        { "$ref": "#/$defs/unionSet" },
+        { "$ref": "#/$defs/differenceSet" }
+      ]
+    },
+    "nameOverride": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_item_ref", "name"],
+      "properties": {
+        "source_item_ref": { "$ref": "#/$defs/sourceItemRef" },
+        "name": { "$ref": "#/$defs/pathSegment" }
+      }
+    },
+    "sourceNaming": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["default"],
+      "properties": {
+        "default": { "const": "preserve_source_basename" },
+        "overrides": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/nameOverride" }
+        }
+      }
+    },
+    "logicalGroup": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["relative_path", "members", "source_naming"],
+      "properties": {
+        "relative_path": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/pathSegment" }
+        },
+        "members": { "$ref": "#/$defs/sourceSet" },
+        "source_naming": { "$ref": "#/$defs/sourceNaming" }
+      }
+    },
+    "otherOutcome": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["members", "outcome"],
+      "properties": {
+        "members": { "$ref": "#/$defs/sourceSet" },
+        "outcome": {
+          "enum": ["retain_current_organization", "exclude_from_logical_organization"]
+        },
+        "reason": { "type": "string", "minLength": 1 },
+        "evidence_refs": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/evidenceRef" }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "outcome": { "const": "exclude_from_logical_organization" } },
+            "required": ["outcome"]
+          },
+          "then": {
+            "properties": { "reason": { "type": "string", "minLength": 1 } },
+            "required": ["reason"]
+          }
+        }
+      ]
+    },
+    "decisionNote": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["applies_to", "summary"],
+      "properties": {
+        "applies_to": { "$ref": "#/$defs/sourceSet" },
+        "summary": { "type": "string", "minLength": 1 },
+        "evidence_refs": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/evidenceRef" }
+        }
+      }
+    },
+    "sealedContent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contract",
+        "plan_ref",
+        "result_ref",
+        "scope",
+        "logical_root",
+        "groups",
+        "other_outcomes"
+      ],
+      "properties": {
+        "contract": { "const": "mediasense.frozen-plan" },
+        "plan_ref": { "$ref": "#/$defs/planRef" },
+        "result_ref": { "$ref": "#/$defs/resultRef" },
+        "scope": { "$ref": "#/$defs/sourceSet" },
+        "logical_root": { "$ref": "#/$defs/pathSegment" },
+        "groups": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/logicalGroup" }
+        },
+        "other_outcomes": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/otherOutcome" }
+        },
+        "decision_notes": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/decisionNote" }
+        }
+      },
+      "anyOf": [
+        {
+          "properties": { "groups": { "type": "array", "minItems": 1 } },
+          "required": ["groups"]
+        },
+        {
+          "properties": { "other_outcomes": { "type": "array", "minItems": 1 } },
+          "required": ["other_outcomes"]
+        }
+      ]
+    },
+    "seal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["encoding_profile", "content_identity", "final_confirmation"],
+      "properties": {
+        "encoding_profile": { "const": "mediasense-json-strings-sha256-v1" },
+        "content_identity": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "final_confirmation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["confirmed_content_identity", "confirmed_at", "confirmed_by"],
+          "properties": {
+            "confirmed_content_identity": {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            },
+            "confirmed_at": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "confirmed_by": { "$ref": "#/$defs/opaqueRef" }
+          }
+        }
+      }
+    }
+  }
+}

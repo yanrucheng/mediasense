@@ -90,6 +90,13 @@ The sealed Dataset context reports actual embedding Work, execution/reuse and
 failure counts. Compare those with the representative method, hidden variation
 and Plan's actual inspection burden; no fixed entry count proves useful compression.
 
+Sensitivity is disabled unless the Human explicitly enables `[sensitivity]` in the
+existing user or Dataset configuration. The `local-models` extra supplies both
+local detector dependencies. Read the effective profile and each detector/input
+outcome; backend-unavailable is a recoverable prerequisite, never permission to
+download weights or silently omit a configured detector. High-resolution still
+Evidence is prepared for selected sources even with both model capabilities off.
+
 Capture-time observations retain raw candidates and interpretation. Distinguish
 explicit offsets, timezone assumptions, conflicts, filename fallback and file
 mtime fallback. Do not treat interpreted time as an original camera timestamp;
@@ -238,8 +245,7 @@ PreCheck owns compression, the Run checkpoint, and Result projection.
 
 If the user dislikes the observed frontier, first ask what is wrong with its
 content or distribution. A large or small count alone is not evidence of a bad
-Result. `review` the exact Result, select Evidence refs from coverage-card
-anchors, and request only advertised `expand` includes needed to compare the
+Result. `review` the exact Result, select Evidence refs from review items, and request only advertised `expand` includes needed to compare the
 complaint with representation bases, coverage, outliers, boundaries,
 qualifications, processing provenance, and cost. Use `resolve` when exact member
 identity is required; do not substitute review summaries for membership proof.
@@ -262,9 +268,18 @@ rewrites, or proof that any one count is inherently correct.
 After publication, `review` the exact `result_ref` through
 `mediasense.precheck.read`. Interpret coverage and readiness as
 independent axes; successful Read enforces integrity and preserve qualifications, omissions, provenance, confidence,
-failures, and externally observable cost. Follow each card's
-`available_expansions` menu for targeted detail and use its
-`source_set` when exact members are needed.
+failures, and externally observable cost. Each normal `items` record joins the Evidence's own
+observations and actual `source_items` with a separate `represents` relation.
+Use `represents.source_set` for exact members. A source photograph's metadata,
+location or detector outcome never becomes a fact about its represented members.
+Use `review.evidence_refs` to inspect already prepared high-resolution or boundary
+Evidence; Read does not prepare additional media.
+
+A page can contain `evidence_ref + error` for an unavailable or oversized item.
+Keep that failure and continue with `page.next_cursor`; a final null cursor means
+all selection positions were accounted for, not that every Evidence was delivered.
+MCP delivers the business result once in structuredContent with empty content.
+A returned path is not proof that an image was opened or understood.
 
 Before handoff, rely on Result `readiness` as the stage contract. Every Source Item
 must expose honest component outcomes or explicit not_checked historical gaps;

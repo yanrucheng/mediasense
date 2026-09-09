@@ -39,6 +39,7 @@ class Diagnostic:
 
 def diagnose() -> dict[str, object]:
     checks: list[Diagnostic] = []
+    sensitivity_configuration = None
     checks.append(
         Diagnostic(
             "python",
@@ -85,6 +86,7 @@ def diagnose() -> dict[str, object]:
         config_sources: list[str] = []
     else:
         config_sources = [str(path) for path in config.sources]
+        sensitivity_configuration = config.sensitivity
         configured_provider = bool(
             os.environ.get(config.amap_api_key_env)
             or os.environ.get(config.google_maps_api_key_env)
@@ -178,11 +180,39 @@ def diagnose() -> dict[str, object]:
             False,
         )
     )
+    from mediasense.precheck.sensitivity import (
+        NudeNetDetector,
+        SensitivityBackendUnavailable,
+    )
+
+    try:
+        NudeNetDetector._weights()
+        weights_state = "available"
+    except SensitivityBackendUnavailable:
+        weights_state = "unavailable"
+    checks.append(
+        Diagnostic(
+            "sensitivity_weights",
+            "ok" if weights_state == "available" else "warning",
+            "Bundled NudeNet weights: "
+            + weights_state
+            + "; NSFW model/processor are loaded only from the pinned local cache at execution.",
+            False,
+        )
+    )
     return {
         "application_version": application_version(),
         "status": ("error" if any(item.status == "error" for item in checks) else "ok"),
         "checks": [item.to_value() for item in checks],
         "configuration_sources": config_sources,
+        "local_sensitivity": {
+            "state": "configured" if sensitivity_configuration else "disabled",
+            "profile": sensitivity_configuration,
+            "execution": "not_checked",
+            "locality": "local",
+            "model_downloads": False,
+            "nudenet_weights": weights_state,
+        },
         "user_config": str(default_user_config_path()),
     }
 

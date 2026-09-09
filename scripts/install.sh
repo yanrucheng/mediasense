@@ -3,16 +3,18 @@ set -euo pipefail
 
 usage() {
   printf '%s\n' \
-    'Usage: ./scripts/install.sh [--offline] [--force] [--embeddings]' \
+    'Usage: ./scripts/install.sh [--offline] [--force] [--embeddings] [--local-models]' \
     '' \
     'Installs the current trusted checkout with uv.' \
     '--embeddings installs local encoder dependencies; model weights remain separately provisioned.' \
+    '--local-models also installs both sensitivity dependencies and packaged NudeNet weights; NSFW weights must already be local.' \
     'The script never installs uv, system packages, model weights, or Agent configuration.'
 }
 
 offline=false
 force=false
 embeddings=false
+local_models=false
 while (($#)); do
   case "$1" in
     --offline)
@@ -23,6 +25,9 @@ while (($#)); do
       ;;
     --embeddings)
       embeddings=true
+      ;;
+    --local-models)
+      local_models=true
       ;;
     -h|--help)
       usage
@@ -55,7 +60,9 @@ fi
 if [[ "$force" == true ]]; then
   arguments+=(--force)
 fi
-if [[ "$embeddings" == true ]]; then
+if [[ "$local_models" == true ]]; then
+  arguments+=("$project_root[local-models]")
+elif [[ "$embeddings" == true ]]; then
   arguments+=("$project_root[embeddings]")
 else
   arguments+=("$project_root")

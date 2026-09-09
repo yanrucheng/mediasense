@@ -184,7 +184,7 @@ def test_all_nine_actions_and_failed_run_observation_over_real_stdio(
                 "read",
                 "expand",
                 result_ref=result_ref,
-                evidence_refs=[review["cards"][0]["evidence_ref"]],
+                evidence_refs=[review["items"][0]["evidence_ref"]],
                 include=[
                     "anchor_evidence",
                     "prepared_targets",
@@ -212,11 +212,10 @@ def test_all_nine_actions_and_failed_run_observation_over_real_stdio(
                 "mediasense.precheck.run",
                 {"action": "cancel", "dataset_ref": dataset, "run_ref": run_ref},
             )
-            import json
 
             assert (
                 refused.is_error
-                and json.loads(refused.content[0].text)["error"]["code"]
+                and refused.structured_content["error"]["code"]
                 == "invalid_state"
             )
             actions.add("cancel")

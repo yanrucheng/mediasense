@@ -217,7 +217,7 @@ def test_real_sealed_precheck_result_executes_controlled_move_and_receipt(
         ReceiptStore(
             tmp_path / "apply-state" / "receipts",
             Path(__file__).parents[1]
-            / "docs/spec/spec-260829-0050-apply/apply-receipt.schema.json",
+            / "docs/spec/contract/apply/apply-receipt.schema.json",
         ),
     )
     status = executor.execute(

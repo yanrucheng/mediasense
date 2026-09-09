@@ -225,19 +225,19 @@ def test_packaged_resources_are_complete_and_contracts_match_authorities() -> No
     root = Path(__file__).resolve().parents[1]
     authorities = {
         "mediasense.dataset.open": root
-        / "docs/spec/spec-260831-0009-dataset-open/dataset-open.tool.json",
+        / "docs/spec/contract/dataset-open/dataset-open.tool.json",
         "mediasense.precheck.run": root
-        / "docs/spec/spec-260827-1915A-precheck-run/precheck-run.tool.json",
+        / "docs/spec/contract/precheck-run/precheck-run.tool.json",
         "mediasense.precheck.read": root
-        / "docs/spec/spec-260826-1546-precheck-read/precheck-read.tool.json",
+        / "docs/spec/contract/precheck-read/precheck-read.tool.json",
         "mediasense.plan.work": root
-        / "docs/spec/spec-260827-1915B-plan-work/plan-work.tool.json",
+        / "docs/spec/contract/plan-work/plan-work.tool.json",
         "mediasense.geo.query": root
-        / "docs/spec/spec-260830-2034-geo-query/geo-query.tool.json",
+        / "docs/spec/contract/geo-query/geo-query.tool.json",
         "mediasense.apply.run": root
-        / "docs/spec/spec-260829-0050-apply/apply-run.tool.json",
+        / "docs/spec/contract/apply/apply-run.tool.json",
         "mediasense.apply.read": root
-        / "docs/spec/spec-260829-0050-apply/apply-read.tool.json",
+        / "docs/spec/contract/apply/apply-read.tool.json",
     }
     for name in CONTRACT_FILES:
         assert contract_path(name).read_bytes() == authorities[name].read_bytes()

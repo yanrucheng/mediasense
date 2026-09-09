@@ -31,8 +31,8 @@ dependencies with:
 ```
 
 The script is intentionally small and reviewable. It invokes `uv tool install`
-for the current checkout and does not bootstrap `uv`, system packages, optional
-models, Agent Skills, user-level configuration, or project-level configuration.
+for the current checkout and does not bootstrap `uv`, system packages, model
+downloads, Agent Skills, user-level configuration, or project-level configuration.
 Use `--offline` to prohibit dependency downloads or `--force` to explicitly
 replace an existing MediaSense tool environment.
 
@@ -52,6 +52,15 @@ reports the effective configuration; model loading is local-only and Run status
 reports unavailable prerequisites. Restore the same encoder to resume a Run;
 changing its model, library version or device requires a new Run. Sealed Result
 context distinguishes actual execution, reuse, failure and comparison limits.
+
+For local sensitivity evidence, use `./scripts/install.sh --local-models`, or
+install the wheel with its `[local-models]` extra. It includes NudeNet 3.4.2's
+packaged local weights and both detector dependencies. The pinned NSFW model and
+processor must already exist in the local Hugging Face cache. `mediasense doctor
+--json` checks the bundled NudeNet weights and reports the user configuration;
+actual backend execution is checked by Run. There is no automatic model download
+or remote fallback. Sensitivity defaults to disabled, including when an empty
+`[sensitivity]` table is present.
 
 For a built release artifact, install the exact wheel instead:
 
@@ -140,14 +149,39 @@ values in this order, with later layers overriding earlier ones:
 Provider keys override individually. A Dataset `[embedding]` table replaces the
 user-level embedding table as a whole: supply a complete enabled profile or
 `enabled = false`. Command options such as `--workspace` select operation inputs;
-there is no generic CLI override for every configuration key.
+there is no generic CLI override for every configuration key. A Dataset
+`[sensitivity]` table likewise replaces its entire user-level table.
 
 The complete currently supported TOML key set is:
 
 | Section | Keys | Default / interpretation |
 | --- | --- | --- |
 | `providers` | `amap_api_key_env`, `google_maps_api_key_env` | Names of credential environment variables; defaults below |
+| `sensitivity` | `enabled`, `device`, `nsfw_model_id`, `nsfw_revision` | Disabled unless `enabled=true`; enabled profiles require a 40-character immutable revision; defaults: CPU and Falconsai/nsfw_image_detection |
 | `embedding` | `enabled`, `model_id`, `revision`, `dimensions`, `device`, `batch_size` | Absent table disables embedding. Enabled profiles require model ID, pinned revision and dimensions; device defaults to `cpu`, batch size to `4` |
+
+Example with both sensitivity detectors explicitly enabled, using an existing
+local NSFW revision (replace the placeholder with its exact 40-character commit):
+
+```toml
+[sensitivity]
+enabled = true
+device = "cpu"
+nsfw_model_id = "Falconsai/nsfw_image_detection"
+nsfw_revision = "<local-40-character-commit>"
+```
+
+Each selected high-resolution still and sampled video frame receives a separate
+outcome from each detector. NudeNet currently uses CPU or a locally available
+CUDA ONNX provider; an unsupported device (including MPS for NudeNet) is reported
+as backend-unavailable. The NSFW adapter supports the configured local PyTorch
+device. Scores and effective thresholds remain evidence; they do not authorize
+remote processing. Run records backend-unavailable as blocked and can resume
+when the pinned local prerequisites become available. Changing an already
+observed model, profile or backend identity requires a new Run.
+
+Ordinary and high-resolution stills are prepared together for selected sources
+even when both model capabilities are off; valid profiles reuse independently.
 
 Example with local embedding explicitly enabled:
 

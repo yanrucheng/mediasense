@@ -149,7 +149,8 @@ class PrecheckExecutionConfig:
     directed_evidence_paths: tuple[Path, ...] = ()
     embedding_profile: EmbeddingProfile | None = None
     embedding_encoder_identity: str | None = None
-    sensitivity_profile: SensitivityProfile | None = None
+    sensitivity_profiles: tuple[SensitivityProfile, ...] = ()
+    sensitivity_detector_identities: tuple[str, ...] = ()
     reverse_geocode_profile: ReverseGeocodeProfile = field(
         default_factory=ReverseGeocodeProfile
     )
@@ -231,10 +232,15 @@ class PrecheckExecutionConfig:
                 "retry_delay_seconds": self.reverse_geocode_profile.retry_delay_seconds,
                 "routing_policy": self.reverse_geocode_profile.routing_policy,
             },
-            "sensitivity_profile": _sensitivity_profile_value(self.sensitivity_profile),
+            "sensitivity_profiles": [
+                _sensitivity_profile_value(p) for p in self.sensitivity_profiles
+            ],
+            "sensitivity_detector_identities": list(
+                self.sensitivity_detector_identities
+            ),
             "source_storage": self.source_storage_hint,
             "source_storage_evidence": self.source_storage_evidence,
-            "version": 5,
+            "version": 6,
             "video": self.video,
             "video_frame_limit": self.video_frame_limit,
         }
@@ -311,7 +317,7 @@ class PrecheckExecutionConfig:
 
     @classmethod
     def from_value(cls, value: Mapping[str, object]) -> PrecheckExecutionConfig:
-        if value.get("version") != 5:
+        if value.get("version") not in {5, 6}:
             raise ValueError("unsupported PreCheck execution configuration")
         budget_value = cast(Mapping[str, object], value["resource_budget"])
         capacity_value = cast(Mapping[str, object], budget_value["capacity"])
@@ -338,8 +344,18 @@ class PrecheckExecutionConfig:
                 cast(Mapping[str, object] | None, value["embedding_profile"])
             ),
             embedding_encoder_identity=value.get("embedding_encoder_identity"),
-            sensitivity_profile=_sensitivity_profile_from_value(
-                cast(Mapping[str, object] | None, value["sensitivity_profile"])
+            sensitivity_profiles=tuple(
+                _sensitivity_profile_from_value(p)
+                for p in (
+                    value.get("sensitivity_profiles", ())
+                    if value.get("version") == 6
+                    else [value["sensitivity_profile"]]
+                    if value.get("sensitivity_profile")
+                    else ()
+                )
+            ),
+            sensitivity_detector_identities=tuple(
+                value.get("sensitivity_detector_identities", ())
             ),
             reverse_geocode_profile=ReverseGeocodeProfile(
                 provider_profile=(
@@ -393,7 +409,7 @@ class PrecheckExecutionDependencies:
     ffprobe_version: str | None = None
     ffmpeg_version: str | None = None
     embedding_encoder: ImageEmbeddingEncoder | None = None
-    sensitivity_detector: SensitivityDetector | None = None
+    sensitivity_detectors: tuple[SensitivityDetector, ...] = ()
     geo_tool: GeoQueryTool | None = None
 
 
@@ -499,8 +515,7 @@ class PrecheckOrchestrator:
         }
         rendition_profiles = (
             2
-            if config.embedding_profile is not None
-            or config.sensitivity_profile is not None
+            if config.embedding_profile is not None or bool(config.sensitivity_profiles)
             else 1
         )
         self._checkpoint(
@@ -572,7 +587,7 @@ class PrecheckOrchestrator:
         self._checkpoint(
             run_ref,
             "sensitivity",
-            total="unknown" if config.sensitivity_profile is not None else 0,
+            total="unknown" if bool(config.sensitivity_profiles) else 0,
         )
         sensitivity = self._sensitivity(
             run_ref,
@@ -641,6 +656,8 @@ class PrecheckOrchestrator:
         if not self._finish_phase(run_ref, "external_evidence"):
             return self.run_control.sync_accounting(run_ref)
 
+        from .geocode import acquisition_policy_value
+
         draft = ResultStore(self.database_path).build_minimal(
             accounting_run_id,
             [outcome.work.work_id for outcome in renditions],
@@ -659,6 +676,7 @@ class PrecheckOrchestrator:
             ),
             reverse_geocode_work_by_source=geocode.work_by_source(),
             sensitivity_work_ids=[outcome.work.work_id for outcome in sensitivity],
+            sensitivity_enabled=bool(config.sensitivity_profiles),
             video_probe_work_ids=[outcome.work.work_id for outcome in probes.values()],
             video_frame_work_ids=[outcome.work.work_id for outcome in frames],
             video_key_frame_work_ids=[
@@ -674,6 +692,7 @@ class PrecheckOrchestrator:
                 },
             ),
             external_policy_status=geocode.status,
+            geo_acquisition_policy=acquisition_policy_value(),
         )
         self._checkpoint(run_ref, "publishing", total=1)
         return self.run_control.publish_result(run_ref, draft)
@@ -790,13 +809,9 @@ class PrecheckOrchestrator:
         if not config.image_renditions:
             return ()
         producer = ImageRenditionProducer(self.database_path)
-        high_resolution = (
-            config.embedding_profile is not None
-            or config.sensitivity_profile is not None
-        )
         calls = (
             ScheduledCall(
-                f"rendition:{profile.name}:{item.relative_path.as_posix()}",
+                f"rendition:{item.relative_path.as_posix()}",
                 ResourceClaim(
                     source_io_slots=1,
                     workspace_io_slots=1,
@@ -806,19 +821,23 @@ class PrecheckOrchestrator:
                     decoder_slots=1,
                     encoder_slots=1,
                 ),
-                lambda item=item, profile=profile: producer.produce(
-                    run_id, item.relative_path, profile=profile
+                lambda item=item: producer.produce_profiles(
+                    run_id,
+                    item.relative_path,
+                    profiles=(
+                        ORDINARY_RENDITION_PROFILE,
+                        HIGH_RESOLUTION_RENDITION_PROFILE,
+                    ),
                 ),
             )
             for item in media
             if item.kind in _STILL_KINDS
-            for profile in (
-                (ORDINARY_RENDITION_PROFILE, HIGH_RESOLUTION_RENDITION_PROFILE)
-                if high_resolution
-                else (ORDINARY_RENDITION_PROFILE,)
-            )
         )
-        return tuple(value for _key, value in self._execute(run_ref, executor, calls))
+        return tuple(
+            outcome
+            for _key, values in self._execute(run_ref, executor, calls)
+            for outcome in values
+        )
 
     def _video(
         self,
@@ -1082,16 +1101,53 @@ class PrecheckOrchestrator:
         config: PrecheckExecutionConfig,
         executor: BoundedWorkExecutor,
     ) -> tuple[SensitivityOutcome, ...]:
-        profile = config.sensitivity_profile
-        if profile is None:
+        if not config.sensitivity_profiles:
             return ()
-        detector = self.dependencies.sensitivity_detector
-        if detector is None:
+        detectors = self.dependencies.sensitivity_detectors
+        if len(detectors) != len(config.sensitivity_profiles) or (
+            config.sensitivity_detector_identities
+            and not all(
+                _backend_identity_matches(expected, detector.identity)
+                for expected, detector in zip(
+                    config.sensitivity_detector_identities, detectors, strict=True
+                )
+            )
+        ):
             raise _BlockedExecution(
                 "sensitivity_backend_unavailable",
-                "The configured local sensitivity backend is unavailable.",
-                "Configure the pinned local sensitivity backend and resume.",
+                "The configured local sensitivity backends do not match this Run.",
+                "Restore the pinned local backends and resume.",
             )
+        from .sensitivity import SensitivityBackendUnavailable
+
+        outcomes = []
+        for profile, detector in zip(
+            config.sensitivity_profiles, detectors, strict=True
+        ):
+            try:
+                outcomes.extend(
+                    self._detect_sensitivity(
+                        run_ref,
+                        run_id,
+                        renditions,
+                        frames,
+                        config,
+                        executor,
+                        profile,
+                        detector,
+                    )
+                )
+            except SensitivityBackendUnavailable as error:
+                raise _BlockedExecution(
+                    "sensitivity_backend_unavailable",
+                    str(error),
+                    "Make the pinned local backend available and resume.",
+                ) from error
+        return tuple(outcomes)
+
+    def _detect_sensitivity(
+        self, run_ref, run_id, renditions, frames, config, executor, profile, detector
+    ):
         visual = tuple(
             outcome
             for outcome in (*renditions, *frames)
@@ -1195,7 +1251,9 @@ class PrecheckOrchestrator:
             member_paths = _bundle_member_paths(bundle_work)
             visual = visual_by_path.get(representative_path)
             if visual is None:
-                alternatives = sorted(path for path in member_paths if path in visual_by_path)
+                alternatives = sorted(
+                    path for path in member_paths if path in visual_by_path
+                )
                 if not alternatives:
                     continue
                 representative_path = alternatives[0]
@@ -1589,6 +1647,17 @@ def _embedding_profile_from_value(
         dimensions=int(value["dimensions"]),
         normalization=str(value["normalization"]),
         dtype=str(value["dtype"]),
+    )
+
+
+def _backend_identity_matches(expected: str, actual: str) -> bool:
+    # Previously missing backend details were unknown, not a different pinned model.
+    # Every already observed identity component, declared model and device stays bound.
+    import re
+
+    return (
+        re.fullmatch(re.escape(expected).replace("unavailable", "[^;]+"), actual)
+        is not None
     )
 
 

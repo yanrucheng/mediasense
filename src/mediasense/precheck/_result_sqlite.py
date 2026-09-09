@@ -430,11 +430,38 @@ class SQLiteResultStore:
                     source_dependencies.add(str(source_path))
             if linked is None:
                 raise ResultSealError("Artifact is not bound to successful Work")
-            derived_sources = {
-                sources[ref].relative_path.as_posix()
-                for ref in derived_by_evidence.get(item.ref, set())
-                if ref in sources
-            }
+
+            def lineage(ref, active=frozenset()):
+                if ref in active:
+                    raise ResultSealError("derived_from contains a cycle")
+                if ref in sources:
+                    return {sources[ref].relative_path.as_posix()}
+                return set().union(
+                    *(
+                        lineage(target, active | {ref})
+                        for target in derived_by_evidence.get(ref, ())
+                    )
+                )
+
+            derived_sources = lineage(item.ref)
+            direct_evidence = [
+                ref for ref in derived_by_evidence.get(item.ref, ()) if ref in evidence
+            ]
+            if direct_evidence:
+                with self._connect() as connection:
+                    upstream = {
+                        row[0]
+                        for row in connection.execute(
+                            "SELECT dependency_key FROM work_dependencies WHERE work_id = ? AND dependency_kind = ?",
+                            (item.work_id, DependencyKind.UPSTREAM_WORK),
+                        )
+                    }
+                if any(
+                    evidence[ref].work_id not in upstream for ref in direct_evidence
+                ):
+                    raise ResultSealError(
+                        "derived Evidence does not match producing Work inputs"
+                    )
             if not derived_sources or not derived_sources <= source_dependencies:
                 raise ResultSealError("derived_from does not match production inputs")
             artifact_ids.append(item.artifact_id)
@@ -766,7 +793,7 @@ def _package(
             }
         )
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "published_at": published_at.isoformat(timespec="microseconds"),
         "result": result_view,
         "dataset": dataset_view,
@@ -827,6 +854,27 @@ def _validate_contract_values(draft: ResultDraft) -> None:
             raise ResultSealError(
                 "only local Artifact Evidence may retain Artifact or Work references"
             )
+    evidence_refs = {item.ref for item in draft.evidence}
+    for subject in (*draft.sources, *draft.evidence):
+        for observation in subject.observations:
+            if observation["name"] == "content_sensitivity" and observation[
+                "status"
+            ] in {"available", "failed"}:
+                if observation["provenance"]["input_evidence_ref"] not in evidence_refs:
+                    raise ResultSealError(
+                        "Sensitivity input Evidence is outside this Result"
+                    )
+            if (
+                observation["name"] == "video_contact_sheet"
+                and observation["status"] == "available"
+            ):
+                if any(
+                    frame["evidence_ref"] not in evidence_refs
+                    for frame in observation["value"]["frames"]
+                ):
+                    raise ResultSealError(
+                        "Contact-sheet frame Evidence is outside this Result"
+                    )
     for evidence_ref in draft.entry_evidence:
         _nonempty(evidence_ref, "entry Evidence reference")
     for relation in draft.relationships:
@@ -979,70 +1027,37 @@ def _validate_source_locator(value: object, relative_path: Path) -> None:
 
 
 def _validate_observations(observations: tuple[dict[str, object], ...]) -> None:
-    allowed = {
-        "name",
-        "status",
-        "value",
-        "basis",
-        "confidence",
-        "qualifications",
-        "provenance",
-    }
-    statuses = {"available", "missing", "failed", "not_checked", "not_applicable"}
-    component_names = {"address_candidate", "nearby_place_candidates"}
-    seen_components: set[str] = set()
+    from mediasense.runtime.resources import contract_validator
+    from jsonschema import ValidationError
+
+    validator = contract_validator("mediasense.precheck.read", "review")
+    validator = validator.evolve(
+        schema={"$defs": validator.schema["$defs"], "$ref": "#/$defs/observation"}
+    )
+    seen = set()
     for observation in observations:
-        if isinstance(observation, dict) and observation.get("name") in component_names:
-            name = observation["name"]
-            if name in seen_components:
-                raise ResultSealError(
-                    "Duplicate authoritative Geo component observation"
-                )
-            seen_components.add(name)
-            if "basis" not in observation:
-                raise ResultSealError("Geo component observation requires basis")
-            if observation.get("status") == "available":
-                value = observation.get("value")
-                if name == "address_candidate" and (
-                    not isinstance(value, dict)
-                    or not isinstance(value.get("formatted_address"), str)
-                    or not value["formatted_address"]
-                    or not isinstance(value.get("components"), dict)
-                ):
-                    raise ResultSealError("Available address candidate must be usable")
-                if name == "nearby_place_candidates" and (
-                    not isinstance(value, list)
-                    or not value
-                    or any(not isinstance(item, dict) or not item for item in value)
-                ):
-                    raise ResultSealError(
-                        "Available nearby candidates must be nonempty"
-                    )
-        if not isinstance(observation, dict) or set(observation) - allowed:
-            raise ResultSealError("Observation contains unknown fields")
-        _nonempty(observation.get("name"), "Observation name")
-        status = observation.get("status")
-        if status not in statuses:
-            raise ResultSealError("Observation has an unknown status")
-        if status == "available" and "value" not in observation:
-            raise ResultSealError("available Observation requires a value")
-        if status == "failed" and "basis" not in observation:
-            raise ResultSealError("failed Observation requires a basis")
-        if status != "available" and "value" in observation:
-            raise ResultSealError("non-available Observation cannot contain a value")
-        if "basis" in observation:
-            _validate_basis(observation["basis"])
-        if "confidence" in observation:
-            confidence = observation["confidence"]
-            if (
-                not isinstance(confidence, (int, float))
-                or isinstance(confidence, bool)
-                or not 0 <= confidence <= 1
-            ):
-                raise ResultSealError("Observation confidence must be from 0 to 1")
-        if "qualifications" in observation and not observation["qualifications"]:
-            raise ResultSealError("Observation qualifications cannot be empty")
-        _validate_qualifications(tuple(observation.get("qualifications", ())))
+        try:
+            validator.validate(observation)
+            json.dumps(observation, allow_nan=False)
+        except (ValidationError, TypeError, ValueError) as error:
+            raise ResultSealError(
+                "Invalid public Observation: " + str(getattr(error, "message", error))
+            ) from error
+        name = observation["name"]
+        provenance = observation.get("provenance", {})
+        provenance = provenance if isinstance(provenance, Mapping) else {}
+        value = observation.get("value", {})
+        value = value if isinstance(value, Mapping) else {}
+        key = (name,)
+        if name == "content_sensitivity":
+            key = (
+                name,
+                value.get("detector_identity", provenance.get("detector_identity")),
+                provenance.get("input_evidence_ref"),
+            )
+        if key in seen:
+            raise ResultSealError("Duplicate authoritative Observation: " + str(key))
+        seen.add(key)
 
 
 def _validate_source_verification_shape(
@@ -1103,27 +1118,10 @@ def _validate_qualifications(qualifications: tuple[dict[str, object], ...]) -> N
 
 
 def _validate_basis(basis: object) -> None:
-    if isinstance(basis, str):
-        _nonempty(basis, "basis")
-        return
-    if not isinstance(basis, dict) or not {"summary"} <= basis.keys():
-        raise ResultSealError("basis must be text or a summary object")
     try:
         json.dumps(basis, allow_nan=False)
     except (TypeError, ValueError) as error:
-        raise ResultSealError("basis must contain JSON values") from error
-    _nonempty(basis["summary"], "basis summary")
-    refs = basis.get("refs", ())
-    if not isinstance(refs, (list, tuple)):
-        raise ResultSealError("basis refs must be an array")
-    for ref in refs:
-        if (
-            not isinstance(ref, dict)
-            or set(ref) != {"kind", "ref"}
-            or ref.get("kind") not in {"result", "dataset", "source_item", "evidence"}
-        ):
-            raise ResultSealError("basis contains an invalid typed reference")
-        _nonempty(ref["ref"], "basis reference")
+        raise ResultSealError("basis must contain finite JSON values") from error
 
 
 def _nonempty(value: object, label: str) -> str:

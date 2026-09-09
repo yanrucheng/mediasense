@@ -11,9 +11,9 @@ from referencing import Registry, Resource
 
 
 ROOT = Path(__file__).parents[1]
-WORK_SPEC = ROOT / "docs" / "spec" / "spec-260827-1915B-plan-work"
-PLAN_SPEC = ROOT / "docs" / "spec" / "spec-260827-1138-frozen-plan"
-READ_SPEC = ROOT / "docs" / "spec" / "spec-260826-1546-precheck-read"
+WORK_SPEC = ROOT / "docs" / "spec" / "contract/plan-work"
+PLAN_SPEC = ROOT / "docs" / "spec" / "contract/frozen-plan"
+READ_SPEC = ROOT / "docs" / "spec" / "contract/precheck-read"
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -60,7 +60,7 @@ class MockPrecheckReader:
     name = "mediasense.precheck.read"
 
     def __init__(self) -> None:
-        mock = load_json(READ_SPEC / "hong-kong.mock.json")
+        mock = load_json(ROOT / "tests/fixtures/plan-precheck-result.json")
         self.result_ref = mock["result_ref"]
         review = next(
             exchange["response"]
@@ -94,11 +94,11 @@ class MockPrecheckReader:
         self.relationships[(self.result_ref, "accounts_for")] = tuple(
             sorted(self.source_views)
         )
-        for card in review["cards"]:
+        for card in review["items"]:
             ref = card["evidence_ref"]
             self.evidence_views.setdefault(ref, _synthetic_evidence(ref, card))
             represented = self.relationships.get((ref, "represents"), ())
-            for refs in card["roles"].values():
+            for refs in card.get("roles", {}).values():
                 for evidence_ref in refs:
                     self.evidence_views.setdefault(
                         evidence_ref,
@@ -107,7 +107,7 @@ class MockPrecheckReader:
                             "ref": evidence_ref,
                             "access": {
                                 "kind": "inline",
-                                "content": {"mock": True},
+                                "value": {"mock": True},
                             },
                         },
                     )
@@ -168,7 +168,7 @@ class MockPrecheckReader:
                         {
                             "kind": "evidence",
                             "ref": ref,
-                            "access": {"kind": "inline", "content": {"mock": True}},
+                            "access": {"kind": "inline", "value": {"mock": True}},
                         },
                     )
 
@@ -208,6 +208,7 @@ class MockPrecheckReader:
                         if key not in {"kind", "ref"}
                     }
                     included["anchor_evidence"].setdefault("roles", [])
+                    included["anchor_evidence"].setdefault("observations", [])
                 if "prepared_targets" in request["include"]:
                     included["prepared_targets"] = []
                 if "provenance" in request["include"]:
@@ -320,17 +321,13 @@ def _read_error(request: dict[str, Any], code: str) -> dict[str, Any]:
 
 
 def _synthetic_evidence(ref: str, card: dict[str, Any]) -> dict[str, Any]:
-    observations = [
-        {"name": "evidence_role", "status": "available", "value": {"role": role}}
-        for role, refs in card["roles"].items()
-        if ref in refs
-    ]
+    observations = deepcopy(card["observations"])
     return {
         "kind": "evidence",
         "ref": ref,
         "access": deepcopy(card["access"]),
         "observations": observations,
-        "roles": [item["value"]["role"] for item in observations],
+        "roles": [item["value"]["role"] for item in observations if item["name"] == "evidence_role"],
     }
 
 

@@ -1481,7 +1481,7 @@ def test_precheck_preserves_cross_provider_provenance_in_result_audit(
     )
     limited = PrecheckReadTool(database).read(request)
     assert "error" not in limited
-    assert limited["cards"]
+    assert limited["items"]
     assert 0 < len(limited["execution_boundary"]["attempts"]) < 3
     assert limited["execution_boundary"]["page"]["total"] == 3
     cursor = limited["execution_boundary"]["page"]["next_cursor"]
@@ -1653,6 +1653,17 @@ def test_bundle_is_a_candidate_scope_and_movement_splits_geo_units(
         }
     )
     assert reviewed["result"]["readiness"] == "plan_ready"
+    source_views = {source["locator"]["value"]: source for item in reviewed["items"] for source in item["source_items"]}
+    projected = {o["name"]: o for o in source_views["b.jpg"]["observations"]}
+    assert projected["gps_coordinates"]["value"]["latitude"] == 22.319330
+    for name in ("address_candidate", "nearby_place_candidates"):
+        observation = projected[name]
+        assert observation["basis"]["query_coordinate"]["latitude"] == 22.319300
+        assert 3 < observation["basis"]["projection"]["query_point_distance_meters"] < 4
+        assert any(q["code"] == "geo_query_point_reused" for q in observation["qualifications"])
+    assert projected["nearby_place_candidates"]["basis"]["requested_radius_meters"] == 500
+    assert projected["nearby_place_candidates"]["basis"]["requested_max_places"] == 30
+
 
 
 def test_nearby_coordinates_share_only_inside_a_media_bundle(tmp_path: Path) -> None:
@@ -2455,7 +2466,7 @@ def test_sealed_result_exposes_candidates_and_external_effect_proof(
     read_schema = json.loads(
         (
             Path(__file__).parents[1]
-            / "docs/spec/spec-260826-1546-precheck-read/precheck-read.tool.json"
+            / "docs/spec/contract/precheck-read/precheck-read.tool.json"
         ).read_text(encoding="utf-8")
     )["outputSchema"]
     validator = Draft202012Validator(read_schema)

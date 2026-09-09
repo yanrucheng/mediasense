@@ -490,7 +490,7 @@ def test_metadata_work_uses_revision_bound_source_and_sidecar_inputs_and_reuses(
         for dependency in first.work.spec.dependencies
         if dependency.key == "metadata_profile"
     )
-    assert json.loads(metadata_profile)["profile_id"] == "index-v1"
+    assert json.loads(metadata_profile)["profile_id"] == "index-v2"
     assert str(source / "photo.jpg") in command
     assert str(source / "photo.xmp") in command
     capture = next(

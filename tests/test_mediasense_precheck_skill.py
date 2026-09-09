@@ -14,13 +14,13 @@ SKILL_DIR = (
 SKILL_PATH = SKILL_DIR / "SKILL.md"
 OPENAI_PATH = SKILL_DIR / "agents" / "openai.yaml"
 RUN_TOOL_PATH = (
-    ROOT / "docs" / "spec" / "spec-260827-1915A-precheck-run" / "precheck-run.tool.json"
+    ROOT / "docs" / "spec" / "contract/precheck-run" / "precheck-run.tool.json"
 )
 READ_TOOL_PATH = (
     ROOT
     / "docs"
     / "spec"
-    / "spec-260826-1546-precheck-read"
+    / "contract/precheck-read"
     / "precheck-read.tool.json"
 )
 RUN_TOOL = json.loads(RUN_TOOL_PATH.read_text(encoding="utf-8"))

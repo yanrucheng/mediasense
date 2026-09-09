@@ -2,19 +2,22 @@
 id: "spec-260907-0247-precheck-plan-handoff"
 title: "MediaSense PreCheck 最小接口草图"
 type: spec
-status: draft
+status: superseded
 created: 2026-09-07
-updated: 2026-09-08
+updated: 2026-09-09
 timezone: "Asia/Shanghai"
 parent: "index-spec"
 depends-on:
   - "spec-260826-1546-precheck-read"
   - "spec-260827-1915A-precheck-run"
-superseded-by: ""
+superseded-by: "precheck-read"
 tags: ["mediasense", "precheck", "contract"]
 ---
 
 # PreCheck 最小接口草图
+
+> **历史讨论草图。** 当前开发只读取 [稳定合约入口](../contract/index.md)，不得按日期将本页当作较新接口。
+
 
 本页保留早期讨论过程。当前交换值以[Run 正式合约](../spec-260827-1915A-precheck-run/index.md)和[Read 正式合约](../spec-260826-1546-precheck-read/index.md)为准；本页省略与临时格式不再是实施依据。
 

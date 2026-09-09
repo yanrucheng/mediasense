@@ -14,7 +14,7 @@ from mediasense.precheck.work import WorkStore
 
 ROOT = Path(__file__).parents[1]
 RUN_CONTRACT = (
-    ROOT / "docs" / "spec" / "spec-260827-1915A-precheck-run" / "precheck-run.tool.json"
+    ROOT / "docs" / "spec" / "contract/precheck-run" / "precheck-run.tool.json"
 )
 
 

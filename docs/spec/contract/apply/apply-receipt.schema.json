@@ -1,0 +1,457 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mediasense.local/spec/apply-receipt.schema.json",
+  "title": "MediaSense Apply Receipt",
+  "description": "Active contract for one immutable, completely accounted Apply execution result.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["sealed_content", "seal"],
+  "properties": {
+    "sealed_content": { "$ref": "#/$defs/sealed_content" },
+    "seal": { "$ref": "#/$defs/seal" }
+  },
+  "$defs": {
+    "nonempty": { "type": "string", "minLength": 1 },
+    "receipt_ref": { "type": "string", "pattern": "^apply-receipt:[^\\s]+$" },
+    "run_ref": { "type": "string", "pattern": "^apply-run:[^\\s]+$" },
+    "plan_ref": { "type": "string", "pattern": "^frozen-plan:[^\\s]+$" },
+    "source_item_ref": { "type": "string", "pattern": "^source-item:[^\\s]+$" },
+    "content_identity": { "type": "string", "minLength": 3 },
+    "path": { "type": "string", "minLength": 1 },
+    "json_value": {
+      "oneOf": [
+        { "type": "boolean" },
+        { "type": "number" },
+        { "type": "string" },
+        { "type": "array" },
+        { "type": "object" }
+      ]
+    },
+    "effect": { "const": "move_originals" },
+    "completion": { "enum": ["complete", "incomplete"] },
+    "closure": { "enum": ["automatic", "human_cancelled"] },
+    "operation_result": {
+      "enum": ["completed_and_verified", "failed", "refused", "not_attempted", "indeterminate"]
+    },
+    "count": { "type": "integer", "minimum": 0 },
+    "accounting": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["plan_scope_items", "materialization_operations", "retained_without_effect", "excluded_without_effect", "completed_and_verified", "failed", "refused", "not_attempted", "indeterminate"],
+      "properties": {
+        "plan_scope_items": { "$ref": "#/$defs/count" },
+        "materialization_operations": { "$ref": "#/$defs/count" },
+        "retained_without_effect": { "$ref": "#/$defs/count" },
+        "excluded_without_effect": { "$ref": "#/$defs/count" },
+        "completed_and_verified": { "$ref": "#/$defs/count" },
+        "failed": { "$ref": "#/$defs/count" },
+        "refused": { "$ref": "#/$defs/count" },
+        "not_attempted": { "$ref": "#/$defs/count" },
+        "indeterminate": { "$ref": "#/$defs/count" }
+      }
+    },
+    "destination": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["parent", "resolved_logical_root", "observed_identity"],
+      "properties": {
+        "parent": { "$ref": "#/$defs/path" },
+        "resolved_logical_root": { "$ref": "#/$defs/path" },
+        "observed_identity": { "$ref": "#/$defs/nonempty" }
+      }
+    },
+    "source_root": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_root_ref", "current_root", "observed_identity"],
+      "properties": {
+        "source_root_ref": { "type": "string", "pattern": "^source-root:[^\\s]+$" },
+        "current_root": { "$ref": "#/$defs/path" },
+        "observed_identity": { "$ref": "#/$defs/nonempty" }
+      }
+    },
+    "forward_execution_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "source_roots", "destination"],
+      "properties": {
+        "kind": { "const": "forward" },
+        "source_roots": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/source_root" }
+        },
+        "destination": { "$ref": "#/$defs/destination" }
+      }
+    },
+    "rewind_execution_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "rewind_of_receipt_ref", "restored_source_parents"],
+      "properties": {
+        "kind": { "const": "rewind" },
+        "rewind_of_receipt_ref": { "$ref": "#/$defs/receipt_ref" },
+        "restored_source_parents": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/path" }
+        }
+      }
+    },
+    "execution_binding": {
+      "oneOf": [
+        { "$ref": "#/$defs/forward_execution_binding" },
+        { "$ref": "#/$defs/rewind_execution_binding" }
+      ]
+    },
+    "authorization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["binding", "confirmed_prepared_content_identity", "confirmed_at"],
+      "properties": {
+        "binding": { "$ref": "#/$defs/nonempty" },
+        "confirmed_prepared_content_identity": { "$ref": "#/$defs/content_identity" },
+        "confirmed_at": { "type": "string", "format": "date-time" }
+      }
+    },
+    "preflight": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_compatibility", "target_binding", "execution_route", "target_collisions", "blockers", "warnings"],
+      "properties": {
+        "source_compatibility": { "const": "verified" },
+        "target_binding": { "const": "verified" },
+        "execution_route": { "enum": ["same_filesystem_atomic_move", "verified_cross_filesystem_transfer"] },
+        "target_collisions": { "const": 0 },
+        "blockers": { "const": 0 },
+        "warnings": { "$ref": "#/$defs/count" }
+      }
+    },
+    "verification_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["planned_targets_present", "original_locations_absent", "unplanned_targets", "unplanned_renames", "unverified_items"],
+      "properties": {
+        "planned_targets_present": { "$ref": "#/$defs/count" },
+        "original_locations_absent": { "$ref": "#/$defs/count" },
+        "unplanned_targets": { "$ref": "#/$defs/count" },
+        "unplanned_renames": { "$ref": "#/$defs/count" },
+        "unverified_items": { "$ref": "#/$defs/count" }
+      }
+    },
+    "reason": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message"],
+      "properties": {
+        "code": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+        "message": { "$ref": "#/$defs/nonempty" }
+      }
+    },
+    "source_verification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["profile", "result", "expected_basis"],
+      "properties": {
+        "profile": { "$ref": "#/$defs/nonempty" },
+        "result": { "enum": ["matched", "mismatched", "unavailable", "indeterminate"] },
+        "expected_basis": { "$ref": "#/$defs/json_value" },
+        "observed_basis": { "$ref": "#/$defs/json_value" }
+      }
+    },
+    "postcondition_verification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["profile", "result", "basis"],
+      "properties": {
+        "profile": { "$ref": "#/$defs/nonempty" },
+        "result": { "enum": ["verified", "failed", "indeterminate"] },
+        "basis": { "$ref": "#/$defs/nonempty" }
+      }
+    },
+    "metadata_discrepancy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["discrepancy_ref", "source_item_ref", "attribute", "expected", "observed"],
+      "properties": {
+        "discrepancy_ref": { "type": "string", "pattern": "^metadata-discrepancy:[^\\s]+$" },
+        "source_item_ref": { "$ref": "#/$defs/source_item_ref" },
+        "attribute": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+        "expected": { "$ref": "#/$defs/json_value" },
+        "observed": { "$ref": "#/$defs/json_value" }
+      }
+    },
+    "discrepancy_authorization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["authorization_ref", "binding", "confirmed_prepared_content_identity", "confirmed_discrepancy_set_identity", "accepted_discrepancy_refs", "confirmed_at"],
+      "properties": {
+        "authorization_ref": { "type": "string", "pattern": "^authorization:[^\\s]+$" },
+        "binding": { "$ref": "#/$defs/nonempty" },
+        "confirmed_prepared_content_identity": { "$ref": "#/$defs/content_identity" },
+        "confirmed_discrepancy_set_identity": { "$ref": "#/$defs/content_identity" },
+        "accepted_discrepancy_refs": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^metadata-discrepancy:[^\\s]+$" }
+        },
+        "confirmed_at": { "type": "string", "format": "date-time" }
+      }
+    },
+    "metadata_preservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["profile", "content_verification", "checked_attributes", "unpreserved_attributes", "accepted_discrepancy_refs", "discrepancy_authorizations"],
+      "properties": {
+        "profile": { "enum": ["same_filesystem_rename_v1", "cross_filesystem_user_metadata_v1"] },
+        "content_verification": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["profile", "result"],
+          "properties": {
+            "profile": { "enum": ["filesystem_identity_and_location", "byte_for_byte"] },
+            "result": { "enum": ["verified", "failed", "indeterminate"] }
+          }
+        },
+        "checked_attributes": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" }
+        },
+        "unpreserved_attributes": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/metadata_discrepancy" }
+        },
+        "accepted_discrepancy_refs": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^metadata-discrepancy:[^\\s]+$" }
+        },
+        "discrepancy_authorizations": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/discrepancy_authorization" }
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "accepted_discrepancy_refs": { "minItems": 1 } }, "required": ["accepted_discrepancy_refs"] },
+          "then": { "properties": { "discrepancy_authorizations": { "minItems": 1 } } }
+        }
+      ]
+    },
+    "operation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_item_ref", "source_before", "intended_target", "source_verification", "result", "attempts", "source_after", "target_after", "verification"],
+      "properties": {
+        "source_item_ref": { "$ref": "#/$defs/source_item_ref" },
+        "source_before": { "$ref": "#/$defs/path" },
+        "intended_target": { "$ref": "#/$defs/path" },
+        "source_verification": { "$ref": "#/$defs/source_verification" },
+        "result": { "$ref": "#/$defs/operation_result" },
+        "attempts": { "type": "integer", "minimum": 0 },
+        "source_after": { "enum": ["present", "absent", "indeterminate"] },
+        "target_after": { "enum": ["verified_present", "absent", "present_unverified", "indeterminate"] },
+        "verification": { "$ref": "#/$defs/postcondition_verification" },
+        "reason": { "$ref": "#/$defs/reason" },
+        "recovery_fact": { "$ref": "#/$defs/nonempty" }
+      }
+    },
+    "ledger": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "items"],
+          "properties": {
+            "kind": { "const": "inline" },
+            "items": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": { "$ref": "#/$defs/operation" }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "coverage", "default_result", "exceptions"],
+          "properties": {
+            "kind": { "const": "planned_set_minus_exceptions" },
+            "coverage": { "const": "all_materialization_operations" },
+            "default_result": { "const": "completed_and_verified" },
+            "exceptions": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": { "$ref": "#/$defs/operation" }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "coverage", "item_count", "segment_count", "content_identity"],
+          "properties": {
+            "kind": { "const": "immutable_segments" },
+            "coverage": { "const": "all_materialization_operations" },
+            "item_count": { "$ref": "#/$defs/count" },
+            "segment_count": { "type": "integer", "minimum": 1 },
+            "content_identity": { "$ref": "#/$defs/content_identity" }
+          }
+        }
+      ]
+    },
+    "created_directory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "effect", "rewind_rule"],
+      "properties": {
+        "path": { "$ref": "#/$defs/path" },
+        "effect": { "const": "created_by_run" },
+        "rewind_rule": { "const": "remove_only_if_empty_and_unchanged" }
+      }
+    },
+    "recovery": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["resume_count", "recovered_item_refs"],
+      "properties": {
+        "resume_count": { "$ref": "#/$defs/count" },
+        "recovered_item_refs": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/source_item_ref" }
+        },
+        "rewind_window_ends_at": { "type": "string", "format": "date-time" }
+      }
+    },
+    "resource_facts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["bytes_moved", "started_at", "ended_at"],
+      "properties": {
+        "bytes_moved": { "type": "integer", "minimum": 0 },
+        "started_at": { "type": "string", "format": "date-time" },
+        "ended_at": { "type": "string", "format": "date-time" }
+      }
+    },
+    "sealed_content": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["contract", "receipt_ref", "run_ref", "frozen_plan_ref", "frozen_plan_content_identity", "effect", "execution_binding", "prepared_content_identity", "authorization", "preflight", "completion", "closure", "accounting", "verification", "metadata_preservation", "operation_ledger", "created_directories", "recovery", "resource_facts"],
+      "properties": {
+        "contract": { "const": "mediasense.apply-receipt" },
+        "receipt_ref": { "$ref": "#/$defs/receipt_ref" },
+        "run_ref": { "$ref": "#/$defs/run_ref" },
+        "frozen_plan_ref": { "$ref": "#/$defs/plan_ref" },
+        "frozen_plan_content_identity": { "$ref": "#/$defs/content_identity" },
+        "effect": { "$ref": "#/$defs/effect" },
+        "execution_binding": { "$ref": "#/$defs/execution_binding" },
+        "prepared_content_identity": { "$ref": "#/$defs/content_identity" },
+        "authorization": { "$ref": "#/$defs/authorization" },
+        "preflight": { "$ref": "#/$defs/preflight" },
+        "completion": { "$ref": "#/$defs/completion" },
+        "closure": { "$ref": "#/$defs/closure" },
+        "accounting": { "$ref": "#/$defs/accounting" },
+        "verification": { "$ref": "#/$defs/verification_summary" },
+        "metadata_preservation": { "$ref": "#/$defs/metadata_preservation" },
+        "operation_ledger": { "$ref": "#/$defs/ledger" },
+        "created_directories": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/created_directory" }
+        },
+        "recovery": { "$ref": "#/$defs/recovery" },
+        "resource_facts": { "$ref": "#/$defs/resource_facts" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "completion": { "const": "incomplete" } }, "required": ["completion"] },
+          "then": { "properties": { "closure": { "const": "human_cancelled" } } }
+        },
+        {
+          "if": {
+            "properties": {
+              "preflight": {
+                "properties": { "execution_route": { "const": "same_filesystem_atomic_move" } },
+                "required": ["execution_route"]
+              }
+            },
+            "required": ["preflight"]
+          },
+          "then": {
+            "properties": {
+              "metadata_preservation": {
+                "properties": {
+                  "profile": { "const": "same_filesystem_rename_v1" },
+                  "content_verification": {
+                    "properties": { "profile": { "const": "filesystem_identity_and_location" } },
+                    "required": ["profile"]
+                  }
+                },
+                "required": ["profile", "content_verification"]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "preflight": {
+                "properties": { "execution_route": { "const": "verified_cross_filesystem_transfer" } },
+                "required": ["execution_route"]
+              }
+            },
+            "required": ["preflight"]
+          },
+          "then": {
+            "properties": {
+              "metadata_preservation": {
+                "properties": {
+                  "profile": { "const": "cross_filesystem_user_metadata_v1" },
+                  "content_verification": {
+                    "properties": { "profile": { "const": "byte_for_byte" } },
+                    "required": ["profile"]
+                  }
+                },
+                "required": ["profile", "content_verification"]
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "completion": { "const": "complete" } }, "required": ["completion"] },
+          "then": {
+            "properties": {
+              "metadata_preservation": {
+                "properties": {
+                  "content_verification": {
+                    "properties": { "result": { "const": "verified" } },
+                    "required": ["result"]
+                  }
+                },
+                "required": ["content_verification"]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "seal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["encoding_profile", "content_identity", "sealed_at"],
+      "properties": {
+        "encoding_profile": { "$ref": "#/$defs/nonempty" },
+        "content_identity": { "$ref": "#/$defs/content_identity" },
+        "sealed_at": { "type": "string", "format": "date-time" }
+      }
+    }
+  }
+}

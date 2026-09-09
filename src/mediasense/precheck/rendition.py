@@ -69,6 +69,54 @@ class ImageRenditionProducer:
         profile: RenditionProfile = RenditionProfile(),
         owner: str = "builtin-image-rendition",
     ) -> RenditionOutcome:
+        return self._produce(
+            run_id, relative_path, profile=profile, owner=owner, render=_render_jpeg
+        )
+
+    def produce_profiles(
+        self,
+        run_id: str,
+        relative_path: Path,
+        *,
+        profiles: tuple[RenditionProfile, ...],
+    ) -> tuple[RenditionOutcome, ...]:
+        """Keep independent Work while sharing one lazily decoded source per call."""
+        decoded = None
+        identity = None
+
+        def render(source_path, destination, profile):
+            nonlocal decoded, identity
+            current = source_path.stat()
+            stamp = (
+                current.st_dev,
+                current.st_ino,
+                current.st_size,
+                current.st_mtime_ns,
+                current.st_ctime_ns,
+            )
+            if decoded is None or stamp != identity:
+                if decoded is not None:
+                    decoded.close()
+                decoded = _decode_rgb(source_path)
+                identity = stamp
+            return _write_jpeg(decoded, destination, profile)
+
+        try:
+            return tuple(
+                self._produce(
+                    run_id,
+                    relative_path,
+                    profile=profile,
+                    owner="builtin-image-rendition",
+                    render=render,
+                )
+                for profile in profiles
+            )
+        finally:
+            if decoded is not None:
+                decoded.close()
+
+    def _produce(self, run_id, relative_path, *, profile, owner, render):
         proof = self.validity.prove(run_id, relative_path)
         spec = WorkSpec(
             capability="image-rendition",
@@ -132,7 +180,7 @@ class ImageRenditionProducer:
         lease = leases[0]
         draft = self.artifacts.create_draft(lease, suffix=".jpg")
         try:
-            width, height = _render_jpeg(proof.source_path, draft.path, profile)
+            width, height = render(proof.source_path, draft.path, profile)
             self.validity.verify(run_id, proof)
         except (
             UnidentifiedImageError,
@@ -200,27 +248,33 @@ def _render_jpeg(
     destination: Path,
     profile: RenditionProfile,
 ) -> tuple[int, int]:
+    with _decode_rgb(source_path) as decoded:
+        return _write_jpeg(decoded, destination, profile)
+
+
+def _decode_rgb(source_path):
     with warnings.catch_warnings():
         warnings.simplefilter("error", Image.DecompressionBombWarning)
         with Image.open(source_path) as opened:
             opened.load()
-            oriented = ImageOps.exif_transpose(opened)
-            rendered = _as_rgb(oriented)
-            rendered.thumbnail(
-                (profile.max_edge, profile.max_edge),
-                Image.Resampling.LANCZOS,
-                reducing_gap=3.0,
+            with ImageOps.exif_transpose(opened) as oriented:
+                return _as_rgb(oriented)
+
+
+def _write_jpeg(decoded, destination, profile):
+    with decoded.copy() as rendered:
+        rendered.thumbnail(
+            (profile.max_edge, profile.max_edge),
+            Image.Resampling.LANCZOS,
+            reducing_gap=3.0,
+        )
+        width, height = rendered.size
+        with destination.open("wb") as output:
+            rendered.save(
+                output, format="JPEG", quality=profile.jpeg_quality, optimize=True
             )
-            width, height = rendered.size
-            with destination.open("wb") as output:
-                rendered.save(
-                    output,
-                    format="JPEG",
-                    quality=profile.jpeg_quality,
-                    optimize=True,
-                )
-                output.flush()
-                os.fsync(output.fileno())
+            output.flush()
+            os.fsync(output.fileno())
     with Image.open(destination) as verification:
         verification.verify()
     return width, height

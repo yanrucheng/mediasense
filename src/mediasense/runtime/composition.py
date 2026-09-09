@@ -135,12 +135,40 @@ class DatasetRuntime:
                 model_batch_size=embedding["batch_size"],
             )
         )
+        from dataclasses import replace
+        from mediasense.precheck.sensitivity import (
+            NudeNetDetector,
+            TransformersNSFWDetector,
+            NUDENET_BODY_EXPOSURE_PROFILE_V1,
+            NSFW_BINARY_PROFILE_V1,
+        )
+
+        detectors = ()
+        if config.sensitivity is not None:
+            sensitivity = config.sensitivity
+            detectors = (
+                NudeNetDetector(device=sensitivity["device"]),
+                TransformersNSFWDetector(
+                    model_id=sensitivity["nsfw_model_id"],
+                    revision=sensitivity["nsfw_revision"],
+                    device=sensitivity["device"],
+                ),
+            )
+            execution_config = replace(
+                execution_config,
+                sensitivity_profiles=(
+                    NUDENET_BODY_EXPOSURE_PROFILE_V1,
+                    NSFW_BINARY_PROFILE_V1,
+                ),
+                sensitivity_detector_identities=tuple(d.identity for d in detectors),
+            )
         self.precheck_run = PrecheckRunTool(
             precheck_database,
             execution_config=execution_config,
             execution_dependencies=PrecheckExecutionDependencies(
                 geo_tool=self.geo_query,
                 embedding_encoder=encoder,
+                sensitivity_detectors=detectors,
             ),
         )
         self.precheck_read = PrecheckReadTool(precheck_database)

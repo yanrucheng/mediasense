@@ -21,7 +21,7 @@ from mediasense.apply.preparation import SourceSetExpansion
 
 ROOT = Path(__file__).parents[1]
 APPLY_RUN_SCHEMA = (
-    ROOT / "docs" / "spec" / "spec-260829-0050-apply" / "apply-run.tool.json"
+    ROOT / "docs" / "spec" / "contract/apply" / "apply-run.tool.json"
 )
 
 

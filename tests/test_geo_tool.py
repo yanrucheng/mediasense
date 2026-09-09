@@ -153,7 +153,7 @@ def _contract() -> dict[str, object]:
         Path(__file__).parents[1]
         / "docs"
         / "spec"
-        / "spec-260830-2034-geo-query"
+        / "contract/geo-query"
         / "geo-query.tool.json"
     )
     return json.loads(path.read_text(encoding="utf-8"))
@@ -164,7 +164,7 @@ def _mock() -> dict[str, object]:
         Path(__file__).parents[1]
         / "docs"
         / "spec"
-        / "spec-260830-2034-geo-query"
+        / "contract/geo-query"
         / "geo-query.mock.json"
     )
     return json.loads(path.read_text(encoding="utf-8"))

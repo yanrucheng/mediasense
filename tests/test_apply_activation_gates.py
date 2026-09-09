@@ -14,7 +14,7 @@ PRECHECK_TOOL = (
     ROOT
     / "docs"
     / "spec"
-    / "spec-260826-1546-precheck-read"
+    / "contract/precheck-read"
     / "precheck-read.tool.json"
 )
 

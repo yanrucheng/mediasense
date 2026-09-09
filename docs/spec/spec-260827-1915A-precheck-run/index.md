@@ -2,20 +2,23 @@
 id: "spec-260827-1915A-precheck-run"
 title: "MediaSense PreCheck Run Tool Contract"
 type: spec
-status: active
+status: superseded
 created: 2026-08-27
-updated: 2026-09-08
+updated: 2026-09-09
 timezone: "Asia/Shanghai"
 parent: "index-spec"
 depends-on:
   - "design-260823-1918-mediasense-foundation"
   - "spec-260826-1546-precheck-read"
   - "clarify-260827-1604-tool-operation-contracts"
-superseded-by: ""
+superseded-by: "precheck-run"
 tags: ["mediasense", "precheck", "tool-contract", "run-lifecycle"]
 ---
 
 # MediaSense PreCheck Run Tool Contract
+
+> **历史记录，已退出当前规范。** 唯一当前合约在 [contract/precheck-run](../contract/precheck-run/index.md)。本目录的文字、schema 和示例保留为旧版本证据，不用于新开发；包内旧副本也不能替代新合约。
+
 
 `mediasense.precheck.run` 控制一次持久、可恢复的 PreCheck 执行。
 [Tool Schema](precheck-run.tool.json) 是唯一交换值规范；

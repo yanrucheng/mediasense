@@ -4,14 +4,14 @@ title: "MediaSense PreCheck Implementation Design"
 type: design
 status: active
 created: 2026-08-27
-updated: 2026-09-05
+updated: 2026-09-09
 timezone: "Asia/Shanghai"
 parent: ""
 depends-on:
   - "design-260823-1918-mediasense-foundation"
   - "design-260825-2235-mediasense-information-architecture"
   - "clarify-260826-1819-precheck-contract-concepts"
-  - "spec-260826-1546-precheck-read"
+  - "precheck-read"
   - "eval-260823-1918-ai-album-migration-baseline"
 superseded-by: ""
 tags: ["precheck", "implementation", "compression", "incremental", "recovery"]
@@ -28,7 +28,7 @@ The following remain authoritative over this design:
 - the [MediaSense Foundation](design-260823-1918-mediasense-foundation.md) for stage purpose, safety, and contract-first development;
 - the [MediaSense Information Architecture](design-260825-2235-mediasense-information-architecture/) for business concepts and stage ownership;
 - the [PreCheck concept clarification](../clarify/clarify-260826-1819-precheck-contract-concepts.md) for accepted concept decisions; and
-- the [PreCheck Read Contract](../spec/spec-260826-1546-precheck-read/) for the machine-facing handoff to Plan.
+- the [PreCheck Read Contract](../spec/contract/precheck-read/) for the machine-facing handoff to Plan.
 
 If implementation pressure conflicts with those authorities, implementation must stop and report the conflict. It must not silently alter the public concepts, relationships, status axes, or Tool behavior.
 

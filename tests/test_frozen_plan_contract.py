@@ -10,8 +10,9 @@ from jsonschema import Draft202012Validator
 
 
 ROOT = Path(__file__).parents[1]
-PLAN_SPEC = ROOT / "docs" / "spec" / "spec-260827-1138-frozen-plan"
-PRECHECK_SPEC = ROOT / "docs" / "spec" / "spec-260826-1546-precheck-read"
+PLAN_SPEC = ROOT / "docs" / "spec" / "contract" / "frozen-plan"
+# This prior Result fixture is historical input evidence, not current API authority.
+PRECHECK_SPEC = ROOT / "docs" / "spec" / "contract/precheck-read"
 PLAN_ARTIFACT_DESIGN = (
     ROOT / "docs" / "design" / "design-260828-2043-plan-local-artifacts"
 )
@@ -168,7 +169,7 @@ def _validate_semantics(plan: dict, resolver: Resolver) -> None:
 
 
 def _hong_kong_resolver() -> Resolver:
-    precheck = _load(PRECHECK_SPEC / "hong-kong.mock.json")
+    precheck = _load(ROOT / "tests/fixtures/plan-precheck-result.json")
     inspected = {}
     for exchange in precheck["exchanges"]:
         response = exchange["response"]
@@ -238,12 +239,12 @@ def _hong_kong_resolver() -> Resolver:
         for exchange in precheck["exchanges"]
         if exchange["request"].get("action") == "review"
     )
-    for card in review["cards"]:
+    for card in review["items"]:
         anchor_key = (card["evidence_ref"], "represents", "outbound")
         represented = relations.get(anchor_key)
         if represented is None:
             continue
-        for role_refs in card["roles"].values():
+        for role_refs in card.get("roles", {}).values():
             for evidence_ref in role_refs:
                 relations.setdefault(
                     (evidence_ref, "represents", "outbound"), represented

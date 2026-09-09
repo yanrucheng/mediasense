@@ -514,17 +514,8 @@ class PrecheckRunTool:
                 )
             except Exception:
                 _LOGGER.exception("PreCheck execution failed for %s", run_ref)
-                current = self._store.get(run_ref)
-                if current["state"] != "running":
-                    result = self._status_record(current)
-                else:
-                    result = self.mark_interrupted(
-                        run_ref,
-                        message=(
-                            "The execution worker stopped unexpectedly after "
-                            "acquiring the Run."
-                        ),
-                    )
+                self.mark_failed(run_ref, code="execution_worker_crashed", message="Unexpected implementation failure; inspect the Host diagnostic before retrying.")
+                raise
             except BaseException:
                 current = self._store.get(run_ref)
                 if current["state"] == "running":

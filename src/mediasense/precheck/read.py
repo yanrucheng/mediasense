@@ -110,6 +110,11 @@ class _ResultGraph:
                 "The sealed Result graph is structurally invalid.",
             ) from error
 
+        self.artifact_proofs = package.get("_artifact_proofs", {})
+        self.workspace = package.get("_workspace")
+        self.evidence_records = {
+            str(record["view"]["ref"]): record for record in evidence_records
+        }
         self.result_ref = str(self.result.get("ref", ""))
         self.by_origin_relation: dict[tuple[str, str], list[Mapping[str, object]]] = (
             defaultdict(list)
@@ -289,27 +294,16 @@ class PrecheckReadTool:
             raise _ReadFailure(
                 "result_untrusted", "Sealed Result cannot be decoded."
             ) from error
-        if not isinstance(package, dict):
+        if not isinstance(package, dict) or package.get("schema_version") not in {1, 2}:
             raise _ReadFailure(
                 "result_untrusted", "Sealed Result has an unsupported shape."
             )
-        for artifact in artifact_rows:
-            artifact_path = self.workspace / str(artifact["relative_path"])
-            try:
-                artifact_bytes = artifact_path.read_bytes()
-            except OSError as error:
-                raise _ReadFailure(
-                    "result_untrusted",
-                    f"Retained Artifact is unavailable: {artifact['artifact_id']}.",
-                ) from error
-            if (
-                len(artifact_bytes) != int(artifact["size_bytes"])
-                or hashlib.sha256(artifact_bytes).hexdigest() != artifact["digest"]
-            ):
-                raise _ReadFailure(
-                    "result_untrusted",
-                    f"Retained Artifact is corrupt: {artifact['artifact_id']}.",
-                )
+        # Artifact availability is checked at the selected Evidence boundary.
+        # A missing rendition must not invalidate the immutable Result graph.
+        package["_artifact_proofs"] = {
+            str(a["artifact_id"]): dict(a) for a in artifact_rows
+        }
+        package["_workspace"] = self.workspace
         from ._result_sqlite import _validate_observations, _validate_execution_boundary
         from ._result_types import ResultSealError
 
@@ -323,6 +317,11 @@ class PrecheckReadTool:
                 raise ValueError("Result identity mismatch")
             if set(graph.sources) != set(graph.accounts):
                 raise ValueError("Result source accounting is incomplete")
+            from ._read_projection import project_retained_observations
+
+            project_retained_observations(
+                graph, historical=package.get("schema_version", 1) == 1
+            )
             for view in (*graph.sources.values(), *graph.evidence.values()):
                 _validate_observations(tuple(view.get("observations", ())))
             _validate_execution_boundary(package["execution_boundary"])
@@ -379,7 +378,10 @@ class PrecheckReadTool:
                     raise ValueError("Source relationship targets another kind")
                 if relation == "entry_evidence" and target_ref not in graph.evidence:
                     raise ValueError("Entry relationship targets another kind")
+            from ._read_projection import source_lineage
+
             for ref in graph.evidence:
+                source_lineage(graph, ref)
                 _represented_refs(graph, ref)
                 for relation in ("derived_from", "expands_to"):
                     for member in graph.members(ref, relation):
@@ -442,10 +444,24 @@ class PrecheckReadTool:
                 "page",
                 "include",
                 "execution_page",
+                "evidence_refs",
             },
         )
+        refs = (
+            tuple(sorted(request["evidence_refs"]))
+            if "evidence_refs" in request
+            else graph.entry_evidence_refs
+        )
+        if any(ref not in graph.evidence for ref in refs):
+            raise _ReadFailure(
+                "reference_not_in_result", "Selected Evidence is not in this Result."
+            )
         query_key = _query_key(
-            "review:frontier_order", {"include": sorted(request.get("include", []))}
+            "review:selection_order",
+            {
+                "include": sorted(request.get("include", [])),
+                "evidence_refs": refs if "evidence_refs" in request else None,
+            },
         )
         limit, offset = _page_request(
             request.get("page"),
@@ -457,7 +473,9 @@ class PrecheckReadTool:
             query_key=query_key,
         )
         reconciliation = _reconciliation(graph)
-        cards = [_coverage_card(graph, ref) for ref in graph.entry_evidence_refs]
+        from ._read_projection import ReviewItems
+
+        items = ReviewItems(graph, refs)
         base: dict[str, object] = {
             "result": _effective_result_view(graph),
             "accounting": reconciliation,
@@ -494,10 +512,10 @@ class PrecheckReadTool:
                 operation="review",
                 query_key="execution_boundary:durable_attempt_order",
             )
-            minimum_cards = _paged_response(
+            minimum_page = _paged_response(
                 base,
-                collection="cards",
-                values=cards,
+                collection="items",
+                values=items,
                 offset=offset,
                 limit=limit,
                 result_ref=graph.result_ref,
@@ -505,10 +523,11 @@ class PrecheckReadTool:
                 operation="review",
                 query_key=query_key,
                 max_items=1,
+                review_faults=True,
             )
             audit_budget = (
                 _MAX_RESPONSE_BYTES
-                - _encoded_size(minimum_cards)
+                - _encoded_size(minimum_page)
                 - len('"execution_boundary":,')
             )
             base["execution_boundary"] = _paged_response(
@@ -517,16 +536,17 @@ class PrecheckReadTool:
                 values=audit.get("attempts", []),
                 offset=execution_offset,
                 limit=execution_limit,
+                byte_budget=audit_budget,
                 result_ref=graph.result_ref,
                 result_digest=result_digest,
                 operation="review",
                 query_key="execution_boundary:durable_attempt_order",
-                byte_budget=audit_budget,
             )
         return _paged_response(
             base,
-            collection="cards",
-            values=cards,
+            collection="items",
+            values=items,
+            review_faults=True,
             offset=offset,
             limit=limit,
             result_ref=graph.result_ref,
@@ -930,79 +950,6 @@ def _reconciliation(graph: _ResultGraph) -> dict[str, object]:
     }
 
 
-def _coverage_card(graph: _ResultGraph, ref: str) -> dict[str, object]:
-    evidence = graph.evidence.get(ref)
-    if evidence is None:
-        raise _ReadFailure("result_inconsistent", "Frontier Evidence is missing.")
-    member_refs = _represented_refs(graph, ref)
-    accounts = Counter(
-        (
-            str(graph.accounts[source_ref].get("scope")),
-            str(graph.accounts[source_ref].get("condition")),
-        )
-        for source_ref in member_refs
-    )
-    prepared = graph.members(ref, "expands_to")
-    role_refs: dict[str, list[str]] = {role: [] for role in _EVIDENCE_ROLES}
-    for evidence_ref in [ref, *list(_prepared_evidence_refs(prepared))]:
-        if evidence_ref not in graph.evidence:
-            raise _ReadFailure(
-                "result_inconsistent", "Prepared Evidence is missing from the Result."
-            )
-        for role in _evidence_roles(graph.evidence[evidence_ref]):
-            if evidence_ref not in role_refs[role]:
-                role_refs[role].append(evidence_ref)
-    prepared_evidence = tuple(_prepared_evidence_refs(prepared))
-    assigned = {item for values in role_refs.values() for item in values}
-    qualifications = _qualification_summary(graph, ref, prepared_evidence)
-    other_observations = any(
-        observation.get("name") not in {"capture_time", "media_type"}
-        for source_ref in member_refs
-        for observation in _observations(graph.sources[source_ref])
-    ) or any(
-        observation.get("name") != "evidence_role"
-        for evidence_ref in (ref, *prepared_evidence)
-        for observation in _observations(graph.evidence[evidence_ref])
-    )
-    return {
-        "evidence_ref": ref,
-        "access": evidence.get("access"),
-        "source_count": len(member_refs),
-        "scope_condition": [
-            {"scope": scope, "condition": condition, "count": count}
-            for (scope, condition), count in sorted(accounts.items())
-        ],
-        "facts": {
-            "capture_time": _capture_time_projection(graph, member_refs),
-            "media_type": _media_type_projection(graph, member_refs),
-        },
-        "roles": {role: values for role, values in role_refs.items() if values},
-        "unassigned_prepared_evidence": [
-            evidence_ref
-            for evidence_ref in prepared_evidence
-            if evidence_ref not in assigned
-        ],
-        "qualifications": qualifications,
-        "other_observations_available": other_observations,
-        "available_expansions": [
-            {"include": "anchor_evidence", "estimated_items": 1},
-            {"include": "prepared_targets", "estimated_items": len(prepared)},
-            {
-                "include": "provenance",
-                "estimated_items": len(graph.members(ref, "derived_from")),
-            },
-            {"include": "coverage_basis", "estimated_items": len(member_refs)},
-            {"include": "member_observations", "estimated_items": len(member_refs)},
-        ],
-        "source_set": {
-            "kind": "precheck_relation",
-            "origin": ref,
-            "relation": "represents",
-            "direction": "outbound",
-        },
-    }
-
-
 def _represented_refs(graph: _ResultGraph, evidence_ref: str) -> tuple[str, ...]:
     refs: list[str] = []
     seen: set[str] = set()
@@ -1098,36 +1045,6 @@ def _media_type_projection(
     }
 
 
-def _qualification_summary(
-    graph: _ResultGraph, anchor_ref: str, prepared_refs: Sequence[str]
-) -> list[dict[str, object]]:
-    grouped: dict[str, tuple[str, Mapping[str, object], int]] = {}
-
-    def add(applies_to: str, qualification: Mapping[str, object]) -> None:
-        key = applies_to + ":" + _canonical_json(qualification)
-        current = grouped.get(key)
-        grouped[key] = (
-            applies_to,
-            qualification,
-            1 if current is None else current[2] + 1,
-        )
-
-    for qualification in _qualifications(graph.evidence[anchor_ref]):
-        add("anchor_evidence", qualification)
-    for prepared_ref in prepared_refs:
-        for qualification in _qualifications(graph.evidence[prepared_ref]):
-            add("prepared_evidence", qualification)
-    for member in graph.members(anchor_ref, "represents"):
-        for qualification in _qualifications(member):
-            add("represents_member", qualification)
-    return [
-        {"applies_to": applies_to, **dict(qualification), "occurrences": count}
-        for applies_to, qualification, count in (
-            grouped[key] for key in sorted(grouped)
-        )
-    ]
-
-
 def _coverage_basis(graph: _ResultGraph, ref: str) -> dict[str, object]:
     members = graph.members(ref, "represents")
     qualified = sum(bool(member.get("qualifications")) for member in members)
@@ -1155,8 +1072,12 @@ def _qualification_summary_for_members(
 
 
 def _evidence_detail(graph: _ResultGraph, ref: str) -> dict[str, object]:
+    from ._read_projection import require_evidence_access
+
+    require_evidence_access(graph, ref)
     view = graph.evidence[ref]
     return {
+        "observations": list(view.get("observations", ())),
         **{key: value for key, value in view.items() if key not in {"kind", "ref"}},
         "roles": list(_evidence_roles(view)),
     }
@@ -1559,6 +1480,19 @@ def _one_observation(
 def _evidence_roles(value: Mapping[str, object]) -> tuple[str, ...]:
     roles: list[str] = []
     for observation in _observations(value):
+        if (
+            observation.get("name") == "additional_evidence_roles"
+            and observation.get("status") == "available"
+        ):
+            for role in observation["value"]:
+                if role not in _EVIDENCE_ROLES:
+                    raise _ReadFailure(
+                        "result_inconsistent",
+                        "Evidence has an unsupported additional role.",
+                    )
+                if role not in roles:
+                    roles.append(role)
+            continue
         if observation.get("name") != "evidence_role":
             continue
         if observation.get("status") != "available":
@@ -1652,68 +1586,94 @@ def _paged_response(
     query_key: str,
     max_items: int | None = None,
     byte_budget: int | None = None,
+    review_faults: bool = False,
 ) -> dict[str, object]:
     if offset > len(values):
         raise _ReadFailure("invalid_cursor", "Cursor position is outside the result.")
-    selected: list[object] = []
-    byte_limited = False
     effective_limit = limit if max_items is None else min(limit, max_items)
-    effective_budget = (
+    budget = (
         _MAX_RESPONSE_BYTES
         if byte_budget is None
         else min(_MAX_RESPONSE_BYTES, byte_budget)
     )
-    for value in values[offset : offset + effective_limit]:
-        candidate = [*selected, value]
-        candidate_next_offset = offset + len(candidate)
-        candidate_complete = candidate_next_offset >= len(values)
-        candidate_page: dict[str, object] = {
-            "total": len(values),
-            "next_cursor": None,
-        }
-        if not candidate_complete:
-            candidate_page["next_cursor"] = _encode_cursor(
+
+    def response(items, next_offset, *, byte_limited=False):
+        page = {"total": len(values), "next_cursor": None}
+        if next_offset < len(values):
+            page["next_cursor"] = _encode_cursor(
                 result_digest,
                 result_ref=result_ref,
                 operation=operation,
                 query_key=query_key,
                 limit=limit,
-                offset=candidate_next_offset,
+                offset=next_offset,
             )
-        provisional = {
-            **base,
-            collection: candidate,
-            "page": candidate_page,
-        }
-        if _encoded_size(provisional) > effective_budget:
-            byte_limited = True
-            break
-        selected = candidate
-    if offset < len(values) and not selected:
+            if byte_limited:
+                page["stop_reason"] = "byte_limit"
+        return {**base, collection: items, "page": page}
+
+    # Exact compact JSON size: empty-array envelope plus encoded items and commas.
+    # stop_reason is included only when the returned page really stops for bytes.
+    def page_size(item_sizes, next_offset, *, byte_limited=False):
+        return (
+            _encoded_size(response([], next_offset, byte_limited=byte_limited))
+            + sum(item_sizes)
+            + max(0, len(item_sizes) - 1)
+        )
+
+    batch = list(values[offset : offset + effective_limit])
+    sizes = [_encoded_size(value) for value in batch]
+    next_offset = offset + len(batch)
+    if page_size(sizes, next_offset) <= budget:
+        return response(batch, next_offset)
+    if page_size([], len(values)) > budget:
         raise _ReadFailure(
             "response_item_too_large",
-            "One response item exceeds the Tool response byte limit.",
+            "The response envelope or execution audit exceeds the byte limit.",
         )
-    next_offset = offset + len(selected)
-    complete = next_offset >= len(values)
-    page: dict[str, object] = {
-        "total": len(values),
-        "next_cursor": None,
-    }
-    if byte_limited and not complete:
-        page["stop_reason"] = "byte_limit"
-    if not complete:
-        page["next_cursor"] = _encode_cursor(
-            result_digest,
-            result_ref=result_ref,
-            operation=operation,
-            query_key=query_key,
-            limit=limit,
-            offset=next_offset,
-        )
-    response = {**base, collection: selected, "page": page}
-    _ensure_response_size(response)
-    return response
+
+    def localize_oversized_item(index, *, byte_limited=False):
+        single = response([batch[index]], offset + index + 1, byte_limited=byte_limited)
+        required = {
+            key: item for key, item in single.items() if key != "execution_boundary"
+        }
+        if _encoded_size(required) <= budget:
+            raise _ReadFailure(
+                "response_item_too_large",
+                "The execution audit leaves insufficient room for this Evidence; reduce execution_page or omit the audit.",
+            )
+        batch[index] = {
+            "evidence_ref": batch[index]["evidence_ref"],
+            "error": {
+                "code": "response_item_too_large",
+                "message": "This Evidence item and its required page envelope exceed the response byte limit.",
+            },
+        }
+        sizes[index] = _encoded_size(batch[index])
+
+    # Defer later items to their own pages instead of classifying their size
+    # using this page's envelope. Final/count-limited pages need no stop marker.
+    # If no prefix fits, the first item's *actual* single-item page necessarily
+    # stops for bytes. Account for that marker before deciding its local outcome.
+    while True:
+        for count in range(len(batch), 0, -1):
+            byte_limited = count < len(batch)
+            if (
+                page_size(sizes[:count], offset + count, byte_limited=byte_limited)
+                <= budget
+            ):
+                return response(
+                    batch[:count], offset + count, byte_limited=byte_limited
+                )
+        if not review_faults or not batch or "error" in batch[0]:
+            break
+        localize_oversized_item(0, byte_limited=len(batch) > 1)
+        # Repack the brief fault with any following items, keeping cursor/limit
+        # bindings and selection positions unchanged. At most one such retry.
+    raise _ReadFailure(
+        "response_item_too_large",
+        "The response item or required page envelope exceeds the response byte limit.",
+    )
 
 
 def _encode_cursor(

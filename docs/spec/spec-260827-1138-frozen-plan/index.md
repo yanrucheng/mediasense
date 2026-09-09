@@ -2,9 +2,9 @@
 id: "spec-260827-1138-frozen-plan"
 title: "MediaSense Frozen Organization Plan Contract"
 type: spec
-status: active
+status: superseded
 created: 2026-08-27
-updated: 2026-08-30
+updated: 2026-09-09
 timezone: "Asia/Shanghai"
 parent: "index-spec"
 depends-on:
@@ -12,11 +12,14 @@ depends-on:
   - "design-260825-2235-mediasense-information-architecture"
   - "spec-260826-1546-precheck-read"
   - "clarify-260827-0107-plan-frozen-contract"
-superseded-by: ""
+superseded-by: "frozen-plan"
 tags: ["mediasense", "plan", "frozen-plan", "contract"]
 ---
 
 # MediaSense Frozen Organization Plan Contract
+
+> **历史记录，已退出当前规范。** 唯一当前合约在 [contract/frozen-plan](../contract/frozen-plan/index.md)。本目录的文字、schema 和示例保留为旧版本证据，不用于新开发；包内旧副本也不能替代新合约。
+
 
 ## Decision
 

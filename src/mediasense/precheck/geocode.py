@@ -54,6 +54,16 @@ _LEGACY_PROFILE = {
 }
 
 
+def acquisition_policy_value() -> dict[str, object]:
+    return {
+        "name": _ACQUISITION_POLICY,
+        "max_pairwise_distance_meters": _MAX_SHARED_DIAMETER_METERS,
+        "max_known_time_span_seconds": _MAX_SHARED_SPAN_SECONDS,
+        "query_selection": "member_coordinate_medoid_then_exact_coordinate_deduplication",
+        "limitations": "Bundle candidates only; absent timestamps can leave same-asset associations unbounded in time. Exact-coordinate request reuse does not establish a shared event or venue.",
+    }
+
+
 @dataclass(frozen=True, slots=True)
 class ReverseGeocodeProfile:
     provider_profile: str = "geo-query-address-poi-v2"
@@ -1373,6 +1383,8 @@ def normalize_geo_observations(
                         }
                         for candidate in item["value"]
                     ]
+        for item in existing:
+            _project_nearby_bounds(item)
         return tuple(existing)
     result = output.get("result", {})
     if not isinstance(result, Mapping):
@@ -1513,8 +1525,26 @@ def normalize_geo_observations(
                 }
                 for item in details
             )
+        _project_nearby_bounds(observation)
         normalized.append(observation)
     return tuple(normalized)
+
+
+def _project_nearby_bounds(observation):
+    if observation.get("name") != "nearby_place_candidates":
+        return
+    basis = observation.get("basis", {})
+    profile = basis.get("profile") if isinstance(basis, dict) else None
+    if isinstance(profile, str):
+        try:
+            profile = json.loads(profile)
+        except ValueError:
+            return
+    if isinstance(profile, Mapping):
+        if "nearby_radius_meters" in profile:
+            basis["requested_radius_meters"] = profile["nearby_radius_meters"]
+        if "max_places" in profile:
+            basis["requested_max_places"] = profile["max_places"]
 
 
 def _reused_output(

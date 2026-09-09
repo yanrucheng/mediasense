@@ -22,8 +22,8 @@ from mediasense.precheck import run as run_module
 
 
 ROOT = Path(__file__).parents[1]
-RUN_SPEC = ROOT / "docs" / "spec" / "spec-260827-1915A-precheck-run"
-READ_SPEC = ROOT / "docs" / "spec" / "spec-260826-1546-precheck-read"
+RUN_SPEC = ROOT / "docs" / "spec" / "contract/precheck-run"
+READ_SPEC = ROOT / "docs" / "spec" / "contract/precheck-read"
 
 
 def _output_validator() -> Draft202012Validator:

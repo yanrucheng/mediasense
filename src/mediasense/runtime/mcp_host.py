@@ -152,6 +152,8 @@ def create_mcp_server(host: RuntimeHost | None = None) -> Server[Any]:
                     "diagnostic_id": diagnostic_id,
                 },
             }
+            if params.name in {"mediasense.precheck.run", "mediasense.precheck.read"}:
+                result.pop("outcome", None)
             return _tool_result(result, is_error=True)
         if params.name in {"mediasense.precheck.run", "mediasense.precheck.read"}:
             result.pop("outcome", None)
@@ -416,12 +418,7 @@ def _tool_result(
     result: dict[str, object], *, is_error: bool = False, structured_error: bool = False
 ) -> types.CallToolResult:
     return types.CallToolResult(
-        content=[
-            types.TextContent(
-                type="text",
-                text=json.dumps(result, ensure_ascii=False, sort_keys=True),
-            )
-        ],
-        structured_content=None if is_error and not structured_error else result,
+        content=[],
+        structured_content=result,
         is_error=is_error,
     )

@@ -134,7 +134,7 @@ def _apply_compression_frontier(
         [
             replace(
                 item,
-                observations=item.observations + tuple(roles.get(item.ref, ())),
+                observations=_merge_roles(item.observations, roles.get(item.ref, ())),
             )
             for item in evidence
         ],
@@ -142,11 +142,37 @@ def _apply_compression_frontier(
     )
 
 
+def _merge_roles(observations, added):
+    all_observations = (*observations, *added)
+    roles = list(
+        dict.fromkeys(
+            item["value"]["role"]
+            for item in all_observations
+            if item["name"] == "evidence_role"
+        )
+    )
+    result = tuple(item for item in all_observations if item["name"] != "evidence_role")
+    if roles:
+        result += (
+            next(item for item in all_observations if item["name"] == "evidence_role"),
+        )
+    if len(roles) > 1:
+        result += (
+            {
+                "name": "additional_evidence_roles",
+                "status": "available",
+                "value": roles[1:],
+                "basis": "Additional roles assigned by the retained candidate method",
+            },
+        )
+    return result
+
+
 def _role_observation(role: str, group_id: str) -> dict[str, object]:
     return {
         "name": "evidence_role",
         "status": "available",
-        "value": {"group_ref": group_id, "role": role},
+        "value": {"role": role},
         "basis": "prepared compression candidate",
     }
 
@@ -213,12 +239,28 @@ def _append_video_evidence(
                 "video key-frame candidate requires its selected frame in this Result"
             )
         selected_frame_ref = frame_refs[selected_work_id]
+        descriptor = json.loads(key_frame_work["descriptor_json"])
+        frame_order = next(
+            json.loads(d["value"])
+            for d in descriptor["dependencies"]
+            if d["kind"] == "parameter" and d["key"] == "frame_order"
+        )
+        if any(work_id not in frame_refs for work_id in frame_order):
+            raise ResultSealError(
+                "Key-frame comparison inputs must be public prepared Evidence"
+            )
+        role_observation = _role_observation("representative", "video-key-frame")
+        role_observation["basis"] = {
+            "method": str(key_frame_work["producer_identity"]),
+            "frame_count": candidate["frame_count"],
+            "top_k": candidate["top_k"],
+            "compared_evidence_refs": [frame_refs[work_id] for work_id in frame_order],
+        }
         for index, item in enumerate(evidence):
             if item.ref == selected_frame_ref:
                 evidence[index] = replace(
                     item,
-                    observations=item.observations
-                    + (_role_observation("representative", "video-key-frame"),),
+                    observations=item.observations + (role_observation,),
                 )
                 break
 
@@ -237,6 +279,19 @@ def _append_video_evidence(
             raise ResultSealError(
                 "contact sheet requires every producing frame Work in this Result"
             )
+        frame_values = {
+            str(frame["work_id"]): json.loads(frame["output_json"])["value"]
+            for frame in frame_works
+            if str(frame["work_id"]) in frame_refs
+        }
+        value = {key: item for key, item in value.items() if key != "frame_work_ids"}
+        value["frames"] = [
+            {
+                "evidence_ref": frame_refs[work_id],
+                "sample_time_seconds": frame_values[work_id]["sample_time_seconds"],
+            }
+            for work_id in expected_frame_ids
+        ]
         sheet_ref = result_local_reference(
             "evidence", str(work["work_id"]), produced[0].artifact_id
         )
@@ -272,7 +327,21 @@ def _append_video_evidence(
         entry_evidence.append(sheet_ref)
         if primary_ref is None:
             primary_ref = sheet_ref
-        relationships.extend(_visual_source_relationships(sheet_ref, source_ref))
+        relationships.extend(
+            relation
+            for relation in _visual_source_relationships(sheet_ref, source_ref)
+            if relation.relation != "derived_from"
+        )
+        relationships.extend(
+            ResultRelationship(
+                origin_ref=sheet_ref,
+                relation="derived_from",
+                target_ref=frame_refs[work_id],
+                target_kind="evidence",
+                basis="ordered sampled frame used in this contact sheet",
+            )
+            for work_id in expected_frame_ids
+        )
         relationships.extend(
             ResultRelationship(
                 origin_ref=sheet_ref,

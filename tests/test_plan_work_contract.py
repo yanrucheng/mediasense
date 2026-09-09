@@ -12,9 +12,10 @@ from referencing import Registry, Resource
 
 
 ROOT = Path(__file__).parents[1]
-WORK_SPEC = ROOT / "docs" / "spec" / "spec-260827-1915B-plan-work"
-PLAN_SPEC = ROOT / "docs" / "spec" / "spec-260827-1138-frozen-plan"
-READ_SPEC = ROOT / "docs" / "spec" / "spec-260826-1546-precheck-read"
+WORK_SPEC = ROOT / "docs" / "spec" / "contract" / "plan-work"
+PLAN_SPEC = ROOT / "docs" / "spec" / "contract" / "frozen-plan"
+# Historical input fixture; current Read contract is under docs/spec/contract.
+READ_SPEC = ROOT / "docs" / "spec" / "contract/precheck-read"
 
 
 def _load(path: Path):
@@ -49,7 +50,7 @@ def _validators() -> tuple[Draft202012Validator, Draft202012Validator]:
 
 
 def _result_view(result_ref: str) -> dict:
-    precheck = _load(READ_SPEC / "hong-kong.mock.json")
+    precheck = _load(ROOT / "tests/fixtures/plan-precheck-result.json")
     for exchange in precheck["exchanges"]:
         result = exchange["response"].get("result", {})
         if result.get("ref") == result_ref:

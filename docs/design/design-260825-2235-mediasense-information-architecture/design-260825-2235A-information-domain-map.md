@@ -4,7 +4,7 @@ title: "MediaSense Information Domain Map"
 type: design
 status: active
 created: 2026-08-25
-updated: 2026-08-26
+updated: 2026-09-09
 timezone: "Asia/Shanghai"
 parent: "design-260825-2235-mediasense-information-architecture"
 depends-on:
@@ -75,6 +75,8 @@ This chain covers MediaSense's primary purpose. Diagnostic support is secondary:
 
 The sections below define business concepts, not storage entities. A concept becomes an independent artifact only when later work proves that it owns a distinct authority or lifecycle.
 
+For PreCheck, the accepted [compression model](design-260825-2235D-precheck-compression-boundary.md) provides the smaller structural vocabulary: objects, relationships, and extensible attributes. Dataset, Result, Source Item, and Evidence retain distinct identities and authority; the other concepts below describe statements, roles, or responsibilities unless an independent lifecycle is separately justified. This inventory is not a tree of models to reproduce in every Tool response. Representative reading joins own information with compression relationships; it does not turn each metadata category into an entity.
+
 ### Source and scope
 
 | Concept | Business meaning and purpose | Authority and indispensable semantics | Loss consequence and relations |
@@ -91,7 +93,7 @@ Scope Discovery, Scope Decision, and Accounting Closure are statement types over
 
 | Concept | Business meaning and purpose | Authority and indispensable semantics | Loss consequence and relations |
 | --- | --- | --- | --- |
-| Observation | A source-derived or locally measured statement about a Source Item, such as a time candidate, coordinate, duration, orientation, decodability result, or content-sensitivity signal. | Subject, observation kind, raw and normalized values where relevant, candidates, producer, field-level provenance, confidence or quality, and explicit completion/error/omission state. It is evidence, not corrected world truth. | Without it, planning must rescan source media or trust flattened values whose origin and failures are unknowable. |
+| Observation | A recorded statement about an identified Source Item or Evidence, produced by extraction, local computation, or authorized acquisition. It is an existing carrier for attributes; relation basis and qualifications carry attributes of relationships. | Subject, declared meaning and units, value when available, producer, provenance, quality where meaningful, and explicit completion/error/omission state. Provider candidates remain candidates; an open attribute vocabulary does not imply an independent Attribute entity or registry. | Without it, planning must rescan sources or trust flattened values whose subject, origin, and failures are unknowable. |
 | Evidence | A reviewable or machine-usable expression that Plan can inspect directly as part of a compressed PreCheck Result. It may directly reuse a Source Item or be derived from Source Items or other Evidence. | Access, derivation and representation relations, observations, material qualifications, and an expansion path where more prepared detail exists. Internal validity dependencies and regeneration conditions remain PreCheck-owned. | Without it, Plan cannot begin from a cheaper surface or challenge what the compression hides. |
 | Candidate Relation | A challengeable claim that Source Items or Evidence may belong together or differ materially. | Endpoints or members, relation type, supporting evidence, score or basis, span or boundary, alternatives, conflicts, profile, and state. | Without it, a final group is opaque and over-merge or under-merge errors cannot be localized. |
 | Coverage Relationship | A challengeable `represents` claim connecting Evidence to the Source Items whose direct reading may be deferred. | Covered set, shared or exceptional basis, material qualifications, and reverse lookup. Entry selection, production lineage, and next-step navigation remain distinct relationships. | Without it, evidence compression becomes untraceable sampling and cannot support economical downstream reasoning. |
@@ -146,7 +148,7 @@ These meanings attach to the information they qualify; they are not general-purp
 
 For a PreCheck Result, an interrupted Working Run is not an immutable result. A Result separately expresses complete or explicitly partial coverage, plan-ready or blocked readiness, and valid or invalid integrity. Partial does not automatically mean blocked, and complete does not automatically mean plan-ready. Continued work produces a new Result rather than modifying an old one.
 
-A PreCheck Result may claim `plan-ready` only when it can show, within the stated MediaSense control boundary, source-read-only execution and an honest external-effect account. Local work and every path before explicit authorization prove zero media, metadata, coordinate, and feature-artifact egress, zero remote-model and online-map calls, and zero billable requests. When any Source Item has an available final coordinate, PreCheck must complete authorization-bound reverse geocoding before publication and project an outcome for that Source Item; visual representative selection does not narrow this coverage. The pending deduplicated external-effect set requires Human confirmation, and PreCheck records the Provider, actual requests, candidate status, and authorization boundary without making those execution details part of Plan's input contract. This path does not authorize media, feature, prompt, or general-metadata egress. Configuration intent, enforcement, observed effects, and processes outside the proof boundary remain distinct.
+A PreCheck Result must retain source-read-only and honest external-effect evidence. The active [Run](../../spec/contract/precheck-run/index.md), [Read](../../spec/contract/precheck-read/index.md), and [Geo](../../spec/contract/geo-query/index.md) contracts own acquisition, authorization, component states, and readiness. Missing coordinates, no_result, known terminal failure, and policy-disabled lookup do not alone block Plan; pending authorization, in-flight acquisition, and indeterminate effects remain distinct. The conceptual model neither mandates a lookup for every coordinate nor certifies the current acquisition-unit strategy. Query provenance and any projection to source items remain inspectable. Configuration intent, enforcement, observed effects, and processes outside the proof boundary remain distinct.
 
 ### Diagnostic responsibility
 

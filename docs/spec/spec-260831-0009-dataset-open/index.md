@@ -2,18 +2,21 @@
 id: "spec-260831-0009-dataset-open"
 title: "MediaSense Dataset Open Tool Contract"
 type: spec
-status: active
+status: superseded
 created: 2026-08-31
-updated: 2026-09-08
+updated: 2026-09-09
 timezone: "Asia/Shanghai"
 parent: ""
 depends-on:
   - "design-260823-1918-mediasense-foundation"
   - "design-260830-1527-reusable-capability-architecture"
-superseded-by: ""
+superseded-by: "dataset-open"
 ---
 
 # MediaSense Dataset Open Tool Contract
+
+> **历史记录，已退出当前规范。** 唯一当前合约在 [contract/dataset-open](../contract/dataset-open/index.md)。本目录的文字、schema 和示例保留为旧版本证据，不用于新开发；包内旧副本也不能替代新合约。
+
 
 ## Purpose and status
 

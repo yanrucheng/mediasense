@@ -35,7 +35,7 @@ do not alone prevent entry, even when no photo has a location. Do not invent
 locations, force Human questions, or loop on terminal Geo failures. Do
 not inspect Geo query batches, deduplication, caching, or acquisition status to
 re-decide the PreCheck handoff. Read Result
-qualifications, accounting reconciliation, exception routes, and the coverage-card
+qualifications, accounting reconciliation, exception routes, and the review
 frontier before making a Dataset-wide claim.
 
 Event memory is the single mature default Profile. Before selection it is a challengeable candidate. When a bounded trip, gathering, exhibition, or other event clearly fits its proposition, activate it without forcing the Human through a profile questionnaire; after selection its defaults constrain the Candidate. If fit is unclear, ask only a high-information question about future finding behavior. If the Dataset clearly does not fit, or contains a materially distinct sub-scope, read [Organization Profile alternatives](references/organization-profiles.md); do not load that reference merely to make every direction compete.
@@ -64,6 +64,18 @@ Use representative future-find questions to test the structure: where would the 
 ## Investigate before forming a complete Candidate
 
 Use `review` to understand the whole coverage frontier at summary level or state the exact bounded scope of the claim. Do not repeatedly replay the same review pages as a substitute for semantic investigation.
+
+Normal `review.items` contain Evidence attributes, actual `source_items`, and a
+separate `represents` relation. Interpret camera parameters, time, location and
+sensitivity as properties of their stated source/input. Use
+`represents.source_set` for membership; a member range is not the representative's
+time. Preserve each Geo query point and reuse qualification, and keep original
+provider place text when producing display names in the Human's language.
+`review.evidence_refs` reads existing high-resolution or other selected Evidence
+with its own relationships. A per-item error remains a failed delivery while
+pagination continues. Do not count it as inspected evidence. MCP structuredContent
+is the single business payload; obtaining a path, opening the image and using it
+in judgment are separate steps.
 
 Use `expand` selectively on representative, boundary, outlier, conflict, unassigned prepared Evidence, or member observations that can change chapter boundaries, scene groups, names, exceptions, or Profile fit. Evidence roles describe review functions inside a compression claim; they are not semantic truth. Inspect enough actual visual Evidence to support the semantic distinctions used in the Candidate. Use `resolve` for exact membership only after the semantic decision requires it; exact resolution proves no retrieval value.
 

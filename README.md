@@ -32,11 +32,13 @@ The three durable handoff roles are the precheck result, the frozen organization
 1. Read [MediaSense Foundation](docs/design/design-260823-1918-mediasense-foundation.md) for the product boundaries and non-negotiable invariants.
 2. Read [AI Album Migration Baseline](docs/eval/eval-260823-1918-ai-album-migration-baseline/index.md) before migrating or comparing legacy behavior.
 3. Read [the fixture descriptor](eval/fixtures/ai-album-hk-representative-v1.yaml) before using the Hong Kong representative package.
-4. For PreCheck development, read the [PreCheck Run Tool Contract](docs/spec/spec-260827-1915A-precheck-run/) and [PreCheck Read Contract](docs/spec/spec-260826-1546-precheck-read/).
-5. For Plan development, read the [Plan Working State Tool Contract](docs/spec/spec-260827-1915B-plan-work/), [Frozen Organization Plan Contract](docs/spec/spec-260827-1138-frozen-plan/), [Default Organization Profile](docs/spec/spec-260828-2026-default-organization-profile/), and [Plan Local Artifact Design](docs/design/design-260828-2043-plan-local-artifacts/).
-6. For Apply development, read the [Apply Contract](docs/spec/spec-260829-0050-apply/) and [Apply Activation Evidence](docs/eval/eval-260829-1350-apply-activation-evidence.md).
+4. For PreCheck development, first read the [object, relationship, and attribute model](docs/design/design-260825-2235-mediasense-information-architecture/design-260825-2235D-precheck-compression-boundary.md), then the [PreCheck Run Tool Contract](docs/spec/contract/precheck-run/) and [PreCheck Read Contract](docs/spec/contract/precheck-read/). The stable contract directory is the only development authority; its milestone status distinguishes the finalized contract from the currently installed release.
+5. For Plan development, read the [Plan Working State Tool Contract](docs/spec/contract/plan-work/), [Frozen Organization Plan Contract](docs/spec/contract/frozen-plan/), [Default Organization Profile](docs/spec/contract/default-organization-profile/), and [Plan Local Artifact Design](docs/design/design-260828-2043-plan-local-artifacts/).
+6. For Apply development, read the [Apply Contract](docs/spec/contract/apply/) and [Apply Activation Evidence](docs/eval/eval-260829-1350-apply-activation-evidence.md).
 
 ## Current phase
+
+The [PreCheck evidence-delivery contract](docs/spec/contract/precheck-read/index.md) is finalized: milestone one is complete after the review corrections and agreed closing checks. Milestone two, implementation and release synchronization, has not started. Existing installed release behavior described below is not proof of conformance to that new contract.
 
 The `0.8.0` distribution provides the installed `mediasense` executable, portable-
 first Dataset discovery, one local composition root, a packaged product entry

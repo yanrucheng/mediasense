@@ -6,8 +6,9 @@ Before architecture, contract, Skill, Tool, or migration work:
 
 1. Read `docs/design/design-260823-1918-mediasense-foundation.md`.
 2. Before creating or reviewing a shared module, provider adapter, stage-neutral Tool, capability Skill, artifact, registry, or service, read `docs/design/design-260830-1527-reusable-capability-architecture.md`.
-3. For legacy comparison, read `docs/eval/eval-260823-1918-ai-album-migration-baseline/index.md` and its linked modules.
-4. Before using the Hong Kong fixture, read `eval/fixtures/ai-album-hk-representative-v1.yaml`, then the package's own `README.md` and `docs/RESEARCH-AND-HANDOFF.zh-CN.md`. Run the package verifier before trusting its contents.
+3. Before PreCheck model, evidence, or handoff work, read `docs/design/design-260825-2235-mediasense-information-architecture/design-260825-2235D-precheck-compression-boundary.md`. Before changing a public Tool, read `docs/spec/contract/index.md` and the relevant active contract.
+4. For legacy comparison, read `docs/eval/eval-260823-1918-ai-album-migration-baseline/index.md` and its linked modules.
+5. Before using the Hong Kong fixture, read `eval/fixtures/ai-album-hk-representative-v1.yaml`, then the package's own `README.md` and `docs/RESEARCH-AND-HANDOFF.zh-CN.md`. Run the package verifier before trusting its contents.
 
 ## Authority and boundaries
 
@@ -16,6 +17,13 @@ Before architecture, contract, Skill, Tool, or migration work:
 - External fixtures are evidence assets. They are not source code, product specifications, or ground truth for corrected MediaSense behavior.
 - Original media is the factual source. Indexes, thumbnails, embeddings, clusters, plans, and output trees are derived artifacts with distinct lifecycles.
 - Do not create a final stage schema or Skill merely from an implementation convenience. First establish a human-reviewed handoff example and runtime/failure semantics.
+
+## PreCheck model and contract development
+
+- The [compression model](docs/design/design-260825-2235-mediasense-information-architecture/design-260825-2235D-precheck-compression-boundary.md) owns object, relationship, and attribute meanings. Attributes extend the information about an identified subject; they do not replace identity, relationship endpoints, accounting, or authority. Reuse existing Observation, basis, and qualification semantics before adding another structure.
+- Representative is a role of Evidence. A representative read joins its own information with its compression relationships; it is a regenerable view, not a new entity. Derivation from one source never makes that source's attributes facts about every represented member.
+- Implement the public contract under `docs/spec/contract/`; the two milestone statuses there separate a finalized contract from a conforming release. Historical dated specs and OpenSpec change packets are not current contracts. Use its declared extension rules; a change to promised semantics requires an explicitly reviewed contract change. Do not rewrite the contract or its examples merely to make an implementation pass.
+- Keep declared capabilities distinct from execution and delivery. An extensible attribute model does not prove that a legacy capability was collected, wired into the installed entry point, or exposed to its consumer. Record those gates in the existing migration ledger.
 
 ## Execution-state honesty
 

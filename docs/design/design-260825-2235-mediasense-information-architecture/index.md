@@ -4,7 +4,7 @@ title: "MediaSense Information Architecture"
 type: design
 status: active
 created: 2026-08-25
-updated: 2026-08-30
+updated: 2026-09-09
 timezone: "Asia/Shanghai"
 parent: "index-design"
 depends-on:
@@ -30,12 +30,12 @@ AI Album contributes historical capability and failure evidence only. Its cache 
 
 | Module | Status | Created | Summary |
 | --- | --- | --- | --- |
-| [PreCheck compression boundary](design-260825-2235D-precheck-compression-boundary.md) | active | 2026-08-26 | Defines the accepted Dataset, Result, Source Item, Evidence, and relationship model and records its three-producer pressure test. |
+| [PreCheck compression boundary](design-260825-2235D-precheck-compression-boundary.md) | active | 2026-08-26 | Defines objects, relationships, and extensible attributes; separates representative information from compression claims without creating new entities. |
 | [PreCheck reference handoff](design-260825-2235C-precheck-reference-handoff.md) | review | 2026-08-26 | Preserves the blocked path-closed fixture reference and adds an assumption-labeled Plan-ready completion variant, without fixing storage or schema. |
 | [Information domain map](design-260825-2235A-information-domain-map.md) | active | 2026-08-25 | Defines the governing relations, minimum business concepts, historical traceability, uncertainty boundary, and stopping rule. |
 | [Stage ownership](design-260825-2235B-stage-ownership.md) | active | 2026-08-25 | Assigns authoritative homes, producers, consumers, validation, sealing, handoffs, and failure routing across PreCheck, Plan, and Apply. |
 
-No storage-lifecycle or PreCheck implementation module is part of this version. The PreCheck compression boundary is active after human review, and the machine-facing access interface is fixed by the formal [PreCheck Read Contract](../../spec/spec-260826-1546-precheck-read/). The earlier reference handoff remains a review artifact rather than the product contract.
+The conceptual model is active after Human review. The formal [PreCheck Read Contract](../../spec/contract/precheck-read/) owns the finalized exchange schema; implementation and release synchronization are tracked separately as milestone two. Model acceptance does not activate a new API or certify its implementation. The earlier reference handoff remains historical review evidence.
 
 ## Authority and discovery path
 
@@ -44,27 +44,25 @@ No storage-lifecycle or PreCheck implementation module is part of this version. 
 - This module is authoritative for the new stage-neutral MediaSense information vocabulary and necessary business relations.
 - [Stage ownership](design-260825-2235B-stage-ownership.md) is authoritative for which stage produces, consumes, validates, or seals each concept.
 - [PreCheck compression boundary](design-260825-2235D-precheck-compression-boundary.md) is authoritative for PreCheck's accepted compression purpose, minimal handoff concepts and relationships, eight invariants, runtime/storage separation, and three-producer pressure-test judgment.
-- [PreCheck Read Contract](../../spec/spec-260826-1546-precheck-read/) is authoritative for the Tool name, machine-readable request and response schemas, stable relationship vocabulary, access outcomes, and Plan development Mock.
-- [Frozen Plan Contract](../../spec/spec-260827-1138-frozen-plan/) is authoritative for the immutable Human-confirmed organization handed to Apply.
-- [Apply Contract](../../spec/spec-260829-0050-apply/) is authoritative for the Run, Receipt, authorization, execution, recovery, and verification boundary.
+- [PreCheck Read Contract](../../spec/contract/precheck-read/) is authoritative for the Tool name, machine-readable request and response schemas, stable relationship vocabulary, access outcomes, and Plan development Mock.
+- [Frozen Plan Contract](../../spec/contract/frozen-plan/) is authoritative for the immutable Human-confirmed organization handed to Apply.
+- [Apply Contract](../../spec/contract/apply/) is authoritative for the Run, Receipt, authorization, execution, recovery, and verification boundary.
 - [PreCheck reference handoff](design-260825-2235C-precheck-reference-handoff.md) preserves the concrete blocked and illustrative completion examples that exposed the abstraction problem. It remains review evidence, not an authoritative product shape.
 
 ## Accepted PreCheck handoff model
 
-The stable structure is a logical compression model rather than a file or table package:
+The stable structure is **objects + relationships + attributes**. Dataset and Result bind the subject and immutable observation boundary; Source Items and Evidence have their own identities and access. Attributes describe an identified object or relationship without fixing today's metadata categories:
 
 ```text
-Dataset
-└── referenced by an immutable PreCheck Result
-      ├── accounts for Source Items
-      ├── exposes low-cost entry Evidence
-      └── lets Evidence
-            ├── represent Source Items
-            ├── derive from Source Items or Evidence
-            └── expand toward Source Items or Evidence
+PreCheck Result — references one Dataset
+├── Source Items: identity, locator, attributes
+├── Evidence: identity, access, attributes
+└── relationships: endpoints, meaning, attributes
 ```
 
-Mutable working state, reusable work units, SQLite, caches, clustering, thumbnails, metadata categories, and evidence filenames remain replaceable PreCheck implementation details. Only the immutable PreCheck Result crosses into Plan through stable semantics bound to an exact result identity.
+The five relationship meanings remain `accounts_for`, `entry_evidence`, `represents`, `derived_from`, and `expands_to`. Representative is a role; attributes and relationships need no additional identity. A representative read brings together **its own information and its compression relationships**, without fetching all represented members' detail by default. Image access may be a path; the Agent decides whether to open it.
+
+The [compression boundary](design-260825-2235D-precheck-compression-boundary.md) is the single authority for these meanings, extension rules, examples, and limits. It does not require a new `attributes` wire field or replace existing Observations. Mutable Work, caches, algorithms, storage, and processing order remain implementation choices.
 
 ## Follow-on sequence
 

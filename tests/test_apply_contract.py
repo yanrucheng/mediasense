@@ -14,7 +14,7 @@ from mediasense.frozen_plan import load_frozen_plan_validator, validate_frozen_p
 
 
 ROOT = Path(__file__).parents[1]
-APPLY_SPEC = ROOT / "docs" / "spec" / "spec-260829-0050-apply"
+APPLY_SPEC = ROOT / "docs" / "spec" / "contract" / "apply"
 PLAN_EXAMPLE = (
     ROOT
     / "docs"
@@ -26,7 +26,8 @@ FROZEN_PLAN_SCHEMA = (
     ROOT
     / "docs"
     / "spec"
-    / "spec-260827-1138-frozen-plan"
+    / "contract"
+    / "frozen-plan"
     / "frozen-plan.schema.json"
 )
 

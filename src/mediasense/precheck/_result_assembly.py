@@ -93,12 +93,14 @@ def build_minimal_result(
     metadata_work_ids: Iterable[str] = (),
     reverse_geocode_work_by_source: Mapping[Path | str, str] | None = None,
     sensitivity_work_ids: Iterable[str] = (),
+    sensitivity_enabled: bool = False,
     video_probe_work_ids: Iterable[str] = (),
     video_frame_work_ids: Iterable[str] = (),
     video_key_frame_work_ids: Iterable[str] = (),
     dataset_name: str | None = None,
     dataset_context: Iterable[dict[str, object]] = (),
     external_policy_status: str | None = None,
+    geo_acquisition_policy: Mapping[str, object] | None = None,
 ) -> ResultDraft:
     """Build the immutable Result authority.
 
@@ -254,6 +256,46 @@ def build_minimal_result(
             capability="content-sensitivity",
             label="sensitivity",
         )
+        sensitivity_inputs = {}
+        for work_id in selected_sensitivity_ids:
+            dependencies = list(
+                connection.execute(
+                    "SELECT dependency_kind, dependency_key, dependency_value FROM work_dependencies WHERE work_id = ?",
+                    (work_id,),
+                )
+            )
+            values = {
+                str(d["dependency_key"]): str(d["dependency_value"])
+                for d in dependencies
+            }
+            upstream = [
+                str(d["dependency_key"])
+                for d in dependencies
+                if d["dependency_kind"] == "upstream_work"
+            ]
+            if len(upstream) != 1:
+                raise ResultSealError("Sensitivity requires one exact visual input")
+            produced = artifacts.artifacts_for_work(upstream[0])
+            if not produced:
+                raise ResultSealError("Sensitivity input Artifact is unavailable")
+            sensitivity_inputs[work_id] = {
+                "detector_identity": values["detector_identity"],
+                "profile": values["profile_name"],
+                "input_evidence_ref": result_local_reference(
+                    "evidence",
+                    *(
+                        [run_id]
+                        if connection.execute(
+                            "SELECT capability FROM work_records WHERE work_id = ?",
+                            (upstream[0],),
+                        ).fetchone()[0]
+                        == "image-rendition"
+                        else []
+                    ),
+                    upstream[0],
+                    produced[0].artifact_id,
+                ),
+            }
         video_probe_rows = _load_source_observation_work(
             connection,
             run_id,
@@ -375,6 +417,8 @@ def build_minimal_result(
                     geocode_work,
                     result_local_reference("source-item", run_id, relative_path),
                     label="reverse geocode",
+                    source_observations=observations,
+                    acquisition_policy=geo_acquisition_policy,
                 )
             )
         elif scope == "source_media":
@@ -390,14 +434,22 @@ def build_minimal_result(
         for sensitivity_work in sensitivity_works:
             if WorkStatus(sensitivity_work["status"]) is WorkStatus.SUCCEEDED:
                 sensitivity_output = json.loads(sensitivity_work["output_json"])
-                observations.extend(
-                    _metadata_result_observations(sensitivity_output, run_id)
-                )
+                for observation in _metadata_result_observations(
+                    sensitivity_output, run_id
+                ):
+                    observation["provenance"].pop("input_work_id", None)
+                    observation["provenance"].update(
+                        sensitivity_inputs[str(sensitivity_work["work_id"])]
+                    )
+                    observations.append(observation)
             elif WorkStatus(sensitivity_work["status"]) is WorkStatus.TERMINAL_FAILURE:
                 observations.append(
                     {
                         "name": "content_sensitivity",
                         "status": "failed",
+                        "provenance": sensitivity_inputs[
+                            str(sensitivity_work["work_id"])
+                        ],
                         "basis": str(sensitivity_work["last_failure_code"]),
                         "qualifications": [
                             {
@@ -410,6 +462,39 @@ def build_minimal_result(
                         ],
                     }
                 )
+        if scope == "source_media" and not sensitivity_works:
+            observations.append(
+                {
+                    "name": "content_sensitivity",
+                    "status": "not_checked",
+                    "basis": {
+                        "code": "evidence_not_prepared"
+                        if sensitivity_enabled
+                        else "capability_disabled"
+                    },
+                }
+            )
+        if (
+            video_probe_work is not None
+            and WorkStatus(video_probe_work["status"]) is WorkStatus.SUCCEEDED
+        ):
+            probe_output = json.loads(video_probe_work["output_json"])
+            observations.append(
+                {
+                    "name": "video_probe",
+                    "status": "available",
+                    "value": probe_output["probe"],
+                    "basis": "builtin-ffprobe-video-v1",
+                }
+            )
+        elif video_probe_work is None and str(row["kind"]) == "video":
+            observations.append(
+                {
+                    "name": "video_probe",
+                    "status": "not_checked",
+                    "basis": {"code": "evidence_not_prepared"},
+                }
+            )
         if (
             video_probe_work is not None
             and WorkStatus(video_probe_work["status"]) is WorkStatus.TERMINAL_FAILURE
@@ -472,20 +557,34 @@ def build_minimal_result(
                         if work["last_failure_code"] == "image_decode_failed"
                         else "error"
                     )
-                observations.append(
-                    {
+                failure = {
+                    "code": str(work["last_failure_code"]),
+                    "message": str(work["last_failure_message"]),
+                    "profile": {
+                        d["key"]: d["value"]
+                        for d in json.loads(work["descriptor_json"])["dependencies"]
+                        if d["kind"] == "parameter"
+                        and d["key"] != "subject_relative_path"
+                    },
+                }
+                observation = next(
+                    (o for o in observations if o["name"] == "image_rendition"), None
+                )
+                if observation is None:
+                    observation = {
                         "name": "image_rendition",
                         "status": "failed",
-                        "basis": str(work["last_failure_code"]),
+                        "basis": {"failures": []},
                         "qualifications": [
                             {
                                 "code": "rendition_unavailable",
                                 "effect": "limits_interpretation",
-                                "message": str(work["last_failure_message"]),
+                                "message": "One or more selected rendition profiles failed; see the per-profile failures.",
                             }
                         ],
                     }
-                )
+                    observations.append(observation)
+                observation["basis"]["failures"].append(failure)
         if any(_has_available_artifact(artifacts, work) for work in sheet_works):
             condition = "usable"
         source_ref = result_local_reference("source-item", run_id, relative_path)
@@ -530,6 +629,8 @@ def build_minimal_result(
                             geocode_work,
                             source_ref,
                             label="reverse geocode",
+                            source_observations=observations,
+                            acquisition_policy=geo_acquisition_policy,
                         )
                     ),
                 )

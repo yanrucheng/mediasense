@@ -28,7 +28,7 @@ from mediasense.precheck import discovery
 
 
 SPEC_ROOT = (
-    Path(__file__).parents[1] / "docs" / "spec" / "spec-260826-1546-precheck-read"
+    Path(__file__).parents[1] / "docs" / "spec" / "contract/precheck-read"
 )
 
 
@@ -63,8 +63,8 @@ def test_ordinary_rendition_is_frontier_and_high_resolution_expands_from_it(
             "action": "review",
         }
     )
-    assert len(entry["cards"]) == 1
-    ordinary_ref = entry["cards"][0]["evidence_ref"]
+    assert len(entry["items"]) == 1
+    ordinary_ref = entry["items"][0]["evidence_ref"]
     expanded = reader.read(
         {
             "dataset_ref": "dataset:dataset-a",
@@ -409,7 +409,7 @@ def test_review_expand_and_resolve_cover_public_result_questions(
             "action": "review",
         }
     )
-    evidence_ref = entry["cards"][0]["evidence_ref"]
+    evidence_ref = entry["items"][0]["evidence_ref"]
     represents = reader.read(
         {
             "dataset_ref": "dataset:dataset-a",
@@ -500,7 +500,7 @@ def test_expand_and_resolve_validation_is_atomic_and_result_bound(
             "action": "review",
         }
     )
-    evidence_ref = review["cards"][0]["evidence_ref"]
+    evidence_ref = review["items"][0]["evidence_ref"]
 
     missing_evidence = reader.read(
         {
@@ -612,7 +612,7 @@ def test_review_cursor_is_repeatable_query_bound_and_byte_bounded(
             "page": {"limit": 2},
         }
     )
-    assert len(bounded["cards"]) == 1
+    assert len(bounded["items"]) == 1
     assert bounded["page"]["stop_reason"] == "byte_limit"
     assert len(
         json.dumps(bounded, ensure_ascii=False, separators=(",", ":")).encode()
@@ -982,7 +982,7 @@ def test_read_integrity_check_does_not_mutate_working_state(tmp_path: Path) -> N
         }
     )
 
-    assert response["error"]["code"] == "result_untrusted"
+    assert response["items"][0]["error"]["code"] == "evidence_unavailable"
     assert database.read_bytes() == before
 
 

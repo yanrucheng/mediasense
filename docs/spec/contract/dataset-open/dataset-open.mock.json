@@ -1,0 +1,37 @@
+{
+  "contract": "mediasense.dataset.open",
+  "request": {
+    "source_root": "/Volumes/PhotoDisk/Photos"
+  },
+  "response": {
+    "outcome": "ok",
+    "dataset_ref": "dataset:7f36d55a",
+    "source_root": "/Volumes/PhotoDisk/Photos",
+    "workspace": "/Volumes/PhotoDisk/.mediasense/datasets/dataset-c2b69fcd2e3a6d4bbfa32f22",
+    "selection_tier": "external_volume",
+    "created": true,
+    "manifest_version": 3,
+    "store_versions": {
+      "precheck": 17,
+      "plan": 3,
+      "geo": 1,
+      "apply": 2
+    },
+    "configuration": {
+      "sources": [],
+      "providers": {
+        "amap": {
+          "credential": "not_configured",
+          "capability": "unavailable",
+          "data_handling": "unknown"
+        },
+        "google_maps": {
+          "credential": "not_configured",
+          "capability": "unavailable",
+          "data_handling": "unknown"
+        }
+      }
+    },
+    "warnings": []
+  }
+}

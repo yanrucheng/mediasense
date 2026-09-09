@@ -5,7 +5,8 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import timedelta
-from importlib.metadata import PackageNotFoundError, version
+from importlib.metadata import PackageNotFoundError, version, distribution
+import hashlib
 import json
 import math
 from pathlib import Path
@@ -117,12 +118,39 @@ class SensitivityDetector(Protocol):
 class NudeNetDetector:
     """NudeNet 3.x adapter; package and bundled weights must already be local."""
 
-    def __init__(self) -> None:
+    def __init__(self, *, device: str = "cpu") -> None:
+        self.device = device
         self._detector: Any | None = None
+        self._identity: str | None = None
 
     @property
     def identity(self) -> str:
-        return f"nudenet:NudeDetector@nudenet-{_package_version('nudenet')}"
+        if self._identity is not None:
+            return self._identity
+        try:
+            weights = self._weights()
+            with weights.open("rb") as stream:
+                digest = hashlib.file_digest(stream, "sha256").hexdigest()
+        except (SensitivityBackendUnavailable, OSError):
+            digest = "unavailable"
+        identity = f"nudenet:NudeDetector@nudenet-{_package_version('nudenet')};weights=sha256:{digest};device={self.device};onnxruntime={_package_version('onnxruntime')}"
+        if "unavailable" not in identity:
+            self._identity = identity
+        return identity
+
+    @staticmethod
+    def _weights() -> Path:
+        try:
+            path = Path(distribution("nudenet").locate_file("nudenet/320n.onnx"))
+        except PackageNotFoundError as error:
+            raise SensitivityBackendUnavailable(
+                "NudeNet local package and bundled weights are unavailable"
+            ) from error
+        if not path.is_file():
+            raise SensitivityBackendUnavailable(
+                "NudeNet bundled weights are missing; automatic downloads are disabled"
+            )
+        return path
 
     def detect(self, image_path: Path) -> Sequence[Detection]:
         detector = self._load()
@@ -143,12 +171,28 @@ class NudeNetDetector:
         if self._detector is not None:
             return self._detector
         try:
+            import onnxruntime
+
+            onnxruntime.disable_telemetry_events()
             from nudenet import NudeDetector as Detector
         except ImportError as error:
             raise SensitivityBackendUnavailable(
                 "NudeNet requires the local-models optional dependencies"
             ) from error
-        self._detector = Detector()
+        weights = self._weights()
+        provider = {"cpu": "CPUExecutionProvider", "cuda": "CUDAExecutionProvider"}.get(
+            self.device
+        )
+        if provider is None or provider not in onnxruntime.get_available_providers():
+            raise SensitivityBackendUnavailable(
+                f"NudeNet does not support the requested {self.device} backend locally"
+            )
+        try:
+            self._detector = Detector(model_path=str(weights), providers=[provider])
+        except (OSError, ValueError, RuntimeError) as error:
+            raise SensitivityBackendUnavailable(
+                "NudeNet could not load its local weights/backend"
+            ) from error
         return self._detector
 
 
@@ -160,9 +204,11 @@ class TransformersNSFWDetector:
         *,
         revision: str,
         model_id: str = "Falconsai/nsfw_image_detection",
+        device: str = "cpu",
     ) -> None:
         if not model_id.strip() or not revision.strip():
             raise ValueError("model id and pinned revision must be non-empty")
+        self.device = device
         self.model_id = model_id
         self.revision = revision
         self._classifier: Any | None = None
@@ -172,7 +218,7 @@ class TransformersNSFWDetector:
         return (
             f"transformers-image-classification:{self.model_id}@{self.revision};"
             f"transformers={_package_version('transformers')};"
-            f"torch={_package_version('torch')}"
+            f"torch={_package_version('torch')};device={self.device}"
         )
 
     def detect(self, image_path: Path) -> Sequence[Detection]:
@@ -185,31 +231,21 @@ class TransformersNSFWDetector:
             for image_path in image_paths:
                 with Image.open(image_path) as opened:
                     images.append(opened.convert("RGB"))
-            raw = classifier(images)
-            if raw and isinstance(raw, list) and isinstance(raw[0], Mapping):
-                raw = [raw]
-            if not isinstance(raw, list) or len(raw) != len(images):
-                raise SensitivityError(
-                    "image classifier batch output count does not match input"
-                )
-            results = []
-            for detections in raw:
-                if not isinstance(detections, list) or any(
-                    not isinstance(item, Mapping)
-                    or "label" not in item
-                    or "score" not in item
-                    for item in detections
-                ):
-                    raise SensitivityError(
-                        "image classifier returned a malformed detection"
+            import torch
+
+            model, processor = classifier
+            inputs = processor(images=images, return_tensors="pt").to(self.device)
+            with torch.inference_mode():
+                probabilities = model(**inputs).logits.softmax(dim=-1).cpu().tolist()
+            return tuple(
+                tuple(
+                    Detection(
+                        label=str(model.config.id2label[index]), score=float(score)
                     )
-                results.append(
-                    tuple(
-                        Detection(label=str(item["label"]), score=float(item["score"]))
-                        for item in detections
-                    )
+                    for index, score in enumerate(scores)
                 )
-            return tuple(results)
+                for scores in probabilities
+            )
         finally:
             for image in images:
                 image.close()
@@ -218,23 +254,26 @@ class TransformersNSFWDetector:
         if self._classifier is not None:
             return self._classifier
         try:
-            from transformers import pipeline
-        except ImportError as error:
-            raise SensitivityBackendUnavailable(
-                "the NSFW classifier requires the local-models optional dependencies"
-            ) from error
-        try:
-            self._classifier = pipeline(
-                "image-classification",
-                model=self.model_id,
-                revision=self.revision,
-                device=-1,
-                model_kwargs={"local_files_only": True},
+            from transformers import AutoImageProcessor, AutoModelForImageClassification
+
+            processor = AutoImageProcessor.from_pretrained(
+                self.model_id, revision=self.revision, local_files_only=True
             )
-        except (OSError, ValueError) as error:
+            model = AutoModelForImageClassification.from_pretrained(
+                self.model_id, revision=self.revision, local_files_only=True
+            )
+            model.to(self.device).eval()
+        except (
+            ImportError,
+            OSError,
+            ValueError,
+            RuntimeError,
+            AssertionError,
+        ) as error:
             raise SensitivityBackendUnavailable(
-                "the pinned NSFW classifier is not available locally"
+                "The pinned NSFW model, processor, or requested local backend is unavailable; downloads are disabled"
             ) from error
+        self._classifier = (model, processor)
         return self._classifier
 
 
@@ -430,7 +469,13 @@ class SensitivityProducer:
                 raise SensitivityError(
                     "sensitivity batch output count does not match input"
                 )
-        except Exception as error:
+        except SensitivityBackendUnavailable:
+            for item in prepared:
+                self.work.invalidate_work(
+                    item.record.work_id, "sensitivity_backend_unavailable"
+                )
+            raise
+        except (SensitivityError, OSError, ValueError) as error:
             if len(prepared) > 1:
                 midpoint = len(prepared) // 2
                 return {
@@ -481,7 +526,7 @@ class SensitivityProducer:
                 },
             )
             return SensitivityOutcome(completed, observations, False)
-        except Exception as error:
+        except (SensitivityError, OSError, ValueError) as error:
             return self._fail_prepared(prepared, error)
 
     def _fail_prepared(

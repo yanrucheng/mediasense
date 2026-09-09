@@ -1,0 +1,243 @@
+{
+  "kind": "synthetic-contract-transcript",
+  "exchanges": [
+    {
+      "name": "start",
+      "tool": "run",
+      "request": {
+        "action": "start",
+        "dataset_ref": "dataset:example-001",
+        "request_id": "request:start-001"
+      },
+      "response": {
+        "run_ref": "precheck-run:example-001"
+      }
+    },
+    {
+      "name": "start-successor",
+      "tool": "run",
+      "request": {
+        "action": "start",
+        "dataset_ref": "dataset:example-001",
+        "request_id": "request:start-002",
+        "prior_result_ref": "precheck-result:example-001"
+      },
+      "response": {
+        "run_ref": "precheck-run:002"
+      }
+    },
+    {
+      "name": "running",
+      "tool": "run",
+      "request": {
+        "action": "status",
+        "dataset_ref": "dataset:example-001",
+        "run_ref": "precheck-run:example-001"
+      },
+      "response": {
+        "state": "running",
+        "progress": {
+          "phase": "geo",
+          "unit": "location_query",
+          "processed": 1,
+          "total": 2,
+          "last_progress_at": "2026-09-07T12:00:00+08:00"
+        },
+        "allowed_actions": [
+          "pause",
+          "cancel"
+        ]
+      }
+    },
+    {
+      "name": "completed-no-place",
+      "tool": "run",
+      "request": {
+        "action": "status",
+        "dataset_ref": "dataset:example-001",
+        "run_ref": "precheck-run:example-001"
+      },
+      "response": {
+        "state": "completed",
+        "result": {
+          "ref": "precheck-result:example-001",
+          "coverage": "complete",
+          "readiness": "plan_ready",
+          "qualifications": [
+            {
+              "code": "location_query_failed",
+              "effect": "limits_interpretation",
+              "message": "地点查询终结失败，仍可规划。"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "failed",
+      "tool": "run",
+      "request": {
+        "action": "status",
+        "dataset_ref": "dataset:example-001",
+        "run_ref": "precheck-run:example-001"
+      },
+      "response": {
+        "state": "failed",
+        "reason": {
+          "code": "result_validation_failed",
+          "message": "Result结构矛盾。"
+        }
+      }
+    },
+    {
+      "name": "cancelled",
+      "tool": "run",
+      "request": {
+        "action": "status",
+        "dataset_ref": "dataset:example-001",
+        "run_ref": "precheck-run:example-001"
+      },
+      "response": {
+        "state": "cancelled"
+      }
+    },
+    {
+      "name": "blocked",
+      "tool": "run",
+      "request": {
+        "action": "status",
+        "dataset_ref": "dataset:example-001",
+        "run_ref": "precheck-run:example-001"
+      },
+      "response": {
+        "state": "blocked",
+        "reason": {
+          "code": "source_unavailable",
+          "message": "源磁盘不可用。",
+          "resume_when": "重新连接同一磁盘。"
+        },
+        "allowed_actions": [
+          "cancel",
+          "resume"
+        ]
+      }
+    },
+    {
+      "name": "pause-accepted",
+      "tool": "run",
+      "request": {
+        "action": "pause",
+        "dataset_ref": "dataset:example-001",
+        "run_ref": "precheck-run:example-001"
+      },
+      "response": {
+        "state": "running"
+      }
+    },
+    {
+      "name": "resume",
+      "tool": "run",
+      "request": {
+        "action": "resume",
+        "dataset_ref": "dataset:example-001",
+        "run_ref": "precheck-run:example-001"
+      },
+      "response": {
+        "state": "running"
+      }
+    },
+    {
+      "name": "cancel",
+      "tool": "run",
+      "request": {
+        "action": "cancel",
+        "dataset_ref": "dataset:example-001",
+        "run_ref": "precheck-run:example-001"
+      },
+      "response": {
+        "state": "cancelled"
+      }
+    },
+    {
+      "name": "paused",
+      "tool": "run",
+      "request": {
+        "action": "status",
+        "dataset_ref": "dataset:example-001",
+        "run_ref": "precheck-run:example-001"
+      },
+      "response": {
+        "state": "paused",
+        "reason": {
+          "code": "pause_requested",
+          "message": "已暂停。"
+        },
+        "allowed_actions": [
+          "resume",
+          "cancel"
+        ]
+      }
+    },
+    {
+      "name": "scope-resume",
+      "tool": "run",
+      "request": {
+        "action": "resume",
+        "dataset_ref": "dataset:example-001",
+        "run_ref": "precheck-run:example-001",
+        "decision": {
+          "kind": "source_scope",
+          "inventory_fingerprint": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "default_disposition": "exclude",
+          "exceptions": [
+            "旅行"
+          ]
+        }
+      },
+      "response": {
+        "state": "running"
+      }
+    },
+    {
+      "name": "trusted-proceed",
+      "tool": "run",
+      "request": {
+        "action": "resume",
+        "dataset_ref": "dataset:example-001",
+        "run_ref": "precheck-run:example-001",
+        "decision": "proceed"
+      },
+      "response": {
+        "state": "running"
+      }
+    },
+    {
+      "name": "decline",
+      "tool": "run",
+      "request": {
+        "action": "resume",
+        "dataset_ref": "dataset:example-001",
+        "run_ref": "precheck-run:example-001",
+        "decision": "decline"
+      },
+      "response": {
+        "state": "cancelled"
+      }
+    },
+    {
+      "name": "bad-request-error",
+      "tool": "run",
+      "request": {
+        "action": "status",
+        "dataset_ref": "dataset:example-001",
+        "run_ref": "precheck-run:example-001"
+      },
+      "response": {
+        "error": {
+          "code": "run_not_found",
+          "message": "未找到该Run。"
+        }
+      }
+    }
+  ]
+}

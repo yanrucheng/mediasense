@@ -201,8 +201,8 @@ def test_video_key_frame_candidate_can_be_the_frontier_without_contact_sheet(
             "result_ref": sealed.result_ref,
         }
     )
-    assert len(entry["cards"]) == 1
-    evidence_ref = entry["cards"][0]["evidence_ref"]
+    assert len(entry["items"]) == 1
+    evidence_ref = entry["items"][0]["evidence_ref"]
     view = reader.read(
         {
             "dataset_ref": "dataset:dataset-a",
@@ -280,8 +280,8 @@ def test_contact_sheet_is_default_evidence_and_expands_to_frames(
             "action": "review",
         }
     )
-    assert len(entry["cards"]) == 1
-    sheet_ref = entry["cards"][0]["evidence_ref"]
+    assert len(entry["items"]) == 1
+    sheet_ref = entry["items"][0]["evidence_ref"]
     sheet_view = reader.read(
         {
             "dataset_ref": "dataset:dataset-a",

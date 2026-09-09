@@ -1,3 +1,5 @@
+> Current public API authority: [`docs/spec/contract/`](../../../docs/spec/contract/index.md). This OpenSpec capability record does not override that contract; finalized contract and installed implementation are separate milestone states.
+
 # mediasense-distribution Specification
 
 ## Purpose

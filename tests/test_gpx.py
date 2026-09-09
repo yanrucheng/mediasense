@@ -197,7 +197,7 @@ def test_bad_gpx_is_localized_and_result_retains_selected_track_basis(
     schema = json.loads(
         (
             Path(__file__).parents[1]
-            / "docs/spec/spec-260826-1546-precheck-read/precheck-read.tool.json"
+            / "docs/spec/contract/precheck-read/precheck-read.tool.json"
         ).read_text(encoding="utf-8")
     )
     Draft202012Validator(schema["outputSchema"]).validate(response)

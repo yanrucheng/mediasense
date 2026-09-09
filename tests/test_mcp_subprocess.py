@@ -302,8 +302,9 @@ def _host_error(
             ),
         )
         assert result.is_error is True
-        assert result.structured_content is None
-        return json.loads(result.content[0].text)
+        assert result.content == []
+        assert result.structured_content is not None
+        return result.structured_content
 
     return anyio.run(scenario)
 
@@ -376,7 +377,7 @@ def test_mcp_geo_resume_uses_session_elicitation_as_trusted_authority() -> None:
         unsupported = await _mcp_geo_resume(unsupported_runtime)
         assert unsupported.is_error is True
         assert (
-            json.loads(unsupported.content[0].text)["error"]["code"]
+            unsupported.structured_content["error"]["code"]
             == "confirmation_required"
         )
         assert unsupported_runtime.authorities == [None]
@@ -385,8 +386,9 @@ def test_mcp_geo_resume_uses_session_elicitation_as_trusted_authority() -> None:
         failed_runtime = GeoElicitationRuntimeHost()
         failed = await _mcp_geo_resume(failed_runtime, fail)
         assert failed.is_error is True
-        assert failed.structured_content is None
-        failed_payload = json.loads(failed.content[0].text)
+        assert failed.content == []
+        assert failed.structured_content is not None
+        failed_payload = failed.structured_content
         assert failed_payload["error"]["code"] == "host_operation_failed"
         assert (
             "elicitation implementation failed"
@@ -507,7 +509,7 @@ def test_stdio_mcp_handshake_discovery_and_non_destructive_call(
             )
             assert status.is_error is True
             assert (
-                json.loads(status.content[0].text)["error"]["code"] == "run_not_found"
+                status.structured_content["error"]["code"] == "run_not_found"
             )
 
     anyio.run(scenario)
@@ -556,7 +558,7 @@ def test_stdio_mcp_missing_run_resume_matches_direct_error(tmp_path: Path) -> No
             assert opened.structured_content["dataset_ref"] == dataset_ref
             result = await session.call_tool("mediasense.precheck.run", request)
             assert result.is_error is True
-            assert json.loads(result.content[0].text) == direct
+            assert result.structured_content == direct
             assert result.structured_content == direct
 
     anyio.run(scenario)

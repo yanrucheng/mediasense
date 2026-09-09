@@ -19,6 +19,7 @@ from mediasense.precheck import (
     ResultSealError,
     ResultStore,
     SensitivityProducer,
+    SensitivityError,
     SensitivityProfile,
     SensitivityThreshold,
     TransformersNSFWDetector,
@@ -27,9 +28,7 @@ from mediasense.precheck import (
 )
 
 
-SPEC_ROOT = (
-    Path(__file__).parents[1] / "docs" / "spec" / "spec-260826-1546-precheck-read"
-)
+SPEC_ROOT = Path(__file__).parents[1] / "docs" / "spec" / "contract/precheck-read"
 
 
 def _closed_run(database: Path, source: Path) -> str:
@@ -49,7 +48,7 @@ class FakeDetector:
     def detect(self, image_path: Path) -> tuple[Detection, ...]:
         self.calls.append(image_path)
         if self.fail:
-            raise RuntimeError("detector unavailable")
+            raise SensitivityError("detector unavailable")
         return (
             Detection("sensitive", 0.8),
             Detection("sensitive", 0.6),
@@ -285,38 +284,57 @@ def test_detector_failure_is_explicit_and_result_observations_remain_readable(
 def test_transformers_detector_requires_pinned_local_model_files(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    calls: list[tuple[str, dict[str, object]]] = []
+    from contextlib import nullcontext
 
-    def fake_pipeline(task: str, **kwargs: object):
-        calls.append((task, kwargs))
+    calls = []
+    tensor = SimpleNamespace(
+        softmax=lambda **kwargs: tensor, cpu=lambda: tensor, tolist=lambda: [[0.1, 0.9]]
+    )
 
-        def classify(_image: Image.Image) -> list[dict[str, object]]:
-            return [
-                {"label": "nsfw", "score": 0.1},
-                {"label": "normal", "score": 0.9},
-            ]
+    class Model:
+        config = SimpleNamespace(id2label={0: "nsfw", 1: "normal"})
 
-        return classify
+        def to(self, device):
+            calls.append(("device", device))
+            return self
+
+        def eval(self):
+            return self
+
+        def __call__(self, **kwargs):
+            return SimpleNamespace(logits=tensor)
+
+    class Processor:
+        def __call__(self, **kwargs):
+            return SimpleNamespace(to=lambda device: {})
+
+    def load_model(*args, **kwargs):
+        calls.append(("model", kwargs))
+        return Model()
+
+    def load_processor(*args, **kwargs):
+        calls.append(("processor", kwargs))
+        return Processor()
 
     monkeypatch.setitem(
-        sys.modules, "transformers", SimpleNamespace(pipeline=fake_pipeline)
+        sys.modules,
+        "transformers",
+        SimpleNamespace(
+            AutoImageProcessor=SimpleNamespace(from_pretrained=load_processor),
+            AutoModelForImageClassification=SimpleNamespace(from_pretrained=load_model),
+        ),
+    )
+    monkeypatch.setitem(
+        sys.modules, "torch", SimpleNamespace(inference_mode=nullcontext)
     )
     image = tmp_path / "input.jpg"
     Image.new("RGB", (8, 8), "white").save(image)
-
     detections = TransformersNSFWDetector(revision="model-commit").detect(image)
-
     assert [item.label for item in detections] == ["nsfw", "normal"]
     assert calls == [
-        (
-            "image-classification",
-            {
-                "device": -1,
-                "model": "Falconsai/nsfw_image_detection",
-                "model_kwargs": {"local_files_only": True},
-                "revision": "model-commit",
-            },
-        )
+        ("processor", {"revision": "model-commit", "local_files_only": True}),
+        ("model", {"revision": "model-commit", "local_files_only": True}),
+        ("device", "cpu"),
     ]
 
 
@@ -355,6 +373,12 @@ def test_nudenet_adapter_preserves_all_local_detections(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     class FakeNudeDetector:
+        def __init__(self, **kwargs):
+            assert kwargs == {
+                "model_path": str(tmp_path / "weights.onnx"),
+                "providers": ["CPUExecutionProvider"],
+            }
+
         def detect(self, image_path: str) -> list[dict[str, object]]:
             assert image_path.endswith("input.jpg")
             return [
@@ -366,6 +390,17 @@ def test_nudenet_adapter_preserves_all_local_detections(
         sys.modules,
         "nudenet",
         SimpleNamespace(NudeDetector=FakeNudeDetector),
+    )
+    weights = tmp_path / "weights.onnx"
+    weights.write_bytes(b"synthetic local weights")
+    monkeypatch.setattr(NudeNetDetector, "_weights", staticmethod(lambda: weights))
+    monkeypatch.setitem(
+        sys.modules,
+        "onnxruntime",
+        SimpleNamespace(
+            get_available_providers=lambda: ["CPUExecutionProvider"],
+            disable_telemetry_events=lambda: None,
+        ),
     )
     image = tmp_path / "input.jpg"
     Image.new("RGB", (8, 8), "white").save(image)

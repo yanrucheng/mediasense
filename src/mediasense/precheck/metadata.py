@@ -13,6 +13,7 @@ from threading import Event, Lock, Thread
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from ._metadata_fields import FIELD_TAGS, DIMENSION_TAGS, EXTRA_TAGS, photographic_observations
 from ._exiftool import ExifToolCancelled, StayOpenExifTool
 from ._fingerprint import SourceChangedDuringRead
 from ._work_types import (
@@ -40,7 +41,7 @@ _EXIF_DATETIME = re.compile(
 class MetadataProfile:
     """Effective metadata fields and interpretation policy."""
 
-    profile_id: str = "index-v1"
+    profile_id: str = "index-v2"
     timezone: str = "Asia/Shanghai"
     time_tags: tuple[str, ...] = (
         "XMP:DateTimeOriginal",
@@ -57,11 +58,13 @@ class MetadataProfile:
         "XMP:GPSLatitude",
         "Composite:GPSLatitude",
         "EXIF:GPSLatitude",
+        "GPS:GPSLatitude",
     )
     longitude_tags: tuple[str, ...] = (
         "XMP:GPSLongitude",
         "Composite:GPSLongitude",
         "EXIF:GPSLongitude",
+        "GPS:GPSLongitude",
     )
 
     def __post_init__(self) -> None:
@@ -89,6 +92,9 @@ class MetadataProfile:
                 "time_tags": self.time_tags,
                 "timezone": self.timezone,
                 "time_interpretation": "field-semantics-v2",
+                "photographic_fields": FIELD_TAGS,
+                "source_dimensions": DIMENSION_TAGS,
+                "photographic_interpretation": "typed-source-fields-v1",
             },
             ensure_ascii=False,
             separators=(",", ":"),
@@ -580,6 +586,7 @@ class MetadataProducer:
                     *profile.time_tags,
                     *profile.latitude_tags,
                     *profile.longitude_tags,
+                    *EXTRA_TAGS,
                     "EXIF:Make",
                     "XMP:Make",
                     "EXIF:Model",
@@ -660,25 +667,7 @@ def select_metadata_observations(
         _time_observation(indexed, ordered, profile, subject),
         _gps_observation(indexed, ordered, profile),
     ]
-    for name, tags in (
-        ("camera_make", ("XMP:Make", "EXIF:Make", "QuickTime:Make")),
-        ("camera_model", ("XMP:Model", "EXIF:Model", "QuickTime:Model")),
-        ("orientation", ("XMP:Orientation", "EXIF:Orientation")),
-        ("media_type", ("File:MIMEType",)),
-    ):
-        selected = _first_value(indexed, ordered, tags)
-        if selected is None:
-            observations.append({"name": name, "status": "missing"})
-            continue
-        relative, tag, value = selected
-        observations.append(
-            {
-                "name": name,
-                "status": "available",
-                "value": value,
-                "provenance": _provenance(relative, tag),
-            }
-        )
+    observations.extend(photographic_observations(indexed, ordered, subject, profile))
     return observations
 
 

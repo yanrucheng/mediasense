@@ -1,0 +1,612 @@
+{
+  "mock_kind": "human-authored-development-transcript",
+  "contract": "docs/spec/contract/precheck-read/precheck-read.tool.json",
+  "authority": "Synthetic consumer fixture using current Read; historical references preserve existing Plan cases.",
+  "result_ref": "precheck-result:hk-review-slice-002",
+  "exchanges": [
+    {
+      "request": {
+        "result_ref": "precheck-result:hk-review-slice-002",
+        "page": {
+          "limit": 2
+        },
+        "action": "review",
+        "dataset_ref": "dataset:hong-kong-food-trip"
+      },
+      "response": {
+        "result": {
+          "ref": "precheck-result:hk-review-slice-002",
+          "coverage": "partial",
+          "readiness": "plan_ready",
+          "qualifications": [
+            {
+              "code": "selected_slice_only",
+              "effect": "limits_interpretation",
+              "message": "This Mock covers a selected review slice rather than the full fixture."
+            }
+          ]
+        },
+        "accounting": {
+          "total": 5,
+          "routes": {
+            "frontier_only": 4,
+            "exception_only": 1,
+            "frontier_and_exception": 0,
+            "residual": 0
+          },
+          "scope_condition": [
+            {
+              "scope": "source_media",
+              "condition": "invalid",
+              "count": 1
+            },
+            {
+              "scope": "source_media",
+              "condition": "usable",
+              "count": 4
+            }
+          ],
+          "frontier": {
+            "entry_evidence_count": 2,
+            "coverage_memberships": 4,
+            "represented_unique_source_items": 4
+          }
+        },
+        "page": {
+          "total": 2,
+          "next_cursor": null
+        },
+        "items": [
+          {
+            "evidence_ref": "evidence:bundle61-entry",
+            "access": {
+              "kind": "source_item",
+              "source_item_ref": "source-item:13"
+            },
+            "observations": [
+              {
+                "name": "evidence_role",
+                "status": "available",
+                "value": {
+                  "role": "representative"
+                }
+              }
+            ],
+            "source_items": [
+              {
+                "source_item_ref": "source-item:13",
+                "locator": {
+                  "kind": "source_root_relative_path",
+                  "source_root_ref": "source-root:hk-representative-v1",
+                  "value": "dataset/260501-HK美食之旅/0503/100MSDCF/DSC00594.JPG"
+                },
+                "observations": []
+              }
+            ],
+            "represents": {
+              "source_set": {
+                "kind": "precheck_relation",
+                "origin": "evidence:bundle61-entry",
+                "relation": "represents",
+                "direction": "outbound"
+              },
+              "source_count": 3,
+              "scope_condition": [
+                {
+                  "scope": "source_media",
+                  "condition": "usable",
+                  "count": 3
+                }
+              ],
+              "basis": {
+                "summary": "Synthetic relation preserving the historical Plan membership case."
+              },
+              "observations": [
+                {
+                  "name": "capture_time_range",
+                  "status": "available",
+                  "basis": {
+                    "summary": "Exact synthetic member observations."
+                  },
+                  "value": {
+                    "status_counts": {
+                      "available": 3,
+                      "missing": 0,
+                      "failed": 0,
+                      "not_checked": 0,
+                      "not_applicable": 0,
+                      "unreported": 0
+                    },
+                    "earliest": "2026-05-03T21:51:29+08:00",
+                    "latest": "2026-05-03T21:56:12+08:00"
+                  }
+                },
+                {
+                  "name": "media_type_counts",
+                  "status": "available",
+                  "basis": {
+                    "summary": "Exact synthetic member observations."
+                  },
+                  "value": {
+                    "status_counts": {
+                      "available": 3,
+                      "missing": 0,
+                      "failed": 0,
+                      "not_checked": 0,
+                      "not_applicable": 0,
+                      "unreported": 0
+                    },
+                    "values": [
+                      {
+                        "value": "image/jpeg",
+                        "count": 1
+                      },
+                      {
+                        "value": "video/mp4",
+                        "count": 2
+                      }
+                    ]
+                  }
+                }
+              ]
+            },
+            "available_expansions": [
+              {
+                "include": "prepared_targets",
+                "estimated_items": 2
+              },
+              {
+                "include": "coverage_basis",
+                "estimated_items": 3
+              },
+              {
+                "include": "member_observations",
+                "estimated_items": 3
+              }
+            ],
+            "roles": {
+              "boundary": [
+                "evidence:bundle61-boundary"
+              ],
+              "outlier": [
+                "evidence:bundle61-outlier"
+              ]
+            }
+          },
+          {
+            "evidence_ref": "evidence:repair-patched",
+            "access": {
+              "kind": "source_item",
+              "source_item_ref": "source-item:217"
+            },
+            "observations": [],
+            "source_items": [
+              {
+                "source_item_ref": "source-item:217",
+                "locator": {
+                  "kind": "source_root_relative_path",
+                  "source_root_ref": "source-root:hk-representative-v1",
+                  "value": "dataset/260501-HK美食之旅/0504/DJI_001-action-sd-amber/DJI_20260504202728_0029_D.remux-faststart.MP4"
+                },
+                "observations": [
+                  {
+                    "name": "media_type",
+                    "status": "available",
+                    "value": "video/mp4"
+                  },
+                  {
+                    "name": "media_readability",
+                    "status": "available",
+                    "value": "readable"
+                  },
+                  {
+                    "name": "capture_time",
+                    "status": "missing"
+                  }
+                ]
+              }
+            ],
+            "represents": {
+              "source_set": {
+                "kind": "precheck_relation",
+                "origin": "evidence:repair-patched",
+                "relation": "represents",
+                "direction": "outbound"
+              },
+              "source_count": 1,
+              "scope_condition": [
+                {
+                  "scope": "source_media",
+                  "condition": "usable",
+                  "count": 1
+                }
+              ],
+              "basis": {
+                "summary": "Synthetic relation preserving the historical Plan membership case."
+              },
+              "observations": [
+                {
+                  "name": "capture_time_range",
+                  "status": "missing",
+                  "basis": {
+                    "summary": "Exact synthetic member observations.",
+                    "status_counts": {
+                      "available": 0,
+                      "missing": 1,
+                      "failed": 0,
+                      "not_checked": 0,
+                      "not_applicable": 0,
+                      "unreported": 0
+                    }
+                  }
+                },
+                {
+                  "name": "media_type_counts",
+                  "status": "available",
+                  "basis": {
+                    "summary": "Exact synthetic member observations."
+                  },
+                  "value": {
+                    "status_counts": {
+                      "available": 1,
+                      "missing": 0,
+                      "failed": 0,
+                      "not_checked": 0,
+                      "not_applicable": 0,
+                      "unreported": 0
+                    },
+                    "values": [
+                      {
+                        "value": "video/mp4",
+                        "count": 1
+                      }
+                    ]
+                  }
+                }
+              ]
+            },
+            "available_expansions": [
+              {
+                "include": "prepared_targets",
+                "estimated_items": 1
+              },
+              {
+                "include": "coverage_basis",
+                "estimated_items": 1
+              },
+              {
+                "include": "member_observations",
+                "estimated_items": 1
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "request": {
+        "result_ref": "precheck-result:hk-review-slice-002",
+        "evidence_refs": [
+          "evidence:bundle61-entry"
+        ],
+        "include": [
+          "anchor_evidence",
+          "prepared_targets",
+          "coverage_basis"
+        ],
+        "action": "expand",
+        "dataset_ref": "dataset:hong-kong-food-trip"
+      },
+      "response": {
+        "items": [
+          {
+            "evidence_ref": "evidence:bundle61-entry",
+            "included": {
+              "anchor_evidence": {
+                "access": {
+                  "kind": "source_item",
+                  "source_item_ref": "source-item:13"
+                },
+                "observations": [
+                  {
+                    "name": "evidence_role",
+                    "status": "available",
+                    "value": {
+                      "role": "representative"
+                    }
+                  }
+                ],
+                "qualifications": [
+                  {
+                    "code": "historical_group_candidate",
+                    "effect": "limits_interpretation",
+                    "message": "The membership is a reviewable compression claim, not semantic truth."
+                  }
+                ],
+                "roles": [
+                  "representative"
+                ]
+              },
+              "prepared_targets": [
+                {
+                  "target": {
+                    "kind": "evidence",
+                    "ref": "evidence:bundle61-boundary"
+                  },
+                  "basis": "Prepared boundary Evidence.",
+                  "roles": [
+                    "boundary"
+                  ],
+                  "access_status": "available"
+                },
+                {
+                  "target": {
+                    "kind": "evidence",
+                    "ref": "evidence:bundle61-outlier"
+                  },
+                  "basis": "Prepared outlier Evidence.",
+                  "roles": [
+                    "outlier"
+                  ],
+                  "access_status": "available"
+                }
+              ],
+              "coverage_basis": {
+                "member_count": 3,
+                "qualified_member_count": 0,
+                "qualification_groups": [],
+                "member_specific_basis": true
+              }
+            }
+          }
+        ],
+        "page": {
+          "total": 1,
+          "next_cursor": null
+        }
+      }
+    },
+    {
+      "request": {
+        "result_ref": "precheck-result:hk-review-slice-002",
+        "source_item_refs": [
+          "source-item:215",
+          "source-item:217"
+        ],
+        "include": [
+          "source_item",
+          "observations",
+          "covering_evidence"
+        ],
+        "action": "expand",
+        "dataset_ref": "dataset:hong-kong-food-trip"
+      },
+      "response": {
+        "items": [
+          {
+            "source_item_ref": "source-item:215",
+            "included": {
+              "source_item": {
+                "locator": {
+                  "kind": "source_root_relative_path",
+                  "source_root_ref": "source-root:hk-representative-v1",
+                  "value": "dataset/260501-HK美食之旅/0504/DJI_001-action-sd-amber/DJI_20260504202728_0029_D.MP4"
+                },
+                "qualifications": [
+                  {
+                    "code": "invalid_media_container",
+                    "effect": "limits_interpretation",
+                    "message": "This remains a distinct accounted Source Item."
+                  }
+                ]
+              },
+              "observations": [
+                {
+                  "name": "media_type",
+                  "status": "available",
+                  "value": "video/mp4"
+                },
+                {
+                  "name": "media_readability",
+                  "status": "failed",
+                  "basis": "No usable moov atom."
+                },
+                {
+                  "name": "capture_time",
+                  "status": "missing"
+                }
+              ],
+              "covering_evidence": []
+            }
+          },
+          {
+            "source_item_ref": "source-item:217",
+            "included": {
+              "source_item": {
+                "locator": {
+                  "kind": "source_root_relative_path",
+                  "source_root_ref": "source-root:hk-representative-v1",
+                  "value": "dataset/260501-HK美食之旅/0504/DJI_001-action-sd-amber/DJI_20260504202728_0029_D.remux-faststart.MP4"
+                }
+              },
+              "observations": [
+                {
+                  "name": "media_type",
+                  "status": "available",
+                  "value": "video/mp4"
+                },
+                {
+                  "name": "media_readability",
+                  "status": "available",
+                  "value": "readable"
+                },
+                {
+                  "name": "capture_time",
+                  "status": "missing"
+                }
+              ],
+              "covering_evidence": [
+                {
+                  "evidence_ref": "evidence:repair-patched",
+                  "basis": "Reviewed repair-family Evidence."
+                }
+              ]
+            }
+          }
+        ],
+        "page": {
+          "total": 2,
+          "next_cursor": null
+        }
+      }
+    },
+    {
+      "request": {
+        "result_ref": "precheck-result:hk-review-slice-002",
+        "page": {
+          "limit": 50
+        },
+        "action": "geo_summary",
+        "dataset_ref": "dataset:hong-kong-food-trip"
+      },
+      "response": {
+        "acquisition_status": "incomplete",
+        "coordinate_evidence": {
+          "gps": {
+            "available": 3,
+            "missing": 2,
+            "failed": 0,
+            "conflict": 0
+          },
+          "gpx": {
+            "available": 0,
+            "missing": 5,
+            "failed": 0,
+            "conflict": 0
+          },
+          "combined": {
+            "available": 3,
+            "missing": 2,
+            "failed": 0,
+            "conflict": 0
+          }
+        },
+        "coordinate_groups": [
+          {
+            "coordinate": {
+              "latitude": 22.3193,
+              "longitude": 114.1694,
+              "datum": "WGS84"
+            },
+            "member_count": 3,
+            "source_set": {
+              "kind": "geo_coordinate",
+              "coordinate": {
+                "latitude": 22.3193,
+                "longitude": 114.1694,
+                "datum": "WGS84"
+              },
+              "selection_rule": "gpx_over_gps_exact_normalized_v1"
+            },
+            "candidate_evidence_refs": [
+              "evidence:geo-hong-kong-candidate"
+            ],
+            "provenance": [
+              {
+                "method": "adaptive_reverse_geocode_v1",
+                "provider": "amap",
+                "observed_at": "2026-05-03T12:00:00+00:00"
+              }
+            ],
+            "qualifications": [
+              {
+                "code": "provider_candidate_not_place_truth",
+                "effect": "limits_interpretation",
+                "message": "The Provider response is a candidate observation, not confirmed place truth."
+              }
+            ],
+            "components": {
+              "address": {
+                "not_requested": 3
+              },
+              "nearby_places": {
+                "not_requested": 3
+              }
+            }
+          }
+        ],
+        "page": {
+          "total": 1,
+          "next_cursor": null
+        }
+      }
+    },
+    {
+      "request": {
+        "result_ref": "precheck-result:hk-review-slice-002",
+        "source_set": {
+          "kind": "precheck_relation",
+          "origin": "evidence:bundle61-entry",
+          "relation": "represents",
+          "direction": "outbound"
+        },
+        "page": {
+          "limit": 250
+        },
+        "action": "resolve",
+        "dataset_ref": "dataset:hong-kong-food-trip"
+      },
+      "response": {
+        "resolution": {
+          "source_set_identity": "sha256:7696583768ac5f8f466337f035db72a868dd71dbe1b094be9b3261c3e93f1a56",
+          "membership_identity": "sha256:7f7c9f1b92952eff7859c16f5a5b6bf021a0ffbcd8ccba29303d21f501df2bb6"
+        },
+        "members": [
+          {
+            "source_item_ref": "source-item:13",
+            "locator": {
+              "kind": "source_root_relative_path",
+              "source_root_ref": "source-root:hk-representative-v1",
+              "value": "dataset/260501-HK美食之旅/0503/100MSDCF/DSC00594.JPG"
+            },
+            "scope": "source_media",
+            "condition": "usable",
+            "source_content_verification": {
+              "status": "not_checked"
+            }
+          },
+          {
+            "source_item_ref": "source-item:14",
+            "locator": {
+              "kind": "source_root_relative_path",
+              "source_root_ref": "source-root:hk-representative-v1",
+              "value": "dataset/260501-HK美食之旅/0503/CLIP-260503/C0561.MP4"
+            },
+            "scope": "source_media",
+            "condition": "usable",
+            "source_content_verification": {
+              "status": "not_checked"
+            }
+          },
+          {
+            "source_item_ref": "source-item:15",
+            "locator": {
+              "kind": "source_root_relative_path",
+              "source_root_ref": "source-root:hk-representative-v1",
+              "value": "dataset/260501-HK美食之旅/0503/DJI_001-action/DJI_20260503215611_0014_D.MP4"
+            },
+            "scope": "source_media",
+            "condition": "usable",
+            "source_content_verification": {
+              "status": "not_checked"
+            }
+          }
+        ],
+        "page": {
+          "total": 3,
+          "next_cursor": null
+        }
+      }
+    }
+  ]
+}

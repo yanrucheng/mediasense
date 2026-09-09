@@ -4,15 +4,15 @@ title: "MediaSense Plan Local Artifact Design"
 type: design
 status: active
 created: 2026-08-28
-updated: 2026-08-30
+updated: 2026-09-09
 timezone: "Asia/Shanghai"
 parent: "index-design"
 depends-on:
   - "design-260823-1918-mediasense-foundation"
-  - "spec-260826-1546-precheck-read"
-  - "spec-260827-1138-frozen-plan"
-  - "spec-260827-1915B-plan-work"
-  - "spec-260828-2026-default-organization-profile"
+  - "precheck-read"
+  - "frozen-plan"
+  - "plan-work"
+  - "default-organization-profile"
 superseded-by: ""
 tags: ["mediasense", "plan", "storage", "artifacts"]
 ---

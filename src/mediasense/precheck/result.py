@@ -35,12 +35,14 @@ class ResultStore(SQLiteResultStore):
         metadata_work_ids: Iterable[str] = (),
         reverse_geocode_work_by_source: Mapping[Path | str, str] | None = None,
         sensitivity_work_ids: Iterable[str] = (),
+        sensitivity_enabled: bool = False,
         video_probe_work_ids: Iterable[str] = (),
         video_frame_work_ids: Iterable[str] = (),
         video_key_frame_work_ids: Iterable[str] = (),
         dataset_name: str | None = None,
         dataset_context: Iterable[dict[str, object]] = (),
         external_policy_status: str | None = None,
+        geo_acquisition_policy: Mapping[str, object] | None = None,
     ) -> ResultDraft:
         return build_minimal_result(
             self.database_path,
@@ -53,12 +55,14 @@ class ResultStore(SQLiteResultStore):
             metadata_work_ids=metadata_work_ids,
             reverse_geocode_work_by_source=reverse_geocode_work_by_source,
             sensitivity_work_ids=sensitivity_work_ids,
+            sensitivity_enabled=sensitivity_enabled,
             video_probe_work_ids=video_probe_work_ids,
             video_frame_work_ids=video_frame_work_ids,
             video_key_frame_work_ids=video_key_frame_work_ids,
             dataset_name=dataset_name,
             dataset_context=dataset_context,
             external_policy_status=external_policy_status,
+            geo_acquisition_policy=geo_acquisition_policy,
         )
 
     def compare(self, left_result_ref: str, right_result_ref: str) -> dict[str, object]:
@@ -101,7 +105,7 @@ def _verified_package(result: SealedResult) -> Mapping[str, object]:
             f"sealed Result failed integrity verification: {result.result_ref}"
         )
     value = json.loads(payload)
-    if not isinstance(value, Mapping) or value.get("schema_version") != 1:
+    if not isinstance(value, Mapping) or value.get("schema_version") not in {1, 2}:
         raise ResultSealError("sealed Result has an unsupported package shape")
     return value
 
