@@ -87,7 +87,7 @@ def check_observations(observations):
 
 
 def check_semantics(request, response):
-    """Public cross-field assertions; runtime source/lineage proofs still need M2."""
+    """Public cross-field assertions; runtime source/lineage proofs are checked by delivery tests."""
     try:
         encoded = json.dumps(
             response, ensure_ascii=False, separators=(",", ":"), allow_nan=False

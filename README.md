@@ -38,9 +38,9 @@ The three durable handoff roles are the precheck result, the frozen organization
 
 ## Current phase
 
-The [PreCheck evidence-delivery contract](docs/spec/contract/precheck-read/index.md) is finalized: milestone one is complete after the review corrections and agreed closing checks. Milestone two, implementation and release synchronization, has not started. Existing installed release behavior described below is not proof of conformance to that new contract.
+The [PreCheck evidence-delivery contract](docs/spec/contract/precheck-read/index.md) and its production implementation have passed milestone-one and milestone-two acceptance, including the metadata, historical-detection, and pagination corrections. The [capability ledger](docs/eval/eval-260823-1918-ai-album-migration-baseline/eval-260823-1918B-capability-ledger.md) retains the exact evidence and certification limits.
 
-The `0.8.0` distribution provides the installed `mediasense` executable, portable-
+The `0.9.0` distribution provides the installed `mediasense` executable, portable-
 first Dataset discovery, one local composition root, a packaged product entry
 Skill and three stage Skills, Tool contracts, and an on-demand stdio MCP Host.
 `mediasense mcp` is part of that same
@@ -49,12 +49,20 @@ contains the packaged Skill sources but is not itself an activated MediaSense
 Honeycomb. Installing the executable does not install Skills, edit any Agent
 client's configuration, or enable external providers by default.
 
-This release keeps the PreCheck run/read Tools and their nine actions, with flat
-`action` and `dataset_ref` inputs, consistent progress, and bounded audit reads.
-Address and nearby-place evidence use separate standard Observations; missing
-locations and known terminal lookup failures do not by themselves block Plan.
-The former nested PreCheck request wrapper and `operation` alias are unsupported;
-upgrade the CLI and all four packaged Skills together, then start a new Agent session.
+This release changes the Read response protocol: `review.items` delivers each
+Evidence's own attributes and actual Source Items separately from its `represents`
+relationships. Prepared Evidence can be selected explicitly; unreadable or oversized
+items remain local failures with continuation to later items. Photographic metadata,
+ordinary/high-resolution renditions, video and Geo evidence, and optional local
+sensitivity signals are delivered through the installed Host. MCP returns one
+`structuredContent` result with empty `content`. Upgrade the CLI and all four Skills
+together; 0.8 clients are incompatible. See the [0.9.0 release notes](CHANGELOG.md)
+and [upgrade steps](readme/installation.md#upgrade-and-rollback), then start a
+new Agent session.
+
+Acceptance covers the recorded controlled delivery paths. Model and representative
+quality, broad codec/HDR support, live Geo quality and terms, large-collection
+throughput, and arbitrary Agent clients' large-page consumption remain uncertified.
 
 PreCheck, Plan, and the first Apply `move_originals` slice are implemented against active contracts. Apply supports its user-facing Skill, durable preparation, exact authorization, same-filesystem moves, the evidence-bounded Darwin cross-filesystem route, pause/resume/cancel, restart reconciliation, immutable Receipts, bounded Receipt reads, and whole-Run rewind. Original-file copy is not a c90 runtime capability despite legacy README wording; persistent relative symbolic links are intentionally deferred because their preview purpose is now Plan-owned and their dangling/rebinding lifecycle is not accepted. Broader cross-filesystem platforms, ACL-bearing cross-filesystem sources, and representative user-storage throughput remain uncertified.
 

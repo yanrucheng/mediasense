@@ -15,7 +15,7 @@ superseded-by: ""
 
 **唯一当前合约入口：[contract/](contract/index.md)。** 所有新开发从这里开始。日期目录是历史记录，日期不是接口版本，也不用于选择最新规范。
 
-[概念模型](../design/design-260825-2235-mediasense-information-architecture/design-260825-2235D-precheck-compression-boundary.md)固定对象、关系与属性；稳定合约固定请求、返回与失败语义；[迁移台账](../eval/eval-260823-1918-ai-album-migration-baseline/eval-260823-1918B-capability-ledger.md)记录实现和验收。第一里程碑已完成；第二里程碑未开始。
+[概念模型](../design/design-260825-2235-mediasense-information-architecture/design-260825-2235D-precheck-compression-boundary.md)固定对象、关系与属性；稳定合约固定请求、返回与失败语义；[迁移台账](../eval/eval-260823-1918-ai-album-migration-baseline/eval-260823-1918B-capability-ledger.md)记录实现和验收。第一里程碑已完成；第二里程碑于 2026-09-10 经用户验收通过，以 0.9.0 发布。
 
 ## 当前规范
 

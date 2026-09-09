@@ -6,6 +6,49 @@ Versioning, with documented breaking changes permitted in minor releases before
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-09-10
+
+### Changed
+
+- **Breaking:** PreCheck Read uses `review.items`, joining Evidence attributes
+  and actual Source Items with separate `represents` relationships. Callers can
+  select exact prepared Evidence. There is no permanent old/new Read protocol.
+- MCP delivers one business result in `structuredContent` with empty `content`.
+  Upgrade the CLI/Host, all four Skills, and independent Read consumers together.
+- Current contracts live only under `docs/spec/contract/`; packaged schemas and
+  Skill references are release snapshots. Both delivery milestones and the
+  acceptance corrections have passed user acceptance.
+
+### Added
+
+- Photographic metadata and source dimensions with provenance, independent
+  ordinary/high-resolution preparation, and public video and Geo projections.
+- Explicit configuration and production wiring for optional local sensitivity
+  detectors. Detection remains disabled by default, with no model download or
+  remote fallback. Installing extras does not enable detection.
+
+### Fixed
+
+- Retained metadata raw values and rejection reasons through producer, Result,
+  and Read, including Encoder and invalid focal-length candidates.
+- Preserved provable historical detection observations when public input
+  references cannot be recovered, without rewriting sealed Results.
+- Sized pages using their actual envelopes. An oversized middle item becomes a
+  local fault and later items remain readable with the same cursor-bound limit.
+
+### Upgrade and validation
+
+- Follow [the installation upgrade steps](readme/installation.md#upgrade-and-rollback),
+  retain optional dependencies/configuration and actual installation targets,
+  then start a new Agent session. Persistent format versions are unchanged by
+  this application release.
+- The existing [capability ledger](docs/eval/eval-260823-1918-ai-album-migration-baseline/eval-260823-1918B-capability-ledger.md)
+  retains the accepted implementation tests, historical 0.8.0-labelled milestone
+  candidates, and final 0.9.0 build/install evidence. Quality of models and
+  representatives, broad codec/HDR behavior, live Geo accuracy/terms/quotas,
+  large-Dataset throughput, and arbitrary clients' large-page handling remain
+  uncertified. This release does not imply a new real-Dataset or Apply audit.
+
 ## [0.8.0] - 2026-09-08
 
 ### Changed

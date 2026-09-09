@@ -16,7 +16,7 @@ tags: ["mediasense", "precheck", "contract", "evidence"]
 
 # PreCheck Read：当前合约
 
-**第一里程碑已完成；第二里程碑暂未通过用户验收；metadata 与历史检测已通过复验；近上限中间页的续读补修已完成验证，整体待复验。** 本目录是 `mediasense.precheck.read` 的唯一当前合约位置。验收修订已闭合阈值表达、故障项续页和语义检查；已确认的概念模型保持不变。旧日期目录及已安装版本的副本仅说明历史行为，不与本合约并列有效。
+**第一里程碑已完成；第二里程碑及 metadata、历史检测和近上限中间页续读补修于 2026-09-10 通过用户验收，以 0.9.0 发布。** 本目录是 `mediasense.precheck.read` 的唯一当前合约位置。验收修订已闭合阈值表达、故障项续页和语义检查；已确认的概念模型保持不变。旧日期目录及已安装版本的副本仅说明历史行为，不与本合约并列有效。
 
 [Tool Schema](precheck-read.tool.json)定义唯一交换值形状；[属性与交付义务](precheck-attributes.md)定义本期属性含义与准备要求；[完整合成用例](examples.json)覆盖正常、异常和多来源读取。下方 JSONC 注释供人阅读，不进入返回，不是第二套协议。
 
@@ -357,7 +357,7 @@ execution_page 默认50/最大200，按原 durable attempt 顺序。每条 attem
 
 geo_summary 按纬度、经度、datum 稳定排序，复用 page。gps/gpx/combined 的状态数量分别保留；同坐标出现多个历史组件结果时，address/nearby_places 各返回 outcome 数量，每一组件之和等于 member_count，不挑一个伪总体状态。对有坐标项，两组件均有已终结记录时 acquisition_status=complete；仍未请求或效果不确定为 incomplete；没有最终坐标为 not_applicable。该状态不替代 readiness，也不证明候选正确。candidate_evidence_refs 只含真实可读候选；无候选来源沿 source_set→resolve/expand 追溯。
 
-现有 Geo 采集单元与逐项投影是第二里程碑要核对的设计现状。该策略的价值或阈值不由本合约预先认证；必须输出真实查询点、源坐标依据及复用限制。Plan 新补查取得独立证据，不修改 Result。
+现有 Geo 采集单元与逐项投影已在第二里程碑完成针对性实现核对，证据见迁移台账。该策略的价值或阈值不由本合约预先认证；必须输出真实查询点、源坐标依据及复用限制。Plan 新补查取得独立证据，不修改 Result。
 
 旧 Result 先验证原封存字节，再只读投影。保留能证明的原值、时间和来源；缺失新字段以 historical_unrecorded 说明，不能捏造成功、逐组件无结果或新授权。旧版 Geo 规范化保留先前的证据约束：聚合缺失和请求数量不能证明两组件都执行过；升级器猜出的两组件 no_result 也不是原始证据，必须追溯真实 Tool 组件结果、attempts 或 provider 协议。无证据的组件明确 historical_geo_unrecorded，不循环迁移或自动网络补查。非法旧 Result 拒绝，不修数据。
 

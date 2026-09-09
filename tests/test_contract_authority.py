@@ -1,4 +1,4 @@
-"""Verify the stable contract home without asserting runtime implements it."""
+"""Verify the stable contract home and synchronized release snapshots."""
 
 import json
 from pathlib import Path
@@ -55,13 +55,11 @@ def test_all_canonical_schemas_compile_and_local_references_resolve():
                     current = current[key.replace("~1", "/").replace("~0", "~")]
 
 
-def test_unchanged_exchange_contracts_preserve_existing_release_shapes():
+def test_all_exchange_contracts_match_release_snapshots():
     released = ROOT / "src/mediasense/_resources/contracts"
     for path in CONTRACT.rglob("*.json"):
         if not path.name.endswith((".tool.json", ".schema.json")):
             continue
-        if path.name == "precheck-read.tool.json":
-            continue  # M2 synchronizes this with the production implementation.
         assert json.loads(path.read_text()) == json.loads(
             (released / path.name).read_text()
         )

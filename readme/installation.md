@@ -1,6 +1,6 @@
 # Installation and first use
 
-MediaSense 0.8 is a pre-release local product for Python 3.11 or newer. macOS is
+MediaSense 0.9 is a pre-release local product for Python 3.11 or newer. macOS is
 the first product-certified platform. Linux can run the Python package, but its
 removable-volume and Apply filesystem behavior is not yet certified. Windows is
 not currently supported.
@@ -65,7 +65,7 @@ or remote fallback. Sensitivity defaults to disabled, including when an empty
 For a built release artifact, install the exact wheel instead:
 
 ```bash
-uv tool install ./dist/mediasense-0.8.0-py3-none-any.whl
+uv tool install ./dist/mediasense-0.9.0-py3-none-any.whl
 ```
 
 `uv` may download declared Python dependencies. MediaSense does not install
@@ -230,27 +230,42 @@ trusted channel used to install it. MediaSense checks manifest and component-sto
 versions before ordinary use and refuses newer or unsupported state without
 rewriting it.
 
-MediaSense `0.8.0` replaces nested PreCheck requests with flat `action` and
-`dataset_ref` inputs and updates the corresponding response contracts. The
-run/read Tools still expose nine actions; the former `request` wrapper and
-`operation` alias are unsupported. Replace an older tool environment with the
-exact trusted current `0.8.x` artifact and update its Skills; matching Tool names
-alone do not establish compatibility:
+MediaSense `0.9.0` has a breaking PreCheck Read response change: consumers read
+`review.items`, with Evidence attributes and actual Source Items separated from
+compression relationships. Explicit prepared-Evidence selection and local failure
+records preserve bounded continuation. The MCP Host delivers the business result
+once in `structuredContent`, with empty `content`; the Agent client must consume
+that field. Update the CLI, four Skills, and any independent Read consumer together.
+The flat `action` / `dataset_ref` requests introduced in 0.8 remain unchanged;
+older nested requests and the `operation` alias are still unsupported.
+
+First locate the active executable (`command -v mediasense`), its installer and
+optional extras, the MCP command, and the actual four Skill directories. Preserve
+those targets and configuration. Do not assume the source checkout is an
+operational Honeycomb or migrate an existing Skill location as part of an upgrade.
+For an existing `uv tool` installation, replace it with the verified wheel:
 
 ```bash
-uv tool install --force ./dist/mediasense-0.8.0-py3-none-any.whl
+uv tool install --offline --force ./dist/mediasense-0.9.0-py3-none-any.whl
 ```
+
+Retain the previously installed extras: for an embeddings-enabled installation,
+use `uv tool install --offline --force './dist/mediasense-0.9.0-py3-none-any.whl[embeddings]'`
+(and retain `local-models` only if already required). Keep the existing Python and
+dependency versions when available in the offline cache. If dependencies are not
+cached, review the required download before using the network. Installing extras
+does not enable models or authorize downloads of weights or external calls.
 
 Application versions follow SemVer during `0.y.z`: minor releases may contain
 documented breaking CLI, Host, manifest, or store changes; patch releases are
 compatible fixes. A changed application version alone never invalidates all
 PreCheck work.
 
-The supported `0.8.x` combination is:
+The supported `0.9.x` combination is:
 
 | Surface | Supported value |
 | --- | --- |
-| Application | `0.8.x` |
+| Application | `0.9.x` |
 | Dataset manifest | `3` |
 | PreCheck store | `17` |
 | Plan store | `3` |
@@ -265,17 +280,27 @@ start, explicitly remove the selected Dataset workspace from discovery only afte
 deciding that its Results and recovery history are no longer needed. Preserve
 source media and unrelated Dataset workspaces.
 
-After replacing the CLI, upgrade the four release-matched Skills in each
-explicit Honeycomb:
+After checking for local customizations, use the new CLI to upgrade the four
+release-matched Skills at the actual installation target:
 
 ```bash
-mediasense skills upgrade --target <absolute-honeycomb>/.agents/skills
+mediasense skills upgrade --target <actual-skill-directory>
 ```
 
 This operation changes only the four MediaSense Skill directories, preserves
 unrelated Skills, and rolls back its own replacements if the set cannot be
-completed. Start a new Agent session afterwards so it loads the `0.8.x` Skills
-and MCP Host.
+completed. A correct MCP command pointing at the same executable needs no edit.
+Verify `mediasense --version`, `mediasense doctor --json`, and
+`mediasense tools list --json`, then compare installed Skills with the release's
+bundled copies. Start a new Agent session to load the `0.9.x` Skills and MCP Host;
+disk updates do not reload an already-running Host or the current Agent context.
+
+M1 and M2 acceptance covers the controlled paths in the existing
+[capability ledger](../docs/eval/eval-260823-1918-ai-album-migration-baseline/eval-260823-1918B-capability-ledger.md).
+It does not certify model or representative quality, broad codec/HDR behavior,
+live Geo accuracy/quotas/terms, large-Dataset throughput, or every Agent client's
+large-response handling. The release upgrade requires no model rerun, automatic
+detector enabling, or rewrite of old Results.
 
 Public Tool contracts are identified by their stable contract ID and exact schema
 digest. Inspect the installed set with `mediasense tools list --json`.
