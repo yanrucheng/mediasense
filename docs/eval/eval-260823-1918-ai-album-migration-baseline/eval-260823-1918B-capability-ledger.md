@@ -4,7 +4,7 @@ title: "Migration Capability Ledger"
 type: eval
 status: active
 created: 2026-08-23
-updated: 2026-09-10
+updated: 2026-09-11
 timezone: "Asia/Shanghai"
 parent: "eval-260823-1918-ai-album-migration-baseline"
 depends-on:
@@ -322,6 +322,43 @@ Geo 针对性判断：保留 `bundle-stationary-complete-link-v1`，没有把其
 安装验收暴露并修复了两个源码单测未覆盖的接通缺口：Run确认schema未允许新增网络/路由字段、现代恢复链历史授权缺少原确认数量而被Result验证拒绝。现已在完整安装入口通过；历史失败日志 `/tmp/mediasense-geo-installed-smoke-{2,3,4}.log` 保留，其中第3次是测试客户端在尚无确认的blocked状态错误附带proceed，已按现有契约修正为先无decision恢复。另有默认沙箱禁止loopback bind和npm缓存访问的环境限制，经仅针对本机测试/离线安装的权限放行后通过；没有将它们当作实际地图根因。
 
 实际 `~/.local/bin/mediasense` 本次只读复查仍是 **0.9.0**。现用CLI/MCP、操作项目Skills/lock、Proxy配置、业务Dataset/Run和旧Result未改变；没有全局Skill安装、远程推送或release。0.10.0交付停在隔离验证与本地源码提交，实际切换及真实业务恢复按已确定的网络条件另行执行，当前主Agent未终止。
+
+### 0.10.0 实际安装切换与原 Run 恢复准备（2026-09-11）
+
+本节续接上节的隔离交付。用户明确授权实际安装升级、操作项目四个 Skills/lock 同步和原 Run 的有界恢复。起点提交 **`46228e9e74be7893a61ac206c664663004421489`**；wheel 仍是上节最终包，重新计算 SHA-256 为 **`f4e4ee4454ebb95c7eca7b87abc004eb7ac1fe6b78411c184b89ad9842c26f1e`**。没有重新构建包。独立验收记录 `/private/tmp/mediasense-acceptance-260911.md` 的88项安装回归、完整CLI/MCP恢复及再次失败后继续恢复证据沿用，本次未重跑该套件、模型或真实数据从零验收。工作区中的独立模型评测改动保留，未纳入此次收尾。
+
+**实际安装完成；原 Run 已准备恢复披露，尚未授权执行本次恢复，也没有新 Result。业务 Agent 会话切换仍需用户新建会话。**
+
+| 检查边界 | 本次实际证据 |
+| --- | --- |
+| 升级前无在途执行 | 指定 Dataset 的两个 Run 分别为completed和blocked，worker均为空；Work无运行项，Geo journal两条记录均已关闭。操作项目的两个业务Agent均停在输入提示。核实PID/父进程/命令后，仅关闭旧MediaSense Host子进程57794、66792；父Agent84648、9090和当前主Agent41231保留。迁移前SQLite备份在临时证据目录。 |
+| 实际CLI升级 | 原路径 `/Users/chengyanru/.local/bin/mediasense` → `/Users/chengyanru/.local/share/uv/tools/mediasense/bin/mediasense`，仍由uv tool管理。使用最终wheel、`--offline --force --no-python-downloads`、原Python3.13.5、`embeddings` extra和原53项依赖的精确约束；uv仅替换mediasense 0.9.0→0.10.0。全部53项依赖版本复核不变，111个包文件与源码/wheel逐字节一致。 |
+| 操作项目Skills/lock | `/Users/chengyanru/Downloads/ai-album-hk-representative-v1/.agents/skills/` 的四个Skill升级前11个文件均匹配0.9.0包，无本地定制。通过缓存的`npx --offline skills@1.5.25 add ../../repos/personal/mediasense --skill mediasense mediasense-precheck mediasense-plan mediasense-apply -a codex --full-depth -y`同步；关闭遥测，不使用全局安装。升级后11个文件匹配0.10.0 wheel，四个lock key及既有相对local source不变，computedHash按CLI原生localeCompare算法逐项通过。该操作项目不是Git仓库；本地lock落在该项目，恢复仍依赖原相对源码位置。 |
+| 实际配置与doctor | 项目`.codex/config.toml`哈希不变，沿用原`/bin/sh -c`加载既有密钥脚本并exec实际CLI的方式；没有输出凭据或新增Proxy。该启动环境下doctor为0.10.0 / ok，ExifTool、FFmpeg、ffprobe和embedding依赖可用；local-models未安装、敏感性仍disabled。第一次在沙箱且未加载凭据的doctor报目录权限error，不能代表实际环境；使用原启动方式并获实际目录访问权限后通过。 |
+| 实际安装Host与合约 | 从操作项目原MCP配置启动的验证Host，initialize明确返回0.10.0；七个公开Tool及contract_id/digest均匹配实际CLI发布清单。该Host通过公开dataset.open打开原Dataset并准备原Run恢复；验证客户端没有elicitation callback，也未发送decision=proceed。取得paused披露后客户端正常退出。收尾无MediaSense在途进程，三个Agent父进程仍在。此证据证明安装Host实际可用，不等于现有Agent已重新加载。 |
+| 原状态迁移与保留 | 新Host按支持的迁移将Geo journal升为2，manifest中的geo store声明随之更新；manifest仍为3，PreCheck17、Plan3、Apply2不变。原已封存Result行逐字节比较不变；各capability的producer attempt总数无新增。没有直接修改数据库或伪造状态，所有迁移/恢复写入均来自公开Host操作。 |
+| 公开原Run恢复准备 | `resume`不带decision后，原Run经已存工作复用进入`paused / confirmation_required`。范围仍是default exclude、唯一include `260501-HK美食之旅`。保留114个历史复用、42个本批完成、1个附近地点未知、11个未请求。披露只补12个地点：12个nearby_places和11个reverse_geocode，共23个缺失组件；已取得的第43个地址不在补查集。 |
+| 效果、预算和当前限制 | **本次安装/准备新增地图请求0**；公开status仍报本批86、历史229、billable_calls=null。原累计请求上限486，剩余400；历史229单列，不重置原批预算，也不把未知记零。原54个查询的地域路由均要求Google，原provider授权名单未扩大；网络profile无Proxy、系统CA、TLS校验开启、reachability=not_checked。未证明网络故障已消失。未执行proceed，因此不能将23个缺失组件写成实际新增23次请求。 |
+
+当前公开披露的精确身份：
+
+- `confirmation.content_identity`：`sha256:68f017fc1d1ed23037c954e996931d30b29c1a13a801bce25364c7051b3bfe2f`
+- `geo_request_fingerprint`：`sha256:4eb6b8e4bb80b8ef60f7fa1535b89f16530c47f195893cd38d78a2eba481f44e`
+- `execution_profile.identity`：`sha256:18d18732f636e45d2d0495169f65a143758a59209fd5c75a4e2da676ad398968`
+- 原请求和恢复root：`request:precheck-geo:85c2e2486d1e1c397b6820528eb198eed7eff6747405691afe7738dd287f05e9`
+- 当前`result_ref`：**无**。readiness、最终覆盖及异常须在完成后通过`precheck.read`取得，不能由旧Result或隔离测试替代。现有status还保留184个video_frame_decode_failed和1个video_probe_failed，未将其清零。
+
+证据在 `/tmp/mediasense-0.10.0-live-switch-260911/`：`installation-verification.json`、`doctor-actual-launcher.json`、`mcp-initialize.json`、`mcp-tools.json`、`dataset-open-after.json`、`status-new-host-before-resume.json`、`resume-without-decision.json`、`status-prepared.json`、`status-final.json`、`recovery-preparation-summary.json`、`retired-hosts.json`，以及升级前依赖/Skill/lock和SQLite备份。包、原始响应及媒体不入Git。fixture verifier的清单SHA-256全部通过，但操作目录已有额外业务文件，总量3,188,676,923字节超过原2,000,000,000字节上限；不能宣称整个操作目录仍是原封不动的限量fixture，也未为通过校验删除这些文件。
+
+#### 在操作项目新建 Agent 会话后的续接指令
+
+当前主Agent没有MediaSense MCP工具，已运行的业务Agent仍加载旧会话资源；Codex当前公开命令面未提供可用的MCP会话内reload。不要终止当前主Agent或用一次独立Host检查冒充业务会话切换。请在 **`/Users/chengyanru/Downloads/ai-album-hk-representative-v1`** 新建正常Codex会话，加载本项目0.10.x四个Skill及原MCP配置，然后继续以下任务：
+
+1. 遵守本项目Skill及MediaSense当前合约，确认新会话实际发现七个MediaSense工具、Host为0.10.0且合约匹配。安装、原数据范围和恢复已有授权，不另开安装或数据范围确认。
+2. 使用`mediasense.dataset.open`打开精确 `source_root=/Users/chengyanru/Downloads/ai-album-hk-representative-v1/test-260831` 和 `workspace=/Users/chengyanru/Library/Application Support/MediaSense/datasets/dataset-b9f71c8826d891a534c33b7e`，核对 `dataset_ref=dataset:6581e19d4fe94e26a10e2f5ca1b34c9b`。
+3. 用公开status读取 **`run_ref=precheck-run:ea216eded808430ead13f6afef40420d`**，include diagnostics/accounting。不得start新Run。它当前已经完成不带decision的resume，停在paused恢复确认；核对上列披露身份、仅补12地点/23组件、本批86/历史229/未知费用、累计486/剩余400和唯一已选范围`260501-HK美食之旅`。若状态已变化，以新的公开事实为准，不重放陈旧确认。
+4. 在范围、服务商和网络接收方仍匹配既有授权时，调用公开`mediasense.precheck.run`，平铺参数`action=resume`、上述dataset_ref/run_ref、`decision=proceed`，由MCP客户端显示完整披露并取得正常Human elicitation。不要传authority、自动接受回调、编辑数据库或伪造确认。此最终可信控件是公开契约的执行机制，不是再次征求已经授权的安装/业务范围。若必须新增代理、变更接收方或扩大预算，先准备具体方案并取得相应授权。
+5. 沿原Run观察到真实终态；若网络仍不可达或再次blocked，保留成功组件、累计尝试和未知费用，明确具体原因及条件，不能无变化地循环resume。完成后用`mediasense.precheck.read`读取Tool给出的精确result_ref，核对readiness、覆盖、异常、历史/本次请求及未知费用。真实新增请求按完成后本批计数减86报告，合成+23不是承诺。将实际结果继续补在本台账；不扩大Apply或模型认证。
 
 ## Current MediaSense implementation status
 
