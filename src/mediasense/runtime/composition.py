@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import threading
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -24,7 +24,6 @@ from mediasense.capabilities.geo import (
     GeoQueryTool,
     GeoRetention,
     MapDatum,
-    OrderedGeoRoutingPolicy,
 )
 from mediasense.capabilities.geo.service import GeoCapability
 from mediasense.geo import AMapReverseGeocoder, GoogleMapsReverseGeocoder
@@ -323,6 +322,18 @@ class DatasetRuntime:
                             "allowed_actions": ["resume", "cancel"],
                         }
                     }
+            if state in {"paused", "blocked"}:
+                from .config import load_runtime_config
+
+                updated = load_runtime_config(dataset_workspace=self.opened.workspace)
+                if updated.geo_network != self.config.geo_network:
+                    geo = _geo_tool(self.opened.workspace / "geo", updated)
+                    self.geo_query = geo
+                    orchestrator = self.precheck_run._orchestrator
+                    orchestrator.dependencies = replace(
+                        orchestrator.dependencies, geo_tool=geo
+                    )
+                    self.config = replace(self.config, geo_network=updated.geo_network)
         response = self.precheck_run.run(
             request,
             confirmation=_confirmation(authority, PrecheckConfirmationContext),
@@ -527,25 +538,52 @@ def contract_path_for(name: str) -> Path:
 def _geo_tool(workspace: Path, config: RuntimeConfig) -> GeoQueryTool:
     import os
 
+    from mediasense.geo import UrllibJsonTransport
+
+    network = config.geo_network or {}
+    transport = UrllibJsonTransport(
+        proxy_url=network.get("proxy_url"),
+        ca_bundle=network.get("ca_bundle"),
+        configured=True,
+    )
     providers: dict[str, Any] = {}
     amap_key = os.environ.get(config.amap_api_key_env)
     google_key = os.environ.get(config.google_maps_api_key_env)
     if amap_key:
-        providers["amap"] = AMapReverseGeocoder(amap_key)
-    if google_key:
-        providers["google_maps"] = GoogleMapsReverseGeocoder(google_key)
-    if providers:
-        routing: Any = OrderedGeoRoutingPolicy(
-            tuple(
-                provider_id
-                for provider_id in ("google_maps", "amap")
-                if provider_id in providers
-            )
+        providers["amap"] = AMapReverseGeocoder(
+            amap_key,
+            transport=transport,
+            timeout=network.get("amap_timeout_seconds", 15),
+            minimum_interval=network.get("minimum_interval_seconds", 0.3),
         )
+    if google_key:
+        providers["google_maps"] = GoogleMapsReverseGeocoder(
+            google_key,
+            transport=transport,
+            timeout=network.get("google_timeout_seconds", 3),
+            minimum_interval=network.get("minimum_interval_seconds", 0.3),
+        )
+    from mediasense.capabilities.geo.routing import RegionalGeoRoutingPolicy
+
+    if providers:
+        routing = RegionalGeoRoutingPolicy()
     else:
         providers = {"unavailable": _UnavailableGeoProvider()}
-        routing = _UnavailableGeoRouting()
-    capability = GeoCapability(providers, routing)
+        routing = RegionalGeoRoutingPolicy()
+    capability = GeoCapability(
+        providers,
+        routing,
+        execution_profile={
+            **transport.network_profile,
+            "timing": {
+                "google_timeout_seconds": network.get("google_timeout_seconds", 3),
+                "amap_timeout_seconds": network.get("amap_timeout_seconds", 15),
+                "minimum_interval_seconds": network.get(
+                    "minimum_interval_seconds", 0.3
+                ),
+            },
+        },
+    )
     return GeoQueryTool(capability, GeoOperationJournal(workspace / "journal.sqlite3"))
 
 

@@ -191,6 +191,7 @@ class ReverseGeocodeProducer:
             coordinate_work_ids,
             bundle_work_ids=bundle_work_ids,
         )
+        attached = self.work.list_run_work(run_id)
         records: list[WorkRecord] = []
         for query in queries:
             record = self.work.ensure_work(
@@ -198,6 +199,33 @@ class ReverseGeocodeProducer:
                 _spec(query, profile),
                 max_attempts=profile.max_attempts,
             )
+            revisions = [
+                r
+                for r in attached
+                if r.spec.producer_identity == record.spec.producer_identity
+                and any(d.key == "geo_recovery_result" for d in r.spec.dependencies)
+                and tuple(
+                    d for d in r.spec.dependencies if d.key != "geo_recovery_result"
+                )
+                == record.spec.dependencies
+            ]
+            if revisions:
+                # Prefer the latest completed response after an interrupted projection.
+                latest_ids = {
+                    self.geo_tool.journal.latest(r.output["geo_request_id"]).request_id
+                    for r in revisions
+                    if self.geo_tool
+                    and isinstance(r.output, Mapping)
+                    and r.output.get("geo_request_id")
+                }
+                latest = [
+                    r
+                    for r in revisions
+                    if isinstance(r.output, Mapping)
+                    and r.output.get("geo_request_id") in latest_ids
+                ]
+                if latest:
+                    record = latest[0]
             if record.status is not WorkStatus.SUCCEEDED:
                 record = self._reuse_legacy_observation(run_id, record, query, profile)
             records.append(record)
@@ -254,6 +282,40 @@ class ReverseGeocodeProducer:
         profile: ReverseGeocodeProfile = ReverseGeocodeProfile(),
         owner: str = "builtin-reverse-geocode",
     ) -> ReverseGeocodeBatchOutcome:
+        if self.geo_tool is None or not coordinate_work_ids:
+            return self._produce(
+                public_run_ref,
+                run_id,
+                coordinate_work_ids,
+                bundle_work_ids=bundle_work_ids,
+                profile=profile,
+                owner=owner,
+            )
+        with self.geo_tool.journal.ownership("precheck-geo:" + run_id) as owned:
+            if not owned:
+                raise RuntimeError("Geo production already has a live execution owner")
+            from ._geo_recovery import reclaim_projection_leases
+
+            reclaim_projection_leases(self, run_id)
+            return self._produce(
+                public_run_ref,
+                run_id,
+                coordinate_work_ids,
+                bundle_work_ids=bundle_work_ids,
+                profile=profile,
+                owner=owner,
+            )
+
+    def _produce(
+        self,
+        public_run_ref: str,
+        run_id: str,
+        coordinate_work_ids: Sequence[str],
+        *,
+        bundle_work_ids: Sequence[str] = (),
+        profile: ReverseGeocodeProfile = ReverseGeocodeProfile(),
+        owner: str = "builtin-reverse-geocode",
+    ) -> ReverseGeocodeBatchOutcome:
         self.run_tool.bind_working_run(public_run_ref, run_id)
         batch = self.freeze(
             run_id,
@@ -263,12 +325,19 @@ class ReverseGeocodeProducer:
         )
         if not batch.queries:
             return ReverseGeocodeBatchOutcome("not_applicable", batch, (), 0)
+        if any(r.status is WorkStatus.RUNNING for r in batch.work):
+            return ReverseGeocodeBatchOutcome("projection_pending", batch, (), 0)
         if any(
             isinstance(record.output, Mapping)
-            and record.output.get("result", {}).get("status") == "indeterminate"
+            and (
+                record.output.get("geo_blocked")
+                or record.output.get("result", {}).get("status") == "indeterminate"
+            )
             for record in batch.work
         ):
-            return self._collect(batch, actual_provider_requests=0)
+            from ._geo_recovery import recover
+
+            return recover(self, public_run_ref, run_id, batch, profile, owner)
         if self.geo_tool is None and batch.pending_query_count:
             return ReverseGeocodeBatchOutcome("unavailable", batch, (), 0)
         pending_records = tuple(
@@ -277,6 +346,23 @@ class ReverseGeocodeProducer:
             if record.status
             in {WorkStatus.PENDING, WorkStatus.READY, WorkStatus.RETRYABLE_FAILURE}
         )
+        if self.geo_tool is not None and pending_records:
+            retained = self.geo_tool.journal.precheck_execution(
+                public_run_ref,
+                {record.work_id for _, record in pending_records},
+            )
+            if retained is not None:
+                from ._geo_recovery import recover
+
+                return recover(
+                    self,
+                    public_run_ref,
+                    run_id,
+                    batch,
+                    profile,
+                    owner,
+                    retained_request_id=retained.request_id,
+                )
         request = _geo_request(
             pending_records,
             profile,
@@ -331,6 +417,14 @@ class ReverseGeocodeProducer:
                 response = self.geo_tool.handle(
                     request,
                     authorization=geo_authorization,
+                    confirmation_proof={
+                        **authority,
+                        "run_ref": public_run_ref,
+                        "pending_fingerprint": batch.pending_fingerprint,
+                        "confirmed_logical_queries": batch.pending_query_count,
+                        "decision": "proceed",
+                        "disclosure_identity": authority["confirmed_content_identity"],
+                    },
                     cancelled=lambda: (
                         self.run_tool.current_state(public_run_ref) != "running"
                     ),
@@ -400,8 +494,14 @@ class ReverseGeocodeProducer:
             for observation in outcome.observations
             for q in observation.get("qualifications", ())
         )
+        blocked = any(
+            isinstance(o.work.output, Mapping) and o.work.output.get("geo_blocked")
+            for o in outcomes
+        )
         status = (
-            "indeterminate"
+            "blocked"
+            if blocked and not indeterminate
+            else "indeterminate"
             if indeterminate
             else "completed"
             if len(outcomes) == len(batch.queries)
@@ -457,6 +557,8 @@ class ReverseGeocodeProducer:
             ),
             "result_retention": "immutable_precheck_result",
             "retry_policy": self.geo_tool.capability.retry_policy.value(),
+            "execution_profile": self.geo_tool.capability.execution_profile,
+            "routing": preflight.get("routing", []),
         }
 
     def _claim_pending(
@@ -469,7 +571,7 @@ class ReverseGeocodeProducer:
         for _query, record in pending:
             claimed = self.work.claim_ready_work(
                 run_id,
-                owner,
+                "geo-projection-v2:" + owner,
                 lease_duration=timedelta(minutes=10),
                 work_id=record.work_id,
             )
@@ -512,6 +614,26 @@ class ReverseGeocodeProducer:
             for subject_ref in refs:
                 if isinstance(subject_ref, str):
                     by_subject.setdefault(subject_ref, {})[operation] = component
+        geo_authorizations = {}
+        if self.geo_tool is not None:
+            for request_id in {
+                a.get("execution_request_id")
+                for a in attempts
+                if isinstance(a, Mapping)
+            } - {None}:
+                cycle = self.geo_tool.journal.cycle(request_id)
+                if cycle is not None:
+                    proof = json.loads(cycle["authority_json"]).get(
+                        "precheck_confirmation"
+                    )
+                    if proof and proof.get("run_ref"):
+                        geo_authorizations[request_id] = {
+                            **proof,
+                            "decision": "proceed",
+                            "pending_fingerprint": self.geo_tool.journal.get(
+                                request_id
+                            ).request_fingerprint,
+                        }
         observed_at = response.get("observed_at")
         completed: list[tuple[WorkLease, object]] = []
         not_requested: list[WorkLease] = []
@@ -528,7 +650,7 @@ class ReverseGeocodeProducer:
             if all(
                 component.get("status") == "not_requested"
                 for component in subject_components.values()
-            ):
+            ) and response.get("outcome") not in {"indeterminate", "blocked"}:
                 not_requested.append(lease)
                 continue
             matching_attempts = tuple(
@@ -548,6 +670,14 @@ class ReverseGeocodeProducer:
                 (
                     lease,
                     {
+                        "geo_request_id": response["request_id"],
+                        "geo_authorizations": geo_authorizations,
+                        "geo_blocked": response.get("outcome")
+                        in {"indeterminate", "blocked"}
+                        and any(
+                            c["status"] not in {"success", "no_result"}
+                            for c in subject_components.values()
+                        ),
                         "authorization": {
                             **dict(authority),
                             "confirmed_logical_queries": batch.pending_query_count,
@@ -614,7 +744,7 @@ class ReverseGeocodeProducer:
             )
             if record.work_id not in selected_work_ids
             and record.spec.producer_identity
-            in {_LEGACY_PRODUCER, _REVERSE_ONLY_PRODUCER, _V3_PRODUCER}
+            in {_LEGACY_PRODUCER, _REVERSE_ONLY_PRODUCER, _V3_PRODUCER, _PRODUCER}
             and record.status is not WorkStatus.RUNNING
         )
         self.work.detach_run_work(run_id, superseded)
@@ -1133,7 +1263,8 @@ def _tool_observations(
     )
     provider_request_count = (
         None
-        if result_status == "indeterminate" and not attempts
+        if (result_status == "indeterminate" and not attempts)
+        or any(a.get("request_count_kind", "exact") != "exact" for a in attempts)
         else sum(int(item.get("provider_requests", 0)) for item in attempts)
     )
     observed_at_value = str(observed_at or "unknown")
@@ -1217,6 +1348,10 @@ def _tool_observations(
                 }
             )
     result_value = {
+        "component_observed_at": {
+            key: component.get("observed_at", observed_at_value)
+            for key, component in components.items()
+        },
         "component_qualifications": {
             key: list(component.get("qualifications", ()))
             for key, component in components.items()
@@ -1489,7 +1624,9 @@ def normalize_geo_observations(
         basis = {"summary": f"{operation}: {outcome}", "outcome": outcome}
         if result.get("input_coordinate"):
             basis["query_coordinate"] = result["input_coordinate"]
-        observed_at = result.get("observed_at", provenance.get("observed_at"))
+        observed_at = result.get("component_observed_at", {}).get(
+            operation, result.get("observed_at", provenance.get("observed_at"))
+        )
         if observed_at and observed_at != "unknown":
             basis["observed_at"] = observed_at
         if producer.get("profile"):

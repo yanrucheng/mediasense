@@ -970,29 +970,54 @@ def _external_effect_boundary(
                 )
             providers.update(result_providers)
         origin = "current" if run_ref in public_run_refs else "historical"
-        if origin == "current":
-            current_requests += request_count or 0
-            current_unknown |= request_count is None
-        else:
-            historical_requests += request_count or 0
-            historical_unknown |= request_count is None
+        history = output.get("geo_authorizations", {})
+        attempts = result.get("attempts", ())
+        split_origins = bool(attempts) and all(
+            a.get("execution_request_id") in history for a in attempts
+        )
+        if not split_origins:
+            if origin == "current":
+                current_requests += request_count or 0
+                current_unknown |= request_count is None
+            else:
+                historical_requests += request_count or 0
+                historical_unknown |= request_count is None
         source_refs = sorted(
             result_local_reference("source-item", run_id, path)
             for path, row in by_source.items()
             if row["work_id"] == work["work_id"]
         )
-        for attempt in result.get("attempts", ()):
+        for attempt in attempts:
+            attempt_origin = origin
+            attempt_count = (
+                attempt.get("provider_requests")
+                if attempt.get("request_count_kind", "exact") == "exact"
+                else None
+            )
+            if split_origins:
+                proof = history[attempt["execution_request_id"]]
+                attempt_origin = (
+                    "current" if proof["run_ref"] in public_run_refs else "historical"
+                )
+                authorizations[(proof["run_ref"], proof["pending_fingerprint"])] = proof
+                if attempt_origin == "current":
+                    current_requests += attempt_count or 0
+                    current_unknown |= attempt_count is None
+                else:
+                    historical_requests += attempt_count or 0
+                    historical_unknown |= attempt_count is None
             audit_attempts.append(
                 {
-                    "origin": origin,
+                    "origin": attempt_origin,
                     "provider": attempt["provider"],
                     "operation": attempt.get("operation", "reverse_geocode"),
                     "status": attempt["status"],
                     "input_coordinate": result["input_coordinate"],
-                    "provider_requests": attempt.get("provider_requests"),
+                    "provider_requests": attempt_count,
                     "billable_units": attempt.get("billable_units"),
-                    "observed_at": result.get("observed_at")
-                    if result.get("observed_at") != "unknown"
+                    "observed_at": attempt.get("observed_at", result.get("observed_at"))
+                    if attempt.get("observed_at", result.get("observed_at"))
+                    != "unknown"
                     else None,
                     "source_set": {"kind": "explicit", "source_item_refs": source_refs},
                     **(

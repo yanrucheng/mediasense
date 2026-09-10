@@ -6,6 +6,37 @@ Versioning, with documented breaking changes permitted in minor releases before
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-09-10
+
+### Changed
+
+- Geo routes from offline target-location evidence: mainland locations use AMap;
+  overseas locations use Google. Provider reachability does not imply regional
+  suitability. Boundary-near locations produce an explicit unresolved route.
+- Provider/network prerequisites and exhausted execution budgets block PreCheck
+  while retaining progress. Proven point-specific failures remain local outcomes.
+- Repeatable map queries may retry classified transient transport failures within
+  a finite authorized cycle. Prior unknown effects and charges remain unknown.
+- Explicit Geo recovery and the existing PreCheck confirmation/resume path retain
+  successful components, continue missing evidence, and share a cumulative budget.
+  Replay sends no requests; changing request IDs cannot reuse one consumed grant.
+- Geo journal v2 checkpoints reservations/results and rejects legacy writers.
+  Dataset, PreCheck, Plan, Apply and Result format versions are unchanged.
+- HTTP(S) Proxy, NO_PROXY, CA and timing configuration reaches the production Host;
+  profile changes require matching authorization. Diagnostics redact credentials.
+
+### Distribution and limits
+
+- CLI/MCP and all four packaged Skills use the 0.10 release line. Install all from
+  the same verified wheel; project Skills and lock remain managed through `npx skills`.
+- Natural Earth 5.1.1 routing geometry is bundled with source hashes, provenance
+  and public-domain notice. Its 500 m guard does not certify boundary accuracy;
+  coastal, reclaimed and disputed areas may require better evidence.
+- Synthetic transport/legacy accounting and isolated installed-entry validation
+  do not certify live China/overseas network availability, provider billing,
+  model quality, or real-Dataset throughput. This release work does not resume the
+  blocked business Run or change its old Result.
+
 ## [0.9.0] - 2026-09-10
 
 ### Changed

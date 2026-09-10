@@ -53,3 +53,56 @@ class OrderedGeoRoutingPolicy:
     ) -> GeoRouteContext:
         del request
         return GeoRouteContext(execution.attempt.provider, context.locale)
+
+
+@dataclass(frozen=True, slots=True)
+class RegionalGeoRoutingPolicy:
+    """Use suitable services directly; reachability is not geographic evidence."""
+
+    def routes(self, request, context, providers):
+        del context
+        operation = provider_operation(request)
+        available = {p.provider_id for p in providers if operation in p.operations}
+        wanted = {
+            provider
+            for item in self.disclosure(request, providers)
+            for provider in item["provider_order"]
+        }
+        return tuple(
+            p for p in ("amap", "google_maps") if p in wanted and p in available
+        )
+
+    def disclosure(self, request, providers):
+        from .regions import service_region, BOUNDARY_SHA256, BOUNDARY_GUARD_METERS
+
+        available = {
+            p.provider_id
+            for p in providers
+            if provider_operation(request) in p.operations
+        }
+        coordinates = sorted(
+            {s.coordinate for s in request.subjects},
+            key=lambda c: (c.latitude, c.longitude, c.datum.value),
+        )
+        result = []
+        for coordinate in coordinates:
+            region = service_region(coordinate)
+            wanted = {
+                "mainland": ("amap",),
+                "overseas": ("google_maps",),
+                "uncertain": (),
+            }[region]
+            result.append(
+                {
+                    "coordinate": coordinate.value(),
+                    "region": region,
+                    "provider_order": [p for p in wanted if p in available],
+                    "required_provider": wanted[0] if wanted else None,
+                    "basis": f"Natural Earth 5.1.1 WGS84; sha256:{BOUNDARY_SHA256}; boundary guard {BOUNDARY_GUARD_METERS} m",
+                }
+            )
+        return result
+
+    def observe(self, request, context, execution):
+        # A prior point's successful provider never determines the next point.
+        return context

@@ -42,7 +42,7 @@ The three durable handoff roles are the precheck result, the frozen organization
 
 The [PreCheck evidence-delivery contract](docs/spec/contract/precheck-read/index.md) and its production implementation have passed milestone-one and milestone-two acceptance, including the metadata, historical-detection, and pagination corrections. The [capability ledger](docs/eval/eval-260823-1918-ai-album-migration-baseline/eval-260823-1918B-capability-ledger.md) retains the exact evidence and certification limits.
 
-The `0.9.0` distribution provides the installed `mediasense` executable, portable-
+The `0.10.0` distribution provides the installed `mediasense` executable, portable-
 first Dataset discovery, one local composition root, a packaged product entry
 Skill and three stage Skills, Tool contracts, and an on-demand stdio MCP Host.
 `mediasense mcp` is part of that same
@@ -58,7 +58,7 @@ items remain local failures with continuation to later items. Photographic metad
 ordinary/high-resolution renditions, video and Geo evidence, and optional local
 sensitivity signals are delivered through the installed Host. MCP returns one
 `structuredContent` result with empty `content`. Upgrade the CLI and all four Skills
-together; 0.8 clients are incompatible. See the [0.9.0 release notes](CHANGELOG.md)
+together; 0.8 clients are incompatible. Geo recovery and target-region routing are added in 0.10.0. See the [release notes](CHANGELOG.md)
 and [upgrade steps](readme/installation.md#upgrade-and-rollback), then start a
 new Agent session.
 

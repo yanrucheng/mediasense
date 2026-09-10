@@ -28,6 +28,7 @@ class GeoOutcome(StrEnum):
     NO_RESULT = "no_result"
     AUTHORIZATION_REQUIRED = "authorization_required"
     UNAVAILABLE = "unavailable"
+    BLOCKED = "blocked"
     FAILED = "failed"
     INDETERMINATE = "indeterminate"
     CANCELLED = "cancelled"
@@ -55,10 +56,18 @@ class GeoLookupError(RuntimeError):
     """Base error for one provider attempt."""
 
     def __init__(
-        self, message: str, *, request_count: int = 0, safe_to_retry: bool = False
+        self,
+        message: str,
+        *,
+        request_count: int = 0,
+        safe_to_retry: bool = False,
+        failure_code: str | None = None,
+        retry_after: float | None = None,
     ) -> None:
         self.request_count = request_count
         self.safe_to_retry = safe_to_retry
+        self.failure_code = failure_code
+        self.retry_after = retry_after
         super().__init__(message)
 
 
@@ -106,6 +115,8 @@ class GeoCoordinate:
     datum: MapDatum = MapDatum.WGS84
 
     def __post_init__(self) -> None:
+        object.__setattr__(self, "latitude", float(self.latitude))
+        object.__setattr__(self, "longitude", float(self.longitude))
         object.__setattr__(self, "datum", MapDatum(self.datum))
         if not -90 <= self.latitude <= 90:
             raise ValueError("latitude must be between -90 and 90")
@@ -214,6 +225,10 @@ class GeoEffectEnvelope:
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "retention", GeoRetention(self.retention))
+        object.__setattr__(self, "allowed_providers", tuple(self.allowed_providers))
+        object.__setattr__(
+            self, "allowed_data_classes", tuple(self.allowed_data_classes)
+        )
         if not self.allowed_providers:
             raise ValueError("allowed_providers must be non-empty")
         if len(set(self.allowed_providers)) != len(self.allowed_providers):
@@ -419,6 +434,7 @@ class GeoComponentResult:
     coordinate: GeoCoordinate
     candidates: tuple[GeoCandidate, ...] = ()
     qualifications: tuple[Mapping[str, str], ...] = ()
+    observed_at: str | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "operation", GeoOperation(self.operation))
@@ -431,7 +447,7 @@ class GeoComponentResult:
             raise ValueError("an unrequested component cannot contain candidates")
 
     def value(self) -> dict[str, object]:
-        return {
+        value = {
             "operation": self.operation.value,
             "status": self.status.value,
             "subject_refs": list(self.subject_refs),
@@ -439,6 +455,9 @@ class GeoComponentResult:
             "candidates": [candidate.value() for candidate in self.candidates],
             "qualifications": [dict(item) for item in self.qualifications],
         }
+        if self.observed_at is not None:
+            value["observed_at"] = self.observed_at
+        return value
 
 
 @dataclass(frozen=True, slots=True)
@@ -447,23 +466,34 @@ class GeoProviderAttempt:
     operation: GeoOperation
     status: GeoComponentStatus
     input_coordinate: GeoCoordinate
-    provider_coordinate: GeoCoordinate
+    provider_coordinate: GeoCoordinate | None
     provider_requests: int
     billable_units: int | None
     error_code: str | None = None
     error_message: str | None = None
+    retry_after_seconds: float | None = None
+    request_count_kind: str = "exact"
+    execution_request_id: str | None = None
+    observed_at: str | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "operation", GeoOperation(self.operation))
         object.__setattr__(self, "status", GeoComponentStatus(self.status))
         if not self.provider or self.provider.isspace():
             raise ValueError("provider must be non-empty")
+        if self.request_count_kind not in {"exact", "reserved_upper_bound"}:
+            raise ValueError("invalid request count kind")
         if self.provider_requests < 0:
             raise ValueError("provider_requests cannot be negative")
         if self.billable_units is not None and self.billable_units < 0:
             raise ValueError("billable_units cannot be negative")
         if self.status is GeoComponentStatus.NOT_REQUESTED:
             raise ValueError("a provider attempt cannot be not_requested")
+        if self.retry_after_seconds is not None:
+            from math import isfinite
+
+            if not isfinite(self.retry_after_seconds) or self.retry_after_seconds < 0:
+                raise ValueError("retry_after_seconds must be finite and nonnegative")
 
     def value(self) -> dict[str, object]:
         value: dict[str, object] = {
@@ -471,7 +501,9 @@ class GeoProviderAttempt:
             "operation": self.operation.value,
             "status": self.status.value,
             "input_coordinate": self.input_coordinate.value(),
-            "provider_coordinate": self.provider_coordinate.value(),
+            "provider_coordinate": self.provider_coordinate.value()
+            if self.provider_coordinate
+            else None,
             "provider_requests": self.provider_requests,
             "billable_units": self.billable_units,
         }
@@ -479,6 +511,14 @@ class GeoProviderAttempt:
             value["error_code"] = self.error_code
         if self.error_message is not None:
             value["error_message"] = self.error_message
+        if self.retry_after_seconds is not None:
+            value["retry_after_seconds"] = self.retry_after_seconds
+        if self.request_count_kind != "exact":
+            value["request_count_kind"] = self.request_count_kind
+        if self.execution_request_id is not None:
+            value["execution_request_id"] = self.execution_request_id
+        if self.observed_at is not None:
+            value["observed_at"] = self.observed_at
         return value
 
 
@@ -489,6 +529,7 @@ class GeoEffects:
     billable_units: int | None
     transmitted_data_classes: tuple[str, ...]
     providers_attempted: tuple[str, ...]
+    provider_requests_upper_bound: int | None = None
 
     def __post_init__(self) -> None:
         if self.logical_queries < 0:
@@ -499,13 +540,16 @@ class GeoEffects:
             raise ValueError("billable_units cannot be negative")
 
     def value(self) -> dict[str, object]:
-        return {
+        value = {
             "logical_queries": self.logical_queries,
             "provider_requests": self.provider_requests,
             "billable_units": self.billable_units,
             "transmitted_data_classes": list(self.transmitted_data_classes),
             "providers_attempted": list(self.providers_attempted),
         }
+        if self.provider_requests_upper_bound is not None:
+            value["provider_requests_upper_bound"] = self.provider_requests_upper_bound
+        return value
 
 
 @dataclass(frozen=True, slots=True)
@@ -540,6 +584,8 @@ class GeoCapabilityResult:
     qualifications: tuple[Mapping[str, str], ...] = ()
     required_authorization: GeoEffectEnvelope | None = None
     route_context: GeoRouteContext = GeoRouteContext()
+    execution_profile: Mapping | None = None
+    routing: tuple[Mapping, ...] = ()
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "operation", GeoOperation(self.operation))
@@ -578,6 +624,10 @@ class GeoCapabilityResult:
             "qualifications": [dict(item) for item in self.qualifications],
             "route_context": self.route_context.value(),
         }
+        if self.routing:
+            value["routing"] = list(self.routing)
+        if self.execution_profile is not None:
+            value["execution_profile"] = dict(self.execution_profile)
         if self.required_authorization is not None:
             value["required_authorization"] = self.required_authorization.value()
         return value

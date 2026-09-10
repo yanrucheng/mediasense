@@ -239,6 +239,90 @@ Geo 针对性判断：保留 `bundle-stationary-complete-link-v1`，没有把其
 
 同日按用户确认的收尾条件完成 M1：状态／值校验只检查正式 observations 容器，合法嵌套扩展按普通数据保留，非法 Observation 仍被拒绝。相关合约检查192项通过；本次未修改主体契约或运行时代码，未开展模型、地图或真实数据验收。
 
+## 2026-09-10：实际 Geo indeterminate 阻塞诊断（未实施恢复）
+
+本次是在M2验收后的业务实验中发现运行品质/恢复缺口，不改写原受控验收结果。源码HEAD `6037952`，相关Geo/PreCheck/runtime文件与实际0.9.0安装相同。对用户指定cmux业务surface及确切Dataset的两份SQLite只读核对：Run `precheck-run:ea216eded808430ead13f6afef40420d` 在 `dataset:6581e19d4fe94e26a10e2f5ca1b34c9b` 中仍blocked，无本次Result。
+
+实际保留：114条历史Geo复用；获授权的54个逻辑查询中42个两组件成功、1个地址成功而附近结果不明、11个未请求。journal保留86条Google请求尝试（43地址成功、42附近成功、1附近indeterminate），billable_units=null。重建原request及授权envelope与持久化的两份指纹完全匹配，上限486、允许未知计费；400余量只是原授权范围下的算术，不能自动扩展为新的未知效果重试权。
+
+当前transport只留下通用错误，无法确认timeout、proxy、TLS或其它原因。原业务Host进程无HTTP/HTTPS/ALL proxy与CA覆盖变量，父Agent的NO_PROXY未传入；当前系统proxy enable flags均0。此证据证明不能假定父shell/Agent网络设置已进Host，但不证明缺代理造成这次故障。未进行连接探测或地图请求。
+
+用户已进一步确认目标：先根据素材中的目标地点选择适用服务，再考虑当前网络可达性。内地地点优先高德等适合内地地址/POI的服务，尽量不先调用Google；海外地点需要当地适用服务，如果网络不可达且没有能满足需求的替代，保存成果并暂停，让用户决定Proxy、网络或其它方式。AI Album的ConnectTimeout回退是有价值的机制证据，但只有替代服务对目标地点/组件适用时才能采用；不能因为高德已获授权或能够连接就将海外查询全部切过去。此前笼统“Google超时→高德→失败则记缺口继续”的推荐撤回，不作为迁移完成标准。
+
+当前业务故障仍只能证明附近接口在42次成功后发生一次通用传输失败，不能断言内地无代理。根据已确认目标，下一阶段业务决策已足够明确，工程计划用“内地首选服务正确、海外服务不可用必暂停、局部有效失败可继续、恢复不丢成果/费用”作为评价条件；待实施的合约补充不等于已经改变当前有效合约。
+
+方案及具体代码/测试证据见[Geo业务阻塞诊断与恢复方案](../../design/design-260910-1726-geo-recovery.md)。诊断及计划阶段该文档状态为review，收敛了7步实施顺序与安装入口验收场景，当时公共合约未改。用户随后授权开发，最新状态见下方开发进展；原诊断判断和证据保留：
+
+| 能力／运行品质 | 本轮分类 | 证据与完成边界 |
+| --- | --- | --- |
+| Google/AMap请求、datum转换、3/15秒默认timeout、0.3秒限速、AMap暂态infocode | `preserved` | 相关适配能力存在；本批仅实际调用Google。不同网络、proxy/CA和服务商真实表现未由一次成功批次认证 |
+| 10次固定间隔重试改为Tool内3次/1、3秒/120秒并受授权上界限制 | `intentionally_changed` | 现有合成检查验证预算、停止和幂等；原费用未知继续保留，不恢复旧的无累计计费上限重试 |
+| ConnectTimeout分类及换Provider能力 | `regression`（本轮发现） | AI Album c90的GeoProcessor明确捕获ConnectTimeout换Provider；当前transport将一般连接timeout与响应未知合并，无法区分安全恢复与需保留未知的路径。安装版合成探针已证明分类差异；恢复旧回退能力须增加目标地域/组件适用约束，不能证明此次真实异常就是连接timeout |
+| 可配置timeout/provider路线及真实Host网络环境可观测性 | `regression`／`not_comparable` | 旧geo_config能调整timeout/限速/endpoint，新正常配置只有key变量名；requests→urllib的proxy/CA语义不是完全等价，且MCP环境边界是新的部署条件。须补安装入口验证，不能仅凭存在HTTP库宣称网络适应能力保留 |
+| 上一坐标推断provider/locale改为按坐标固定有效路由 | `intentionally_changed` | 生产OrderedGeoRoutingPolicy避免跨坐标隐藏状态；不能拿AdaptiveReverseGeocoder单独测试当作生产地域路由认证。用户已确认内地优先适用内地服务，海外必要服务不可达无替代则暂停；当前固定Google优先尚未满足，需要独立的地域/适用性和安装场景验证 |
+| 已成功地址在后续整组重试后丢失 | `regression`（本轮发现） | 安装版合成“地址成功→附近503→重复地址未知”返回地址candidates为空，违背现有成功组件保留保证；当前实际第43项的地址仍保留，不能混为同一故障 |
+| 原请求幂等、未知效果不自动重发、未知费用不记0 | `intentionally_changed` | journal和PreCheck符合现有合约；已有20项合成检查通过。相比旧系统吞错继续，效果诚实得到保持，但公开恢复出口缺失放大为全Run阻塞 |
+| 单点失败局部结束、继续后续查询与Result交付 | `regression`（运行品质缺口）；修复需合约审阅 | 旧metadata层可在Geo异常后继续，但可能丢地址/缓存成缺字段；新实现应保留组件/效果并增加公开恢复。仅孤立且有明确依据的地点级终结结果可继续；适用服务持续不可达无替代必须暂停，不能复制吞错、自动降级或擅改当前indeterminate阻断语义 |
+| HTTP级持久预算、跨恢复链防双发及旧批次恢复 | `not_comparable` | AI Album无相应授权/journal保证；当前仅整批admit/complete，无法证明崩溃中途的逐HTTP进度。拟扩展现有journal职责，尚未实施或认证 |
+
+本轮运行已有相关合成检查 **20 passed，2.65s**，日志 `/tmp/mediasense-geo-diagnosis-existing-tests.log`；安装版纯合成传输和成功候选探针 `/tmp/mediasense-geo-diagnosis/synthetic-probes.json`；授权指纹核对 `/tmp/mediasense-geo-diagnosis/authority-verification.json`。没有重跑模型、读取fixture媒体、调用地图、恢复Run或修改业务数据库；真实网络根因、实际费用、尚未实现的恢复流程及跨平台网络能力均未认证。
+
+### Geo 恢复开发进展（2026-09-10；尚未形成可安装交付）
+
+用户已批准按既定业务目标直接开发。起点仍为 `6037952`；同工作区另有独立模型评测改动，未纳入本次 Geo 工作。本节不覆盖 M2 的既有验收或 0.9.0 wheel 哈希，也不将源码检查算作安装入口验收。
+
+已实现的源码范围：
+
+- Geo 成功/no_result 组件保留，Google 只补缺失组件；历史 attempt、未知费用和组件原观察时间在恢复后保留。新的确定暂态传输分类在可重复 Provider、有限周期和累计预算内重试；鉴权/配置、持续服务不可用和额度条件返回 blocked，明确地点级失败仍可继续。
+- 同一 Geo Tool 增加显式关联 recovery，原请求重放不发 HTTP，恢复链唯一后继且累计额度不重置；同一已消费授权不能通过换 request_id 再取得一份额度。
+- 原 Geo journal 演进至内部 v2：逐操作发送前预留、返回后保存、OS 执行所有权锁、已完成响应不可覆盖；已保存 checkpoint 可本地恢复，只有预留的部分保留未知及上界。新写入守卫同时阻止迁移前已打开的旧连接写入。无关 store 与 Result 格式未升版。
+- PreCheck 利用现有 confirmation/resume 接通恢复，恢复响应先入 journal，再投影后继 Work；投影异常后只重放本地响应，旧 Work 输出保留。尝试的执行归属用于区分历史与本次费用。缺少 Provider 变为可解释 blocked，无完成 Result。
+- 实际 transport 接入 HTTP(S) Proxy、ALL_PROXY 回补、NO_PROXY、CA bundle 和可调 timeout/限速；配置只展示脱敏接收位置与 `not_checked`，不声称可达。网络 profile 参与授权身份，文件设置可在暂停后的 resume 更新。当前合约、发布 schema 源、PreCheck Skill 说明和安装开发说明同步，尚未构建新发布包。
+
+当前源码与受控证据：
+
+- 最终 Geo/PreCheck 重点检查 **108 passed，26.97 s**：`/tmp/mediasense-geo-final-focused.log`。覆盖正常首项→中间地址保留/附近未知→后项未查→明确确认→恢复投影中断→零 HTTP 重放、未知费用、累计请求、原观察时间、授权复用拒绝、旧无 checkpoint 未知记录与旧写入拒绝。
+- 4 项真实 loopback HTTP 检查 **4 passed，0.14 s**。测试仅使用自建 `127.0.0.1` 服务，验证 Proxy、NO_PROXY、429/Retry-After、实际超时及脱敏。默认沙箱中的组合执行因禁止 bind 报 4 个 PermissionError；随后仅对这 4 项申请本机监听权限并通过，不能把沙箱失败记成产品网络故障。
+- 默认全套第一次记录为 **855 passed，5 failed，16 deselected**：4 个上述 bind 限制，1 个旧用例仍要求“未配置 Provider=failed”；按用户已批准的“配置前提可恢复阻塞”语义修正为 blocked 后，相关编排回归通过。随后重跑默认源码套件（仅将上述4项 loopback 独立运行）得到 **857 passed，16 deselected，89.52 s**，日志 `/tmp/mediasense-geo-final-suite.log`；另4项已在允许本机监听的受控运行中通过。原失败日志 `/tmp/mediasense-geo-full-tests.log` 保留。
+- `ruff check` 与 `git diff --check` 通过。开发 `.venv` 原包元数据仍为0.8.0，已仅用离线缓存重新安装本仓库 editable 元数据为当前0.9.0；没有升级实际 uv tool CLI/MCP 环境。
+
+**开放门槛没有关闭**：可靠离线地域资源尚缺，拟使用 Natural Earth 1:10m Admin-0 Countries 公共领域数据，网络下载授权仍待答复；没有下载，也没有用粗框替代。生产路由当前仍是旧顺序，尚不能认证“内地直接高德、海外不向不适用高德回退”。地域边界/港澳场景、完整114复用＋54查询形状、真实进程终止/并发压力、最终 wheel 的 CLI/MCP 与受控 TLS/Proxy 恢复、四个项目 Skill/lock 一致性均仍需完成。源码组件存在及本节检查不能替代这些门槛。
+
+本次没有恢复业务 Run、访问地图、运行模型、下载模型或数据、读取真实媒体、改写旧 Result、安装全局 Skill、升级实际业务环境或推送提交。当前工作保留为开发改动；完成地域与安装门槛后才可交付新版本。
+
+### 0.10.0 Geo 恢复交付（2026-09-10；隔离安装通过，真实业务未恢复）
+
+本节是上述开发记录的后续完成证据。用户随后明确允许继续及下载地域资源；未增加平行台账。当前源码仍从 `6037952` 开始，保留无关模型评测改动。主体 Source Item/Evidence/Observation 模型与 Read 主体协议未重设计；当前 Geo/Run 披露扩展只在 `docs/spec/contract/` 定义并同步打包副本及 Skill 引用。0.9.0 和全部 M1/M2 历史证据、包哈希保留。
+
+| 目标与迁移判断 | 最终实现和证据 | 保留的边界 |
+| --- | --- | --- |
+| 地域适用性 `intentionally_changed`；修复旧固定Google优先的运行品质缺口 | Natural Earth 5.1.1 WGS84几何随包分发，按坐标分别路由；内地高德，海外Google。安装版内地Google请求0；只有高德配置的香港输入在零请求下blocked；混合、乱序、GCJ02、香港、澳门、台湾及边界用例通过 | 不把服务路由标签作为法律归属；边界/海岸500米保守带返回uncertain，填海、岛屿、争议范围和资源实际精度未作业务认证 |
+| 网络环境、超时和错误分类 `preserved` / `intentionally_changed` | 生产Host接入HTTP(S) Proxy、ALL_PROXY回补、NO_PROXY、CA和timeout/限速；实际本机HTTP验证代理、绕过、429/Retry-After和超时。未知HTTP/JSON响应不会作为地点无结果封存；服务故障在有限次数内阻塞 | 无SOCKS原生支持，不关闭TLS校验，不发线上探测；仍不能据新分类倒推本次历史故障的具体原因 |
+| 已成功组件保留 `regression` 已在所述受控链路修复 | 地址及原观察时间保留，Google仅补未完成组件；旧Work和旧Result字节不变；未知效果与费用不变成0 | 实际地图内容、地点准确性和费用仍须独立核对 |
+| 公开恢复与累计预算 `intentionally_changed` | Geo关联recovery只有一个后继，原请求重放零HTTP，换request_id不能重复使用同一已消费授权；PreCheck blocked时resume不带decision准备确认，paused时proceed才授权。网络profile变化重新绑定确认；逐HTTP预算预留及已完成响应不可覆盖 | 不自动扩大预算/Provider/数据范围；不可证明旧授权或成本上界时拒绝自动恢复 |
+| 进程中断及投影 `not_comparable`（旧系统无此保证） | 5项真实测试子进程kill覆盖发送前、发送后、写execution前、complete前和Work投影中断；OS锁释放后重放已保存证据，原未知预留保留。v2投影owner可证明消失后回收其lease；legacy lease保留原TTL。旧已打开连接也不能写v2 Geo journal | 不声称跨平台网络/文件系统或长时间压力测试已通过 |
+| 安装入口及结果交付 `implemented`（下述范围） | 最终wheel实际CLI doctor、7个Tool发现、MCP确认、阻塞、配置切换、恢复和Read均通过。114历史复用＋54新查询的合成旧版0.9账本：原86，新增23，累计109；Read分别报告历史228/本次109，费用null | 没有恢复真实Run、重跑模型/真实Dataset或扩展Apply审计 |
+
+**最终包**：`dist/mediasense-0.10.0-py3-none-any.whl`，SHA-256 **`f4e4ee4454ebb95c7eca7b87abc004eb7ac1fe6b78411c184b89ad9842c26f1e`**。包元数据、uv.lock项目版本及四个Skill的兼容声明均为0.10版本线；仅Geo journal内部版本从1升2，Dataset manifest3、PreCheck17、Plan3、Apply2和Result格式未随应用升版。
+
+验证记录：
+
+- 最终源码默认套件：**879 passed，16 deselected，101.88 s**，仅将4项需监听的loopback测试单独放在安装回归运行；`/tmp/mediasense-0.10.0-final-verified-suite.log`。local_fixture/scale不计本次认证。
+- Python **3.13.5** 隔离安装最终wheel，保留实际0.9.0环境全部 **53项依赖版本**，包括torch2.13.0/transformers4.57.6；没有加载模型或下载依赖/权重。安装路径 `/tmp/mediasense-0.10.0-production-profile/`，日志 `/tmp/mediasense-0.10.0-production-install.log`。
+- 禁用源码pythonpath、用上述安装Python在/tmp运行Geo区域/恢复/硬进程kill、本机HTTP及M2 Read边界回归：**67 passed，41.91 s**。日志 `/tmp/mediasense-0.10.0-final-verified-installed.log`；显式关闭可选pytest缓存，安装回归没有warning。
+- 最终真实安装MCP脚本 `tests/run_geo_recovery_smoke.py` 通过。10个HTTP请求全部在自建127.0.0.1 TLS Proxy内终止，外部地图请求0；内地1次高德，海外故障周期6次Google，换Proxy并明确确认后只新增3次，Read累计9并保留3次indeterminate和费用null。缺海外Provider场景0请求/无Result。完整返回、确认文本和summary在 `/tmp/mediasense-0.10.0-final-verified-mcp/`，日志同名`.log`。
+- 现有离线发行脚本 `tests/run_distribution_smoke.py` 通过，日志 `/tmp/mediasense-0.10.0-final-verified-distribution.log`；`uv lock --check --offline`、ruff和diff空白检查通过。
+- 源码、最终wheel、Python3.13隔离安装的 **111个包文件逐字节一致**。四个Skill **11个文件**与wheel一致。`npx skills` **1.5.25**通过正常add入口在 `/tmp/mediasense-0.10.0-skill-project` 写入4个项目锁entry；显式Codex目标、四名allowlist、离线并关闭遥测。用该CLI的native localeCompare和SHA256(path+content)核对全部computedHash。锁记录相对的本地wheel解包来源，仅用于隔离验收，不声称远端托管恢复。
+- 汇总文件 `/tmp/mediasense-0.10.0-verification.json`；Skill锁核对 `/tmp/mediasense-0.10.0-skill-lock-verification.json`；原始安装日志 `/tmp/mediasense-0.10.0-skills-install.log`。
+
+地域资源：获明确授权后下载 Natural Earth 1:10m Admin-0 Countries 5.1.1，原zip SHA-256 `ce1ac7036499a0edd641fbc093cd209a98f96a49d2eca8480aaacad35138a7f6`；核对官方public-domain条款。只提取CHN/HKG/MAC/TWN几何、不做简化，随包JSON342894字节、SHA-256 `25aca3d92c8b53faf03021601b344f58277577d71f6d63e3d55ea363ed6b257c`。可复现提取脚本 `scripts/build_geo_boundaries.py`，包内 `geo/NOTICE.md` 保存来源与精度限制。下载不含媒体、模型或坐标查询。
+
+最后的checkpoint反例还证明：已经成功解决的旧暂态错误不能把另一地点的明确局部失败变成全局阻塞。已改为按各组件最后一次尝试判断，并保留修复前后日志 `/tmp/mediasense-geo-checkpoint-{before,after}.log`。此前候选wheel SHA-256 `97c31937405931f021eec0c1d1c8f541292eada694dd8215b688572023eff6bd` 保存在 `/tmp/mediasense-0.10.0-candidate-97c3193/`，不是最终交付；其878项源码、66项安装和MCP记录保留，最终证据以上述新包复验为准。
+
+安装验收暴露并修复了两个源码单测未覆盖的接通缺口：Run确认schema未允许新增网络/路由字段、现代恢复链历史授权缺少原确认数量而被Result验证拒绝。现已在完整安装入口通过；历史失败日志 `/tmp/mediasense-geo-installed-smoke-{2,3,4}.log` 保留，其中第3次是测试客户端在尚无确认的blocked状态错误附带proceed，已按现有契约修正为先无decision恢复。另有默认沙箱禁止loopback bind和npm缓存访问的环境限制，经仅针对本机测试/离线安装的权限放行后通过；没有将它们当作实际地图根因。
+
+实际 `~/.local/bin/mediasense` 本次只读复查仍是 **0.9.0**。现用CLI/MCP、操作项目Skills/lock、Proxy配置、业务Dataset/Run和旧Result未改变；没有全局Skill安装、远程推送或release。0.10.0交付停在隔离验证与本地源码提交，实际切换及真实业务恢复按已确定的网络条件另行执行，当前主Agent未终止。
+
 ## Current MediaSense implementation status
 
 This table is deliberately narrower than the inventory above. A row marked `implemented` proves only the stated unit, not the whole legacy capability family or a complete PreCheck stage.

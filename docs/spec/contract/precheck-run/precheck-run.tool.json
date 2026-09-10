@@ -1379,6 +1379,213 @@
                 "const": 120
               }
             }
+          },
+          "execution_profile": {
+            "anyOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "identity",
+                  "proxy_receivers",
+                  "no_proxy_configured",
+                  "ca_source",
+                  "reachability",
+                  "tls_verification",
+                  "timing"
+                ],
+                "properties": {
+                  "identity": {
+                    "type": "string",
+                    "pattern": "^sha256:[0-9a-f]{64}$"
+                  },
+                  "proxy_receivers": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "no_proxy_configured": {
+                    "type": "boolean"
+                  },
+                  "ca_source": {
+                    "enum": [
+                      "system",
+                      "configured_bundle"
+                    ]
+                  },
+                  "reachability": {
+                    "const": "not_checked"
+                  },
+                  "tls_verification": {
+                    "const": true
+                  },
+                  "timing": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "number",
+                      "exclusiveMinimum": 0
+                    }
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "routing": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "coordinate",
+                "region",
+                "provider_order",
+                "required_provider",
+                "basis"
+              ],
+              "properties": {
+                "coordinate": {
+                  "$ref": "#/$defs/coordinate"
+                },
+                "region": {
+                  "enum": [
+                    "mainland",
+                    "overseas",
+                    "uncertain"
+                  ]
+                },
+                "provider_order": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "required_provider": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "basis": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "recovery_of": {
+            "type": "string",
+            "pattern": "^request:[^\\s]+$"
+          },
+          "recovery_accounting": {
+            "anyOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "root_request_id",
+                  "prior_request_id",
+                  "prior_provider_requests",
+                  "prior_provider_requests_upper_bound",
+                  "prior_billable_units",
+                  "cumulative_provider_request_ceiling",
+                  "remaining_provider_request_budget"
+                ],
+                "properties": {
+                  "root_request_id": {
+                    "type": "string"
+                  },
+                  "prior_request_id": {
+                    "type": "string"
+                  },
+                  "prior_provider_requests": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "minimum": 0
+                  },
+                  "prior_provider_requests_upper_bound": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "minimum": 0
+                  },
+                  "prior_billable_units": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "minimum": 0
+                  },
+                  "cumulative_provider_request_ceiling": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "remaining_provider_request_budget": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "minimum": 0
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "prior_provider_requests": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "prior_billable_units": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "cumulative_provider_request_ceiling": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "recovery_policy": {
+            "type": "string",
+            "minLength": 1
+          },
+          "original_logical_queries": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "pending_components": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "coordinate",
+                "operation"
+              ],
+              "properties": {
+                "coordinate": {
+                  "$ref": "#/$defs/coordinate"
+                },
+                "operation": {
+                  "enum": [
+                    "reverse_geocode",
+                    "nearby_places"
+                  ]
+                }
+              }
+            }
           }
         }
       },

@@ -351,7 +351,7 @@ execution_page 默认50/最大200，按原 durable attempt 顺序。每条 attem
 
 ## Geo 状态、历史和效果
 
-地址和附近地点的属性语义见[属性义务](precheck-attributes.md)，获取权限和请求上限见[Geo 合约](../geo-query/index.md)。success→available；no_result→missing；有限终结失败→failed；未请求→not_checked；无坐标→not_applicable。indeterminate 保留效果不确定限定并阻止自动续发，不伪装成普通缺地点。
+地址和附近地点的属性语义见[属性义务](precheck-attributes.md)，获取权限和请求上限见[Geo 合约](../geo-query/index.md)。success→available；no_result→missing；有限终结失败→failed；未请求→not_checked；无坐标→not_applicable。indeterminate 保留效果不确定限定，不伪装成普通缺地点；有限再试与显式恢复资格遵循 Geo D6。后继成功不消除历史未知 attempt 或费用，未解决服务前提的 Run 不发布本次 Result。
 
 缺坐标、no_result、已终结已知失败或策略未请求，均不单独阻止 Plan。尚在确认、执行或效果不确定不能假装终结。按坐标诊断仍保留逐组件 Source Item 数量和 candidate_evidence_refs，仅指真实候选。
 

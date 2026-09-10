@@ -27,6 +27,8 @@ class GeoProviderCapabilities:
     max_requests_per_operation: int = 1
     max_billable_units_per_operation: int | None = None
     operation_request_ceilings: tuple[tuple[GeoOperation, int], ...] = ()
+    independent_components: bool = False
+    repeatable_queries: bool = False
 
     def __post_init__(self) -> None:
         if not self.provider_id or self.provider_id.isspace():

@@ -125,7 +125,7 @@ def configured(tmp_path, script):
     "script,outcome,calls,delay",
     [
         (["transient", "transient", "success"], "success", 3, 4),
-        (["transient"], "failed", 3, 4),
+        (["transient"], "blocked", 3, 4),
         (["permanent"], "failed", 1, 0),
         (["no_result"], "no_result", 1, 0),
         (["indeterminate"], "indeterminate", 1, 0),
@@ -166,7 +166,7 @@ def test_retry_respects_smaller_authority_and_effective_profile(tmp_path):
     )
     public = {"request_id": "request:small", **request.value()}
     result = tool.handle(public, authorization=authorization)
-    assert result["outcome"] == "failed"
+    assert result["outcome"] == "blocked"
     assert provider.calls == 1
     changed = GeoQueryTool(
         GeoCapability(
@@ -176,7 +176,9 @@ def test_retry_respects_smaller_authority_and_effective_profile(tmp_path):
         ),
         tool.journal,
     )
-    assert changed.handle(public)["error"]["code"] == "idempotency_conflict"
+    assert (
+        changed.handle(public) == result
+    )  # replay retains the original effective profile
     assert provider.calls == 1
 
 
@@ -188,7 +190,7 @@ def test_retry_deadline_and_cancellation_stop_new_effects(tmp_path):
     result = capability.invoke(request, authorization=authorization)
     assert provider.calls == 1
     assert clock.now == pytest.approx(120)
-    assert result.outcome.value == "failed"
+    assert result.outcome.value == "blocked"
     clock.now = 0
     provider.calls = 0
     provider.elapsed_per_call = 0
@@ -275,10 +277,14 @@ def test_legacy_guessed_outcomes_are_not_independent_proof():
     "response,status",
     [
         ({"status": "1", "regeocode": {}}, "missing"),
-        ({"status": "0", "infocode": "10001", "info": "denied"}, "failed"),
+        ({"status": "0", "infocode": "10001", "info": "denied"}, "blocked"),
+        (
+            {"status": "0", "infocode": "20000", "info": "invalid point parameter"},
+            "failed",
+        ),
     ],
 )
-def test_whole_batch_without_provider_location_seals_and_enters_plan(
+def test_known_location_gap_can_enter_plan_but_provider_configuration_blocks(
     tmp_path, response, status
 ):
     from pathlib import Path
@@ -329,6 +335,11 @@ def test_whole_batch_without_provider_location_seals_and_enters_plan(
     assert not transport.gets
     _authorize(run, run_ref)
     completed = producer.produce(run_ref, run_id, [item.work_id for item in metadata])
+    if status == "blocked":
+        assert completed.status == "blocked"
+        assert len(transport.gets) == 1
+        assert all(o.work.output["geo_blocked"] for o in completed.outcomes)
+        return
     assert completed.status == "completed"
     assert len(transport.gets) == 1
 
@@ -803,11 +814,11 @@ def test_legal_historical_result_projects_gaps_without_changing_bytes(tmp_path):
 @pytest.mark.parametrize(
     "failure,expected,calls,requests",
     [
-        ("429", "failed", 3, 3),
-        ("503", "failed", 3, 3),
-        ("401", "failed", 1, 1),
-        ("connect", "failed", 3, 0),
-        ("timeout", "indeterminate", 1, 1),
+        ("429", "blocked", 3, 3),
+        ("503", "blocked", 3, 3),
+        ("401", "blocked", 1, 1),
+        ("connect", "blocked", 3, 0),
+        ("timeout", "blocked", 3, 3),
     ],
 )
 def test_real_http_adapter_classification_preserves_retry_and_billing_bounds(

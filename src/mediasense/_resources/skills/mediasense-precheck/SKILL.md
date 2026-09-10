@@ -13,7 +13,7 @@ goal.
 ## Tool Host prerequisite
 
 Proceed only when the current Honeycomb session exposes a compatible MediaSense
-`0.9.x` Tool Host and `mediasense.dataset.open`, `mediasense.precheck.run`,
+`0.10.x` Tool Host and `mediasense.dataset.open`, `mediasense.precheck.run`,
 `mediasense.precheck.read`, and `mediasense.geo.query` are discoverable. A CLI found in `PATH` or an MCP table
 present on disk is not sufficient. If the Host is absent or incompatible, stop
 PreCheck work and use the `mediasense` product entry Skill's local Honeycomb
@@ -206,8 +206,10 @@ deduplication is a final request defense, not a substitute for this media-aware
 step.
 
 Every Source Item has separate address_candidate and nearby_place_candidates
-Observations. Missing coordinates, no_result, known terminal service failure, and
-policy-disabled lookup do not alone block Plan, even if the whole collection lacks location.
+Observations. Missing coordinates, valid no_result, and proven location-specific
+terminal failures do not alone block Plan. A required provider being unreachable,
+misconfigured, or out of budget is a blocked acquisition condition; do not turn
+that condition into a completed collection with missing locations.
 The Tool owns finite authorized retries; do not resubmit terminal failures in an Agent loop.
 This does not require one
 Provider call per Source Item or per component. Pending confirmation, in-flight
@@ -215,6 +217,18 @@ acquisition, indeterminate effects, and invalid Result data still require their 
 proceed only if the returned confirmation identifies the exact bounded
 `mediasense.geo.query` request fingerprint and effect envelope; otherwise stop and
 surface the ambiguity.
+
+For Geo recovery, follow the current Geo contract's D6 through Run status,
+confirmation, and resume. Mainland target locations prefer an appropriate mainland
+provider; overseas targets require a suitable overseas service. If that service
+cannot be reached, preserve progress and let the user decide Proxy or network
+configuration. A reachable AMap is not by itself an overseas alternative. After
+the condition is addressed, call resume without a decision to prepare recovery.
+When the Run returns a paused confirmation, review its recovery disclosure: retained
+components, missing components, cumulative request ceiling, prior unknown effects,
+and actual proxy receivers. Proceed only through the trusted confirmation control.
+Do not clear Work/journals, invent a new root request ID, repeatedly resume an
+unchanged blocked condition, or report an old unknown charge as zero.
 
 1. Show the exact Tool-reported number of logical queries and the coordinate-only
    scope.

@@ -40,6 +40,14 @@
         "enum": ["none", "caller_state"],
         "default": "none"
       },
+      "recovery": {
+        "type": "object", "additionalProperties": false,
+        "required": ["prior_request_id", "result_digest"],
+        "properties": {
+          "prior_request_id": { "type": "string", "pattern": "^request:[^\\s]+$" },
+          "result_digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+        }
+      },
       "route_context": { "$ref": "#/$defs/route_context" }
     },
     "allOf": [
@@ -145,6 +153,7 @@
         "required": ["operation", "status", "subject_refs", "coordinate", "candidates", "qualifications"],
         "properties": {
           "operation": { "enum": ["reverse_geocode", "nearby_places"] },
+          "observed_at": { "type": "string", "format": "date-time" },
           "status": { "enum": ["success", "no_result", "failed", "indeterminate", "not_requested"] },
           "subject_refs": {
             "type": "array",
@@ -171,11 +180,15 @@
           "operation": { "enum": ["resolve_place", "reverse_geocode", "nearby_places"] },
           "status": { "enum": ["success", "no_result", "failed", "indeterminate"] },
           "input_coordinate": { "$ref": "#/$defs/coordinate" },
-          "provider_coordinate": { "$ref": "#/$defs/coordinate" },
+          "provider_coordinate": { "anyOf": [{ "$ref": "#/$defs/coordinate" }, { "type": "null" }] },
+          "request_count_kind": { "enum": ["exact", "reserved_upper_bound"], "default": "exact" },
+          "execution_request_id": { "type": "string", "pattern": "^request:[^\\s]+$" },
+          "observed_at": { "type": "string", "format": "date-time" },
           "provider_requests": { "type": "integer", "minimum": 0 },
           "billable_units": { "type": ["integer", "null"], "minimum": 0 },
           "error_code": { "type": "string" },
-          "error_message": { "type": "string" }
+          "error_message": { "type": "string" },
+          "retry_after_seconds": { "type": "number", "minimum": 0 }
         }
       },
       "effect_envelope": {
@@ -207,6 +220,7 @@
         "required": ["logical_queries", "provider_requests", "billable_units", "transmitted_data_classes", "providers_attempted"],
         "properties": {
           "logical_queries": { "type": "integer", "minimum": 0 },
+          "provider_requests_upper_bound": { "type": "integer", "minimum": 0 },
           "provider_requests": { "type": ["integer", "null"], "minimum": 0 },
           "billable_units": { "type": ["integer", "null"], "minimum": 0 },
           "transmitted_data_classes": {
@@ -246,7 +260,7 @@
         "properties": {
           "tool": { "const": "mediasense.geo.query" },
           "request_id": { "type": "string", "pattern": "^request:[^\\s]+$" },
-          "outcome": { "enum": ["success", "partial", "no_result", "authorization_required", "unavailable", "failed", "indeterminate", "cancelled"] },
+          "outcome": { "enum": ["success", "partial", "no_result", "authorization_required", "unavailable", "failed", "indeterminate", "cancelled", "blocked"] },
           "operation": { "enum": ["resolve_place", "reverse_geocode", "nearby_places"] },
           "request_fingerprint": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
           "components": { "type": "array", "items": { "$ref": "#/$defs/component" } },
@@ -256,6 +270,44 @@
           "observed_at": { "type": "string", "format": "date-time" },
           "qualifications": { "type": "array", "items": { "$ref": "#/$defs/qualification" } },
           "route_context": { "$ref": "#/$defs/route_context" },
+          "recovery": {
+            "type": "object", "additionalProperties": false,
+            "required": ["root_request_id", "prior_request_id", "prior_provider_requests", "prior_provider_requests_upper_bound", "prior_billable_units", "cumulative_provider_request_ceiling", "remaining_provider_request_budget"],
+            "properties": {
+              "root_request_id": {"type":"string"}, "prior_request_id": {"type":"string"},
+              "prior_provider_requests": {"type":["integer","null"],"minimum":0},
+              "prior_provider_requests_upper_bound": {"type":["integer","null"],"minimum":0},
+              "prior_billable_units": {"type":["integer","null"],"minimum":0},
+              "cumulative_provider_request_ceiling": {"type":"integer","minimum":1},
+              "remaining_provider_request_budget": {"type":["integer","null"],"minimum":0}
+            }
+          },
+          "routing": {
+            "type": "array", "items": {
+              "type": "object", "additionalProperties": false,
+              "required": ["coordinate", "region", "provider_order", "required_provider", "basis"],
+              "properties": {
+                "coordinate": { "$ref": "#/$defs/coordinate" },
+                "region": { "enum": ["mainland", "overseas", "uncertain"] },
+                "provider_order": { "type": "array", "items": { "type": "string" } },
+                "required_provider": { "type": ["string", "null"] },
+                "basis": { "type": "string" }
+              }
+            }
+          },
+          "execution_profile": {
+            "type": "object", "additionalProperties": false,
+            "required": ["identity", "proxy_receivers", "no_proxy_configured", "ca_source", "reachability", "tls_verification", "timing"],
+            "properties": {
+              "identity": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+              "proxy_receivers": { "type": "array", "items": { "type": "string" } },
+              "no_proxy_configured": { "type": "boolean" },
+              "ca_source": { "enum": ["system", "configured_bundle"] },
+              "reachability": { "const": "not_checked" },
+              "tls_verification": { "const": true },
+              "timing": { "type": "object", "additionalProperties": { "type": "number", "exclusiveMinimum": 0 } }
+            }
+          },
           "required_authorization": { "$ref": "#/$defs/effect_envelope" }
         },
         "allOf": [
@@ -282,7 +334,7 @@
             "additionalProperties": false,
             "required": ["code", "message"],
             "properties": {
-              "code": { "enum": ["invalid_request", "idempotency_conflict"] },
+              "code": { "enum": ["invalid_request", "idempotency_conflict", "request_not_found", "recovery_stale", "recovery_unavailable", "execution_in_progress"] },
               "message": { "type": "string", "minLength": 1 }
             }
           }

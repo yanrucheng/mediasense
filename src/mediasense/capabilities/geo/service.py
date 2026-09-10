@@ -23,10 +23,13 @@ from .model import (
     GeoRequest,
     GeoRetention,
     GeoRouteContext,
+    GeoSubject,
     RetryPolicy,
 )
-from .protocol import GeoProvider, GeoRoutingPolicy
+from .protocol import GeoProvider, GeoRoutingPolicy, GeoProviderExecution
 from .routing import provider_operation
+from .journal import GeoBudgetExhausted
+from ._execution_codec import component as decode_component, attempt as decode_attempt
 
 _EGRESS = ("coordinate", "datum", "locale")
 
@@ -40,12 +43,14 @@ class GeoCapability:
         routing: GeoRoutingPolicy,
         *,
         clock: Callable[[], datetime] | None = None,
+        execution_profile: Mapping | None = None,
         retry_policy: RetryPolicy = RetryPolicy(),
         monotonic: Callable[[], float] = time.monotonic,
         sleeper: Callable[[float], None] = time.sleep,
     ) -> None:
         if not providers:
             raise ValueError("at least one Geo provider is required")
+        self.execution_profile = dict(execution_profile) if execution_profile else None
         self.retry_policy = retry_policy
         self._monotonic = monotonic
         self._sleeper = sleeper
@@ -59,8 +64,13 @@ class GeoCapability:
     def fingerprint(self, request: GeoRequest) -> str:
         value = {
             "request": request.fingerprint(),
+            "execution_semantics": "component-recovery-v2",
             "retry_policy": self.retry_policy.value(),
         }
+        if self.routing_plan(request):
+            value["routing"] = self.routing_plan(request)
+        if self.execution_profile:
+            value["execution_profile"] = self.execution_profile
         return (
             "sha256:"
             + hashlib.sha256(
@@ -88,22 +98,25 @@ class GeoCapability:
         if not routes:
             raise ValueError("no configured provider supports the requested operation")
         operation = provider_operation(request)
-        max_requests = (
-            request.logical_query_count
-            * self.retry_policy.max_attempts
-            * sum(
-                self.providers[item].capabilities.request_ceiling(operation)
-                for item in routes
+        per_coordinate = [
+            self._routes(
+                replace(request, subjects=(GeoSubject(refs[0], coordinate),)),
+                request.route_context,
             )
+            for coordinate, refs in _coordinate_groups(request)
+        ]
+        max_requests = self.retry_policy.max_attempts * sum(
+            self.providers[item].capabilities.request_ceiling(operation)
+            for group in per_coordinate
+            for item in group
         )
         billable_ceilings = [
             self.providers[item].capabilities.max_billable_units_per_operation
-            for item in routes
+            for group in per_coordinate
+            for item in group
         ]
         max_billable_units = (
-            request.logical_query_count
-            * self.retry_policy.max_attempts
-            * sum(billable_ceilings)
+            self.retry_policy.max_attempts * sum(billable_ceilings)
             if all(item is not None for item in billable_ceilings)
             else None
         )
@@ -123,8 +136,12 @@ class GeoCapability:
         *,
         authorization: GeoAuthorization | None = None,
         cancelled: Callable[[], bool] | None = None,
+        execute: Callable[..., GeoProviderExecution] | None = None,
+        previous: Mapping | None = None,
     ) -> GeoCapabilityResult:
-        preflight = self.preflight(request, authorization=authorization)
+        preflight = self.preflight(
+            request, authorization=authorization, previous=previous
+        )
         if preflight is not None:
             return preflight
 
@@ -136,15 +153,22 @@ class GeoCapability:
         routes = tuple(item for item in available_routes if item in allowed)
 
         components: list[GeoComponentResult] = []
-        attempts = []
+        attempts = [decode_attempt(a) for a in previous["attempts"]] if previous else []
         current_context = route_context
-        request_count = 0
-        billable_units = 0
-        billable_known = True
+        request_count = previous["effects"]["provider_requests"] if previous else 0
+        if request_count is None:
+            request_count = previous["effects"].get("provider_requests_upper_bound")
+            if request_count is None:
+                raise ValueError("Cannot resume an unbounded cumulative request count")
+        billable_known = (
+            not previous or previous["effects"]["billable_units"] is not None
+        )
+        billable_units = (previous["effects"]["billable_units"] or 0) if previous else 0
         groups = _coordinate_groups(request)
         provider_op = provider_operation(request)
         component_operations = _component_operations(request)
         was_cancelled = False
+        blocked_code = None
 
         for index, (coordinate, subject_refs) in enumerate(groups):
             if cancelled is not None and cancelled():
@@ -165,17 +189,46 @@ class GeoCapability:
             # stable when callers reorder or extend a batch.
             query_context = route_context
             routes = tuple(
-                item for item in self._routes(request, query_context) if item in allowed
+                item
+                for item in self._routes(
+                    replace(
+                        request, subjects=(GeoSubject(subject_refs[0], coordinate),)
+                    ),
+                    query_context,
+                )
+                if item in allowed
             )
             selected: dict[GeoOperation, GeoComponentResult] = {}
+            if previous:
+                for raw in previous["components"]:
+                    if raw["coordinate"] == coordinate.value() and raw["status"] in {
+                        "success",
+                        "no_result",
+                    }:
+                        item = decode_component(raw)
+                        selected[item.operation] = item
+            if all(op in selected for op in component_operations):
+                components.extend(selected[op] for op in component_operations)
+                continue
             last: dict[GeoOperation, GeoComponentResult] = {}
             indeterminate = False
+            repeat_unknown = False
             stop_code = None
             deadline = self._monotonic() + self.retry_policy.coordinate_deadline_seconds
             for provider_id in routes:
                 for attempt_number in range(self.retry_policy.max_attempts):
                     provider = self.providers[provider_id]
-                    ceiling = provider.capabilities.request_ceiling(provider_op)
+                    missing = tuple(
+                        op for op in component_operations if op not in selected
+                    )
+                    execute_ops = (
+                        missing
+                        if provider.capabilities.independent_components
+                        else (provider_op,)
+                    )
+                    ceiling = sum(
+                        provider.capabilities.request_ceiling(op) for op in execute_ops
+                    )
                     if (
                         request_count + ceiling
                         > authorization.envelope.max_provider_requests
@@ -202,14 +255,42 @@ class GeoCapability:
                     if self._monotonic() >= deadline:
                         stop_code = "geo_deadline_exhausted"
                         break
-                    execution = provider.execute(
-                        provider_op,
-                        coordinate,
-                        locale=request.locale,
-                        radius_meters=request.radius_meters,
-                        max_places=request.max_places,
-                        deadline=deadline,
-                        cancelled=cancelled,
+                    pieces = []
+                    for execute_op in execute_ops:
+                        kwargs = dict(
+                            locale=request.locale,
+                            radius_meters=request.radius_meters,
+                            max_places=request.max_places,
+                            deadline=deadline,
+                            cancelled=cancelled,
+                        )
+                        try:
+                            piece = (
+                                provider.execute(execute_op, coordinate, **kwargs)
+                                if execute is None
+                                else execute(provider, execute_op, coordinate, **kwargs)
+                            )
+                        except GeoBudgetExhausted:
+                            stop_code = "geo_authority_exhausted"
+                            break
+                        pieces.append(piece)
+                        if any(
+                            c.status is GeoComponentStatus.INDETERMINATE
+                            for c in piece.components
+                        ):
+                            break
+                    if not pieces:
+                        break
+                    indeterminate = False
+                    all_components = tuple(
+                        c for piece in pieces for c in piece.components
+                    )
+                    all_attempts = tuple(a for piece in pieces for a in piece.attempts)
+                    execution = GeoProviderExecution(
+                        all_components[0],
+                        all_attempts[0],
+                        all_components[1:],
+                        all_attempts[1:],
                     )
                     execution_attempts = execution.attempts
                     if any(
@@ -266,7 +347,7 @@ class GeoCapability:
                         raise ValueError(
                             "provider returned an unexpected Geo component"
                         )
-                    for operation in component_operations:
+                    for operation in missing:
                         component = returned.get(operation)
                         if component is None:
                             component = GeoComponentResult(
@@ -283,34 +364,69 @@ class GeoCapability:
                                     },
                                 ),
                             )
-                        if component.status is GeoComponentStatus.SUCCESS:
+                        if component.status in {
+                            GeoComponentStatus.SUCCESS,
+                            GeoComponentStatus.NO_RESULT,
+                        }:
                             selected.setdefault(operation, component)
                         if component.status is GeoComponentStatus.INDETERMINATE:
-                            selected.pop(operation, None)
+                            # A later unobserved attempt does not revoke evidence
+                            # already obtained by an earlier successful request.
                             last[operation] = component
                             indeterminate = True
                         else:
-                            previous = last.get(operation)
-                            if previous is None or _component_rank(
+                            prior_component = last.get(operation)
+                            if prior_component is None or _component_rank(
                                 component
-                            ) >= _component_rank(previous):
+                            ) >= _component_rank(prior_component):
                                 last[operation] = component
-                    if indeterminate:
+                    repeat_unknown = provider.capabilities.repeatable_queries and all(
+                        a.error_code
+                        in {"transport_timeout", "connection_lost", "transport_unknown"}
+                        for a in execution_attempts
+                        if a.status is GeoComponentStatus.INDETERMINATE
+                    )
+                    if indeterminate and not repeat_unknown:
                         break
                     if all(operation in selected for operation in component_operations):
                         break
-                    retryable = any(
-                        attempt.error_code == "transient"
+                    retryable = (indeterminate and repeat_unknown) or any(
+                        attempt.error_code
+                        in {
+                            "transient",
+                            "rate_limited",
+                            "service_transient",
+                            "dns_failure",
+                            "connection_refused",
+                        }
                         and attempt.status is GeoComponentStatus.FAILED
                         for attempt in execution_attempts
                     )
                     if not retryable:
+                        if any(
+                            a.error_code
+                            in {
+                                "authentication",
+                                "tls_certificate",
+                                "tls_failure",
+                                "provider_quota",
+                                "provider_response_invalid",
+                            }
+                            for a in execution_attempts
+                        ):
+                            stop_code = "geo_provider_condition_unresolved"
                         break
                     if attempt_number + 1 == self.retry_policy.max_attempts:
                         stop_code = "geo_retry_exhausted"
                     if attempt_number + 1 < self.retry_policy.max_attempts:
                         if not self._wait(
-                            self.retry_policy.backoff_seconds[attempt_number],
+                            max(
+                                self.retry_policy.backoff_seconds[attempt_number],
+                                *(
+                                    a.retry_after_seconds or 0
+                                    for a in execution_attempts
+                                ),
+                            ),
                             deadline,
                             cancelled,
                         ):
@@ -322,7 +438,7 @@ class GeoCapability:
                             )
                             break
                 if (
-                    indeterminate
+                    (indeterminate and not repeat_unknown)
                     or was_cancelled
                     or all(op in selected for op in component_operations)
                 ):
@@ -361,6 +477,22 @@ class GeoCapability:
                     for component in coordinate_components
                 )
             components.extend(coordinate_components)
+            unresolved = any(
+                c.status
+                not in {GeoComponentStatus.SUCCESS, GeoComponentStatus.NO_RESULT}
+                for c in coordinate_components
+            )
+            if unresolved and stop_code is not None:
+                blocked_code = stop_code
+                components.extend(
+                    _unattempted_components(
+                        component_operations,
+                        groups[index + 1 :],
+                        stop_code,
+                        "The required provider or execution budget is unavailable; resolve this condition before continuing.",
+                    )
+                )
+                break
             if any(
                 component.status is GeoComponentStatus.INDETERMINATE
                 for component in coordinate_components
@@ -378,11 +510,14 @@ class GeoCapability:
         outcome = (
             GeoOutcome.CANCELLED
             if was_cancelled
+            else GeoOutcome.BLOCKED
+            if blocked_code
             else _overall_outcome(tuple(components))
         )
         continuations = (
             ()
-            if outcome in {GeoOutcome.CANCELLED, GeoOutcome.INDETERMINATE}
+            if outcome
+            in {GeoOutcome.CANCELLED, GeoOutcome.INDETERMINATE, GeoOutcome.BLOCKED}
             else _continuations(request, tuple(components))
         )
         return GeoCapabilityResult(
@@ -393,7 +528,12 @@ class GeoCapability:
             attempts=tuple(attempts),
             effects=GeoEffects(
                 logical_queries=request.logical_query_count,
-                provider_requests=request_count,
+                provider_requests=None
+                if any(a.request_count_kind != "exact" for a in attempts)
+                else request_count,
+                provider_requests_upper_bound=request_count
+                if any(a.request_count_kind != "exact" for a in attempts)
+                else None,
                 billable_units=billable_units if billable_known else None,
                 transmitted_data_classes=_EGRESS if request_count else (),
                 providers_attempted=tuple(attempt.provider for attempt in attempts),
@@ -401,6 +541,16 @@ class GeoCapability:
             continuations=continuations,
             observed_at=self._clock(),
             route_context=current_context,
+            execution_profile=self.execution_profile,
+            routing=self.routing_plan(request),
+            qualifications=(
+                {
+                    "code": blocked_code,
+                    "message": "Resolve the provider, network, or budget condition, then explicitly authorize recovery.",
+                },
+            )
+            if blocked_code
+            else (),
         )
 
     def preflight(
@@ -408,12 +558,31 @@ class GeoCapability:
         request: GeoRequest,
         *,
         authorization: GeoAuthorization | None = None,
+        previous: Mapping | None = None,
     ) -> GeoCapabilityResult | None:
         """Return a no-effect terminal result, or ``None`` when execution is allowed."""
 
         fingerprint = self.fingerprint(request)
         route_context = request.route_context
-        available_routes = self._routes(request, route_context)
+        execution_scope = remaining_request(request, previous) or request
+        available_routes = self._routes(execution_scope, route_context)
+        plan = self.routing_plan(execution_scope)
+        missing = [item for item in plan if not item["provider_order"]]
+        if missing:
+            uncertain = any(item["region"] == "uncertain" for item in missing)
+            return self._empty_result(
+                request,
+                GeoOutcome.UNAVAILABLE,
+                fingerprint,
+                route_context,
+                qualification=(
+                    "region_uncertain" if uncertain else "provider_unavailable",
+                    "The offline boundary cannot establish a suitable route for a boundary-near coordinate; inspect routing evidence before changing scope."
+                    if uncertain
+                    else "Configure the required service shown in routing evidence; a reachable service for another region is not an alternative.",
+                ),
+            )
+
         if not available_routes:
             return self._empty_result(
                 request,
@@ -425,7 +594,7 @@ class GeoCapability:
                     "No configured provider supports the requested operation.",
                 ),
             )
-        proposed = self.proposed_envelope(request)
+        proposed = self.proposed_envelope(execution_scope)
         if authorization is None:
             return self._empty_result(
                 request,
@@ -438,7 +607,17 @@ class GeoCapability:
                     "No provider request was sent.",
                 ),
             )
-        mismatch = self._authorization_mismatch(request, authorization, proposed)
+        mismatch = (
+            "authorization does not match the exact request"
+            if authorization.request_fingerprint != fingerprint
+            else self._authorization_mismatch(
+                execution_scope,
+                replace(
+                    authorization, request_fingerprint=self.fingerprint(execution_scope)
+                ),
+                proposed,
+            )
+        )
         if mismatch is not None:
             return self._empty_result(
                 request,
@@ -463,6 +642,18 @@ class GeoCapability:
                 ),
             )
         return None
+
+    def routing_plan(self, request):
+        disclosure = getattr(self.routing, "disclosure", None)
+        return (
+            tuple(
+                disclosure(
+                    request, tuple(p.capabilities for p in self.providers.values())
+                )
+            )
+            if disclosure
+            else ()
+        )
 
     def _routes(self, request: GeoRequest, context: GeoRouteContext) -> tuple[str, ...]:
         routes = self.routing.routes(
@@ -497,9 +688,23 @@ class GeoCapability:
         if not permitted:
             return "authorization permits no compatible provider"
         operation = provider_operation(request)
-        minimum_requests = request.logical_query_count * min(
-            self.providers[item].capabilities.request_ceiling(operation)
-            for item in permitted
+        coordinate_routes = [
+            set(
+                self._routes(
+                    replace(request, subjects=(GeoSubject(refs[0], coordinate),)),
+                    request.route_context,
+                )
+            ).intersection(permitted)
+            for coordinate, refs in _coordinate_groups(request)
+        ]
+        if any(not routes for routes in coordinate_routes):
+            return "authorization does not cover the suitable provider for every coordinate"
+        minimum_requests = sum(
+            min(
+                self.providers[item].capabilities.request_ceiling(operation)
+                for item in routes
+            )
+            for routes in coordinate_routes
         )
         if envelope.max_provider_requests < minimum_requests:
             return "provider-request ceiling cannot cover the logical queries"
@@ -544,7 +749,25 @@ class GeoCapability:
             qualifications=({"code": code, "message": message},),
             required_authorization=required_authorization,
             route_context=route_context,
+            execution_profile=self.execution_profile,
+            routing=self.routing_plan(request),
         )
+
+
+def remaining_request(request, previous):
+    if previous is None:
+        return request
+    required = set(_component_operations(request))
+    complete = {}
+    for raw in previous["components"]:
+        if raw["status"] in {"success", "no_result"}:
+            complete.setdefault(GeoCoordinate(**raw["coordinate"]), set()).add(
+                GeoOperation(raw["operation"])
+            )
+    subjects = tuple(
+        s for s in request.subjects if not required <= complete.get(s.coordinate, set())
+    )
+    return replace(request, subjects=subjects) if subjects else None
 
 
 def _coordinate_groups(

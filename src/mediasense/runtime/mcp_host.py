@@ -106,7 +106,9 @@ def create_mcp_server(host: RuntimeHost | None = None) -> Server[Any]:
                             request=request,
                         )
                     )
-                    authority = await _elicit_geo_authority(_context, preflight)
+                    authority = await _elicit_geo_authority(
+                        _context, preflight, request
+                    )
                     if authority is None:
                         result = preflight
                         return _tool_result(result)
@@ -307,6 +309,7 @@ async def _elicit_precheck_authority(
 async def _elicit_geo_authority(
     context: Any,
     preflight: Mapping[str, object],
+    request: Mapping[str, object] | None = None,
 ) -> Mapping[str, object] | None:
     if preflight.get("outcome") != "authorization_required":
         return None
@@ -323,7 +326,19 @@ async def _elicit_geo_authority(
         return None
     try:
         elicited = await session.elicit_form(
-            _geo_authorization_message(envelope),
+            _geo_authorization_message(envelope)
+            + "\nExact request and execution disclosure: "
+            + json.dumps(
+                {
+                    "request": request,
+                    "request_fingerprint": fingerprint,
+                    "execution_profile": preflight.get("execution_profile"),
+                    "routing": preflight.get("routing"),
+                    "recovery": preflight.get("recovery"),
+                },
+                ensure_ascii=False,
+                sort_keys=True,
+            ),
             {
                 "type": "object",
                 "additionalProperties": False,

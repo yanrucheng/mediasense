@@ -55,6 +55,18 @@
             "additionalProperties": false,
             "required": ["sources", "providers"],
             "properties": {
+              "geo_network": {
+                "type": "object", "additionalProperties": false,
+                "required": ["identity", "proxy_receivers", "no_proxy_configured", "ca_source", "reachability", "tls_verification"],
+                "properties": {
+                  "identity": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+                  "proxy_receivers": { "type": "array", "items": { "type": "string" } },
+                  "no_proxy_configured": { "type": "boolean" },
+                  "ca_source": { "enum": ["system", "configured_bundle"] },
+                  "reachability": { "const": "not_checked" },
+                  "tls_verification": { "const": true }
+                }
+              },
               "sources": {
                 "type": "array",
                 "items": { "type": "string", "minLength": 1 }

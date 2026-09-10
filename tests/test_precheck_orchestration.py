@@ -993,7 +993,7 @@ def test_visual_compression_does_not_reduce_per_source_geocode_coverage(
     assert "error" not in plan
 
 
-def test_nonempty_geo_batch_without_provider_is_terminal_unavailable(
+def test_nonempty_geo_batch_without_provider_blocks_for_configuration(
     tmp_path: Path,
 ) -> None:
     database, source, _accounting_run_id = _prepare_source_bound_run(tmp_path)
@@ -1025,7 +1025,7 @@ def test_nonempty_geo_batch_without_provider_is_terminal_unavailable(
         }
     )
 
-    assert status["state"] == "failed"
+    assert status["state"] == "blocked"
     assert status["reason"]["code"] == "provider_unavailable"
     assert "result" not in status
 

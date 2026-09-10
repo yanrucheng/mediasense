@@ -4,6 +4,10 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 from datetime import datetime, timezone
+from dataclasses import replace
+import hashlib
+import json
+import sqlite3
 import re
 from typing import Any
 
@@ -24,6 +28,7 @@ from .model import (
     MapDatum,
 )
 from .service import GeoCapability
+from ._execution_codec import encode
 
 _REQUEST_ID = re.compile(r"^request:[^\s]+$")
 _REQUEST_KEYS = {
@@ -35,6 +40,7 @@ _REQUEST_KEYS = {
     "max_places",
     "retention",
     "route_context",
+    "recovery",
 }
 
 
@@ -48,11 +54,32 @@ class GeoQueryTool:
         self.journal = journal
 
     def handle(
+        self, request, *, authorization=None, cancelled=None, confirmation_proof=None
+    ):
+        request_id = request.get("request_id")
+        if not isinstance(request_id, str) or _REQUEST_ID.fullmatch(request_id) is None:
+            return _error("invalid_request", "request_id is missing or invalid")
+        with self.journal.ownership(request_id) as owned:
+            if not owned:
+                return _error(
+                    "execution_in_progress",
+                    "This request has a live execution owner; replay after it returns.",
+                    request_id=request_id,
+                )
+            return self._handle(
+                request,
+                authorization=authorization,
+                cancelled=cancelled,
+                confirmation_proof=confirmation_proof,
+            )
+
+    def _handle(
         self,
         request: Mapping[str, Any],
         *,
         authorization: GeoAuthorization | None = None,
         cancelled: Callable[[], bool] | None = None,
+        confirmation_proof: Mapping | None = None,
     ) -> dict[str, object]:
         request_id = request.get("request_id")
         if not isinstance(request_id, str) or _REQUEST_ID.fullmatch(request_id) is None:
@@ -62,9 +89,60 @@ class GeoQueryTool:
         except (TypeError, ValueError) as error:
             return _error("invalid_request", str(error), request_id=request_id)
 
+        recovery = request.get("recovery")
+        prior = None
+        cycle = None
+        fingerprint = self.capability.fingerprint(parsed)
+        if recovery is not None:
+            if not isinstance(recovery, dict) or set(recovery) != {
+                "prior_request_id",
+                "result_digest",
+            }:
+                return _error(
+                    "invalid_request",
+                    "Recovery requires prior_request_id and result_digest",
+                    request_id=request_id,
+                )
+            prior = self.journal.get(str(recovery["prior_request_id"]))
+            if prior is None:
+                return _error(
+                    "request_not_found",
+                    "Prior Geo request is not retained",
+                    request_id=request_id,
+                )
+            if result_digest(prior.result) != recovery["result_digest"]:
+                return _error(
+                    "recovery_stale", "Prior Geo result changed", request_id=request_id
+                )
+            cycle = self.journal.cycle(prior.request_id)
+            if cycle is None or not cycle["closed"]:
+                return _error(
+                    "recovery_unavailable",
+                    "Prior effect has no closed, budgeted execution record",
+                    request_id=request_id,
+                )
+            if (
+                _parse_request(json.loads(cycle["request_json"])).fingerprint()
+                != parsed.fingerprint()
+            ):
+                return _error(
+                    "idempotency_conflict",
+                    "Recovery must retain the original query scope",
+                    request_id=request_id,
+                )
+            parsed = _parse_request(json.loads(cycle["request_json"]))
+            fingerprint = result_digest({"request": fingerprint, "recovery": recovery})
+
         existing = self.journal.get(request_id)
         if existing is not None:
-            if existing.request_fingerprint != self.capability.fingerprint(parsed):
+            retained = self.journal.cycle(request_id)
+            same_scope = retained is not None and (
+                _parse_request(json.loads(retained["request_json"])).fingerprint()
+                == parsed.fingerprint()
+                and retained["prior_request_id"]
+                == (recovery["prior_request_id"] if recovery else None)
+            )
+            if existing.request_fingerprint != fingerprint and not same_scope:
                 return _error(
                     "idempotency_conflict",
                     "request_id was already used with different input",
@@ -79,7 +157,25 @@ class GeoQueryTool:
                     "request_id was already used with different authority",
                     request_id=request_id,
                 )
+            if existing.state == "indeterminate" and self.journal.cycle(request_id):
+                from ._checkpoint import reconcile
+
+                response = reconcile(self.journal, existing, parsed)
+                self.journal.complete(request_id, response)
+                return response
             return existing.result
+
+        if prior is not None:
+            return self._recover(
+                request_id,
+                parsed,
+                prior,
+                cycle,
+                fingerprint,
+                authorization,
+                cancelled,
+                confirmation_proof,
+            )
 
         preflight = self.capability.preflight(parsed, authorization=authorization)
         if preflight is not None:
@@ -98,6 +194,20 @@ class GeoQueryTool:
                 request_fingerprint=self.capability.fingerprint(parsed),
                 authorization_binding=authorization.binding(),
                 indeterminate_result=_response(request_id, indeterminate),
+                execution={
+                    "request": parsed.value(),
+                    "authority": {
+                        **authorization.value(),
+                        "execution_profile": self.capability.execution_profile,
+                        "retry_policy": self.capability.retry_policy.value(),
+                        "routing": self.capability.routing_plan(parsed),
+                        "precheck_confirmation": dict(confirmation_proof)
+                        if confirmation_proof
+                        else None,
+                    },
+                    "max_requests": authorization.envelope.max_provider_requests,
+                    "max_billable_units": authorization.envelope.max_billable_units,
+                },
             )
         except GeoIdempotencyConflict as error:
             return _error("idempotency_conflict", str(error), request_id=request_id)
@@ -109,6 +219,9 @@ class GeoQueryTool:
                 parsed,
                 authorization=authorization,
                 cancelled=cancelled,
+                execute=lambda provider, operation, coordinate, **kwargs: self._execute(
+                    request_id, provider, operation, coordinate, **kwargs
+                ),
             )
             response = _response(request_id, result)
             self.journal.complete(request_id, response)
@@ -116,6 +229,180 @@ class GeoQueryTool:
             # The admission journal retains uncertainty; programming failures still surface.
             raise
         return response
+
+    def _recover(
+        self,
+        request_id,
+        parsed,
+        prior,
+        cycle,
+        fingerprint,
+        authorization,
+        cancelled,
+        confirmation_proof,
+    ):
+        from .model import GeoEffectEnvelope
+
+        root = self.journal.cycle(cycle["root_request_id"])
+        original = json.loads(root["authority_json"])
+        envelope = GeoEffectEnvelope(**original["effect_envelope"])
+        prior_effects = prior.result["effects"]
+        used = prior_effects["provider_requests"]
+        upper = prior_effects.get("provider_requests_upper_bound", used)
+        recovery_context = {
+            "root_request_id": cycle["root_request_id"],
+            "prior_request_id": prior.request_id,
+            "prior_provider_requests": used,
+            "prior_provider_requests_upper_bound": upper,
+            "prior_billable_units": prior_effects["billable_units"],
+            "cumulative_provider_request_ceiling": root["max_requests"],
+            "remaining_provider_request_budget": max(0, root["max_requests"] - upper)
+            if upper is not None
+            else None,
+        }
+        # The recovery grant includes the cumulative ceiling, not a fresh quota.
+        from .service import remaining_request
+
+        if remaining_request(parsed, prior.result) is None:
+            return _error(
+                "recovery_unavailable",
+                "All requested components already have terminal evidence",
+                request_id=request_id,
+            )
+        preflight = self.capability.preflight(parsed, previous=prior.result)
+        if preflight is not None and preflight.outcome is GeoOutcome.UNAVAILABLE:
+            return _response(
+                request_id, replace(preflight, request_fingerprint=fingerprint)
+            )
+        if authorization is None or (
+            authorization.request_fingerprint != fingerprint
+            or authorization.envelope != envelope
+        ):
+            result = self.capability._empty_result(
+                parsed,
+                GeoOutcome.AUTHORIZATION_REQUIRED,
+                fingerprint,
+                parsed.route_context,
+                required_authorization=envelope,
+                qualification=(
+                    "recovery_authorization_required",
+                    "Authorize recovery under the original cumulative ceiling; prior unknown effects remain recorded.",
+                ),
+            )
+            return {**_response(request_id, result), "recovery": recovery_context}
+        for provider in self.capability.providers.values():
+            if (
+                provider.capabilities.provider_id in envelope.allowed_providers
+                and not provider.capabilities.repeatable_queries
+            ):
+                return _error(
+                    "recovery_unavailable",
+                    "Provider has not declared repeatable query semantics",
+                    request_id=request_id,
+                )
+        placeholder = _response(
+            request_id,
+            replace(
+                _indeterminate_result(parsed),
+                request_fingerprint=fingerprint,
+            ),
+        )
+        try:
+            replay = self.journal.admit(
+                request_id=request_id,
+                request_fingerprint=fingerprint,
+                authorization_binding=authorization.binding(),
+                indeterminate_result=placeholder,
+                execution={
+                    "request": parsed.value(),
+                    "authority": {
+                        **authorization.value(),
+                        "execution_profile": self.capability.execution_profile,
+                        "retry_policy": self.capability.retry_policy.value(),
+                        "routing": self.capability.routing_plan(parsed),
+                        "precheck_confirmation": dict(confirmation_proof)
+                        if confirmation_proof
+                        else None,
+                    },
+                    "root_request_id": cycle["root_request_id"],
+                    "prior_request_id": prior.request_id,
+                    "max_requests": root["max_requests"],
+                    "max_billable_units": root["max_billable_units"],
+                },
+            )
+        except (GeoIdempotencyConflict, sqlite3.IntegrityError):
+            return _error(
+                "recovery_stale",
+                "Another recovery already owns this result",
+                request_id=request_id,
+            )
+        if replay is not None:
+            return replay.result
+        result = self.capability.invoke(
+            parsed,
+            authorization=replace(
+                authorization, request_fingerprint=self.capability.fingerprint(parsed)
+            ),
+            cancelled=cancelled,
+            previous={
+                **prior.result,
+                "attempts": [
+                    {
+                        "execution_request_id": prior.request_id,
+                        "observed_at": prior.result["observed_at"],
+                        **a,
+                    }
+                    for a in prior.result["attempts"]
+                ],
+                "components": [
+                    {"observed_at": prior.result["observed_at"], **c}
+                    for c in prior.result["components"]
+                ],
+            },
+            execute=lambda provider, operation, coordinate, **kwargs: self._execute(
+                request_id, provider, operation, coordinate, **kwargs
+            ),
+        )
+        response = _response(
+            request_id, replace(result, request_fingerprint=fingerprint)
+        )
+        response["recovery"] = recovery_context
+        self.journal.complete(request_id, response)
+        return response
+
+    def _execute(self, request_id, provider, operation, coordinate, **kwargs):
+        sequence = self.journal.reserve(
+            request_id,
+            descriptor={
+                "provider": provider.capabilities.provider_id,
+                "operation": operation.value,
+                "coordinate": coordinate.value(),
+                "locale": kwargs["locale"],
+            },
+            requests=provider.capabilities.request_ceiling(operation),
+            billable_units=provider.capabilities.max_billable_units_per_operation,
+        )
+        execution = provider.execute(operation, coordinate, **kwargs)
+        observed_at = datetime.now(timezone.utc).isoformat()
+        execution = replace(
+            execution,
+            component=replace(execution.component, observed_at=observed_at),
+            additional_components=tuple(
+                replace(c, observed_at=observed_at)
+                for c in execution.additional_components
+            ),
+            attempt=replace(
+                execution.attempt,
+                execution_request_id=request_id,
+                observed_at=observed_at,
+            ),
+            additional_attempts=tuple(
+                replace(a, execution_request_id=request_id, observed_at=observed_at)
+                for a in execution.additional_attempts
+            ),
+        )
+        self.journal.record_execution(request_id, sequence, encode(execution))
+        return execution
 
 
 def _parse_request(request: Mapping[str, Any]) -> GeoRequest:
@@ -204,6 +491,17 @@ def _optional_integer(value: object, name: str) -> int | None:
 
 def _response(request_id: str, result: GeoCapabilityResult) -> dict[str, object]:
     return {"tool": GeoQueryTool.name, "request_id": request_id, **result.value()}
+
+
+def result_digest(value: Mapping) -> str:
+    return (
+        "sha256:"
+        + hashlib.sha256(
+            json.dumps(
+                value, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+            ).encode()
+        ).hexdigest()
+    )
 
 
 def _error(

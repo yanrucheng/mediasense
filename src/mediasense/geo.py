@@ -7,12 +7,24 @@ from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 import json
 import socket
+import ssl
+import http.client
 from threading import Lock
 import time
 from typing import Protocol
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
-from urllib.request import Request, urlopen
+from urllib.request import (
+    Request,
+    urlopen,
+    build_opener,
+    ProxyHandler,
+    HTTPSHandler,
+    getproxies,
+)
+from urllib.parse import urlsplit
+import hashlib
+import os
 
 from .capabilities.geo.model import (
     GeoCandidate,
@@ -104,6 +116,66 @@ class XYConvertCoordinateConverter:
 class UrllibJsonTransport:
     """Small explicit HTTP adapter; constructing providers never sends a request."""
 
+    def __init__(
+        self,
+        *,
+        proxy_url: str | None = None,
+        ca_bundle: str | None = None,
+        configured: bool = False,
+    ):
+        self._opener = None
+        self.network_profile = None
+        if not configured and proxy_url is None and ca_bundle is None:
+            return
+        proxies = getproxies()
+        if "all" in proxies:
+            proxies.setdefault("http", proxies["all"])
+            proxies.setdefault("https", proxies["all"])
+        if proxy_url is not None:
+            proxies["http"] = proxies["https"] = proxy_url
+        for value in (proxies.get("http"), proxies.get("https")):
+            if value and urlsplit(value).scheme not in {"http", "https"}:
+                raise ValueError(
+                    "Geo supports HTTP/HTTPS proxies; configure an HTTP tunnel for other proxy protocols."
+                )
+        bundle = (
+            ca_bundle
+            or os.environ.get("SSL_CERT_FILE")
+            or os.environ.get("REQUESTS_CA_BUNDLE")
+            or os.environ.get("CURL_CA_BUNDLE")
+        )
+        context = ssl.create_default_context(cafile=bundle)
+        self._opener = build_opener(
+            ProxyHandler(proxies), HTTPSHandler(context=context)
+        )
+        from pathlib import Path
+
+        effective = {
+            "proxies": proxies,
+            "ca_digest": hashlib.sha256(Path(bundle).read_bytes()).hexdigest()
+            if bundle
+            else "system",
+        }
+        identity = (
+            "sha256:"
+            + hashlib.sha256(json.dumps(effective, sort_keys=True).encode()).hexdigest()
+        )
+        recipients = []
+        for value in (proxies.get("http"), proxies.get("https")):
+            if value:
+                parsed = urlsplit(value)
+                recipient = f"{parsed.scheme}://{parsed.hostname}:{parsed.port or (443 if parsed.scheme == 'https' else 80)}"
+                if recipient not in recipients:
+                    recipients.append(recipient)
+        self.network_profile = {
+            "identity": identity,
+            "proxy_receivers": recipients,
+            "no_proxy_configured": bool(proxies.get("no")),
+            "ca_source": "configured_bundle" if bundle else "system",
+            "reachability": "not_checked",
+            "tls_verification": True,
+        }
+
     def get_json(
         self,
         url: str,
@@ -133,37 +205,78 @@ class UrllibJsonTransport:
         )
         return self._open(request, timeout)
 
-    @staticmethod
-    def _open(request: Request, timeout: float) -> Mapping[str, object]:
+    def _open(self, request: Request, timeout: float) -> Mapping[str, object]:
         try:
-            with urlopen(request, timeout=timeout) as response:  # noqa: S310
+            opener = self._opener.open if self._opener is not None else urlopen
+            with opener(request, timeout=timeout) as response:  # noqa: S310
                 value = json.loads(response.read())
         except HTTPError as error:
+            retry_after = None
+            raw_delay = error.headers.get("Retry-After") if error.headers else None
+            if raw_delay and raw_delay.isdecimal():
+                retry_after = min(float(raw_delay), 86400)
             if error.code in {408, 425, 429} or error.code >= 500:
                 raise GeoTransientError(
-                    f"provider HTTP {error.code}", request_count=1, safe_to_retry=True
+                    f"provider HTTP {error.code}",
+                    request_count=1,
+                    safe_to_retry=True,
+                    failure_code="rate_limited"
+                    if error.code == 429
+                    else "service_transient",
+                    retry_after=retry_after,
                 ) from error
             raise GeoPermanentError(
-                f"provider HTTP {error.code}", request_count=1
+                f"provider HTTP {error.code}",
+                request_count=1,
+                failure_code="authentication"
+                if error.code in {401, 403, 407}
+                else "http_permanent",
             ) from error
-        except (TimeoutError, socket.timeout, URLError) as error:
+        except (OSError, URLError, http.client.HTTPException) as error:
+            cause = error.reason if isinstance(error, URLError) else error
+            if isinstance(cause, ssl.SSLCertVerificationError):
+                raise GeoPermanentError(
+                    "TLS certificate verification failed before the application request.",
+                    failure_code="tls_certificate",
+                ) from error
             unsent = isinstance(error, URLError) and isinstance(
                 error.reason, (ConnectionRefusedError, socket.gaierror)
             )
-            raise GeoTransientError(
-                "Provider connection failed before sending."
+            category = (
+                "dns_failure"
+                if unsent and isinstance(cause, socket.gaierror)
+                else "connection_refused"
                 if unsent
-                else "Provider completion is unknown after transport failure.",
+                else "transport_timeout"
+                if isinstance(cause, TimeoutError)
+                else "tls_failure"
+                if isinstance(cause, ssl.SSLError)
+                else "connection_lost"
+                if isinstance(cause, (ConnectionError, http.client.HTTPException))
+                else "transport_unknown"
+            )
+            raise GeoTransientError(
+                f"Geo transport {category}; "
+                + (
+                    "application request was not sent."
+                    if unsent
+                    else "application request completion is unknown."
+                ),
                 request_count=0 if unsent else 1,
                 safe_to_retry=unsent,
+                failure_code=category,
             ) from error
         except (UnicodeError, json.JSONDecodeError) as error:
             raise GeoPermanentError(
-                "provider response is not valid JSON", request_count=1
+                "provider response is not valid JSON",
+                request_count=1,
+                failure_code="provider_response_invalid",
             ) from error
         if not isinstance(value, Mapping):
             raise GeoPermanentError(
-                "provider response must be a JSON object", request_count=1
+                "provider response must be a JSON object",
+                request_count=1,
+                failure_code="provider_response_invalid",
             )
         return value
 
@@ -209,6 +322,7 @@ class AMapReverseGeocoder:
         ),
         datum,
         operation_request_ceilings=((GeoOperation.RESOLVE_PLACE, 1),),
+        repeatable_queries=True,
     )
 
     def __init__(
@@ -350,7 +464,34 @@ class AMapReverseGeocoder:
             code = str(response.get("infocode") or "amap_error")
             message = str(response.get("info") or "AMap request failed")
             if code in {"10019", "10020", "10021"}:
-                raise GeoTransientError(message, request_count=1, safe_to_retry=True)
+                raise GeoTransientError(
+                    "AMap temporary service rejection",
+                    request_count=1,
+                    safe_to_retry=True,
+                    failure_code="service_transient",
+                )
+            if code in {
+                "10001",
+                "10002",
+                "10005",
+                "10006",
+                "10007",
+                "10008",
+                "10009",
+                "10012",
+                "10013",
+            }:
+                raise GeoPermanentError(
+                    "AMap credential or access configuration rejected",
+                    request_count=1,
+                    failure_code="authentication",
+                )
+            if code in {"10003", "10004", "10010", "10014", "10044"}:
+                raise GeoPermanentError(
+                    "AMap quota requires user action",
+                    request_count=1,
+                    failure_code="provider_quota",
+                )
             return GeoProviderResult(
                 "failed",
                 self.provider_id,
@@ -405,6 +546,8 @@ class GoogleMapsReverseGeocoder:
         ),
         datum,
         operation_request_ceilings=((GeoOperation.RESOLVE_PLACE, 2),),
+        independent_components=True,
+        repeatable_queries=True,
     )
 
     def __init__(
@@ -562,6 +705,32 @@ class GoogleMapsReverseGeocoder:
                 converted, normalized_language, response = self._reverse(
                     coordinate, language=locale, deadline=deadline, cancelled=cancelled
                 )
+                status = response.get("status")
+                if status == "UNKNOWN_ERROR":
+                    raise GeoTransientError(
+                        "Google temporary service error",
+                        request_count=1,
+                        safe_to_retry=True,
+                        failure_code="service_transient",
+                    )
+                if status in {"OVER_QUERY_LIMIT", "OVER_DAILY_LIMIT"}:
+                    raise GeoPermanentError(
+                        "Google quota requires user action",
+                        request_count=1,
+                        failure_code="provider_quota",
+                    )
+                if status == "REQUEST_DENIED":
+                    raise GeoPermanentError(
+                        "Google access configuration rejected",
+                        request_count=1,
+                        failure_code="authentication",
+                    )
+                if status not in {"OK", "ZERO_RESULTS", "INVALID_REQUEST"}:
+                    raise GeoPermanentError(
+                        "Google returned an unrecognized response status",
+                        request_count=1,
+                        failure_code="provider_response_invalid",
+                    )
                 location = _google_location(response)
                 reverse_error = None
                 if response.get("status") not in {"OK", "ZERO_RESULTS"}:
@@ -1229,7 +1398,9 @@ def _provider_error_execution(
         and not error.safe_to_retry
         else GeoComponentStatus.FAILED
     )
-    code = "transient" if isinstance(error, GeoTransientError) else "permanent"
+    code = error.failure_code or (
+        "transient" if isinstance(error, GeoTransientError) else "permanent"
+    )
     message = str(error) or type(error).__name__
     qualification = ({"code": code, "message": message},)
     return GeoProviderExecution(
@@ -1250,6 +1421,7 @@ def _provider_error_execution(
             None,
             code,
             message,
+            error.retry_after,
         ),
     )
 

@@ -22,9 +22,19 @@ class RuntimeConfig:
     sources: tuple[Path, ...]
     embedding: dict[str, Any] | None = None
     sensitivity: dict[str, Any] | None = None
+    geo_network: dict[str, Any] | None = None
 
     def public_value(self) -> dict[str, object]:
+        from mediasense.geo import UrllibJsonTransport
+
+        network = self.geo_network or {}
+        transport = UrllibJsonTransport(
+            proxy_url=network.get("proxy_url"),
+            ca_bundle=network.get("ca_bundle"),
+            configured=True,
+        )
         return {
+            "geo_network": transport.network_profile,
             "sources": [str(path) for path in self.sources],
             "local_embedding": {
                 "state": "configured" if self.embedding else "disabled",
@@ -108,6 +118,7 @@ def load_runtime_config(
         sources=tuple(sources),
         embedding=values.get("embedding"),
         sensitivity=values.get("sensitivity"),
+        geo_network=values.get("geo_network"),
     )
 
 
@@ -118,7 +129,7 @@ def _read_config(path: Path) -> dict[str, object]:
         raise ConfigurationError(
             f"Cannot read configuration {path}: {error}"
         ) from error
-    if set(value) - {"providers", "embedding", "sensitivity"}:
+    if set(value) - {"providers", "embedding", "sensitivity", "geo_network"}:
         raise ConfigurationError(f"Unknown configuration section in {path}")
     providers = value.get("providers", {})
     if not isinstance(providers, dict):
@@ -126,6 +137,50 @@ def _read_config(path: Path) -> dict[str, object]:
     if set(providers) - {"amap_api_key_env", "google_maps_api_key_env"}:
         raise ConfigurationError(f"Unknown provider configuration key in {path}")
     result: dict[str, object] = {}
+    if "geo_network" in value:
+        from math import isfinite
+        from urllib.parse import urlsplit
+
+        network = value["geo_network"]
+        if not isinstance(network, dict) or set(network) - {
+            "proxy_url",
+            "ca_bundle",
+            "google_timeout_seconds",
+            "amap_timeout_seconds",
+            "minimum_interval_seconds",
+        }:
+            raise ConfigurationError("Invalid geo_network configuration")
+        for key in (
+            "google_timeout_seconds",
+            "amap_timeout_seconds",
+            "minimum_interval_seconds",
+        ):
+            if key in network and (
+                type(network[key]) not in {int, float}
+                or not isfinite(network[key])
+                or network[key] <= 0
+            ):
+                raise ConfigurationError(
+                    f"geo_network.{key} must be finite and positive"
+                )
+        if "proxy_url" in network:
+            proxy = network["proxy_url"]
+            if (
+                not isinstance(proxy, str)
+                or urlsplit(proxy).scheme not in {"http", "https"}
+                or not urlsplit(proxy).hostname
+            ):
+                raise ConfigurationError(
+                    "geo_network.proxy_url requires an HTTP/HTTPS proxy URL"
+                )
+        if "ca_bundle" in network:
+            bundle = network["ca_bundle"]
+            if not isinstance(bundle, str) or not Path(bundle).expanduser().is_file():
+                raise ConfigurationError(
+                    "geo_network.ca_bundle must name an existing CA file"
+                )
+            network["ca_bundle"] = str(Path(bundle).expanduser().absolute())
+        result["geo_network"] = network
     if "embedding" in value:
         embedding = value["embedding"]
         if not isinstance(embedding, dict):

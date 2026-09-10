@@ -4,7 +4,7 @@ title: "MediaSense Geo Query Tool Contract"
 type: spec
 status: active
 created: 2026-08-30
-updated: 2026-09-09
+updated: 2026-09-10
 timezone: "Asia/Shanghai"
 parent: "index-contract"
 depends-on:
@@ -98,7 +98,7 @@ runtime parsing silently supply a missing datum.
 ## Result meaning
 
 Results distinguish `success`, `partial`, `no_result`,
-`authorization_required`, `unavailable`, `failed`, `indeterminate`, and
+`authorization_required`, `unavailable`, `failed`, `indeterminate`, `blocked`, and
 `cancelled`. Each requested evidence component separately distinguishes
 `success`, `no_result`, `failed`, `indeterminate`, and `not_requested`.
 
@@ -114,9 +114,38 @@ An effectful request is admitted to a Tool-owned journal before provider access.
 Once admitted, an identical `request_id` and effective request returns the recorded
 terminal result without another authorization prompt or Provider request. If a
 caller also supplies authority it must match the original binding; changed input
-or explicit conflicting authority is an error. If completion cannot be
-established, replay remains `indeterminate` and does not automatically repeat the
-effect.
+or explicit conflicting authority is an error. Replay never sends a provider
+request. For a retained v2 cycle, the same scope and recovery linkage replay its
+original effective profile even if the Host configuration has changed; replay does
+not authorize execution under the new configuration. Reusing one consumed trusted
+authorization under another request ID is refused. After the execution owner has stopped, retained per-request checkpoints
+may establish completed components and close the interrupted execution. A reserved
+request without a saved response remains indeterminate; absence of a response
+never proves zero effects. A live owner returns `execution_in_progress`.
+
+Recovery is a separate, explicitly authorized request on this same Tool. It has a
+new `request_id` and `recovery: {prior_request_id, result_digest}`. The digest is
+SHA-256 of the exact prior response encoded as UTF-8 JSON with sorted object keys,
+no insignificant whitespace and unescaped Unicode. Query scope, bounds, subject
+identities and the original cumulative envelope remain unchanged. Only one
+successor may own each prior response. Replaying a successor returns that
+successor's saved result; it never opens another retry cycle. Unknown or changed
+references return `request_not_found` / `recovery_stale`; an unclosed or unbounded
+historical execution returns `recovery_unavailable`.
+
+Each recovery response carries cumulative attempts and effects, while previously
+completed responses remain immutable. Component observed_at retains the original
+acquisition time; attempts carry execution_request_id and observed_at when proven,
+so a successor does not relabel historical requests as new effects. Successful and valid no-result components
+are retained; only missing components may be requested again. Another bounded
+cycle requires fresh trusted authorization tied to the successor and current
+execution profile. Unknown charges remain unknown after successful recovery.
+Cumulative ceilings do not reset with request identity, process restart or replay.
+Recovery responses expose the root/prior identity, prior known or bounded request
+usage, prior billable knowledge, cumulative ceiling and remaining request budget;
+trusted confirmation displays these together with the exact request and network profile.
+A ceiling that cannot admit another request blocks execution; this recovery form
+does not silently increase it.
 
 The journal is execution evidence, not a shared geographic cache or place-truth
 store. Callers own retention and projection of accepted observations.
@@ -144,24 +173,28 @@ Read 保留真实查询坐标、观察时间、有效 profile、请求的附近�
 Plan 可以在自己的授权范围内调用同一 Tool 补查，保留新调用来源与候选。新证据不能改写或冒充原 PreCheck Result；Human 的地点确认也不成为 provider 观测。该边界不要求新增 Geo Tool、模型或缓存服务。
 
 
-### D6. 有限重试归 Tool，费用预先受限
+### D6. 有限执行、目标地域和公开恢复
 
-共享 GeoCapability 接受内部不可变 RetryPolicy（配置值，不是新公开字段/Tool）。
-本轮实现策略：每坐标、每候选 Provider 最多3次 execute，瞬态失败后等待1秒、3秒；
-每坐标单调时钟120秒墙钟预算，每个实际 HTTP timeout 不超过剩余时间及原 Provider timeout。
-成功组件保留，no_result 不在同 Provider 重试；只有 transient(限流/服务5xx/安全可重试网络错误)重试。
-permanent 不重试；indeterminate 立即停止。回退按现有已授权 Provider 路由，不新增 Provider。
-“安全可重试网络错误”只包括证明请求未发送的连接失败；发送后的timeout/未知完成仍按现有
-Geo契约归indeterminate，不能把计费未知当作可盲重试失败。HTTP已响应的429/5xx可重试，
-其请求数照实记录；认证/参数等永久错误立即终结。GeoProvider.execute增加内部deadline及cancelled
-参数，所有真实adapter与fake遵守同一端口；每个HTTP admission前重新校验剩余deadline。
-扩展操作一次可有两次 HTTP，全部受 Provider 声明 ceiling；重试会重复读已成功组件时照实计费，
-不丢失已得候选。Sleep 可取消，deadline或额度耗尽时终结带具体 qualification 的失败。
+目标地域决定服务适用性，执行机器的所在地或连通性不决定素材地域。内地目标优先适合内地地址及 POI 的高德；海外目标需要当地适用服务。港澳、边界附近及无法可靠判断的输入不得用内地粗框伪判。地域依据应能离线取得、可追溯，不能先请求 Google 判国家，也不能把能连通的高德自动当作海外替代服务。
 
-预检请求 ceiling = coordinates × sum(provider.execute ceiling × max_attempts)，已知 billable
-ceiling同样上界；配置策略描述加入有效请求 fingerprint 与 journal admission identity并随披露返回。
-纯 request 数据保持现有 Geo公共输入，Host/Tool 以 request+effective profile 的 canonical值计算最终
-fingerprint，不让客户端自行猜摘要。变更策略使旧授权不匹配；较小的既有授权不能被扩大，
-不足以再发一次时直接终结。效果最终失败后的相同 request_id 重放只读 journal，不重做外部调用。
-失败证明与安全重试资格由adapter返回的attempt/error类别决定；缺分类默认不可重试，不能靠自由message猜测。
-PreCheck 外层 Work 不重复重试已经终结的 Geo失败，只有未发送且可安全恢复的工作走本地恢复。
+有限执行由共享 Geo Tool 负责。现行周期上限为每坐标、每适用 Provider 三次尝试，退避 1/3 秒，每坐标 120 秒；HTTP timeout 不超过剩余窗口。已获得成功和有效 no_result 组件保留，支持独立组件的 Provider 只补欠缺组件。复合 API 不得因重复读取而覆盖原成功，每次实际请求仍计数。
+
+证明未发送的连接失败以及已响应的暂态服务错误可以有限重试。发送完成未知保持 indeterminate；只有声明可重复查询语义、具有已分类暂态传输原因、并处于明确授权及累计预算内的 Provider/operation，才可再尝试。旧记录的通用错误不能升级成已证明的网络原因。原未知效果和费用不会因下一次成功变成零。未经声明的 operation、TLS/鉴权/配额故障不得套用通用未知重试。
+
+有效服务的明确地点级失败可以局部终结，后续项继续。适用服务持续不可达、鉴权或配置前提缺失、超时窗口或累计预算耗尽时返回 blocked，保存成功组件及后续 not_requested，停止对余下地点重复发送。海外适用服务不可达且无适用替代时，需要用户提供 Proxy、调整网络或作其它明确决定；不能自动降为整批缺地点并封存 Result。blocked 表示本周期已停止执行且有可解释的外部条件，不代替未知实现异常。
+
+当前 Provider 请求上界由逻辑坐标数、适用 Provider 和有限重试 ceiling 决定；预算同时覆盖首次尝试、重试和恢复。逐请求预留必须先于发送持久化，确定未发送可释放请求占用，未知发送保留占用。对中断后只有预留证明的 attempt，`request_count_kind=reserved_upper_bound` 明确其 provider_requests 是预算占用上界；不能当作精确已发送次数。无法证明转换后的坐标时 provider_coordinate 为 null。累计实际请求数不明时 effects.provider_requests=null，以 provider_requests_upper_bound 交代保守上界，billable_units 保留未知。正常 attempt 省略 request_count_kind 时含义为 exact。
+
+执行策略及网络 profile 参与授权指纹。execution_profile 只披露脱敏代理接收位置、配置身份、CA 来源和时间限制；不暴露密钥、代理密码或原始传输 URL，也不以已配置声称网络可达。新增或改变代理会使旧确认不匹配，需要针对新的实际接收边界明确确认。不会自动设置代理或关闭 TLS 验证。
+
+PreCheck 通过既有 status/confirmation/resume 入口恢复：先说明阻塞和累计已用效果；用户处理条件后 resume，完整披露只补欠缺组件的范围及原累计上限，再按明确 proceed 执行。恢复 journal 先提交、Work 后幂等投影；投影失败重放本地结果，不重复发请求。状态读取本身不探测地图。取消不生成假完成 Result，旧 Result 不改写。
+
+旧 journal 只有在原授权绑定、范围和累计消耗可证明时才可衔接恢复；未知上界不能猜成剩余额度。升级 Geo journal 的内部版本不提升无关 Dataset、Work 或 Result 格式。新存储须拒绝旧 Host 写入，包括迁移前已打开但不支持新写入协议的连接。
+
+### 当前生产路由与资源
+
+生产路由使用随发行包提供的 Natural Earth 5.1.1 WGS84 几何及源码中的校验身份；资源出处与许可见包内 geo/NOTICE.md。内地使用高德，海外（包括本策略中的港澳、台湾查询范围）使用 Google。地域标签只决定本次服务路线，不是地点法律归属事实。GCJ02 输入先经既有转换器归一到 WGS84。距内地几何边界/海岸 500 米以内返回 uncertain；该保守带不是数据精度保证，填海、岛屿及争议范围仍需更好证据。
+
+routing 交代坐标、region、当前可用 provider_order、required_provider 及离线 basis；preferred_provider 不能覆盖适用性。混合批次按各坐标独立判定，顺序不改变授权身份。批次中有无法确定路线或缺少适用 Provider 的待查询坐标时，预检零效果返回 unavailable；先解决条件后再确认。已取得的组件在恢复时复用，不因当前路线资源改变而重新查询。暂不实现用自由文本臆定地域或通过不适用服务填满 Result。
+
+恢复调用顺序：blocked 时发送 `resume` 且省略 decision，准备恢复确认；进入 paused 并取得完整 confirmation 后，才发送 `resume + decision=proceed` 触发可信确认。前一步不授予新的外部效果，不能把尚无披露时的 proceed 当作授权。

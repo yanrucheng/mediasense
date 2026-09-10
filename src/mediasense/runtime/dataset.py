@@ -648,6 +648,7 @@ def _is_supported_legacy_manifest(value: object) -> bool:
     return (version, stores) in (
         (1, {"apply": 2, "geo": 1, "plan": 2, "precheck": 17}),
         (2, {"apply": 2, "plan": 3, "precheck": 17}),
+        (3, {"apply": 2, "geo": 1, "plan": 3, "precheck": 17}),
     )
 
 
@@ -717,6 +718,11 @@ def _verify_component_stores(workspace: Path, manifest: DatasetManifest) -> None
             )
         actual = int(row[0])
         expected = int(manifest.stores[name])
+        if name == "geo" and actual == 1 and expected == 2:
+            from mediasense.capabilities.geo.journal import GeoOperationJournal
+
+            GeoOperationJournal(database)
+            actual = 2
         if actual > expected:
             raise DatasetOpenError(
                 "store_newer",

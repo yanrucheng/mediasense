@@ -1653,17 +1653,24 @@ def test_bundle_is_a_candidate_scope_and_movement_splits_geo_units(
         }
     )
     assert reviewed["result"]["readiness"] == "plan_ready"
-    source_views = {source["locator"]["value"]: source for item in reviewed["items"] for source in item["source_items"]}
+    source_views = {
+        source["locator"]["value"]: source
+        for item in reviewed["items"]
+        for source in item["source_items"]
+    }
     projected = {o["name"]: o for o in source_views["b.jpg"]["observations"]}
     assert projected["gps_coordinates"]["value"]["latitude"] == 22.319330
     for name in ("address_candidate", "nearby_place_candidates"):
         observation = projected[name]
         assert observation["basis"]["query_coordinate"]["latitude"] == 22.319300
         assert 3 < observation["basis"]["projection"]["query_point_distance_meters"] < 4
-        assert any(q["code"] == "geo_query_point_reused" for q in observation["qualifications"])
-    assert projected["nearby_place_candidates"]["basis"]["requested_radius_meters"] == 500
+        assert any(
+            q["code"] == "geo_query_point_reused" for q in observation["qualifications"]
+        )
+    assert (
+        projected["nearby_place_candidates"]["basis"]["requested_radius_meters"] == 500
+    )
     assert projected["nearby_place_candidates"]["basis"]["requested_max_places"] == 30
-
 
 
 def test_nearby_coordinates_share_only_inside_a_media_bundle(tmp_path: Path) -> None:
@@ -2231,6 +2238,22 @@ def test_recovered_geo_effects_preserve_unknown_and_known_zero(
 
     if interrupted:
         with monkeypatch.context() as crash:
+            # Reproduce the 0.9 journal: admission had no per-provider checkpoints.
+            # Keep this historical unknown-state regression alongside v2 recovery tests.
+            admit = geo.journal.admit
+
+            def legacy_admit(**kwargs):
+                kwargs.pop("execution", None)
+                return admit(**kwargs)
+
+            crash.setattr(geo.journal, "admit", legacy_admit)
+            crash.setattr(
+                geo,
+                "_execute",
+                lambda request_id, adapter, op, coord, **kwargs: adapter.execute(
+                    op, coord, **kwargs
+                ),
+            )
             crash.setattr(geo.journal, "complete", crash_before_completion)
             with pytest.raises(RuntimeError, match="synthetic crash"):
                 producer.produce(run_ref, run_id, [metadata.work_id])

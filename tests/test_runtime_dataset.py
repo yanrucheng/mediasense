@@ -302,7 +302,7 @@ def test_open_migrates_supported_v1_manifest_without_touching_private_stores(
     assert migrated["format_version"] == 3
     assert migrated["stores"] == {
         "apply": 2,
-        "geo": 1,
+        "geo": 2,
         "plan": 3,
         "precheck": 17,
     }
@@ -323,7 +323,7 @@ def test_open_migrates_supported_v2_manifest_by_restoring_geo_store(
     reopened = resolver.open(source)
 
     assert reopened.manifest.format_version == 3
-    assert reopened.manifest.stores["geo"] == 1
+    assert reopened.manifest.stores["geo"] == 2
 
 
 def test_portable_workspace_survives_mount_path_change(tmp_path: Path) -> None:

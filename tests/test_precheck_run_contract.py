@@ -33,11 +33,14 @@ NEGATIVE = load(PACKET / "contracts/examples.json")["negative"]
 
 
 def test_schemas_compile_and_match_packaged_authority():
-    # Run exchange shape is unchanged. The earlier Read packet is only a release
-    # snapshot; M1 conformance is tested against the stable home separately.
+    # Existing control requests and historical transcripts remain valid. Geo
+    # recovery adds disclosure fields in the current contract, not the old packet.
     for kind, root in (("run", RUN),):
         tool = load(root / f"precheck-{kind}.tool.json")
-        assert tool == load(PACKET / f"contracts/precheck-{kind}.tool.json")
+        assert (
+            tool["inputSchema"]
+            == load(PACKET / f"contracts/precheck-{kind}.tool.json")["inputSchema"]
+        )
         assert tool == load(
             ROOT / f"src/mediasense/_resources/contracts/precheck-{kind}.tool.json"
         )

@@ -65,7 +65,7 @@ or remote fallback. Sensitivity defaults to disabled, including when an empty
 For a built release artifact, install the exact wheel instead:
 
 ```bash
-uv tool install ./dist/mediasense-0.9.0-py3-none-any.whl
+uv tool install ./dist/mediasense-0.10.0-py3-none-any.whl
 ```
 
 `uv` may download declared Python dependencies. MediaSense does not install
@@ -246,11 +246,11 @@ operational Honeycomb or migrate an existing Skill location as part of an upgrad
 For an existing `uv tool` installation, replace it with the verified wheel:
 
 ```bash
-uv tool install --offline --force ./dist/mediasense-0.9.0-py3-none-any.whl
+uv tool install --offline --force ./dist/mediasense-0.10.0-py3-none-any.whl
 ```
 
 Retain the previously installed extras: for an embeddings-enabled installation,
-use `uv tool install --offline --force './dist/mediasense-0.9.0-py3-none-any.whl[embeddings]'`
+use `uv tool install --offline --force './dist/mediasense-0.10.0-py3-none-any.whl[embeddings]'`
 (and retain `local-models` only if already required). Keep the existing Python and
 dependency versions when available in the offline cache. If dependencies are not
 cached, review the required download before using the network. Installing extras
@@ -261,15 +261,15 @@ documented breaking CLI, Host, manifest, or store changes; patch releases are
 compatible fixes. A changed application version alone never invalidates all
 PreCheck work.
 
-The supported `0.9.x` combination is:
+The supported `0.10.x` combination is:
 
 | Surface | Supported value |
 | --- | --- |
-| Application | `0.9.x` |
+| Application | `0.10.x` |
 | Dataset manifest | `3` |
 | PreCheck store | `17` |
 | Plan store | `3` |
-| Geo journal | `1` |
+| Geo journal | `2` |
 | Apply store | `2` |
 | Packaged Skills | From the same MediaSense release |
 
@@ -280,20 +280,30 @@ start, explicitly remove the selected Dataset workspace from discovery only afte
 deciding that its Results and recovery history are no longer needed. Preserve
 source media and unrelated Dataset workspaces.
 
-After checking for local customizations, use the new CLI to upgrade the four
-release-matched Skills at the actual installation target:
+After checking local customizations, keep the four project Skills and their existing
+`skills-lock.json` on the same release source. For projects already managed through
+`npx skills`, use that manager with the explicit four-name allowlist and the existing
+agent target; do not replace it with file copying or a global install. For example,
+a verified local release export can be installed from the actual operation project:
 
 ```bash
-mediasense skills upgrade --target <actual-skill-directory>
+npx --offline skills@latest add <verified-release-source> --skill mediasense mediasense-precheck mediasense-plan mediasense-apply -a codex --full-depth -y
+npx --offline skills@latest ls --json
 ```
 
-This operation changes only the four MediaSense Skill directories, preserves
-unrelated Skills, and rolls back its own replacements if the set cannot be
-completed. A correct MCP command pointing at the same executable needs no edit.
-Verify `mediasense --version`, `mediasense doctor --json`, and
-`mediasense tools list --json`, then compare installed Skills with the release's
-bundled copies. Start a new Agent session to load the `0.9.x` Skills and MCP Host;
-disk updates do not reload an already-running Host or the current Agent context.
+Verify the four lock entries and every installed Skill file against the release
+bundle. The local export must remain available for that project's local-source lock;
+use an explicitly selected published source when cross-machine restoration is needed.
+The CLI's `skills install/upgrade --target` copies remain available for explicitly
+unmanaged installations, but they do not maintain an npx project lock.
+
+A correct MCP command pointing at the same executable needs no edit. Verify
+`mediasense --version`, `mediasense doctor --json`, and `mediasense tools list --json`.
+Before opening a v2 Geo journal, retire old Host writers without terminating the
+current Agent session. An already-running 0.9 Host cannot write the migrated store.
+Load the new Host/Skills in a new Agent session when required; disk updates do not
+reload existing process state. Do not resume a business Run until its network
+condition and recovery disclosure have been explicitly accepted.
 
 M1 and M2 acceptance covers the controlled paths in the existing
 [capability ledger](../docs/eval/eval-260823-1918-ai-album-migration-baseline/eval-260823-1918B-capability-ledger.md).
@@ -320,3 +330,49 @@ uv tool uninstall mediasense
 Uninstalling does not delete Dataset workspaces, configuration, credentials, or
 model downloads. Inspect and remove those locations separately only after deciding
 their retained Results and recovery history are no longer needed.
+
+
+### Geo recovery and network configuration (0.10)
+
+The [Geo contract](../docs/spec/contract/geo-query/index.md) defines target-region
+routing, finite execution, cumulative accounting and explicit recovery. Bundled
+Natural Earth 5.1.1 geometry is used offline; a 500 m boundary/coast guard reports
+uncertainty instead of guessing. It does not certify real geographic accuracy.
+Mainland routes use AMap and overseas routes use Google. A missing suitable
+provider or uncertain route is reported before new effects; a provider outage
+preserves completed components and blocks until its condition is addressed.
+
+The Host accepts an optional `geo_network` table in the existing user
+or Dataset configuration, for example:
+
+```toml
+[geo_network]
+# Set a proxy only after the user has selected and authorized this receiver.
+# proxy_url = "http://127.0.0.1:7890"
+google_timeout_seconds = 3
+amap_timeout_seconds = 15
+minimum_interval_seconds = 0.3
+# ca_bundle = "/absolute/path/to/approved-ca.pem"
+```
+
+Without an explicit proxy, the actual Host's environment/system HTTP(S) proxies
+apply; `ALL_PROXY` supplies missing HTTP/HTTPS entries. Only HTTP/HTTPS proxy
+protocols are supported. `NO_PROXY` / `no_proxy` remain effective. An explicit
+`ca_bundle` takes precedence over `SSL_CERT_FILE`, `REQUESTS_CA_BUNDLE`, and
+`CURL_CA_BUNDLE`; otherwise system CA validation remains enabled. Unsupported
+proxy protocols or invalid CA configuration fail explicitly. No model download,
+map reachability probe, or automatic proxy setup is performed.
+
+Configuration reports show sanitized proxy receivers, CA source, and an effective
+profile identity, with reachability `not_checked`. Parent shell variables are not
+proof of the MCP child's environment: explicitly pass required proxy/CA variables
+through the existing launcher, or configure the existing MediaSense config file.
+After file configuration changes, a paused/blocked Run reloads its Geo network
+settings on resume and requires matching confirmation before new effects. Changed
+process environment requires a newly launched Host. Do not terminate an active
+Agent merely to claim the disk update is already loaded.
+
+Do not migrate the live Dataset as an experiment. Geo journal v2 preserves old
+responses and blocks old writers; other stores and Result formats do not change.
+Project Skills remain managed by the existing project `npx skills` source and lock;
+this development stage does not install global Skills or change operational projects.

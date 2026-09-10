@@ -52,7 +52,7 @@ def test_doctor_rejects_skill_release_mismatch(
     monkeypatch.setattr(
         "mediasense.runtime.doctor.validate_skill_release_line",
         lambda _version: (_ for _ in ()).throw(
-            ValueError("installed Skill declares 0.8.x; expected only 0.9.x")
+            ValueError("installed Skill declares 0.8.x; expected only 0.10.x")
         ),
     )
 
@@ -60,7 +60,7 @@ def test_doctor_rejects_skill_release_mismatch(
     result = json.loads(capsys.readouterr().out)
     resources = next(item for item in result["checks"] if item["name"] == "resources")
     assert resources["status"] == "error"
-    assert "expected only 0.9.x" in resources["message"]
+    assert "expected only 0.10.x" in resources["message"]
 
 
 def test_dataset_open_command_reports_selected_workspace(

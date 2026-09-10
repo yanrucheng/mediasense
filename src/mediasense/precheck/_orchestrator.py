@@ -635,23 +635,43 @@ class PrecheckOrchestrator:
             config,
             executor,
         )
-        if geocode.status == "confirmation_required":
-            return self.run_control.sync_accounting(run_ref)
-        if geocode.status == "indeterminate":
+        if geocode.status == "projection_pending":
             return self.run_control.mark_blocked(
                 run_ref,
-                code="geo_effect_indeterminate",
-                message="An admitted Geo effect has no provable terminal outcome.",
-                resume_when="Reconcile the admitted Geo effect; automatic reissuance is forbidden.",
+                code="geo_projection_pending",
+                message="A retained legacy Geo projection lease has not ended; no new provider request was sent.",
+                resume_when="After the existing projection lease ends, resume without a decision to replay retained evidence.",
+            )
+        if geocode.status == "confirmation_required":
+            return self.run_control.sync_accounting(run_ref)
+        if geocode.status in {"indeterminate", "blocked"}:
+            failures = sorted(
+                {
+                    f"{a.get('provider', 'unknown')}:{a.get('error_code', a.get('status', 'unknown'))}"
+                    for o in geocode.outcomes
+                    if isinstance(o.work.output, dict)
+                    for a in o.work.output.get("result", {}).get("attempts", ())
+                    if a.get("status") in {"failed", "indeterminate"}
+                }
+            )
+            return self.run_control.mark_blocked(
+                run_ref,
+                code="geo_effect_indeterminate"
+                if geocode.status == "indeterminate"
+                else "geo_provider_unavailable",
+                message="Geo evidence is incomplete and requires a network, provider, or budget decision; completed components are retained. Recorded conditions: "
+                + ", ".join(failures),
+                resume_when="Resolve the reported provider or network condition, then resume without decision to prepare recovery. Review the resulting confirmation and resume with proceed to authorize only missing components within the cumulative budget.",
             )
         if geocode.status == "unavailable":
-            return self.run_control.mark_failed(
+            return self.run_control.mark_blocked(
                 run_ref,
                 code="provider_unavailable",
                 message=(
                     "A frozen coordinate batch requires reverse geocoding, but no "
                     "compatible provider is configured."
                 ),
+                resume_when="Configure a provider appropriate for the target location, then resume.",
             )
         if not self._finish_phase(run_ref, "external_evidence"):
             return self.run_control.sync_accounting(run_ref)
