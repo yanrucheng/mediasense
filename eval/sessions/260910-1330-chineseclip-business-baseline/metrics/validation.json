@@ -1,0 +1,35 @@
+{
+  "focused_tests": 17,
+  "all_source_cards_unique": 2134,
+  "thumbnail_files_decoded": 2118,
+  "local_links_verified": 2681,
+  "regenerated_business_result_identical": true,
+  "original_source_reverified": true,
+  "business_code_pinned": {
+    "package": "mediasense.precheck",
+    "files": 46,
+    "sha256": "255977ab42bc780b9f59ce4ff519be872766f2ee4dfa4ae1cc1eace1dd8b2ff3"
+  },
+  "known_limitation": "181 videos have only 1 or 2 successful frames; current symmetric similarity selection cannot distinguish the 2-frame tie, so this fixture does not establish key-frame ranking quality.",
+  "browser": {
+    "engine": "system WKWebView; nonPersistent data store; file URL",
+    "groups": 117,
+    "source_cards": 2134,
+    "expand_all": true,
+    "collapse_all": true,
+    "video_expand": true,
+    "sample_images_decoded": 16,
+    "sample_images_checked": 16,
+    "screenshot_inspected": true
+  },
+  "independent_preparation_repeat": {
+    "same_fingerprint": true,
+    "fingerprint": "2144fcd970052a44d20a378e3819b86b55345d0605b6d71ce073fc2dd5cd5ba0",
+    "same_ready_count": 366,
+    "same_failed_count": 185
+  },
+  "existing_summary_refused_before_inference": true,
+  "ruff": "passed",
+  "git_diff_check": "passed",
+  "final_code_hashes_match_executed": true
+}

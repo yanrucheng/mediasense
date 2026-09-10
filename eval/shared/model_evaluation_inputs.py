@@ -160,6 +160,10 @@ def nearest_frames(probe: dict, fractions: list[float]) -> list[tuple[int, float
 
 
 def prepare_inputs(config: dict, destination: Path) -> dict:
+    if config["inputs"].get("mode") == "mediasense_business":
+        from model_evaluation_business_inputs import prepare_business_inputs
+
+        return prepare_business_inputs(config, destination)
     root, sources = source_rows(config)
     destination = outside(destination, *fixture_roots(config))
     destination.mkdir(parents=True, exist_ok=False)
@@ -322,6 +326,10 @@ def input_fingerprint(prepared: dict) -> str:
 
 
 def validate_inputs(config: dict, path: Path) -> dict:
+    if config["inputs"].get("mode") == "mediasense_business":
+        from model_evaluation_business_inputs import validate_business_inputs
+
+        return validate_business_inputs(config, path)
     prepared = json.loads(path.read_text())
     root, sources = source_rows(config)
     if (

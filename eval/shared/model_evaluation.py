@@ -99,12 +99,9 @@ def environment() -> dict:
 
 def code_version() -> dict:
     root = Path(__file__).resolve().parents[2]
-    names = [
-        "model_evaluation.py",
-        "model_evaluation_inputs.py",
-        "model_evaluation_encoder.py",
-        "prepare_input.py",
-    ]
+    names = sorted(
+        path.name for path in Path(__file__).parent.glob("model_evaluation*.py")
+    ) + ["prepare_input.py"]
     return {
         "git_head": subprocess.check_output(
             ["git", "-C", str(root), "rev-parse", "HEAD"], text=True
@@ -158,6 +155,10 @@ def encode(config: dict, inputs_path: Path, output: Path) -> dict:
         )
     check_runtime(config)
     prepared = validate_inputs(config, inputs_path)
+    if config["inputs"].get("mode") == "mediasense_business":
+        from model_evaluation_business import check_baseline
+
+        check_baseline(config, prepared)
     output.mkdir(parents=True)
     write_json(output / "config.json", config)
     provenance = code_version()
@@ -343,7 +344,10 @@ def main() -> None:
     else:
         result = None
     if args.action in {"preview", "run"}:
-        from model_evaluation_preview import preview
+        if config["inputs"].get("mode") == "mediasense_business":
+            from model_evaluation_business_preview import preview
+        else:
+            from model_evaluation_preview import preview
 
         result = preview(config, args.output, args.summary)
     if args.action in {"encode", "preview", "run"}:
