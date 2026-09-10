@@ -165,11 +165,15 @@ def render_business(
     if sorted(source_cards) != sorted(sources):
         raise ValueError("Preview must contain every source exactly once")
     performance = encoded["performance"]
+    runtime = encoded["runtime"]
+    effective = encoded.get("effective_encoder", {})
+    device = str(effective.get("device", runtime["device"])).upper()
+    precision = str(effective.get("precision", runtime["precision"]))
     title = config["model"]["model_id"].split("/")[-1]
     page = f"""<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MediaSense 业务基线 · {escape(title)}</title>
 <style>
 :root{{font-family:system-ui,sans-serif;color:#203047;background:#eff3f7}}body{{max-width:1320px;margin:24px auto;padding:0 20px}}header,.panel{{background:white;padding:22px;border-radius:12px;margin-bottom:18px}}h1{{font-size:27px;margin:0 0 8px}}h2{{font-size:20px}}p{{line-height:1.6}}.pending,.role{{color:#925506}}.stats{{font-size:18px;font-weight:650}}button{{padding:10px 16px;border:0;border-radius:6px;color:white;background:#254c70;cursor:pointer;margin:0 8px 12px 0}}details{{margin:10px 0}}summary{{cursor:pointer}}.group{{background:white;border:1px solid #c7d3e0;border-radius:9px;padding:16px;margin-bottom:14px}}.group>summary{{font-weight:600}}.group-title{{font-size:19px}}.highlights{{display:flex;flex-wrap:wrap;gap:14px;margin:12px 0 0}}figure{{margin:0;width:175px}}figcaption{{font-size:11px;overflow-wrap:anywhere;font-weight:400}}.small{{width:175px;height:110px;object-fit:contain;background:#edf1f5;border-radius:5px}}.source-card{{border-top:1px solid #dce3ec;padding:14px 0}}.source-top{{display:flex;gap:18px;align-items:flex-start}}.photo{{width:240px;height:170px;object-fit:contain;background:#edf1f5;border-radius:5px}}.placeholder{{width:180px;min-height:80px;padding:20px;background:#edf1f5;box-sizing:border-box}}small{{overflow-wrap:anywhere;color:#5f6d7e}}a{{color:#226a9f;margin-right:12px}}.grid{{display:flex;flex-wrap:wrap;gap:14px}}.frame{{max-width:270px;padding:12px;border:1px solid #c7d3e0;border-radius:7px}}.chosen{{border:3px solid #287a65;background:#f0faf5}}.error{{color:#9b3e20;overflow-wrap:anywhere;font-size:12px}}.note{{color:#5f6d7e;font-size:13px}}pre{{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px}}@media(max-width:680px){{.source-top{{display:block}}.photo{{width:100%;height:200px}}body{{padding:0 10px}}figure{{width:120px}}.small{{width:120px;height:85px}}}}
-</style><header><h1>MediaSense 业务分组与代表选择</h1><p>{escape(title)} · CPU · float32 · batch {config["runtime"]["batch_size"]}</p><p class="pending">技术执行已完成 · 待人工质量验收</p>
+</style><header><h1>MediaSense 业务分组与代表选择</h1><p>{escape(title)} · {escape(device)} · {escape(precision)} · batch {runtime["batch_size"]}</p><p class="pending">技术执行已完成 · 待人工质量验收</p>
 <p class="stats">{len(sources)} 个源媒体 → {result["point_count"]} 个分组候选 → {len(result["groups"])} 个组</p>
 <p>{encoded["counts"]["encoded"]} 个图片／帧成功编码 · {len(failed_inputs)} 个输入准备失败 · {len(result["exceptions"])} 个源未进入视觉分组 · 未交代遗漏 0</p>
 <p>加载 {performance["model_load_seconds"]:.2f} s · 编码 {performance["encoding_seconds"]:.2f} s · {performance["inputs_per_second"]:.3f} 输入/s · 编码进程峰值 RSS {performance["peak_process_rss_bytes"] / 2**30:.3f} GiB（不含子进程）</p>

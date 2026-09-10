@@ -31,5 +31,24 @@
   "existing_summary_refused_before_inference": true,
   "ruff": "passed",
   "git_diff_check": "passed",
-  "final_code_hashes_match_executed": true
+  "final_code_hashes_match_executed": true,
+  "closeout": {
+    "date": "2026-09-10",
+    "baseline_saved_commit": "77e37ab",
+    "baseline_code_files_verified_at_saved_commit": 9,
+    "baseline_code_hashes_match_saved_commit": true,
+    "focused_tests": 18,
+    "preview_runtime_cases": [
+      "CPU float32 remains CPU even when MPS is available",
+      "MPS float16 and batch size come from retained encoding, not current config",
+      "Effective adapter device and precision override configured values",
+      "Runtime text is HTML-escaped"
+    ],
+    "ruff": "passed",
+    "format_check": "passed",
+    "git_diff_check": "passed",
+    "tracked_evaluation_outputs": 0,
+    "model_rerun": false,
+    "original_baseline_artifacts_unchanged": true
+  }
 }

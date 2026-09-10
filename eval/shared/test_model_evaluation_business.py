@@ -27,7 +27,7 @@ class BusinessTests(unittest.TestCase):
                 "profile": {"target_entries": 200, "content_based_boundaries": True},
             },
             "model": {"model_id": "test/model"},
-            "runtime": {"batch_size": 4},
+            "runtime": {"device": "cpu", "precision": "float32", "batch_size": 4},
             "baseline_ref": None,
         }
         self.prepared = {
@@ -209,6 +209,7 @@ class BusinessTests(unittest.TestCase):
                     Image.new("RGB", (20, 20), "blue").save(row["image_path"])
             result = classify(self.config, self.prepared, self.vectors)
             encoded = {
+                "runtime": dict(self.config["runtime"]),
                 "counts": {"encoded": 4},
                 "performance": {
                     "model_load_seconds": 1.0,
@@ -226,6 +227,58 @@ class BusinessTests(unittest.TestCase):
             self.assertIn("未请求编码", page)
             self.assertIn("unreadable", page)
             self.assertFalse(rendered["thumbnail_failures"])
+
+    def test_preview_uses_recorded_runtime_and_effective_encoder(self):
+        cases = [
+            (
+                "cpu",
+                {"device": "cpu", "precision": "float32", "batch_size": 4},
+                {"mps_available": True},
+                "CPU · float32 · batch 4",
+            ),
+            (
+                "mps",
+                {"device": "mps", "precision": "float16", "batch_size": 8},
+                {},
+                "MPS · float16 · batch 8",
+            ),
+            (
+                "effective",
+                {"device": "mps", "precision": "float16", "batch_size": 8},
+                {"device": "cpu", "precision": "float32; reported by adapter"},
+                "CPU · float32; reported by adapter · batch 8",
+            ),
+            (
+                "escaped",
+                {"device": "mps", "precision": "float16", "batch_size": 8},
+                {"device": "gpu <custom>", "precision": 'float16 & "mixed"'},
+                "GPU &lt;CUSTOM&gt; · float16 &amp; &quot;mixed&quot; · batch 8",
+            ),
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            prepared = {
+                "source_root": str(root),
+                "inputs": [],
+                "business": {"sources": {}, "bundles": []},
+            }
+            result = {"groups": [], "exceptions": [], "point_count": 0}
+            for name, runtime, effective, expected in cases:
+                with self.subTest(name=name):
+                    encoded = {
+                        "runtime": runtime,
+                        "effective_encoder": effective,
+                        "counts": {"encoded": 0},
+                        "performance": {
+                            "model_load_seconds": 1.0,
+                            "encoding_seconds": 2.0,
+                            "inputs_per_second": 0.0,
+                            "peak_process_rss_bytes": 1000,
+                        },
+                    }
+                    render_business(root / name, prepared, result, encoded, self.config)
+                    page = (root / name / "index.html").read_text()
+                    self.assertIn(f"<p>model · {expected}</p>", page)
 
 
 if __name__ == "__main__":
