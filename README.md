@@ -17,6 +17,8 @@ See
 [Troubleshooting and recovery](readme/troubleshooting.md) when opening or
 connecting fails.
 
+For repeatable local embedding-model evaluations, see [Local model evaluation](readme/model-evaluation.md).
+
 The product exposes one user-facing entry Skill, `mediasense`, which owns setup,
 readiness verification, and routing. It delegates business work to three stage
 Skills:

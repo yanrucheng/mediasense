@@ -1,0 +1,67 @@
+{
+  "baseline_ref": null,
+  "fixture": {
+    "id": "ai-album-hk-representative-v1",
+    "original_package_root": "/Users/chengyanru/Downloads/ai-album-hk-representative-v1",
+    "package_root": "/private/tmp/mediasense-model-evaluation/ai-album-hk-representative-v1",
+    "media_subdirectory": "dataset/260501-HK美食之旅",
+    "checksum_manifest_sha256": "f56caa6b1f1dd56e1b02850a5bfc17567d11f5617899db166eb8d670889d67fe",
+    "media_manifest_sha256": "a13ba7d2bad2e1c9e21b363286bbf44c3655fec4cefb5200d5dd6d68bb9fc380",
+    "expected_media_count": 2134
+  },
+  "inputs": {
+    "selection": "all_manifest_media; no historical representatives or model outputs",
+    "still_images": "manifest JPEG bytes; existing encoder RGB conversion; no EXIF transpose",
+    "video_fractions": [0.1, 0.5, 0.9],
+    "video_selection": "nearest decoded frame PTS to fraction * duration; ties earlier; duplicate slots retained",
+    "video_raster": "ffmpeg frame-index select; noautorotate; rgb24 lossless PNG; no resize",
+    "sort_time": "EXIF DateTimeOriginal/DateTimeDigitized (naive Asia/Shanghai), video creation_time (naive UTC) + PTS; fallback filesystem mtime; path then slot breaks ties",
+    "ffmpeg": "/opt/homebrew/bin/ffmpeg",
+    "ffprobe": "/opt/homebrew/bin/ffprobe",
+    "tool_versions": {
+      "ffmpeg": "ffmpeg version 8.1 Copyright (c) 2000-2026 the FFmpeg developers",
+      "ffprobe": "ffprobe version 8.1 Copyright (c) 2007-2026 the FFmpeg developers"
+    }
+  },
+  "expected_input_fingerprint": "ed6d7c924493ece63ddab70d97d71f592035440f2898abb013d41a18d4909477",
+  "model": {
+    "adapter": "model_evaluation_encoder:ChineseCLIPAdapter",
+    "model_id": "OFA-Sys/chinese-clip-vit-huge-patch14",
+    "revision": "503e16b560aff94c1922f13a86a7693d36957a4f",
+    "snapshot_path": "/Users/chengyanru/.cache/huggingface/hub/models--OFA-Sys--chinese-clip-vit-huge-patch14/snapshots/503e16b560aff94c1922f13a86a7693d36957a4f",
+    "encoder_source_sha256": "a036ae6972c4f2eb577f685df29980eae9713e20633f735bd98ff0392f294501",
+    "dimensions": 1024,
+    "normalization": "unit_length",
+    "vector_dtype": "float32-le",
+    "files_sha256": {
+      "config.json": "baf9f24b4f9eb8253dbca9211628cfb5aa7015785f8382bd6992d59691277480",
+      "preprocessor_config.json": "0e00af244b402c34f92898e2ba68359762ad3788e087b2a0e4d575512f388ea9",
+      "pytorch_model.bin": "d3bc35de533b12cc69ce6c0604a6737c21eb2b84068384a0805d4f32c90dbfdb",
+      "vocab.txt": "45bbac6b341c319adc98a532532882e91a9cefc0329aa57bac9ae761c27b291c"
+    }
+  },
+  "runtime": {
+    "python": "/Users/chengyanru/.local/share/uv/tools/mediasense/bin/python",
+    "python_version": "3.13.5",
+    "packages": {
+      "mediasense": "0.8.0",
+      "torch": "2.13.0",
+      "transformers": "4.57.6",
+      "numpy": "2.5.2",
+      "Pillow": "12.3.0"
+    },
+    "device": "cpu",
+    "precision": "float32",
+    "batch_size": 4,
+    "cpu_threads": 2,
+    "nice": 10,
+    "profile_source": "/private/tmp/mediasense-daily-installed-check/config/config.toml",
+    "profile_note": "Reuse the actual installed-model verification profile; no user-level embedding profile is configured. Thread cap and nice protect concurrent product work."
+  },
+  "classification": {
+    "status": "awaiting_human_confirmation",
+    "proposed_algorithm": "legacy_linear_hierarchical_visual",
+    "distance_levels": [0.311],
+    "min_cluster_weight": 20
+  }
+}

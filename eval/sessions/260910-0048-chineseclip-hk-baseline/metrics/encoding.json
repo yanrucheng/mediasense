@@ -1,0 +1,88 @@
+{
+  "status": "encoded_awaiting_classification_confirmation",
+  "human_acceptance": "待人工验收",
+  "config": "../config.json",
+  "inference_fingerprint": "cd0cc63bcc3788002196fbd4bec6b5143eb3e5d78d5ef1354e566bb465bf7a5a",
+  "source_fingerprint": "ddb7d5cae4a459b2c57cc8d2253db413b6cda3394ede5ccc5db5cea5d55562d8",
+  "input_fingerprint": "ed6d7c924493ece63ddab70d97d71f592035440f2898abb013d41a18d4909477",
+  "encoding_summary": "/Users/chengyanru/repos/personal/mediasense/eval/sessions/260910-0048-chineseclip-hk-baseline/outputs/baseline/encoding.json",
+  "input_preview": "/Users/chengyanru/repos/personal/mediasense/eval/sessions/260910-0048-chineseclip-hk-baseline/outputs/baseline/input-preview/index.html",
+  "classification_preview": null,
+  "counts": {
+    "sources": 2134,
+    "expected_inputs": 2700,
+    "prepared": 2697,
+    "input_failures": 3,
+    "encoded": 2697,
+    "not_encoded": 0,
+    "omitted": 0,
+    "classification_executed": false
+  },
+  "performance": {
+    "model_load_seconds": 28.604989500017837,
+    "encoding_seconds": 1147.7852825508453,
+    "encoded_inputs": 2697,
+    "embedding_cache_hits": 0,
+    "warmup_inputs": 0,
+    "timing_scope": "Every batch includes file read, RGB decode, processor resize/normalize, inference, result materialization on CPU, and device synchronization. No warmup; first batch included. Excludes fixture verification, video extraction, L2 normalization, vector writes, clustering and preview.",
+    "load_scope": "Adapter/framework import, model and processor loading, device transfer, readiness and synchronization; weight hashing is preflight, outside load timing.",
+    "memory_scope": "Kernel RUSAGE_SELF high-water resident bytes for this encoding PID through completion, including imports, load and encoding; excludes all children and separate preparation/preview processes. Not total system or GPU allocation.",
+    "memory_includes_children": false,
+    "inputs_per_second": 2.349742622597643,
+    "peak_process_rss_bytes": 4080992256
+  },
+  "environment": {
+    "python": "3.13.5 (main, Jun 12 2025, 12:22:43) [Clang 20.1.4 ]",
+    "executable": "/Users/chengyanru/.local/share/uv/tools/mediasense/bin/python",
+    "platform": "macOS-26.4.1-arm64-arm-64bit-Mach-O",
+    "machine": "arm64",
+    "pid": 81523,
+    "nice": 10,
+    "macos": "26.4.1",
+    "build": "25E253",
+    "cpu": "Apple M5 Pro",
+    "unified_memory_bytes": 51539607552
+  },
+  "code": {
+    "git_head": "b52535a9fa1021ba29c4e8431cc9ca5125ae4f22",
+    "working_tree_dirty": true,
+    "evaluation_files_sha256": {
+      "model_evaluation.py": "7fbb334b9c90d71067bdbdd6332c5fe46edcc7bf9ec6b0c00bb48025ef461051",
+      "model_evaluation_inputs.py": "c1dbb312524536dd42e910f6fe51eb6327d2677f49fbd971d9cf9cab26b417be",
+      "model_evaluation_encoder.py": "f83d93911a098a85a22dad829c4ed3060b26d7fbbad72ae8717f58312c79572a",
+      "prepare_input.py": "5e5870fc39838c378d798417c214402101829e495d0ed4472157227975b27319"
+    }
+  },
+  "embedding_identity": "8201092905e527c9b095ddb8bf8d907266393e2ae3c841c33861b72276011289",
+  "effective_preprocessing": {
+    "_processor_class": null,
+    "do_resize": true,
+    "size": {
+      "height": 224,
+      "width": 224
+    },
+    "resample": 3,
+    "do_center_crop": false,
+    "crop_size": {
+      "height": 224,
+      "width": 224
+    },
+    "do_rescale": true,
+    "rescale_factor": 0.00392156862745098,
+    "do_normalize": true,
+    "image_mean": [
+      0.48145466,
+      0.4578275,
+      0.40821073
+    ],
+    "image_std": [
+      0.26862954,
+      0.26130258,
+      0.27577711
+    ],
+    "do_convert_rgb": true,
+    "image_processor_type": "ChineseCLIPImageProcessor"
+  },
+  "mps_available": true,
+  "baseline_ref": null
+}

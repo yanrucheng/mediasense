@@ -1,0 +1,39 @@
+{
+  "input_vector_accounting": "passed",
+  "verified_rows": 2697,
+  "vector_bytes": 11046912,
+  "real_single_batch_correspondence": "passed",
+  "reencoded_validation_inputs": 6,
+  "separate_from_benchmark_timing": true,
+  "numerical_checks": [
+    {
+      "id": "00000:00",
+      "baseline_vs_batch_max_abs": 0.0,
+      "single_vs_batch_max_abs": 1.4901161193847656e-07
+    },
+    {
+      "id": "00412:00",
+      "baseline_vs_batch_max_abs": 0.0,
+      "single_vs_batch_max_abs": 2.384185791015625e-07
+    },
+    {
+      "id": "02133:02",
+      "baseline_vs_batch_max_abs": 1.4901161193847656e-07,
+      "single_vs_batch_max_abs": 1.4901161193847656e-07
+    }
+  ],
+  "focused_tests_passed": 11,
+  "ruff": "passed",
+  "diff_check": "passed",
+  "existing_output_refused_before_load": true,
+  "input_preview": {
+    "cards": 2697,
+    "unique_inputs": 2697,
+    "thumbnail_files_decodable": 2697,
+    "local_links_valid": 5394,
+    "external_assets": 0,
+    "classification_executed": false,
+    "browser_automation": "unavailable: headless Chrome exited -6; no browser interaction claim",
+    "thumbnail_contact_sheet_inspected": true
+  }
+}
