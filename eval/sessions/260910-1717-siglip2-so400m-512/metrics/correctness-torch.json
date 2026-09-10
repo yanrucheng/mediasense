@@ -1,0 +1,340 @@
+{
+  "status": "passed",
+  "input_fingerprint": "2144fcd970052a44d20a378e3819b86b55345d0605b6d71ce073fc2dd5cd5ba0",
+  "samples": [
+    {
+      "id": "00000:00",
+      "kind": "image",
+      "image_sha256": "154dd8b745e27f977a0f280f3dbfe6ac069782d9ab4cef45b87503a08ab8bfcd"
+    },
+    {
+      "id": "00482:00",
+      "kind": "image",
+      "image_sha256": "b7fc1d2c1f1ea153587e08519a5d83e7d38b79a80537a6215fa178f5515bf5ab"
+    },
+    {
+      "id": "01640:00",
+      "kind": "image",
+      "image_sha256": "92a3c056f1c00d52643d6764e04f59aa314160f7077ebcba555f899d87124c86"
+    },
+    {
+      "id": "02130:00",
+      "kind": "image",
+      "image_sha256": "2206b6e2d46ca8e350db8c2befeda99113bd43ab80a6a542e6d7ea4a5a31fd08"
+    },
+    {
+      "id": "00416:00",
+      "kind": "video",
+      "image_sha256": "b4133ba5ee7a16c7570fbcb9acf8564d32d225de1808e5cb43c0f0a31e9712c0"
+    },
+    {
+      "id": "00797:00",
+      "kind": "video",
+      "image_sha256": "1dab35916f920e09e1cd3fc4ddb099298be166e3658d562aeefccae972c92836"
+    },
+    {
+      "id": "01623:01",
+      "kind": "video",
+      "image_sha256": "d0d1885b9608bf634c0f35458328b5978c3fe308d8dbe14ce4a18297a755d97f"
+    },
+    {
+      "id": "02133:00",
+      "kind": "video",
+      "image_sha256": "a4fa41531ad42bdc9fbf28179861b5bf0c3ca6f2e9c84214fdc8bd2f48264c74"
+    }
+  ],
+  "tolerances": {
+    "max_cosine_distance": 0.001,
+    "max_pairwise_cosine_error": 0.002,
+    "material_rank_margin": 0.005
+  },
+  "checks": {
+    "cpu_fp32": {
+      "single_vs_batch4": {
+        "rows": 8,
+        "dimensions": 1152,
+        "max_cosine_distance": 1.1078073236525654e-08,
+        "max_pairwise_cosine_error": 6.169465761596271e-07,
+        "max_normalized_element_error": 9.834766387939453e-07,
+        "max_raw_relative_l2_error": 2.35512388077683e-06,
+        "nearest_neighbor_agreement": 8,
+        "changed_rank_positions": 0,
+        "inversions_with_reference_margin_over_0_005": 0,
+        "max_stored_unit_norm_error": 5.381372458757028e-09
+      },
+      "permuted_vs_original": {
+        "rows": 8,
+        "dimensions": 1152,
+        "max_cosine_distance": 2.5313338092303184e-08,
+        "max_pairwise_cosine_error": 0.0,
+        "max_normalized_element_error": 0.0,
+        "max_raw_relative_l2_error": 0.0,
+        "nearest_neighbor_agreement": 8,
+        "changed_rank_positions": 0,
+        "inversions_with_reference_margin_over_0_005": 0,
+        "max_stored_unit_norm_error": 1.2656669157173894e-08
+      },
+      "final_batch2_vs_batch4": {
+        "rows": 2,
+        "dimensions": 1152,
+        "max_cosine_distance": 1.8971899606867737e-09,
+        "max_pairwise_cosine_error": 0.0,
+        "max_normalized_element_error": 0.0,
+        "max_raw_relative_l2_error": 0.0,
+        "nearest_neighbor_agreement": 2,
+        "changed_rank_positions": 0,
+        "inversions_with_reference_margin_over_0_005": 0,
+        "max_stored_unit_norm_error": 9.485949803433869e-10
+      },
+      "description": {
+        "identity": "siglip2-image:c2103bf38ba96510b6c67481cc18178a696b6afe6361af1e518475eb4b9b6ffa",
+        "model_id": "google/siglip2-so400m-patch16-512",
+        "revision": "ceea1cba8130d8271436da4828633198c176a775",
+        "device": "cpu",
+        "precision": "float32",
+        "autocast": false,
+        "attention_implementation": "sdpa",
+        "encoder_source": "/private/tmp/mediasense-siglip2-260910/venv/lib/python3.13/site-packages/transformers/models/siglip/modeling_siglip.py",
+        "encoder_source_sha256": "60874564b9fd1fbd78d9aa3748b3adb506cf4b570f1ebd51dfcde32e0ba51d0d",
+        "vision_parameters": 428772800,
+        "excluded_checkpoint_tensors": 440,
+        "text_tower_loaded": false,
+        "feature_output": "SiglipVisionModel.pooler_output; official learned attention pooling + residual MLP, identical path to SiglipModel.get_image_features",
+        "preprocessing": {
+          "_processor_class": "SiglipProcessor",
+          "image_processor_type": "SiglipImageProcessor",
+          "do_resize": true,
+          "size": {
+            "height": 512,
+            "width": 512
+          },
+          "resample": 2,
+          "do_rescale": true,
+          "rescale_factor": 0.00392156862745098,
+          "do_normalize": true,
+          "image_mean": [
+            0.5,
+            0.5,
+            0.5
+          ],
+          "image_std": [
+            0.5,
+            0.5,
+            0.5
+          ],
+          "do_convert_rgb": null
+        },
+        "image_decode": "Pillow Image.open -> RGB; no EXIF transpose",
+        "output_normalization": "runner L2 normalization and float32-le storage",
+        "mps_available": true,
+        "mps_cpu_fallback": false,
+        "cpu_threads": 2,
+        "inter_op_threads": 1
+      },
+      "official_get_image_features": {
+        "rows": 4,
+        "dimensions": 1152,
+        "max_cosine_distance": 2.5313338092303184e-08,
+        "max_pairwise_cosine_error": 0.0,
+        "max_normalized_element_error": 0.0,
+        "max_raw_relative_l2_error": 0.0,
+        "nearest_neighbor_agreement": 4,
+        "changed_rank_positions": 0,
+        "inversions_with_reference_margin_over_0_005": 0,
+        "max_stored_unit_norm_error": 1.2656669157173894e-08
+      }
+    },
+    "mps_fp32": {
+      "single_vs_batch4": {
+        "rows": 8,
+        "dimensions": 1152,
+        "max_cosine_distance": 1.677498595586968e-08,
+        "max_pairwise_cosine_error": 2.7057764473426005e-08,
+        "max_normalized_element_error": 3.5390257835388184e-08,
+        "max_raw_relative_l2_error": 1.904674511469593e-07,
+        "nearest_neighbor_agreement": 8,
+        "changed_rank_positions": 0,
+        "inversions_with_reference_margin_over_0_005": 0,
+        "max_stored_unit_norm_error": 7.909068733269464e-09
+      },
+      "permuted_vs_original": {
+        "rows": 8,
+        "dimensions": 1152,
+        "max_cosine_distance": 1.869157706391178e-08,
+        "max_pairwise_cosine_error": 0.0,
+        "max_normalized_element_error": 0.0,
+        "max_raw_relative_l2_error": 0.0,
+        "nearest_neighbor_agreement": 8,
+        "changed_rank_positions": 0,
+        "inversions_with_reference_margin_over_0_005": 0,
+        "max_stored_unit_norm_error": 9.345788587467041e-09
+      },
+      "final_batch2_vs_batch4": {
+        "rows": 2,
+        "dimensions": 1152,
+        "max_cosine_distance": 0.0,
+        "max_pairwise_cosine_error": 1.9698889186514634e-09,
+        "max_normalized_element_error": 2.9802322387695312e-08,
+        "max_raw_relative_l2_error": 1.6296786022160254e-07,
+        "nearest_neighbor_agreement": 2,
+        "changed_rank_positions": 0,
+        "inversions_with_reference_margin_over_0_005": 0,
+        "max_stored_unit_norm_error": 1.3009679999953505e-09
+      },
+      "description": {
+        "identity": "siglip2-image:0e43c339ce9a14149f8304e192d335de8b6aa6e92c069b06a03c7b1f9666be3a",
+        "model_id": "google/siglip2-so400m-patch16-512",
+        "revision": "ceea1cba8130d8271436da4828633198c176a775",
+        "device": "mps",
+        "precision": "float32",
+        "autocast": false,
+        "attention_implementation": "sdpa",
+        "encoder_source": "/private/tmp/mediasense-siglip2-260910/venv/lib/python3.13/site-packages/transformers/models/siglip/modeling_siglip.py",
+        "encoder_source_sha256": "60874564b9fd1fbd78d9aa3748b3adb506cf4b570f1ebd51dfcde32e0ba51d0d",
+        "vision_parameters": 428772800,
+        "excluded_checkpoint_tensors": 440,
+        "text_tower_loaded": false,
+        "feature_output": "SiglipVisionModel.pooler_output; official learned attention pooling + residual MLP, identical path to SiglipModel.get_image_features",
+        "preprocessing": {
+          "_processor_class": "SiglipProcessor",
+          "image_processor_type": "SiglipImageProcessor",
+          "do_resize": true,
+          "size": {
+            "height": 512,
+            "width": 512
+          },
+          "resample": 2,
+          "do_rescale": true,
+          "rescale_factor": 0.00392156862745098,
+          "do_normalize": true,
+          "image_mean": [
+            0.5,
+            0.5,
+            0.5
+          ],
+          "image_std": [
+            0.5,
+            0.5,
+            0.5
+          ],
+          "do_convert_rgb": null
+        },
+        "image_decode": "Pillow Image.open -> RGB; no EXIF transpose",
+        "output_normalization": "runner L2 normalization and float32-le storage",
+        "mps_available": true,
+        "mps_cpu_fallback": false,
+        "cpu_threads": 2,
+        "inter_op_threads": 1
+      }
+    },
+    "mps_fp32_vs_cpu_fp32": {
+      "rows": 8,
+      "dimensions": 1152,
+      "max_cosine_distance": 2.2013021627742546e-08,
+      "max_pairwise_cosine_error": 3.4183566489653927e-06,
+      "max_normalized_element_error": 3.11434268951416e-06,
+      "max_raw_relative_l2_error": 2.2445256373749903e-05,
+      "nearest_neighbor_agreement": 8,
+      "changed_rank_positions": 0,
+      "inversions_with_reference_margin_over_0_005": 0,
+      "max_stored_unit_norm_error": 9.345788587467041e-09
+    },
+    "mps_fp16": {
+      "single_vs_batch4": {
+        "rows": 8,
+        "dimensions": 1152,
+        "max_cosine_distance": 6.0645862776098625e-09,
+        "max_pairwise_cosine_error": 0.0,
+        "max_normalized_element_error": 0.0,
+        "max_raw_relative_l2_error": 0.0,
+        "nearest_neighbor_agreement": 8,
+        "changed_rank_positions": 0,
+        "inversions_with_reference_margin_over_0_005": 0,
+        "max_stored_unit_norm_error": 6.622874249018196e-09
+      },
+      "permuted_vs_original": {
+        "rows": 8,
+        "dimensions": 1152,
+        "max_cosine_distance": 6.0645862776098625e-09,
+        "max_pairwise_cosine_error": 0.0,
+        "max_normalized_element_error": 0.0,
+        "max_raw_relative_l2_error": 0.0,
+        "nearest_neighbor_agreement": 8,
+        "changed_rank_positions": 0,
+        "inversions_with_reference_margin_over_0_005": 0,
+        "max_stored_unit_norm_error": 6.622874249018196e-09
+      },
+      "final_batch2_vs_batch4": {
+        "rows": 2,
+        "dimensions": 1152,
+        "max_cosine_distance": 1.812137329082475e-09,
+        "max_pairwise_cosine_error": 0.0,
+        "max_normalized_element_error": 0.0,
+        "max_raw_relative_l2_error": 0.0,
+        "nearest_neighbor_agreement": 2,
+        "changed_rank_positions": 0,
+        "inversions_with_reference_margin_over_0_005": 0,
+        "max_stored_unit_norm_error": 5.302575045718072e-09
+      },
+      "description": {
+        "identity": "siglip2-image:c7aa85771725b34246152c99086a618c9fe2328cdd41d34ac1ee826d61821330",
+        "model_id": "google/siglip2-so400m-patch16-512",
+        "revision": "ceea1cba8130d8271436da4828633198c176a775",
+        "device": "mps",
+        "precision": "float16",
+        "autocast": false,
+        "attention_implementation": "sdpa",
+        "encoder_source": "/private/tmp/mediasense-siglip2-260910/venv/lib/python3.13/site-packages/transformers/models/siglip/modeling_siglip.py",
+        "encoder_source_sha256": "60874564b9fd1fbd78d9aa3748b3adb506cf4b570f1ebd51dfcde32e0ba51d0d",
+        "vision_parameters": 428772800,
+        "excluded_checkpoint_tensors": 440,
+        "text_tower_loaded": false,
+        "feature_output": "SiglipVisionModel.pooler_output; official learned attention pooling + residual MLP, identical path to SiglipModel.get_image_features",
+        "preprocessing": {
+          "_processor_class": "SiglipProcessor",
+          "image_processor_type": "SiglipImageProcessor",
+          "do_resize": true,
+          "size": {
+            "height": 512,
+            "width": 512
+          },
+          "resample": 2,
+          "do_rescale": true,
+          "rescale_factor": 0.00392156862745098,
+          "do_normalize": true,
+          "image_mean": [
+            0.5,
+            0.5,
+            0.5
+          ],
+          "image_std": [
+            0.5,
+            0.5,
+            0.5
+          ],
+          "do_convert_rgb": null
+        },
+        "image_decode": "Pillow Image.open -> RGB; no EXIF transpose",
+        "output_normalization": "runner L2 normalization and float32-le storage",
+        "mps_available": true,
+        "mps_cpu_fallback": false,
+        "cpu_threads": 2,
+        "inter_op_threads": 1
+      }
+    },
+    "mps_fp16_vs_cpu_fp32": {
+      "rows": 8,
+      "dimensions": 1152,
+      "max_cosine_distance": 1.4518111371986109e-05,
+      "max_pairwise_cosine_error": 0.0004643438218894236,
+      "max_normalized_element_error": 0.0005859136581420898,
+      "max_raw_relative_l2_error": 0.005389338054902185,
+      "nearest_neighbor_agreement": 8,
+      "changed_rank_positions": 0,
+      "inversions_with_reference_margin_over_0_005": 0,
+      "max_stored_unit_norm_error": 6.622874249018196e-09
+    }
+  },
+  "evidence_directory": "/Users/chengyanru/repos/personal/mediasense/eval/sessions/260910-1717-siglip2-so400m-512/outputs/correctness-torch-02",
+  "diagnostic_note": "The first attempt stopped on exclusive creation of a progress JSON file; corrected the diagnostic writer and reran all checks in a new directory. No model, input or classification change."
+}

@@ -228,6 +228,19 @@ class BusinessTests(unittest.TestCase):
             self.assertIn("unreadable", page)
             self.assertFalse(rendered["thumbnail_failures"])
 
+            reused = {
+                **encoded,
+                "started_at": "2026-09-10T14:52:11+00:00",
+                "reuse_provenance": {"source_encoding": "/old/<encoding>.json"},
+            }
+            render_business(root / "reused", self.prepared, result, reused, self.config)
+            reused_page = (root / "reused/index.html").read_text()
+            self.assertIn("本轮新编码 0", reused_page)
+            self.assertIn("原编码实测，非本次测量", reused_page)
+            self.assertIn("/old/&lt;encoding&gt;.json", reused_page)
+            self.assertIn("原评测已编码，本轮复用向量", reused_page)
+            self.assertNotIn("无向量缓存命中", reused_page)
+
     def test_preview_uses_recorded_runtime_and_effective_encoder(self):
         cases = [
             (

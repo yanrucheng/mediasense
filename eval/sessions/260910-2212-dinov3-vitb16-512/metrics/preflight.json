@@ -1,0 +1,27 @@
+{
+  "fixture_verifier": "passed",
+  "fixture_bytes": 1759421497,
+  "input_fingerprint": "2144fcd970052a44d20a378e3819b86b55345d0605b6d71ce073fc2dd5cd5ba0",
+  "classification_fingerprint": "d4f8dcf2d38fcc58b8dd2a0b22d1e6360364ac14cce9620c2e12f34f0fa67b01",
+  "business_code": {
+    "package": "mediasense.precheck",
+    "files": 46,
+    "sha256": "255977ab42bc780b9f59ce4ff519be872766f2ee4dfa4ae1cc1eace1dd8b2ff3"
+  },
+  "weight_files_sha256": {
+    "LICENSE.md": "25d122eb8f5b880fd23c736fb6ea8018ee45c12237e00b8a86d14c653904999e",
+    "README.md": "cebdbe299e69067797886eb381366e3e353b793a2fed95d2c5a47716f9749b96",
+    "config.json": "5ca17ece8677541aa067db570946330ecca4125b713a51e89be9e7ec97395e94",
+    "model.safetensors": "1f9ed8a2378d65e24bb710ba522ac9fa7be4e036d7aefb4384ce022833926332"
+  },
+  "official_access": {
+    "revision": "5931719e67bbdb9737e363e781fb0c67687896bc",
+    "http_status": 401,
+    "error": "GatedRepo",
+    "gated": "manual",
+    "local_token_available": false
+  },
+  "reference_implementation": "timm 1.0.20; public publisher-provided DINOv3 ViT-B/16 LVD-1689M release",
+  "official_full_model_numerical_equivalence": "not independently tested; official checkpoint inaccessible",
+  "official_source_revision": "6876159a11b4df116f30f667f8c9888617df0751"
+}

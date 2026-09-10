@@ -1,0 +1,21 @@
+{
+  "git_head": "46228e9e74be7893a61ac206c664663004421489",
+  "files_sha256": {
+    "eval/shared/model_evaluation.py": "02fa96227a657bbe3f82d0c62c0ebaf6e56d87ce4b57d850c48d44e376e7259d",
+    "eval/shared/model_evaluation_inputs.py": "71f9cefc699f298f91d80b465a376694dfc0d5995f25f5315119998daae9d6b9",
+    "eval/shared/model_evaluation_hierarchy.py": "03e5aa9a5186883dcd1f20c8973b1de53f2e58e62330a343f24171b94c4d356b",
+    "eval/shared/model_evaluation_encoder.py": "f83d93911a098a85a22dad829c4ed3060b26d7fbbad72ae8717f58312c79572a",
+    "eval/shared/model_evaluation_dinov3.py": "b3b0f8ace614438b004bfc55f8cc6f6b5c4cfa6a0872556e0073804122a13f5d",
+    "eval/shared/model_evaluation_business_preview.py": "9733470de4f74ed74263e04f11b47076a9e59e7ae3d7253ce53e32553269e904",
+    "eval/shared/model_evaluation_business_inputs.py": "dba0192d1326709c58900b9e6c1adf7c214536415fe355c7d38542d790b14b14",
+    "eval/shared/model_evaluation_siglip2.py": "c5a71b588a74e0109dedab3c490d26c6543aa9521bb5ff123797f0bf81122602",
+    "eval/shared/model_evaluation_preview.py": "8da1502bc8a62f03d30eb8d06e27fe348c77729b9a049a2b77a4a718e182efc1",
+    "eval/shared/model_evaluation_business.py": "9323e667af836c3877c5c1a1230dc3db408b615a1bf3a3b66357f9a3428d85d1",
+    "readme/model-evaluation.md": "b1df48da24ac99fad75bae8245b9dde5260ce7d02b2435ade1dd77709ec2050f",
+    "eval/sessions/260910-2212-dinov3-vitb16-512/report.md": "d95f9bd41dfeb5e3927ebedb97914ce653ac219ffb579d5795b04299b36e7113",
+    "eval/sessions/260910-2212-dinov3-vitb16-512/outputs/mps/preview/index.html": "f1a42fc6eb2ac43b83904dc11a784d4a7289efa7f2db5f1dcecf4b2ef49cceae",
+    "eval/sessions/260910-2212-dinov3-vitb16-512/outputs/mps/vectors.f32": "0a4093d752e5349180d11d845a06721f3b3bc25dbb17fc5c1dd4217445c637ee",
+    "eval/sessions/260910-1717-siglip2-so400m-512/outputs/mps/preview/index.html": "3895c5760c8d0f01d80ec4bc30eb0d0017e08e1c3940d57dea7ccadbb61809b4",
+    "eval/sessions/260910-1330-chineseclip-business-baseline/outputs/baseline/preview/index.html": "d2168bfca1a5fee2fc6307017f5af7e43f5d98ae8fc5c45f19e600bd12ee572e"
+  }
+}

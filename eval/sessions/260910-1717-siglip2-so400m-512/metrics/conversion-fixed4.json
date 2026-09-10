@@ -1,0 +1,79 @@
+{
+  "status": "converted_and_compiled; numerical validation pending",
+  "input_fingerprint": "2144fcd970052a44d20a378e3819b86b55345d0605b6d71ce073fc2dd5cd5ba0",
+  "source_checkpoint_sha256": "a621bd212e1b3329b428595f9693217e19587afe826adf3e5c241a16392e8973",
+  "compute_precision": "FLOAT16",
+  "input_output_dtype": "float32",
+  "batch_shapes": [
+    4
+  ],
+  "minimum_deployment_target": "macOS15",
+  "timings": {
+    "source_load_and_example_seconds": 2.014765959000215,
+    "trace_and_checks_seconds": 31.469801458064467,
+    "conversion_seconds": 8.093390667112544,
+    "save_seconds": 0.1161064999178052,
+    "compile_seconds": 0.11122541595250368
+  },
+  "coremltools": "9.0",
+  "torch": "2.7.0",
+  "trace_vs_cpu_fp32": {
+    "rows": 4,
+    "dimensions": 1152,
+    "max_cosine_distance": 2.5313338092303184e-08,
+    "max_pairwise_cosine_error": 0.0,
+    "max_normalized_element_error": 0.0,
+    "max_raw_relative_l2_error": 0.0,
+    "nearest_neighbor_agreement": 4,
+    "changed_rank_positions": 0,
+    "inversions_with_reference_margin_over_0_005": 0,
+    "max_stored_unit_norm_error": 1.2656669157173894e-08
+  },
+  "nonconstant_float_output_types": {
+    "fp16": 653,
+    "fp32": 1
+  },
+  "compute_plan": {
+    "compute_units": "ALL",
+    "preferred_device_operation_counts": {
+      "unknown": 924,
+      "MLGPUComputeDevice": 654
+    },
+    "supported_device_operation_counts": {
+      "MLCPUComputeDevice": 654,
+      "MLGPUComputeDevice": 654,
+      "MLNeuralEngineComputeDevice": 654
+    },
+    "operations": {
+      "const": 924,
+      "ios18.cast": 2,
+      "ios18.conv": 1,
+      "ios18.reshape": 114,
+      "ios18.transpose": 115,
+      "ios18.add": 56,
+      "ios18.layer_norm": 56,
+      "ios18.linear": 166,
+      "ios18.mul": 27,
+      "ios18.matmul": 56,
+      "ios18.softmax": 28,
+      "ios18.gelu": 28,
+      "ios18.expand_dims": 1,
+      "ios18.squeeze": 1,
+      "ios18.slice_by_index": 3
+    },
+    "actual_execution_trace": false,
+    "limitation": "Static compute plan, not measured per-operation dispatch or elapsed time."
+  },
+  "files_sha256": {
+    "config.json": "048fd125a0ce9fdf98919bb3651c8596510488282cf76402eb838418a8029c79",
+    "preprocessor_config.json": "63ff380d3e424f93e6fbca5cc8e74eeed882e96fd6be2b7728aed308f3ad1513",
+    "vision.mlmodelc/analytics/coremldata.bin": "b53d626a7e26539e45d888690e4e210fc782af08cf915a0f7df46e0acb108b8c",
+    "vision.mlmodelc/coremldata.bin": "db497d811ad2104cdc18a5e295d78631d1118a7df614f68150a2f0a393604788",
+    "vision.mlmodelc/model.mil": "016eb3c2f345f428a12367979c2b28e951693d79ce7d34a62010fe1c0ae87fb0",
+    "vision.mlmodelc/weights/weight.bin": "91d13d9caec60087bd1a0a7ba32ef962e5c3925564117b4f98828517adaa1482",
+    "vision.mlpackage/Data/com.apple.CoreML/model.mlmodel": "f9c608c9854053755cacf8a2e2f1559c667a2c748e1470d34ed824922be551e7",
+    "vision.mlpackage/Data/com.apple.CoreML/weights/weight.bin": "91d13d9caec60087bd1a0a7ba32ef962e5c3925564117b4f98828517adaa1482",
+    "vision.mlpackage/Manifest.json": "2cf3e203f6a4284e62f519a93f5f499468228f7cfa65d95fdad7117d39959388"
+  },
+  "conversion_process_peak_rss_bytes": 4838539264
+}

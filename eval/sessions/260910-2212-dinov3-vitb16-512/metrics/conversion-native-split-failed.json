@@ -1,0 +1,30 @@
+{
+  "status": "failed",
+  "input_fingerprint": "2144fcd970052a44d20a378e3819b86b55345d0605b6d71ce073fc2dd5cd5ba0",
+  "source_checkpoint_sha256": "1f9ed8a2378d65e24bb710ba522ac9fa7be4e036d7aefb4384ce022833926332",
+  "precision": "FP16 convolution/MLP graph; FP32 attention, normalization, residuals and RoPE; FP32 I/O",
+  "native_batch_sizes": [
+    1
+  ],
+  "timings": {
+    "source_load_and_example_seconds": 2.6363105000928044,
+    "trace_and_checks_seconds": 5.6865718751214445
+  },
+  "trace_vs_cpu_fp32": {
+    "rows": 4,
+    "dimensions": 768,
+    "max_cosine_distance": 1.9739979650879036e-09,
+    "max_pairwise_cosine_error": 0.0,
+    "pairwise_pairs": 6,
+    "pairwise_over_tolerance": 0,
+    "max_normalized_element_error": 0.0,
+    "max_raw_relative_l2_error": 0.0,
+    "nearest_neighbor_agreement": 4,
+    "changed_rank_positions": 0,
+    "inversions_with_reference_margin_over_0_005": 0,
+    "max_stored_unit_norm_error": 9.86999038055103e-10,
+    "passed": true
+  },
+  "error": "NotImplementedError: PyTorch convert function for op 'tensor_split' not implemented.",
+  "conversion_process_peak_rss_bytes": 1067565056
+}

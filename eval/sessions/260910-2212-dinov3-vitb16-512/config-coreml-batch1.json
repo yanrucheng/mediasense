@@ -1,0 +1,181 @@
+{
+  "baseline_ref": "eval/sessions/260910-1330-chineseclip-business-baseline/metrics/baseline.json",
+  "fixture": {
+    "id": "ai-album-hk-representative-v1",
+    "original_package_root": "/Users/chengyanru/Downloads/ai-album-hk-representative-v1",
+    "package_root": "/private/tmp/mediasense-model-evaluation/ai-album-hk-representative-v1",
+    "media_subdirectory": "dataset/260501-HK美食之旅",
+    "checksum_manifest_sha256": "f56caa6b1f1dd56e1b02850a5bfc17567d11f5617899db166eb8d670889d67fe",
+    "media_manifest_sha256": "a13ba7d2bad2e1c9e21b363286bbf44c3655fec4cefb5200d5dd6d68bb9fc380",
+    "expected_media_count": 2134
+  },
+  "inputs": {
+    "mode": "mediasense_business",
+    "business_code": {
+      "package": "mediasense.precheck",
+      "files": 46,
+      "sha256": "255977ab42bc780b9f59ce4ff519be872766f2ee4dfa4ae1cc1eace1dd8b2ff3"
+    },
+    "compression_target": 200,
+    "video_frame_limit": 3,
+    "metadata_batch_size": 200,
+    "ffmpeg_threads": 1,
+    "tools": {
+      "exiftool": "13.30",
+      "ffmpeg": "ffmpeg version 8.1 Copyright (c) 2000-2026 the FFmpeg developers",
+      "ffprobe": "ffprobe version 8.1 Copyright (c) 2007-2026 the FFmpeg developers"
+    }
+  },
+  "expected_input_fingerprint": "2144fcd970052a44d20a378e3819b86b55345d0605b6d71ce073fc2dd5cd5ba0",
+  "model": {
+    "adapter": "model_evaluation_dinov3:DinoV3CoreMLAdapter",
+    "model_id": "timm/vit_base_patch16_dinov3.lvd1689m",
+    "upstream_model_id": "facebook/dinov3-vitb16-pretrain-lvd1689m",
+    "revision": "c6a5fb7d12bbd3cf3b0079253141c3332aaed7da",
+    "snapshot_path": "/private/tmp/mediasense-dinov3-260910/coreml-mixed-batch1-chunk",
+    "encoder_source_sha256": "52e00af9628a8ca785378dad256fd3d5931d61846fc08bbec80deb172d8844be",
+    "implementation_files_sha256": {
+      "models/eva.py": "52e00af9628a8ca785378dad256fd3d5931d61846fc08bbec80deb172d8844be",
+      "layers/pos_embed_sincos.py": "265ca0ce9070d5d5ed4c182330f8c072a66072bcabd66633b726aaa446194dc8",
+      "layers/patch_embed.py": "78f2d6afba3bf71a0b8a51cfb06e034b08af0708f4a49509511e4b419e448cda",
+      "layers/mlp.py": "26e9b3ee1e0eeff0e837065b37727482b2f89638dbbb67da0c5853eac619e9ff",
+      "layers/norm.py": "0fb3fdaf24b55a6d6415c0bd107d7268fb359f68e6c22be3c014af2c160ef509"
+    },
+    "architecture": "vit_base_patch16_dinov3",
+    "dimensions": 768,
+    "vision_parameters": 85641216,
+    "normalization": "unit_length",
+    "vector_dtype": "float32-le",
+    "feature_output": "forward_features(pixel_values)[:, 0, :] after final LayerNorm",
+    "rope_precision": "float32",
+    "rope_periods_policy": "timm native float32 periods; not truncated to Meta bfloat16 values",
+    "attention_implementation": "sdpa-float32",
+    "preprocessing": {
+      "image_size": 512,
+      "image_decode": "Pillow RGB; no EXIF transpose",
+      "recipe": "Meta README make_transform(resize_size=512)",
+      "order": [
+        "ToImage uint8",
+        "Resize square uint8",
+        "ToDtype float32 scale=True",
+        "Normalize"
+      ],
+      "interpolation": "bilinear",
+      "antialias": true,
+      "crop": null,
+      "mean": [
+        0.485,
+        0.456,
+        0.406
+      ],
+      "std": [
+        0.229,
+        0.224,
+        0.225
+      ]
+    },
+    "files_sha256": {
+      "source-config.json": "5ca17ece8677541aa067db570946330ecca4125b713a51e89be9e7ec97395e94",
+      "vision.mlmodelc/analytics/coremldata.bin": "20840458228d70827b89468daee33e65c38d5b6d1332a00691643ea710a9cd58",
+      "vision.mlmodelc/coremldata.bin": "4e1563f0924b87b12d336f98580065eef5690926ebededc794edcf6a21e56e81",
+      "vision.mlmodelc/model.mil": "42ab824f8544dd456f25a8c34d571b304cf46f2d05f9b4a916e968c846109bb3",
+      "vision.mlmodelc/weights/weight.bin": "10ba4a964d5a7f84d75e8bd4004c839e625fed3e41fe06c932bde79f37fad1ea",
+      "vision.mlpackage/Data/com.apple.CoreML/model.mlmodel": "9969ef45952222e0a39c4e749fd3911f88c359970156c463b26466f8731cf77d",
+      "vision.mlpackage/Data/com.apple.CoreML/weights/weight.bin": "10ba4a964d5a7f84d75e8bd4004c839e625fed3e41fe06c932bde79f37fad1ea",
+      "vision.mlpackage/Manifest.json": "a7ad956bc249c07508683b5946804284635b7f3c19cdce0b622d5865bc63d6cd"
+    },
+    "source_checkpoint_sha256": "1f9ed8a2378d65e24bb710ba522ac9fa7be4e036d7aefb4384ce022833926332",
+    "native_batch_sizes": [
+      1
+    ],
+    "graph_precision": "FP16 convolution/MLP graph; FP32 attention, normalization, residuals and RoPE; FP32 I/O"
+  },
+  "runtime": {
+    "python": "/private/tmp/mediasense-dinov3-260910/venv/bin/python",
+    "python_version": "3.13.5",
+    "packages": {
+      "annotated-types": "0.8.0",
+      "anyio": "4.15.1",
+      "attrs": "26.1.0",
+      "cattrs": "26.2.0",
+      "certifi": "2026.7.22",
+      "cffi": "2.1.1",
+      "charset-normalizer": "3.5.1",
+      "click": "8.5.0",
+      "coremltools": "9.0",
+      "cryptography": "50.0.1",
+      "filelock": "3.32.6",
+      "fsspec": "2026.7.0",
+      "gpxpy": "1.6.2",
+      "h11": "0.16.0",
+      "hf-xet": "1.6.0",
+      "httpcore2": "2.12.0",
+      "httpx2": "2.12.0",
+      "huggingface_hub": "0.36.2",
+      "idna": "3.19",
+      "Jinja2": "3.1.6",
+      "jsonschema": "4.26.0",
+      "jsonschema-specifications": "2025.9.1",
+      "MarkupSafe": "3.0.3",
+      "mcp": "2.2.0",
+      "mcp-types": "2.2.0",
+      "mediasense": "0.9.0",
+      "mpmath": "1.3.0",
+      "networkx": "3.6.1",
+      "numpy": "2.2.6",
+      "opentelemetry-api": "1.44.0",
+      "packaging": "26.3",
+      "pillow": "12.3.0",
+      "protobuf": "7.36.1",
+      "pyaml": "26.7.0",
+      "pycparser": "3.0",
+      "pydantic": "2.13.5",
+      "pydantic_core": "2.46.5",
+      "PyJWT": "2.13.0",
+      "python-multipart": "0.0.32",
+      "PyYAML": "6.0.3",
+      "referencing": "0.37.0",
+      "regex": "2026.9.10",
+      "requests": "2.34.2",
+      "rpds-py": "2026.6.3",
+      "safetensors": "0.8.0",
+      "setuptools": "84.0.0",
+      "sse-starlette": "3.4.11",
+      "starlette": "1.6.0",
+      "sympy": "1.14.0",
+      "timm": "1.0.20",
+      "tokenizers": "0.22.2",
+      "torch": "2.7.0",
+      "torchvision": "0.22.0",
+      "tqdm": "4.70.0",
+      "transformers": "4.57.6",
+      "truststore": "0.10.4",
+      "typing-inspection": "0.4.4",
+      "typing_extensions": "4.16.0",
+      "urllib3": "2.7.0",
+      "uvicorn": "0.52.4"
+    },
+    "device": "coreml",
+    "precision": "float16",
+    "batch_size": 1,
+    "cpu_threads": 2,
+    "nice": 10,
+    "profile_note": "FP16 convolution/MLP graph; FP32 attention, normalization, residuals and RoPE; FP32 I/O; allowed compute units ALL, actual dispatch unmeasured; no padding",
+    "compute_units": "ALL"
+  },
+  "classification": {
+    "status": "confirmed",
+    "algorithm": "mediasense_content_boundaries_with_anchor",
+    "video_top_k": 0.5,
+    "profile": {
+      "target_entries": 200,
+      "temporal_scale_seconds": 86400.0,
+      "spatial_scale_meters": 3000.0,
+      "content_distance_scale": 0.311,
+      "representative_top_k": 0.5,
+      "exact_representative_limit": 256,
+      "representative_comparison_budget": 65536,
+      "content_based_boundaries": true
+    }
+  }
+}

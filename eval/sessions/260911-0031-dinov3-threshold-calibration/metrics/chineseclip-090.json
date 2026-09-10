@@ -1,0 +1,160 @@
+{
+  "status": "reclassified_with_input_failures",
+  "human_acceptance": "待人工验收",
+  "baseline_ref": null,
+  "classification_fingerprint": "c713f837aabbc5de71f9698e63e84e88274e7e6c0855b3cf49c2b77dc6ae784a",
+  "input_fingerprint": "2144fcd970052a44d20a378e3819b86b55345d0605b6d71ce073fc2dd5cd5ba0",
+  "source_fingerprint": "ddb7d5cae4a459b2c57cc8d2253db413b6cda3394ede5ccc5db5cea5d55562d8",
+  "classification": {
+    "status": "confirmed",
+    "algorithm": "mediasense_content_boundaries_with_anchor",
+    "video_top_k": 0.5,
+    "profile": {
+      "target_entries": 200,
+      "temporal_scale_seconds": 86400.0,
+      "spatial_scale_meters": 3000.0,
+      "content_distance_scale": 0.9,
+      "representative_top_k": 0.5,
+      "exact_representative_limit": 256,
+      "representative_comparison_budget": 65536,
+      "content_based_boundaries": true
+    }
+  },
+  "counts": {
+    "sources": 2134,
+    "expected_inputs": 551,
+    "prepared": 366,
+    "input_failures": 185,
+    "encoded": 366,
+    "not_encoded": 0,
+    "groups": 16,
+    "business_points": 167,
+    "grouped_sources": 2134,
+    "ungrouped_sources": 0,
+    "omitted": 0
+  },
+  "performance": null,
+  "environment": {
+    "python": "3.13.5 (main, Jun 12 2025, 12:22:43) [Clang 20.1.4 ]",
+    "executable": "/Users/chengyanru/.local/share/uv/tools/mediasense/bin/python",
+    "platform": "macOS-26.4.1-arm64-arm-64bit-Mach-O",
+    "machine": "arm64",
+    "pid": 41619,
+    "nice": 10,
+    "macos": "26.4.1",
+    "build": "25E253",
+    "cpu": "Apple M5 Pro",
+    "unified_memory_bytes": 51539607552
+  },
+  "code": {
+    "git_head": "17373fa926549b671d293bfcc1635a7de664629d",
+    "working_tree_dirty": true,
+    "evaluation_files_sha256": {
+      "model_evaluation.py": "4821a52cb43118a39b8822145b2c9c1d9e21687b8aa11de23b8189b7ab2159ce",
+      "model_evaluation_business.py": "9323e667af836c3877c5c1a1230dc3db408b615a1bf3a3b66357f9a3428d85d1",
+      "model_evaluation_business_inputs.py": "dba0192d1326709c58900b9e6c1adf7c214536415fe355c7d38542d790b14b14",
+      "model_evaluation_business_preview.py": "a29a8b3113c1c18a693991dd6a8cbecc024e7a70972382d04f8273b83711d15c",
+      "model_evaluation_encoder.py": "f83d93911a098a85a22dad829c4ed3060b26d7fbbad72ae8717f58312c79572a",
+      "model_evaluation_hierarchy.py": "03e5aa9a5186883dcd1f20c8973b1de53f2e58e62330a343f24171b94c4d356b",
+      "model_evaluation_inputs.py": "71f9cefc699f298f91d80b465a376694dfc0d5995f25f5315119998daae9d6b9",
+      "model_evaluation_preview.py": "8da1502bc8a62f03d30eb8d06e27fe348c77729b9a049a2b77a4a718e182efc1",
+      "prepare_input.py": "5e5870fc39838c378d798417c214402101829e495d0ed4472157227975b27319"
+    }
+  },
+  "business_code": {
+    "package": "mediasense.precheck",
+    "files": 46,
+    "sha256": "255977ab42bc780b9f59ce4ff519be872766f2ee4dfa4ae1cc1eace1dd8b2ff3"
+  },
+  "effective_encoder": {
+    "identity": "transformers-chinese-clip:/Users/chengyanru/.cache/huggingface/hub/models--OFA-Sys--chinese-clip-vit-huge-patch14/snapshots/503e16b560aff94c1922f13a86a7693d36957a4f@503e16b560aff94c1922f13a86a7693d36957a4f;transformers=4.57.6;torch=2.13.0;device=cpu",
+    "model_id": "OFA-Sys/chinese-clip-vit-huge-patch14",
+    "revision": "503e16b560aff94c1922f13a86a7693d36957a4f",
+    "encoder_source": "/Users/chengyanru/.local/share/uv/tools/mediasense/lib/python3.13/site-packages/mediasense/precheck/embedding.py",
+    "precision": "float32; no autocast; existing no_grad path",
+    "preprocessing": {
+      "_processor_class": null,
+      "do_resize": true,
+      "size": {
+        "height": 224,
+        "width": 224
+      },
+      "resample": 3,
+      "do_center_crop": false,
+      "crop_size": {
+        "height": 224,
+        "width": 224
+      },
+      "do_rescale": true,
+      "rescale_factor": 0.00392156862745098,
+      "do_normalize": true,
+      "image_mean": [
+        0.48145466,
+        0.4578275,
+        0.40821073
+      ],
+      "image_std": [
+        0.26862954,
+        0.26130258,
+        0.27577711
+      ],
+      "do_convert_rgb": true,
+      "image_processor_type": "ChineseCLIPImageProcessor"
+    },
+    "image_decode": "Pillow Image.open -> RGB; no EXIF transpose",
+    "output_normalization": "unit_length",
+    "mps_available": true,
+    "cpu_threads": 2,
+    "inter_op_threads": 1
+  },
+  "embedding_identity": "a469a4fd2ec4398fd31888a86516ed0c82c3926bad61e7e84c0052d30f11c80a",
+  "encoding_summary": "/Users/chengyanru/repos/personal/mediasense/eval/sessions/260910-1330-chineseclip-business-baseline/outputs/baseline/encoding.json",
+  "preview": "/Users/chengyanru/repos/personal/mediasense/eval/sessions/260911-0031-dinov3-threshold-calibration/outputs/chineseclip-090/preview/index.html",
+  "preview_checks": {
+    "source_cards": 2134,
+    "thumbnails": 2118,
+    "thumbnail_failures": [],
+    "external_resources": 0
+  },
+  "result_sha256": "5c17a1b7edb8c0af37e9c81f702ce35136a70ac53c4c8817323d0bede92455dc",
+  "preparation_failures_by_kind": {
+    "video": 185
+  },
+  "encoding_reuse": {
+    "source_encoding": "/Users/chengyanru/repos/personal/mediasense/eval/sessions/260910-1330-chineseclip-business-baseline/outputs/baseline/encoding.json",
+    "source_encoding_sha256": "4f68965f478e351a017526cf70e81ae7032b075e2c3d70da2a6c54bcfdb9154b",
+    "source_vectors_sha256": "8bb03cfd7a3e94929b7bbd6fbf0daff918c02a9f1abf032b370add80feaefa31",
+    "reused_vectors": 366,
+    "newly_encoded": 0
+  },
+  "source_encoding_performance": {
+    "model_load_seconds": 26.502733583096415,
+    "encoding_seconds": 155.28981470572762,
+    "encoded_inputs": 366,
+    "embedding_cache_hits": 0,
+    "warmup_inputs": 0,
+    "timing_scope": "Every batch includes file read, RGB decode, processor resize/normalize, inference, result materialization on CPU, and device synchronization. No warmup; first batch included. Excludes fixture verification, video extraction, L2 normalization, vector writes, clustering and preview.",
+    "load_scope": "Adapter/framework import, model and processor loading, device transfer, readiness and synchronization; weight hashing is preflight, outside load timing.",
+    "memory_scope": "Kernel RUSAGE_SELF high-water resident bytes for this encoding PID through completion, including imports, load and encoding; excludes all children and separate preparation/preview processes. Not total system or GPU allocation.",
+    "memory_includes_children": false,
+    "inputs_per_second": 2.3568834871338193,
+    "peak_process_rss_bytes": 3075702784
+  },
+  "classification_code": {
+    "git_head": "46228e9e74be7893a61ac206c664663004421489",
+    "working_tree_dirty": true,
+    "evaluation_files_sha256": {
+      "model_evaluation.py": "ad8f8cd8de573c9c2661b7d5722e28a6908c5a70cd94542dc3e564d4b963d367",
+      "model_evaluation_business.py": "9323e667af836c3877c5c1a1230dc3db408b615a1bf3a3b66357f9a3428d85d1",
+      "model_evaluation_business_inputs.py": "dba0192d1326709c58900b9e6c1adf7c214536415fe355c7d38542d790b14b14",
+      "model_evaluation_business_preview.py": "3c66cf5e820fa5032bc0b558c4aaf6e5fbc3125e7190cf41f65ebcea38f2eaee",
+      "model_evaluation_dinov3.py": "b3b0f8ace614438b004bfc55f8cc6f6b5c4cfa6a0872556e0073804122a13f5d",
+      "model_evaluation_encoder.py": "f83d93911a098a85a22dad829c4ed3060b26d7fbbad72ae8717f58312c79572a",
+      "model_evaluation_hierarchy.py": "03e5aa9a5186883dcd1f20c8973b1de53f2e58e62330a343f24171b94c4d356b",
+      "model_evaluation_inputs.py": "71f9cefc699f298f91d80b465a376694dfc0d5995f25f5315119998daae9d6b9",
+      "model_evaluation_preview.py": "8da1502bc8a62f03d30eb8d06e27fe348c77729b9a049a2b77a4a718e182efc1",
+      "model_evaluation_siglip2.py": "c5a71b588a74e0109dedab3c490d26c6543aa9521bb5ff123797f0bf81122602",
+      "prepare_input.py": "5e5870fc39838c378d798417c214402101829e495d0ed4472157227975b27319"
+    }
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "q": {
+    "dtype": "torch.float16",
+    "finite": true,
+    "max_abs": 331.5
+  },
+  "k": {
+    "dtype": "torch.float16",
+    "finite": true,
+    "max_abs": 235.5
+  },
+  "v": {
+    "dtype": "torch.float16",
+    "finite": true,
+    "max_abs": 34.46875
+  },
+  "qk_fp32": {
+    "dtype": "torch.float32",
+    "finite": true,
+    "max_abs": 1096297.25
+  },
+  "qk_fp16": {
+    "dtype": "torch.float16",
+    "finite": false,
+    "max_abs": "inf"
+  },
+  "sdpa_fp16": {
+    "dtype": "torch.float16",
+    "finite": false,
+    "max_abs": "nan"
+  },
+  "sdpa_fp32": {
+    "dtype": "torch.float32",
+    "finite": true,
+    "max_abs": 23.359375
+  },
+  "timm_eager_fp16": {
+    "dtype": "torch.float16",
+    "finite": false,
+    "max_abs": "nan"
+  }
+}

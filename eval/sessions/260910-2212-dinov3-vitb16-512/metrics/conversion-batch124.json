@@ -1,0 +1,79 @@
+{
+  "status": "converted_and_compiled; numerical validation pending",
+  "input_fingerprint": "2144fcd970052a44d20a378e3819b86b55345d0605b6d71ce073fc2dd5cd5ba0",
+  "source_checkpoint_sha256": "1f9ed8a2378d65e24bb710ba522ac9fa7be4e036d7aefb4384ce022833926332",
+  "precision": "FP16 convolution/MLP graph; FP32 attention, normalization, residuals and RoPE; FP32 I/O",
+  "native_batch_sizes": [
+    1,
+    2,
+    4
+  ],
+  "timings": {
+    "source_load_and_example_seconds": 1.4289550830144435,
+    "trace_and_checks_seconds": 14.660131459124386,
+    "conversion_seconds": 3.0842176671139896,
+    "save_seconds": 0.0499569159001112,
+    "compile_seconds": 0.13246033294126391
+  },
+  "export_compatibility": "RoPE tensor_split(2,-1) replaced by chunk(2,-1) at fixed width 128; process-local tracing only",
+  "trace_vs_cpu_fp32": {
+    "rows": 4,
+    "dimensions": 768,
+    "max_cosine_distance": 1.9739979650879036e-09,
+    "max_pairwise_cosine_error": 0.0,
+    "pairwise_pairs": 6,
+    "pairwise_over_tolerance": 0,
+    "max_normalized_element_error": 0.0,
+    "max_raw_relative_l2_error": 0.0,
+    "nearest_neighbor_agreement": 4,
+    "changed_rank_positions": 0,
+    "inversions_with_reference_margin_over_0_005": 0,
+    "max_stored_unit_norm_error": 9.86999038055103e-10,
+    "passed": true
+  },
+  "precision_selection_counts": {
+    "keep_fp32": 1828,
+    "fp16": 106
+  },
+  "nonconstant_float_output_types": {
+    "fp16": 51,
+    "fp32": 512
+  },
+  "attention_compute_output_types": {
+    "fp32": 36
+  },
+  "operation_counts": {
+    "cast": 67,
+    "conv": 1,
+    "transpose": 25,
+    "shape": 50,
+    "gather": 27,
+    "concat": 111,
+    "reshape": 25,
+    "equal": 25,
+    "select": 26,
+    "real_div": 26,
+    "tile": 26,
+    "layer_norm": 25,
+    "linear": 48,
+    "split": 36,
+    "squeeze": 36,
+    "slice_by_index": 85,
+    "mul": 96,
+    "add": 48,
+    "scaled_dot_product_attention": 12,
+    "gelu": 12,
+    "identity": 1
+  },
+  "files_sha256": {
+    "source-config.json": "5ca17ece8677541aa067db570946330ecca4125b713a51e89be9e7ec97395e94",
+    "vision.mlmodelc/analytics/coremldata.bin": "63b76ca302e31f9f89357198201f5be681cc79243bd299358f7795385a2f5897",
+    "vision.mlmodelc/coremldata.bin": "14fb5eb4b77ef444399962395d2df806bf29d393aa48fb40a3e4249973d2053d",
+    "vision.mlmodelc/model.mil": "571f77dc66eda2f51dd4dddcf7354df6aafc51584d385d6ef6ce9f9b4c4f9a4f",
+    "vision.mlmodelc/weights/weight.bin": "10ba4a964d5a7f84d75e8bd4004c839e625fed3e41fe06c932bde79f37fad1ea",
+    "vision.mlpackage/Data/com.apple.CoreML/model.mlmodel": "4fd28483575129c43b9a465575b551f5628f58b136d9fe0b66c7b7f59b3761a0",
+    "vision.mlpackage/Data/com.apple.CoreML/weights/weight.bin": "10ba4a964d5a7f84d75e8bd4004c839e625fed3e41fe06c932bde79f37fad1ea",
+    "vision.mlpackage/Manifest.json": "b71cc360561c9bf4916c030c890951192cbe412b51eb9553b4645ab2d9517aee"
+  },
+  "conversion_process_peak_rss_bytes": 1082327040
+}

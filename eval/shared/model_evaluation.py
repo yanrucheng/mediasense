@@ -195,6 +195,7 @@ def encode(config: dict, inputs_path: Path, output: Path) -> dict:
         "performance": {
             "model_load_seconds": None,
             "encoding_seconds": 0.0,
+            "first_batch_seconds": None,
             "encoded_inputs": 0,
             "embedding_cache_hits": 0,
             "warmup_inputs": 0,
@@ -243,6 +244,8 @@ def encode(config: dict, inputs_path: Path, output: Path) -> dict:
                     )
                     raise
                 performance["encoding_seconds"] += elapsed
+                if start == 0:
+                    performance["first_batch_seconds"] = elapsed
                 validated = [
                     validate_vector(values, config["model"]["dimensions"])
                     for values in raw
@@ -306,6 +309,10 @@ def main() -> None:
         "--inputs", type=Path, help="Frozen prepared inputs.json (encode/run)"
     )
     parser.add_argument(
+        "--encoding", type=Path,
+        help="Existing verified business encoding to reclassify into a NEW preview output; no inference",
+    )
+    parser.add_argument(
         "--output",
         type=Path,
         required=True,
@@ -316,6 +323,10 @@ def main() -> None:
     )
     args = parser.parse_args()
     config = json.loads(args.config.read_text())
+    if args.encoding is not None and (
+        args.action != "preview" or config["inputs"].get("mode") != "mediasense_business"
+    ):
+        parser.error("--encoding is only supported for business preview")
     os.environ.update(
         HF_HUB_OFFLINE="1",
         TRANSFORMERS_OFFLINE="1",
@@ -349,13 +360,17 @@ def main() -> None:
         else:
             from model_evaluation_preview import preview
 
-        result = preview(config, args.output, args.summary)
+        if args.encoding is not None:
+            result = preview(config, args.output, args.summary, encoding_source=args.encoding)
+        else:
+            result = preview(config, args.output, args.summary)
     if args.action in {"encode", "preview", "run"}:
         result = {
             "output": str(args.output.resolve()),
             "status": result["status"],
             "counts": result["counts"],
             "performance": result["performance"],
+            **({"encoding_reuse": result["encoding_reuse"]} if "encoding_reuse" in result else {}),
         }
     print(json.dumps(result, ensure_ascii=False, indent=2))
 

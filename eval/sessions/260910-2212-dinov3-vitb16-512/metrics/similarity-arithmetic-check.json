@@ -1,0 +1,22 @@
+{
+  "mps": {
+    "blas_warnings": [
+      "divide by zero encountered in matmul",
+      "overflow encountered in matmul",
+      "invalid value encountered in matmul"
+    ],
+    "blas_finite": true,
+    "non_blas_finite": true,
+    "max_blas_vs_non_blas_error": 2.886579864025407e-15
+  },
+  "coreml-batch1": {
+    "blas_warnings": [
+      "divide by zero encountered in matmul",
+      "overflow encountered in matmul",
+      "invalid value encountered in matmul"
+    ],
+    "blas_finite": true,
+    "non_blas_finite": true,
+    "max_blas_vs_non_blas_error": 2.6645352591003757e-15
+  }
+}

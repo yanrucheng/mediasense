@@ -1,0 +1,551 @@
+{
+  "status": "passed",
+  "input_fingerprint": "2144fcd970052a44d20a378e3819b86b55345d0605b6d71ce073fc2dd5cd5ba0",
+  "samples": [
+    {
+      "id": "00000:00",
+      "kind": "image",
+      "image_sha256": "154dd8b745e27f977a0f280f3dbfe6ac069782d9ab4cef45b87503a08ab8bfcd"
+    },
+    {
+      "id": "00482:00",
+      "kind": "image",
+      "image_sha256": "b7fc1d2c1f1ea153587e08519a5d83e7d38b79a80537a6215fa178f5515bf5ab"
+    },
+    {
+      "id": "01640:00",
+      "kind": "image",
+      "image_sha256": "92a3c056f1c00d52643d6764e04f59aa314160f7077ebcba555f899d87124c86"
+    },
+    {
+      "id": "02130:00",
+      "kind": "image",
+      "image_sha256": "2206b6e2d46ca8e350db8c2befeda99113bd43ab80a6a542e6d7ea4a5a31fd08"
+    },
+    {
+      "id": "00416:00",
+      "kind": "video",
+      "image_sha256": "b4133ba5ee7a16c7570fbcb9acf8564d32d225de1808e5cb43c0f0a31e9712c0"
+    },
+    {
+      "id": "00797:00",
+      "kind": "video",
+      "image_sha256": "1dab35916f920e09e1cd3fc4ddb099298be166e3658d562aeefccae972c92836"
+    },
+    {
+      "id": "01623:01",
+      "kind": "video",
+      "image_sha256": "d0d1885b9608bf634c0f35458328b5978c3fe308d8dbe14ce4a18297a755d97f"
+    },
+    {
+      "id": "02133:00",
+      "kind": "video",
+      "image_sha256": "a4fa41531ad42bdc9fbf28179861b5bf0c3ca6f2e9c84214fdc8bd2f48264c74"
+    }
+  ],
+  "tolerances": {
+    "max_cosine_distance": 0.001,
+    "max_pairwise_cosine_error": 0.002,
+    "material_rank_margin": 0.005,
+    "max_stored_unit_norm_error": 1e-06
+  },
+  "checks": {
+    "cpu_fp32": {
+      "single_vs_batch4": {
+        "rows": 8,
+        "dimensions": 768,
+        "max_cosine_distance": 4.963546240688288e-09,
+        "max_pairwise_cosine_error": 0.0,
+        "pairwise_pairs": 28,
+        "pairwise_over_tolerance": 0,
+        "max_normalized_element_error": 0.0,
+        "max_raw_relative_l2_error": 0.0,
+        "nearest_neighbor_agreement": 8,
+        "changed_rank_positions": 0,
+        "inversions_with_reference_margin_over_0_005": 0,
+        "max_stored_unit_norm_error": 2.481773120344144e-09,
+        "passed": true
+      },
+      "reordered": {
+        "rows": 8,
+        "dimensions": 768,
+        "max_cosine_distance": 4.963546240688288e-09,
+        "max_pairwise_cosine_error": 0.0,
+        "pairwise_pairs": 28,
+        "pairwise_over_tolerance": 0,
+        "max_normalized_element_error": 0.0,
+        "max_raw_relative_l2_error": 0.0,
+        "nearest_neighbor_agreement": 8,
+        "changed_rank_positions": 0,
+        "inversions_with_reference_margin_over_0_005": 0,
+        "max_stored_unit_norm_error": 2.481773120344144e-09,
+        "passed": true
+      },
+      "final_batch2": {
+        "rows": 2,
+        "dimensions": 768,
+        "max_cosine_distance": 4.963546240688288e-09,
+        "max_pairwise_cosine_error": 0.0,
+        "pairwise_pairs": 1,
+        "pairwise_over_tolerance": 0,
+        "max_normalized_element_error": 0.0,
+        "max_raw_relative_l2_error": 0.0,
+        "nearest_neighbor_agreement": 2,
+        "changed_rank_positions": 0,
+        "inversions_with_reference_margin_over_0_005": 0,
+        "max_stored_unit_norm_error": 2.481773120344144e-09,
+        "passed": true
+      },
+      "duplicate_slots": {
+        "rows": 4,
+        "dimensions": 768,
+        "max_cosine_distance": 0.0,
+        "max_pairwise_cosine_error": 0.0,
+        "pairwise_pairs": 6,
+        "pairwise_over_tolerance": 0,
+        "max_normalized_element_error": 0.0,
+        "max_raw_relative_l2_error": 0.0,
+        "nearest_neighbor_agreement": 4,
+        "changed_rank_positions": 0,
+        "inversions_with_reference_margin_over_0_005": 0,
+        "max_stored_unit_norm_error": 1.1114131837075547e-09,
+        "passed": true
+      },
+      "description": {
+        "identity": "dinov3-cls:ad1caf3a750f07af3614d64b22532ec6b28c6f898deaa3cb465ee2ede527cab4",
+        "model_id": "timm/vit_base_patch16_dinov3.lvd1689m",
+        "revision": "c6a5fb7d12bbd3cf3b0079253141c3332aaed7da",
+        "device": "cpu",
+        "precision": "float32",
+        "autocast": false,
+        "vision_parameters": 85641216,
+        "feature_output": "forward_features(pixel_values)[:, 0, :] after final LayerNorm",
+        "prefix_tokens": "CLS + 4 register tokens; only CLS is returned",
+        "qkv_bias": false,
+        "rope_periods_policy": "timm native float32 periods; not truncated to Meta bfloat16 values",
+        "rope_periods": [
+          1.0,
+          1.3335214853286743,
+          1.778279423713684,
+          2.3713736534118652,
+          3.1622776985168457,
+          4.216965198516846,
+          5.6234130859375,
+          7.498941898345947,
+          10.0,
+          13.335214614868164,
+          17.782794952392578,
+          23.71373748779297,
+          31.62277603149414,
+          42.16965103149414,
+          56.234130859375,
+          74.98941802978516
+        ],
+        "attention_implementation": "timm EvaAttention in float32, including QKV, SDPA and output projection; attention autocast disabled",
+        "parameter_counts_by_dtype": {
+          "torch.float32": 85641216
+        },
+        "preprocessing": {
+          "image_size": 512,
+          "image_decode": "Pillow RGB; no EXIF transpose",
+          "recipe": "Meta README make_transform(resize_size=512)",
+          "order": [
+            "ToImage uint8",
+            "Resize square uint8",
+            "ToDtype float32 scale=True",
+            "Normalize"
+          ],
+          "interpolation": "bilinear",
+          "antialias": true,
+          "crop": null,
+          "mean": [
+            0.485,
+            0.456,
+            0.406
+          ],
+          "std": [
+            0.229,
+            0.224,
+            0.225
+          ]
+        },
+        "output_normalization": "runner L2 normalization and float32-le storage",
+        "mps_cpu_fallback": false,
+        "cpu_threads": 2,
+        "inter_op_threads": 1,
+        "positional_coordinate_creation": "timm creates coordinates on CPU then explicitly transfers to the model device; not operator fallback"
+      },
+      "observed_execution_dtypes": {
+        "patch_embed.proj": {
+          "dtype": "torch.float32",
+          "device": "cpu"
+        },
+        "blocks.0.norm1": {
+          "dtype": "torch.float32",
+          "device": "cpu"
+        },
+        "blocks.0.attn.attention.qkv": {
+          "dtype": "torch.float32",
+          "device": "cpu"
+        },
+        "blocks.0.mlp.fc1": {
+          "dtype": "torch.float32",
+          "device": "cpu"
+        },
+        "blocks.0.mlp.fc2": {
+          "dtype": "torch.float32",
+          "device": "cpu"
+        },
+        "blocks.0": {
+          "dtype": "torch.float32",
+          "device": "cpu"
+        }
+      },
+      "reference_feature_semantics": {
+        "meta_preprocessing_equal": true,
+        "token_shape": [
+          4,
+          1029,
+          768
+        ],
+        "direct_cls_and_token_pool_exact": true,
+        "equal_to_patch_average": false,
+        "meta_checkpoint_numerical_equivalence": "unverified; gated official checkpoint unavailable"
+      }
+    },
+    "mps_fp32": {
+      "single_vs_batch4": {
+        "rows": 8,
+        "dimensions": 768,
+        "max_cosine_distance": 5.082891996188721e-09,
+        "max_pairwise_cosine_error": 0.0,
+        "pairwise_pairs": 28,
+        "pairwise_over_tolerance": 0,
+        "max_normalized_element_error": 0.0,
+        "max_raw_relative_l2_error": 0.0,
+        "nearest_neighbor_agreement": 8,
+        "changed_rank_positions": 0,
+        "inversions_with_reference_margin_over_0_005": 0,
+        "max_stored_unit_norm_error": 3.4894411804486936e-09,
+        "passed": true
+      },
+      "reordered": {
+        "rows": 8,
+        "dimensions": 768,
+        "max_cosine_distance": 5.082891996188721e-09,
+        "max_pairwise_cosine_error": 0.0,
+        "pairwise_pairs": 28,
+        "pairwise_over_tolerance": 0,
+        "max_normalized_element_error": 0.0,
+        "max_raw_relative_l2_error": 0.0,
+        "nearest_neighbor_agreement": 8,
+        "changed_rank_positions": 0,
+        "inversions_with_reference_margin_over_0_005": 0,
+        "max_stored_unit_norm_error": 3.4894411804486936e-09,
+        "passed": true
+      },
+      "final_batch2": {
+        "rows": 2,
+        "dimensions": 768,
+        "max_cosine_distance": 5.082891996188721e-09,
+        "max_pairwise_cosine_error": 0.0,
+        "pairwise_pairs": 1,
+        "pairwise_over_tolerance": 0,
+        "max_normalized_element_error": 0.0,
+        "max_raw_relative_l2_error": 0.0,
+        "nearest_neighbor_agreement": 2,
+        "changed_rank_positions": 0,
+        "inversions_with_reference_margin_over_0_005": 0,
+        "max_stored_unit_norm_error": 2.5414460536055117e-09,
+        "passed": true
+      },
+      "duplicate_slots": {
+        "rows": 4,
+        "dimensions": 768,
+        "max_cosine_distance": 9.464762307231922e-10,
+        "max_pairwise_cosine_error": 0.0,
+        "pairwise_pairs": 6,
+        "pairwise_over_tolerance": 0,
+        "max_normalized_element_error": 0.0,
+        "max_raw_relative_l2_error": 0.0,
+        "nearest_neighbor_agreement": 4,
+        "changed_rank_positions": 0,
+        "inversions_with_reference_margin_over_0_005": 0,
+        "max_stored_unit_norm_error": 1.8905523813117497e-09,
+        "passed": true
+      },
+      "description": {
+        "identity": "dinov3-cls:34a82d25d0507d2b989b3bdc34b50ef0324d00c404bd8fcd0db393ec3628cf0c",
+        "model_id": "timm/vit_base_patch16_dinov3.lvd1689m",
+        "revision": "c6a5fb7d12bbd3cf3b0079253141c3332aaed7da",
+        "device": "mps",
+        "precision": "float32",
+        "autocast": false,
+        "vision_parameters": 85641216,
+        "feature_output": "forward_features(pixel_values)[:, 0, :] after final LayerNorm",
+        "prefix_tokens": "CLS + 4 register tokens; only CLS is returned",
+        "qkv_bias": false,
+        "rope_periods_policy": "timm native float32 periods; not truncated to Meta bfloat16 values",
+        "rope_periods": [
+          1.0,
+          1.3335214853286743,
+          1.778279423713684,
+          2.3713736534118652,
+          3.1622776985168457,
+          4.216965198516846,
+          5.6234130859375,
+          7.498941898345947,
+          10.0,
+          13.335214614868164,
+          17.782794952392578,
+          23.71373748779297,
+          31.62277603149414,
+          42.16965103149414,
+          56.234130859375,
+          74.98941802978516
+        ],
+        "attention_implementation": "timm EvaAttention in float32, including QKV, SDPA and output projection; attention autocast disabled",
+        "parameter_counts_by_dtype": {
+          "torch.float32": 85641216
+        },
+        "preprocessing": {
+          "image_size": 512,
+          "image_decode": "Pillow RGB; no EXIF transpose",
+          "recipe": "Meta README make_transform(resize_size=512)",
+          "order": [
+            "ToImage uint8",
+            "Resize square uint8",
+            "ToDtype float32 scale=True",
+            "Normalize"
+          ],
+          "interpolation": "bilinear",
+          "antialias": true,
+          "crop": null,
+          "mean": [
+            0.485,
+            0.456,
+            0.406
+          ],
+          "std": [
+            0.229,
+            0.224,
+            0.225
+          ]
+        },
+        "output_normalization": "runner L2 normalization and float32-le storage",
+        "mps_cpu_fallback": false,
+        "cpu_threads": 2,
+        "inter_op_threads": 1,
+        "positional_coordinate_creation": "timm creates coordinates on CPU then explicitly transfers to the model device; not operator fallback"
+      },
+      "observed_execution_dtypes": {
+        "patch_embed.proj": {
+          "dtype": "torch.float32",
+          "device": "mps"
+        },
+        "blocks.0.norm1": {
+          "dtype": "torch.float32",
+          "device": "mps"
+        },
+        "blocks.0.attn.attention.qkv": {
+          "dtype": "torch.float32",
+          "device": "mps"
+        },
+        "blocks.0.mlp.fc1": {
+          "dtype": "torch.float32",
+          "device": "mps"
+        },
+        "blocks.0.mlp.fc2": {
+          "dtype": "torch.float32",
+          "device": "mps"
+        },
+        "blocks.0": {
+          "dtype": "torch.float32",
+          "device": "mps"
+        }
+      }
+    },
+    "mps_fp32_vs_cpu_fp32": {
+      "rows": 8,
+      "dimensions": 768,
+      "max_cosine_distance": 1.516432424075731e-09,
+      "max_pairwise_cosine_error": 5.331357110505142e-07,
+      "pairwise_pairs": 28,
+      "pairwise_over_tolerance": 0,
+      "max_normalized_element_error": 9.387731552124023e-07,
+      "max_raw_relative_l2_error": 4.2426324761967085e-06,
+      "nearest_neighbor_agreement": 8,
+      "changed_rank_positions": 0,
+      "inversions_with_reference_margin_over_0_005": 0,
+      "max_stored_unit_norm_error": 3.4894411804486936e-09,
+      "passed": true
+    },
+    "mps_fp16": {
+      "single_vs_batch4": {
+        "rows": 8,
+        "dimensions": 768,
+        "max_cosine_distance": 5.4806510441096634e-09,
+        "max_pairwise_cosine_error": 0.0,
+        "pairwise_pairs": 28,
+        "pairwise_over_tolerance": 0,
+        "max_normalized_element_error": 0.0,
+        "max_raw_relative_l2_error": 0.0,
+        "nearest_neighbor_agreement": 8,
+        "changed_rank_positions": 0,
+        "inversions_with_reference_margin_over_0_005": 0,
+        "max_stored_unit_norm_error": 2.7403255220548317e-09,
+        "passed": true
+      },
+      "reordered": {
+        "rows": 8,
+        "dimensions": 768,
+        "max_cosine_distance": 5.4806510441096634e-09,
+        "max_pairwise_cosine_error": 0.0,
+        "pairwise_pairs": 28,
+        "pairwise_over_tolerance": 0,
+        "max_normalized_element_error": 0.0,
+        "max_raw_relative_l2_error": 0.0,
+        "nearest_neighbor_agreement": 8,
+        "changed_rank_positions": 0,
+        "inversions_with_reference_margin_over_0_005": 0,
+        "max_stored_unit_norm_error": 2.7403255220548317e-09,
+        "passed": true
+      },
+      "final_batch2": {
+        "rows": 2,
+        "dimensions": 768,
+        "max_cosine_distance": 2.0526327304537517e-09,
+        "max_pairwise_cosine_error": 0.0,
+        "pairwise_pairs": 1,
+        "pairwise_over_tolerance": 0,
+        "max_normalized_element_error": 0.0,
+        "max_raw_relative_l2_error": 0.0,
+        "nearest_neighbor_agreement": 2,
+        "changed_rank_positions": 0,
+        "inversions_with_reference_margin_over_0_005": 0,
+        "max_stored_unit_norm_error": 1.0263163652268759e-09,
+        "passed": true
+      },
+      "duplicate_slots": {
+        "rows": 4,
+        "dimensions": 768,
+        "max_cosine_distance": 0.0,
+        "max_pairwise_cosine_error": 0.0,
+        "pairwise_pairs": 6,
+        "pairwise_over_tolerance": 0,
+        "max_normalized_element_error": 0.0,
+        "max_raw_relative_l2_error": 0.0,
+        "nearest_neighbor_agreement": 4,
+        "changed_rank_positions": 0,
+        "inversions_with_reference_margin_over_0_005": 0,
+        "max_stored_unit_norm_error": 2.4630002481984548e-09,
+        "passed": true
+      },
+      "description": {
+        "identity": "dinov3-cls:3d3ab9e2cd86f23e78136295125e5294cab3a54f2f834bfafad60c4610de5409",
+        "model_id": "timm/vit_base_patch16_dinov3.lvd1689m",
+        "revision": "c6a5fb7d12bbd3cf3b0079253141c3332aaed7da",
+        "device": "mps",
+        "precision": "FP16 autocast convolution/MLP; FP32 parameters, attention, normalization, residuals and RoPE",
+        "autocast": true,
+        "vision_parameters": 85641216,
+        "feature_output": "forward_features(pixel_values)[:, 0, :] after final LayerNorm",
+        "prefix_tokens": "CLS + 4 register tokens; only CLS is returned",
+        "qkv_bias": false,
+        "rope_periods_policy": "timm native float32 periods; not truncated to Meta bfloat16 values",
+        "rope_periods": [
+          1.0,
+          1.3335214853286743,
+          1.778279423713684,
+          2.3713736534118652,
+          3.1622776985168457,
+          4.216965198516846,
+          5.6234130859375,
+          7.498941898345947,
+          10.0,
+          13.335214614868164,
+          17.782794952392578,
+          23.71373748779297,
+          31.62277603149414,
+          42.16965103149414,
+          56.234130859375,
+          74.98941802978516
+        ],
+        "attention_implementation": "timm EvaAttention in float32, including QKV, SDPA and output projection; attention autocast disabled",
+        "parameter_counts_by_dtype": {
+          "torch.float32": 85641216
+        },
+        "preprocessing": {
+          "image_size": 512,
+          "image_decode": "Pillow RGB; no EXIF transpose",
+          "recipe": "Meta README make_transform(resize_size=512)",
+          "order": [
+            "ToImage uint8",
+            "Resize square uint8",
+            "ToDtype float32 scale=True",
+            "Normalize"
+          ],
+          "interpolation": "bilinear",
+          "antialias": true,
+          "crop": null,
+          "mean": [
+            0.485,
+            0.456,
+            0.406
+          ],
+          "std": [
+            0.229,
+            0.224,
+            0.225
+          ]
+        },
+        "output_normalization": "runner L2 normalization and float32-le storage",
+        "mps_cpu_fallback": false,
+        "cpu_threads": 2,
+        "inter_op_threads": 1,
+        "positional_coordinate_creation": "timm creates coordinates on CPU then explicitly transfers to the model device; not operator fallback"
+      },
+      "observed_execution_dtypes": {
+        "patch_embed.proj": {
+          "dtype": "torch.float16",
+          "device": "mps"
+        },
+        "blocks.0.norm1": {
+          "dtype": "torch.float32",
+          "device": "mps"
+        },
+        "blocks.0.attn.attention.qkv": {
+          "dtype": "torch.float32",
+          "device": "mps"
+        },
+        "blocks.0.mlp.fc1": {
+          "dtype": "torch.float16",
+          "device": "mps"
+        },
+        "blocks.0.mlp.fc2": {
+          "dtype": "torch.float16",
+          "device": "mps"
+        },
+        "blocks.0": {
+          "dtype": "torch.float32",
+          "device": "mps"
+        }
+      }
+    },
+    "mps_fp16_vs_cpu_fp32": {
+      "rows": 8,
+      "dimensions": 768,
+      "max_cosine_distance": 2.089362681201301e-06,
+      "max_pairwise_cosine_error": 0.0004142784917761655,
+      "pairwise_pairs": 28,
+      "pairwise_over_tolerance": 0,
+      "max_normalized_element_error": 0.0002843867987394333,
+      "max_raw_relative_l2_error": 0.0020451586807430982,
+      "nearest_neighbor_agreement": 8,
+      "changed_rank_positions": 0,
+      "inversions_with_reference_margin_over_0_005": 0,
+      "max_stored_unit_norm_error": 2.7403255220548317e-09,
+      "passed": true
+    }
+  }
+}

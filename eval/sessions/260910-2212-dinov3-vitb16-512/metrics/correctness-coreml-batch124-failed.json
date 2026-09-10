@@ -1,0 +1,16 @@
+{
+  "status": "failed_backend_compilation",
+  "exit_code": 134,
+  "signal": "SIGABRT (6)",
+  "native_batch_shapes_declared": [
+    1,
+    2,
+    4
+  ],
+  "validated_native_batch_shapes": [],
+  "failure": "Core ML MPS backend layer_norm inference: tensor<?x?x768xf32> vs gamma tensor<1x1x0xf32> not broadcast compatible; LLVM abort",
+  "phase": "CompiledMLModel loading/first prediction preparation; no usable numerical results produced",
+  "log": "outputs/correctness-coreml-batch124.log",
+  "log_sha256": "0392fce49b21601269aa59616c0a470a8d733ccd886a1c88fe545aaf647cd786",
+  "scope": "Separate fixed batch-1 model passed. Flexible batch 2/4 is not accepted; no throughput reported. This differs from the prior SigLIP numerical failure."
+}

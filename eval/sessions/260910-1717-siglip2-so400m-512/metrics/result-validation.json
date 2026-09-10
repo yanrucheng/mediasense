@@ -1,0 +1,142 @@
+{
+  "status": "completed_with_numeric_qualification",
+  "runs": {
+    "mps": {
+      "classification_fingerprint": "d4f8dcf2d38fcc58b8dd2a0b22d1e6360364ac14cce9620c2e12f34f0fa67b01",
+      "input_fingerprint": "2144fcd970052a44d20a378e3819b86b55345d0605b6d71ce073fc2dd5cd5ba0",
+      "source_cards": 2134,
+      "groups": 107,
+      "unique_decodable_thumbnails": 2118,
+      "verified_local_links": 2681,
+      "unit_norm_max_error": 2.5765452660309052e-08,
+      "vector_sha256": "d4d4b3a632ed85e6b810ec01b9edd626d52451319e50a646dd6436b103e857a7",
+      "reclassified_exactly_matches_saved_result": true,
+      "actual_runtime_displayed": true,
+      "human_acceptance": "待人工验收"
+    },
+    "mps_batch1": {
+      "classification_fingerprint": "d4f8dcf2d38fcc58b8dd2a0b22d1e6360364ac14cce9620c2e12f34f0fa67b01",
+      "input_fingerprint": "2144fcd970052a44d20a378e3819b86b55345d0605b6d71ce073fc2dd5cd5ba0",
+      "source_cards": 2134,
+      "groups": 107,
+      "unique_decodable_thumbnails": 2118,
+      "verified_local_links": 2681,
+      "unit_norm_max_error": 2.5765452660309052e-08,
+      "vector_sha256": "d4d4b3a632ed85e6b810ec01b9edd626d52451319e50a646dd6436b103e857a7",
+      "reclassified_exactly_matches_saved_result": true,
+      "actual_runtime_displayed": true,
+      "human_acceptance": "待人工验收"
+    },
+    "coreml_batch1": {
+      "classification_fingerprint": "d4f8dcf2d38fcc58b8dd2a0b22d1e6360364ac14cce9620c2e12f34f0fa67b01",
+      "input_fingerprint": "2144fcd970052a44d20a378e3819b86b55345d0605b6d71ce073fc2dd5cd5ba0",
+      "source_cards": 2134,
+      "groups": 107,
+      "unique_decodable_thumbnails": 2118,
+      "verified_local_links": 2681,
+      "unit_norm_max_error": 2.0470030115404825e-08,
+      "vector_sha256": "bbd75715c0747231c93a1dba9658b875d7195b7ffcdb0b231430959e95d2b505",
+      "reclassified_exactly_matches_saved_result": true,
+      "actual_runtime_displayed": true,
+      "human_acceptance": "待人工验收"
+    }
+  },
+  "comparisons": {
+    "mps_vs_mps_batch1": {
+      "vectors_bit_identical": true,
+      "maximum_cosine_distance": 3.3306690738754696e-16,
+      "maximum_pairwise_cosine_difference": 0.0,
+      "nearest_neighbor_agreement": 366,
+      "nearest_neighbor_changes": 0,
+      "largest_reference_margin_for_changed_neighbor": 0,
+      "group_memberships_equal": true,
+      "group_memberships_and_representatives_equal": true,
+      "selected_video_frames_equal": true
+    },
+    "mps_batch1_vs_coreml_batch1": {
+      "vectors_bit_identical": false,
+      "maximum_cosine_distance": 9.392736021496262e-05,
+      "maximum_pairwise_cosine_difference": 0.002560289582042241,
+      "nearest_neighbor_agreement": 366,
+      "nearest_neighbor_changes": 0,
+      "largest_reference_margin_for_changed_neighbor": 0,
+      "group_memberships_equal": true,
+      "group_memberships_and_representatives_equal": true,
+      "selected_video_frames_equal": true
+    }
+  },
+  "baseline_comparison": {
+    "baseline_groups": 117,
+    "candidate_groups": 107,
+    "candidate_groups_with_identical_baseline_membership": 80,
+    "representative_changes_within_identical_membership": 3,
+    "quality_judgment": "待人工验收；分组数和差异不代表好坏"
+  },
+  "baseline_files_unchanged": true,
+  "full_pairwise_guardrail": {
+    "threshold": 0.002,
+    "passed": false,
+    "pairs_exceeding": 13,
+    "total_unordered_pairs": 66795,
+    "maximum_difference": 0.0025602895820433513,
+    "additional_fp32_reference": "metrics/numerical-tail-check.json",
+    "threshold_changed": false,
+    "scope": "The fixed eight-sample checks passed. Full outputs retain this numerical qualification; all business memberships, representatives and nearest neighbors agree."
+  },
+  "independent_numeric_verification": {
+    "method": "Non-BLAS numpy.einsum, with math.fsum for worst pair",
+    "all_pairwise_results_finite": true,
+    "nearest_neighbor_agreement": 366,
+    "note": "The initial BLAS audit emitted floating-point warnings despite finite results; independent accumulation confirmed the retained difference and nearest-neighbor count."
+  },
+  "webkit": {
+    "mps": {
+      "groups": 107,
+      "source_cards": 2134,
+      "expanded": true,
+      "collapsed": true,
+      "video_expanded": true,
+      "decoded_images": 16,
+      "checked_images": 16,
+      "title": "MediaSense 业务基线 · siglip2-so400m-patch16-512"
+    },
+    "mps-batch1": {
+      "groups": 107,
+      "source_cards": 2134,
+      "expanded": true,
+      "collapsed": true,
+      "video_expanded": true,
+      "decoded_images": 16,
+      "checked_images": 16,
+      "title": "MediaSense 业务基线 · siglip2-so400m-patch16-512"
+    },
+    "coreml-batch1": {
+      "groups": 107,
+      "source_cards": 2134,
+      "expanded": true,
+      "collapsed": true,
+      "video_expanded": true,
+      "decoded_images": 16,
+      "checked_images": 16,
+      "title": "MediaSense 业务基线 · siglip2-so400m-patch16-512"
+    }
+  },
+  "shared_verification": {
+    "unit_tests_passed": 18,
+    "ruff": "passed",
+    "git_diff_check": "passed",
+    "tracked_outputs": 0
+  },
+  "code_preservation": {
+    "mps_batch4_original_adapter": "outputs/mps/execution-source/model_evaluation_siglip2.py",
+    "original_adapter_sha256": "51435843ed98b0776f1d999075fffbd0f033f8fa0c14b77574ca1c6204421599",
+    "restoration_patch": "metrics/mps-batch4-adapter-source.patch",
+    "mps_definitions_ast_unchanged": true,
+    "batch1_runtime_pair_uses_identical_eval_source_hashes": true
+  },
+  "other_thread_changes_preserved": [
+    "docs/design/index.md",
+    "docs/eval/eval-260823-1918-ai-album-migration-baseline/eval-260823-1918B-capability-ledger.md",
+    "docs/design/design-260910-1726-geo-recovery.md"
+  ]
+}

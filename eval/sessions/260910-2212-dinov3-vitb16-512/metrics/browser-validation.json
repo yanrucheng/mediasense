@@ -1,0 +1,35 @@
+{
+  "mps": {
+    "groups": 157,
+    "source_cards": 2134,
+    "expanded": true,
+    "collapsed": true,
+    "video_expanded": true,
+    "decoded_images": 16,
+    "checked_images": 16,
+    "checker": "check_preview.swift",
+    "screenshot": "outputs/mps-verified.png"
+  },
+  "mps-batch1": {
+    "groups": 157,
+    "source_cards": 2134,
+    "expanded": true,
+    "collapsed": true,
+    "video_expanded": true,
+    "decoded_images": 16,
+    "checked_images": 16,
+    "checker": "check_preview.swift",
+    "screenshot": "outputs/mps-batch1-verified.png"
+  },
+  "coreml-batch1": {
+    "groups": 157,
+    "source_cards": 2134,
+    "expanded": true,
+    "collapsed": true,
+    "video_expanded": true,
+    "decoded_images": 16,
+    "checked_images": 16,
+    "checker": "check_preview.swift",
+    "screenshot": "outputs/coreml-batch1-verified.png"
+  }
+}

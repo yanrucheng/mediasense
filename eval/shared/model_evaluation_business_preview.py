@@ -27,6 +27,7 @@ def render_business(
     sources = prepared["business"]["sources"]
     source_root = Path(prepared["source_root"])
     rows = {row["id"]: row for row in prepared["inputs"]}
+    reuse = encoded.get("reuse_provenance")
     by_source = {}
     for row in rows.values():
         by_source.setdefault(row["source"], []).append(row)
@@ -77,9 +78,9 @@ def render_business(
         candidates = by_source.get(source, [])
         roles = " · ".join(roles)
         explanation = (
-            "本次已编码；缩略图来自实际模型输入"
+            ("原评测已编码，本轮复用向量；缩略图来自实际模型输入" if reuse else "本次已编码；缩略图来自实际模型输入")
             if identity
-            else "本次未成功编码；图片缩略图仅供展开核对"
+            else ("没有可用向量；图片缩略图仅供展开核对" if reuse else "本次未成功编码；图片缩略图仅供展开核对")
         )
         if not sources[source]["visual_requested"]:
             explanation = "初始素材组的展开成员，未请求编码；缩略图仅供核对"
@@ -170,15 +171,31 @@ def render_business(
     device = str(effective.get("device", runtime["device"])).upper()
     precision = str(effective.get("precision", runtime["precision"]))
     title = config["model"]["model_id"].split("/")[-1]
+    measurement = f'加载 {performance["model_load_seconds"]:.2f} s · 编码 {performance["encoding_seconds"]:.2f} s · {performance["inputs_per_second"]:.3f} 输入/s · 编码进程峰值 RSS {performance["peak_process_rss_bytes"] / 2**30:.3f} GiB（不含子进程）'
+    measurement_html = f"<p>{measurement}</p>"
+    encoded_label = f'{encoded["counts"]["encoded"]} 个图片／帧成功编码'
+    execution_label = "技术执行已完成"
+    source_label = ""
+    timing_note = "编码含读取、预处理、计算、取回与同步，抽帧与预览不计入速度；无向量缓存命中。"
+    if reuse:
+        source_label = "原向量来源："
+        execution_label = "重分组已完成"
+        encoded_label = f'复用 {encoded["counts"]["encoded"]} 个图片／帧向量，本轮新编码 0'
+        measurement_html = (
+            '<p class="note">本轮仅重分组，未执行模型推理；没有新的推理速度或内存测量。</p>'
+            f'<details><summary>原编码实测，非本次测量</summary><p>{measurement}</p>'
+            f'<small>来源：{escape(reuse["source_encoding"])}；{escape(encoded["started_at"])}</small></details>'
+        )
+        timing_note = "本轮复用已校验向量，仅改变分组配置。原编码性能单独保留，不作为本轮实测。"
     page = f"""<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MediaSense 业务基线 · {escape(title)}</title>
 <style>
 :root{{font-family:system-ui,sans-serif;color:#203047;background:#eff3f7}}body{{max-width:1320px;margin:24px auto;padding:0 20px}}header,.panel{{background:white;padding:22px;border-radius:12px;margin-bottom:18px}}h1{{font-size:27px;margin:0 0 8px}}h2{{font-size:20px}}p{{line-height:1.6}}.pending,.role{{color:#925506}}.stats{{font-size:18px;font-weight:650}}button{{padding:10px 16px;border:0;border-radius:6px;color:white;background:#254c70;cursor:pointer;margin:0 8px 12px 0}}details{{margin:10px 0}}summary{{cursor:pointer}}.group{{background:white;border:1px solid #c7d3e0;border-radius:9px;padding:16px;margin-bottom:14px}}.group>summary{{font-weight:600}}.group-title{{font-size:19px}}.highlights{{display:flex;flex-wrap:wrap;gap:14px;margin:12px 0 0}}figure{{margin:0;width:175px}}figcaption{{font-size:11px;overflow-wrap:anywhere;font-weight:400}}.small{{width:175px;height:110px;object-fit:contain;background:#edf1f5;border-radius:5px}}.source-card{{border-top:1px solid #dce3ec;padding:14px 0}}.source-top{{display:flex;gap:18px;align-items:flex-start}}.photo{{width:240px;height:170px;object-fit:contain;background:#edf1f5;border-radius:5px}}.placeholder{{width:180px;min-height:80px;padding:20px;background:#edf1f5;box-sizing:border-box}}small{{overflow-wrap:anywhere;color:#5f6d7e}}a{{color:#226a9f;margin-right:12px}}.grid{{display:flex;flex-wrap:wrap;gap:14px}}.frame{{max-width:270px;padding:12px;border:1px solid #c7d3e0;border-radius:7px}}.chosen{{border:3px solid #287a65;background:#f0faf5}}.error{{color:#9b3e20;overflow-wrap:anywhere;font-size:12px}}.note{{color:#5f6d7e;font-size:13px}}pre{{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px}}@media(max-width:680px){{.source-top{{display:block}}.photo{{width:100%;height:200px}}body{{padding:0 10px}}figure{{width:120px}}.small{{width:120px;height:85px}}}}
-</style><header><h1>MediaSense 业务分组与代表选择</h1><p>{escape(title)} · {escape(device)} · {escape(precision)} · batch {runtime["batch_size"]}</p><p class="pending">技术执行已完成 · 待人工质量验收</p>
+</style><header><h1>MediaSense 业务分组与代表选择</h1><p>{source_label}{escape(title)} · {escape(device)} · {escape(precision)} · batch {runtime["batch_size"]}</p><p class="pending">{execution_label} · 待人工质量验收</p>
 <p class="stats">{len(sources)} 个源媒体 → {result["point_count"]} 个分组候选 → {len(result["groups"])} 个组</p>
-<p>{encoded["counts"]["encoded"]} 个图片／帧成功编码 · {len(failed_inputs)} 个输入准备失败 · {len(result["exceptions"])} 个源未进入视觉分组 · 未交代遗漏 0</p>
-<p>加载 {performance["model_load_seconds"]:.2f} s · 编码 {performance["encoding_seconds"]:.2f} s · {performance["inputs_per_second"]:.3f} 输入/s · 编码进程峰值 RSS {performance["peak_process_rss_bytes"] / 2**30:.3f} GiB（不含子进程）</p>
+<p>{encoded_label} · {len(failed_inputs)} 个输入准备失败 · {len(result["exceptions"])} 个源未进入视觉分组 · 未交代遗漏 0</p>
+{measurement_html}
 <p>请检查：组内是否混入不同内容、组代表是否合适、视频选中帧是否遗漏有用画面。展开组看全部源成员，展开视频看全部已请求候选帧。</p>
-<details><summary>固定方法与性能口径</summary><pre>{escape(json.dumps(config["classification"], ensure_ascii=False, indent=2))}</pre><p>时间／位置／视觉边界与组首比较；复用 MediaSense 业务函数。层级是实际成员关系。编码含读取、预处理、计算、取回与同步，抽帧与预览不计入速度；无向量缓存命中。素材含缩小图片与稀疏视频代理。</p></details></header>
+<details><summary>固定方法与性能口径</summary><pre>{escape(json.dumps(config["classification"], ensure_ascii=False, indent=2))}</pre><p>时间／位置／视觉边界与组首比较；复用 MediaSense 业务函数。层级是实际成员关系。{timing_note}素材含缩小图片与稀疏视频代理。</p></details></header>
 <button id="expand" onclick="document.querySelectorAll('details.group').forEach(x=>x.open=true)">展开所有组</button><button id="collapse" onclick="document.querySelectorAll('details.group').forEach(x=>x.open=false)">收起所有组</button>
 {"".join(group_html)}<section class="panel"><h2>未进入视觉分组的源媒体</h2>{exception_cards or "<p>无</p>"}</section>
 <section class="panel"><details id="failures"><summary>输入准备失败明细（{len(failed_inputs)}）</summary><ul>{failure_list}</ul></details><p>失败输入仍归属原媒体；源媒体可能由同组其他成员代表。未请求编码不等于读取或质量验证通过。</p></section></html>"""
@@ -191,12 +208,24 @@ def render_business(
     }
 
 
-def preview(config: dict, output: Path, summary_path: Path) -> dict:
+def preview(config: dict, output: Path, summary_path: Path, *, encoding_source: Path | None = None) -> dict:
     outside(output, *fixture_roots(config))
     outside(summary_path, *fixture_roots(config))
-    encoded, prepared, rows, vectors = read_encoding(config, output)
+    source = encoding_source if encoding_source is not None else output
+    if encoding_source is not None and output.exists():
+        raise ValueError("Reclassification requires a new output directory")
+    encoded, prepared, rows, vectors = read_encoding(config, source)
     identity = check_baseline(config, prepared)
     result = classify(config, prepared, vectors)
+    reuse = None
+    if encoding_source is not None:
+        reuse = {
+            "source_encoding": str((source / "encoding.json").resolve()),
+            "source_encoding_sha256": digest(source / "encoding.json"),
+            "source_vectors_sha256": encoded["vectors_sha256"],
+            "reused_vectors": len(vectors), "newly_encoded": 0,
+        }
+        encoded = {**encoded, "reuse_provenance": reuse}
     render = render_business(output / "preview", prepared, result, encoded, config)
     write_json(output / "preview/groups.json", result)
     failures = encoded["counts"]["input_failures"]
@@ -222,7 +251,7 @@ def preview(config: dict, output: Path, summary_path: Path) -> dict:
         "business_code": config["inputs"]["business_code"],
         "effective_encoder": encoded["effective_encoder"],
         "embedding_identity": encoded["embedding_identity"],
-        "encoding_summary": str((output / "encoding.json").resolve()),
+        "encoding_summary": str((source / "encoding.json").resolve()),
         "preview": str((output / "preview/index.html").resolve()),
         "preview_checks": render,
         "result_sha256": digest(output / "preview/groups.json"),
@@ -232,5 +261,15 @@ def preview(config: dict, output: Path, summary_path: Path) -> dict:
             )
         ),
     }
+    if reuse is not None:
+        from model_evaluation import code_version
+
+        summary.update(
+            status="reclassified_with_input_failures" if failures else "reclassified",
+            encoding_reuse=reuse, performance=None,
+            source_encoding_performance=encoded["performance"],
+            classification_code=code_version(),
+        )
+        write_json(output / "config.json", config)
     write_json(summary_path, summary)
     return summary

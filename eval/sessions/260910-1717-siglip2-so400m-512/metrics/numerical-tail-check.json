@@ -1,0 +1,76 @@
+{
+  "method": "numpy einsum without BLAS, cross-checked worst pair with math.fsum",
+  "maximum_pairwise_cosine_difference": 0.0025602895820433513,
+  "unordered_pairs_over_small_sample_0_002_guardrail": 13,
+  "unordered_pairs": 66795,
+  "worst_pair": {
+    "indices": [
+      20,
+      259
+    ],
+    "ids": [
+      "00227:00",
+      "01648:00"
+    ],
+    "mps_similarity": 0.6039361851121507,
+    "coreml_similarity": 0.6064964746941933
+  },
+  "worst_row_index": 259,
+  "selected_indices": [
+    20,
+    259
+  ],
+  "selected_ids": [
+    "00227:00",
+    "01648:00"
+  ],
+  "reference": "official CPU float32, same pinned checkpoint and processor; diagnostic only, not a performance run",
+  "samples": [
+    {
+      "id": "00227:00",
+      "image_sha256": "268ae3c42500aa3c1157f6a491213fafdc8031c09276e3a9c6caefb8f5a57b4d",
+      "kind": "image"
+    },
+    {
+      "id": "01648:00",
+      "image_sha256": "0e126a6ae736d03d43df5b4881ec43b6c177df8b6b64e5317f9c8eecb29250aa",
+      "kind": "video"
+    }
+  ],
+  "variants": {
+    "mps-batch1": {
+      "cosine_distances_to_cpu_fp32": [
+        6.288778327423472e-06,
+        2.7493381416832108e-05
+      ],
+      "pairwise_similarity_difference_to_cpu_fp32": [
+        [
+          6.661338147750939e-16,
+          0.0013601057588842336
+        ],
+        [
+          0.0013601057588842336,
+          -5.551115123125783e-16
+        ]
+      ],
+      "max_pairwise_similarity_difference_to_cpu_fp32": 0.0013601057588842336
+    },
+    "coreml-batch1": {
+      "cosine_distances_to_cpu_fp32": [
+        6.231640058196319e-06,
+        3.9722108236439624e-05
+      ],
+      "pairwise_similarity_difference_to_cpu_fp32": [
+        [
+          6.661338147750939e-16,
+          -0.0012001838231591178
+        ],
+        [
+          -0.0012001838231591178,
+          -5.551115123125783e-16
+        ]
+      ],
+      "max_pairwise_similarity_difference_to_cpu_fp32": 0.0012001838231591178
+    }
+  }
+}

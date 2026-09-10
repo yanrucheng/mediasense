@@ -1,0 +1,62 @@
+{
+  "business_candidates": 167,
+  "split_old_groups": 34,
+  "examined_candidates": 90,
+  "new_inference_inputs": 0,
+  "neighbor_margin_for_near_tie": 0.005,
+  "neighbor_relations": {
+    "dinov3": {
+      "outside_same_day": {
+        "queries": 90,
+        "inside_ahead_over_0_005": 30,
+        "outside_ahead_over_0_005": 59,
+        "near_ties": 1
+      },
+      "outside_global": {
+        "queries": 90,
+        "inside_ahead_over_0_005": 17,
+        "outside_ahead_over_0_005": 73,
+        "near_ties": 0
+      }
+    },
+    "siglip2": {
+      "outside_same_day": {
+        "queries": 90,
+        "inside_ahead_over_0_005": 25,
+        "outside_ahead_over_0_005": 62,
+        "near_ties": 3
+      },
+      "outside_global": {
+        "queries": 90,
+        "inside_ahead_over_0_005": 16,
+        "outside_ahead_over_0_005": 72,
+        "near_ties": 2
+      }
+    }
+  },
+  "reunion_scan": {
+    "scales": "0.311, then 0.32–1.20 in 0.01 increments; not exact critical thresholds",
+    "ever_clean_reunion": 28,
+    "outside_mix_before_full_reunion": 18,
+    "selected_scales": {
+      "0.85": {
+        "groups": 103,
+        "old_groups_cleanly_reunited": 23,
+        "old_groups_reunited_with_outsiders": 3
+      },
+      "0.9": {
+        "groups": 89,
+        "old_groups_cleanly_reunited": 18,
+        "old_groups_reunited_with_outsiders": 6
+      }
+    }
+  },
+  "input_fingerprint": "2144fcd970052a44d20a378e3819b86b55345d0605b6d71ce073fc2dd5cd5ba0",
+  "source_vectors_sha256": {
+    "dinov3": "0a4093d752e5349180d11d845a06721f3b3bc25dbb17fc5c1dd4217445c637ee",
+    "siglip2": "d4d4b3a632ed85e6b810ec01b9edd626d52451319e50a646dd6436b103e857a7"
+  },
+  "detail": "eval/sessions/260911-0031-dinov3-threshold-calibration/outputs/relationships/relationships.json",
+  "detail_sha256": "e73dd3956c5668df874c03e8957c67722766bdc6e036f5e26ff54b8f5445cfb0",
+  "preview": "/Users/chengyanru/repos/personal/mediasense/eval/sessions/260911-0031-dinov3-threshold-calibration/outputs/relationships/preview/index.html"
+}

@@ -1,0 +1,58 @@
+{
+  "source_encoding": "eval/sessions/260910-2212-dinov3-vitb16-512/outputs/mps/encoding.json",
+  "vectors_sha256": "0a4093d752e5349180d11d845a06721f3b3bc25dbb17fc5c1dd4217445c637ee",
+  "input_fingerprint": "2144fcd970052a44d20a378e3819b86b55345d0605b6d71ce073fc2dd5cd5ba0",
+  "new_inference_inputs": 0,
+  "sweep": [
+    {
+      "scale": 0.311,
+      "groups": 157,
+      "single_candidate_groups": 148
+    },
+    {
+      "scale": 0.4,
+      "groups": 152,
+      "single_candidate_groups": 140
+    },
+    {
+      "scale": 0.5,
+      "groups": 148,
+      "single_candidate_groups": 133
+    },
+    {
+      "scale": 0.6,
+      "groups": 142,
+      "single_candidate_groups": 123
+    },
+    {
+      "scale": 0.7,
+      "groups": 131,
+      "single_candidate_groups": 104
+    },
+    {
+      "scale": 0.8,
+      "groups": 116,
+      "single_candidate_groups": 79
+    },
+    {
+      "scale": 0.9,
+      "groups": 89,
+      "single_candidate_groups": 39
+    },
+    {
+      "scale": 1.0,
+      "groups": 31,
+      "single_candidate_groups": 5
+    },
+    {
+      "scale": 1.1,
+      "groups": 16,
+      "single_candidate_groups": 5
+    },
+    {
+      "scale": 1.2,
+      "groups": 16,
+      "single_candidate_groups": 5
+    }
+  ]
+}

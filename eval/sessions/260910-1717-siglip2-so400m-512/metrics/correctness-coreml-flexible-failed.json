@@ -1,0 +1,53 @@
+{
+  "status": "failed",
+  "input_fingerprint": "2144fcd970052a44d20a378e3819b86b55345d0605b6d71ce073fc2dd5cd5ba0",
+  "samples": [
+    {
+      "id": "00000:00",
+      "kind": "image",
+      "image_sha256": "154dd8b745e27f977a0f280f3dbfe6ac069782d9ab4cef45b87503a08ab8bfcd"
+    },
+    {
+      "id": "00482:00",
+      "kind": "image",
+      "image_sha256": "b7fc1d2c1f1ea153587e08519a5d83e7d38b79a80537a6215fa178f5515bf5ab"
+    },
+    {
+      "id": "01640:00",
+      "kind": "image",
+      "image_sha256": "92a3c056f1c00d52643d6764e04f59aa314160f7077ebcba555f899d87124c86"
+    },
+    {
+      "id": "02130:00",
+      "kind": "image",
+      "image_sha256": "2206b6e2d46ca8e350db8c2befeda99113bd43ab80a6a542e6d7ea4a5a31fd08"
+    },
+    {
+      "id": "00416:00",
+      "kind": "video",
+      "image_sha256": "b4133ba5ee7a16c7570fbcb9acf8564d32d225de1808e5cb43c0f0a31e9712c0"
+    },
+    {
+      "id": "00797:00",
+      "kind": "video",
+      "image_sha256": "1dab35916f920e09e1cd3fc4ddb099298be166e3658d562aeefccae972c92836"
+    },
+    {
+      "id": "01623:01",
+      "kind": "video",
+      "image_sha256": "d0d1885b9608bf634c0f35458328b5978c3fe308d8dbe14ce4a18297a755d97f"
+    },
+    {
+      "id": "02133:00",
+      "kind": "video",
+      "image_sha256": "a4fa41531ad42bdc9fbf28179861b5bf0c3ca6f2e9c84214fdc8bd2f48264c74"
+    }
+  ],
+  "tolerances": {
+    "max_cosine_distance": 0.001,
+    "max_pairwise_cosine_error": 0.002,
+    "material_rank_margin": 0.005
+  },
+  "checks": {},
+  "error": "ValueError: Predeclared numerical tolerance failed: {'rows': 8, 'dimensions': 1152, 'max_cosine_distance': 0.5260121688445907, 'max_pairwise_cosine_error': 0.46370433976960584, 'max_normalized_element_error': 0.20071043074131012, 'max_raw_relative_l2_error': 0.8805719128746734, 'nearest_neighbor_agreement': 1, 'changed_rank_positions': 37, 'inversions_with_reference_margin_over_0_005': 39, 'max_stored_unit_norm_error': 6.986711542644741e-09}"
+}
