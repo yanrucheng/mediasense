@@ -138,6 +138,18 @@ Implementation status is independent of the difference class:
 
 本次补正完成的是项目 Skill 的磁盘副本。使用者仍需在该操作项目新建 Agent 会话，确认加载0.9.x Skill；不把磁盘更新说成旧会话已生效，不终止当前主 Agent。上一节CLI、依赖、包及公开Read验证仍有效，但其原“实际使用环境完整升级”结论以此补正为准。
 
+### 项目级 npx Skills 管理与全局清理（2026-09-10）
+
+用户进一步明确：MediaSense Skill 应保留在实际操作项目，删除全局副本，并通过 `npx-skills-manager` / `npx skills` 管理安装和对应锁文件。此前使用 `mediasense skills upgrade` 只同步了文件，没有维护已有 npx 项目需求记录；因此上一节11个文件一致并不等于锁文件完整。以上用户级升级是历史步骤，最终安装范围以下述状态为准。
+
+使用离线缓存中的 **skills CLI 1.5.25** 完成，只通过其正常 remove/add 管理入口写安装，不手改锁。全局 `ls -g --json` 显示四个 MediaSense 的 source 均为null，全局锁原本无对应key；实际还有四个 `~/.claude/skills/` symlink。执行明确四名的 `remove ... -g -y` 后，CLI不再列出、全局锁无对应key、canonical目录和agent链接均不存在；其余24个全局Skill和已记录的无关文件/链接不变。后续全局批量操作不应重新安装这四项。
+
+操作项目 `/Users/chengyanru/Downloads/ai-album-hk-representative-v1` 原 `skills-lock.json` 仅有 mediasense，source为 `../../repos/personal/mediasense`、sourceType为local，另外三个文件副本无锁记录。沿用这一既有本地来源和实际Codex目标，用显式四名allowlist执行 `npx --offline skills@latest add /Users/chengyanru/repos/personal/mediasense --skill mediasense mediasense-precheck mediasense-plan mediasense-apply -a codex --full-depth -y`。CLI正常写锁为四项，仍使用相对本地source；逐项按该CLI算法验证computedHash与实际安装内容一致，11个文件仍与0.9.0 wheel完全相同。此版本对该local source记录source/sourceType/computedHash，未生成skillPath；未手工伪造它。项目已有Claude Code入口链接保留，MCP配置原哈希不变。
+
+这是**已有本地来源的项目锁修复**，不声称远端发布托管或跨机器无条件恢复；恢复仍依赖相对路径处存在正确版本的源码。未使用尚未确认的远端内容、未推送、未下载。该操作目录不是Git仓库，项目锁只在其本地落盘，不在MediaSense源码仓库另建需求清单。此次没有改变0.9.0发布包或应用，CLI仍为0.9.0；该用户的后续Skill管理应走npx入口，避免仅用打包复制命令而使项目锁再次脱节。
+
+备份、前后CLI列表、安装日志和 `verification.json` 位于 `/tmp/mediasense-npx-skills-cleanup/`；全局删除列表已收敛，项目四项锁与文件均验证。没有媒体/Result/Dataset处理，也没有模型或地图调用。当前Agent会话没有重启；操作项目的新会话加载项目级0.9.x副本。全局清理与项目锁变化不影响CLI/MCP服务本身。
+
 ### M2 中间页续读补修与已通过验收的历史候选（2026-09-10）
 
 用户第二次复验仍判定 **暂不通过**；metadata 与历史检测两项已经通过。新增分页遗漏已修复并完成下述验证；此处保留当时的待复验阶段记录，后续用户已确认通过，见上方发布收尾。此前有效证据继续保留。
