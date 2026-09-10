@@ -119,14 +119,24 @@ Implementation status is independent of the difference class:
 实际安装收尾：
 
 - CLI 仍是 `/Users/chengyanru/.local/bin/mediasense`，指向 `/Users/chengyanru/.local/share/uv/tools/mediasense/bin/mediasense`，由原 `uv tool` 管理。使用上述确切 wheel 离线替换，保留 Python **3.13.5**、`embeddings` extra 及全部 **53个依赖的原版本**（含 Torch 2.13.0、Transformers 4.57.6）；uv 安装日志确认只替换 mediasense。receipt 保留 wheel 路径、extra 和已展开的依赖版本约束，不依赖临时约束文件存活。
-- 真正在用的四个 Skill 在 `/Users/chengyanru/.agents/skills/{mediasense,mediasense-precheck,mediasense-plan,mediasense-apply}`。升级前11个文件均精确匹配仓库历史版本，无本地定制；由 **0.9.0 自带的 `mediasense skills upgrade --target /Users/chengyanru/.agents/skills --json`** 整组升级。升级后11个文件与 wheel 完全一致。未迁移为 repo/Honeycomb 目录，未触碰其他 Skill。
+- 首轮识别并升级的用户级四个 Skill 在 `/Users/chengyanru/.agents/skills/{mediasense,mediasense-precheck,mediasense-plan,mediasense-apply}`；当时漏查了实际操作项目内的副本，因此这项证据不能证明所有实际加载的 Skill 已同版，补正见下节。升级前11个文件均精确匹配仓库历史版本，无本地定制；由 **0.9.0 自带的 `mediasense skills upgrade --target /Users/chengyanru/.agents/skills --json`** 整组升级。升级后11个文件与 wheel 完全一致。未迁移为 repo/Honeycomb 目录，未触碰其他 Skill。
 - 实际 MCP 注册位于 `/Users/chengyanru/Downloads/ai-album-hk-representative-v1/.codex/config.toml`，保留原 `/bin/sh -c` 加载既有密钥环境后 `exec /Users/chengyanru/.local/bin/mediasense mcp` 的命令。本次只读取并使用其启动配置，未修改或遍历该 fixture 的媒体和 Dataset。MCP 配置、密钥脚本、用户配置及已记录的无关 Skill 文件共 **32项原哈希/缺失状态不变**；未输出密钥值，也未调用地图服务。
 - `doctor` 确认 embeddings 依赖可用；`local-models` 仍未安装，敏感性检测仍 disabled。未更改模型配置、既有授权或 Dataset/Result。全程使用离线缓存，无新网络下载、模型运行、地图/付费调用、真实 Dataset 从零验收或 Apply 全量审计。
-- **磁盘升级已完成，当前主 Agent 会话未重启、未宣称已重新加载。** 用户下一次在原操作位置新建 Agent 会话后，才会加载0.9.x Skill 与新 Host；这次独立 MCP 验证进程的成功不代替当前客户端会话切换。没有修改其他 MCP 服务，也没有推送或远程 release。
+- **首轮完成 CLI/Host 和用户级 Skill 磁盘升级，但遗漏操作项目内的 Skill，实际使用环境对齐当时并未完整完成。当前主 Agent 会话未重启、未宣称已重新加载。** 必须先完成下述项目副本补正，再在原操作位置新建 Agent 会话加载0.9.x Skill 与新 Host；这次独立 MCP 验证进程的成功不代替当前客户端会话切换。没有修改其他 MCP 服务，也没有推送或远程 release。
 
 本次临时证据统一保留于 `/tmp/mediasense-0.9.0-release/`：`package-verification.json`、`release-checks-verified.log`、`distribution-smoke.log`、`isolated-mcp/{summary.json,responses.json}`、`actual-install.log`、`actual-verification-verified.log`、`actual-verification.json`、`actual-doctor.json`、`actual-tools.json`、`actual-mcp-responses.json` 与升级前后依赖/配置指纹。`verify_actual.py` 保留真实注册启动及合成结果重读的复核步骤；临时输出、wheel 和原日志均不入 Git。首次验证脚本误用了未存在的测试文件名，未运行测试；使用正确清单得到上表155项。实际 Host 初次对合成 workspace 的 `/tmp` 别名请求按原合约拒绝为 source_mismatch，使用封存的 `/private/tmp` 精确定位后通过；没有为此改实现或旧 Result。
 
 仍未认证的质量／吞吐／客户端边界沿用下方记录，不由升版或安装成功扩展：模型与代表/关键帧质量、广泛 codec/RAW/HEIF/HDR 矩阵、Geo 15m/120s 的真实地点适用性及 live 服务条款/配额/费用、大数据吞吐与长故障 soak、全量真实 Dataset、具体 Agent 客户端大页完整交付与语义使用质量。
+
+### 0.9.0 实际项目 Skill 安装遗漏补正（2026-09-10）
+
+用户反馈操作会话已发现七个 Tool，CLI 为0.9.0，但 `/Users/chengyanru/Downloads/ai-album-hk-representative-v1/.agents/skills/mediasense-precheck/SKILL.md` 要求0.8.x，因此没有开始处理数据源。只读核对确认该项目内四个 Skill 均仍是0.8.x。此前仅核对用户级 `~/.agents/skills` 并把它称为完整实际使用位置，遗漏了已找到 MCP 注册的同一项目内的 Skill 目录；这是发布安装收尾遗漏。使用者暂停 PreCheck 符合兼容性要求，七个 Tool 可发现不能代替 Skill 版本一致性验证。
+
+本次起点为 `7fbdc77`，工作区干净；该提交中的独立模型评测工作保持不变。沿用用户原有实际安装升级授权，只处理明确反馈的项目 Skill 目录，不遍历其他项目、不改变安装拓扑。升级前四个目录无符号链接，全部11个文件能逐字节匹配仓库历史发布内容，文件集合与已验证 wheel 相同，无本地定制；备份与指纹保留于 `/tmp/mediasense-0.9.0-project-skills-correction/`。
+
+使用现有0.9.0安装版执行 `mediasense skills upgrade --target /Users/chengyanru/Downloads/ai-album-hk-representative-v1/.agents/skills --json`，实际返回四个 Skill 全部 upgraded。升级后11个文件与最终0.9.0 wheel逐字节一致，兼容声明均为0.9.x；包 SHA-256仍为 `66745af1eed9fe4d2d0ae7f9dc31fa47c1a9a84a5826559d2ab8551c9371344a`，没有重建包或修改主体合约。该项目 MCP 配置原哈希不变。`verification.json` 记录结果；此次只写四个 Skill 目录及原台账，没有读取或处理 fixture 媒体、修改 Dataset/Result、调用模型或地图服务。
+
+本次补正完成的是项目 Skill 的磁盘副本。使用者仍需在该操作项目新建 Agent 会话，确认加载0.9.x Skill；不把磁盘更新说成旧会话已生效，不终止当前主 Agent。上一节CLI、依赖、包及公开Read验证仍有效，但其原“实际使用环境完整升级”结论以此补正为准。
 
 ### M2 中间页续读补修与已通过验收的历史候选（2026-09-10）
 
