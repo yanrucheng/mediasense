@@ -13,7 +13,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "shared"))
 from model_evaluation import check_runtime, timed_batch, validate_vector  # noqa: E402
-from model_evaluation_inputs import validate_inputs, write_json  # noqa: E402
+from model_evaluation_inputs import fingerprint, validate_inputs, write_json  # noqa: E402
 
 TOLERANCES = {
     "max_cosine_distance": 0.001,
@@ -21,6 +21,15 @@ TOLERANCES = {
     "material_rank_margin": 0.005,
     "max_stored_unit_norm_error": 1e-6,
 }
+
+
+def reference_recipe(config):
+    """Bind CPU reference to weights, preprocessing and feature semantics, not runtime."""
+    model = config["model"]
+    return fingerprint({
+        **{key: model[key] for key in ("model_id", "revision", "preprocessing", "feature_output", "dimensions", "implementation_files_sha256", "rope_precision", "rope_periods_policy", "attention_implementation")},
+        "checkpoint": model.get("source_checkpoint_sha256", model["files_sha256"].get("model.safetensors")),
+    })
 
 
 def normalized(raw):
@@ -119,9 +128,10 @@ def exercise(config, paths, output, reference_checks=False):
         from torchvision.transforms import v2
         from model_evaluation_dinov3 import image_pixels
 
-        pixels = image_pixels(adapter.processor, paths[:4])
+        size = config["model"]["preprocessing"]["image_size"]
+        pixels = image_pixels(adapter.processor, paths[:4], image_size=size)
         meta_transform = v2.Compose([
-            v2.ToImage(), v2.Resize((512, 512), antialias=True),
+            v2.ToImage(), v2.Resize((size, size), antialias=True),
             v2.ToDtype(torch.float32, scale=True),
             v2.Normalize(mean=(.485, .456, .406), std=(.229, .224, .225)),
         ])
@@ -131,12 +141,12 @@ def exercise(config, paths, output, reference_checks=False):
                 with image.convert("RGB") as rgb:
                     expected_pixels.append(meta_transform(rgb))
         if not torch.equal(pixels, torch.stack(expected_pixels)):
-            raise ValueError("Preprocessing differs from Meta README make_transform(512)")
+            raise ValueError(f"Preprocessing differs from Meta README make_transform({size})")
         with torch.inference_mode():
             tokens = adapter.encoder.forward_features(pixels)
             direct = adapter.encoder(pixels)
-        if tokens.shape != (4, 1029, 768):
-            raise ValueError("Expected CLS + 4 register + 1024 patch tokens")
+        if tokens.shape != (4, 5 + (size // 16) ** 2, 768):
+            raise ValueError("Expected CLS + 4 register + configured patch tokens")
         if not np.array_equal(batch[:4], tokens[:, 0, :].numpy()) or not np.array_equal(batch[:4], direct.numpy()):
             raise ValueError("Adapter does not exactly match the selected timm CLS path")
         checks["reference_feature_semantics"] = {
@@ -174,7 +184,7 @@ def main():
     paths = [Path(row["image_path"]) for row in selected]
     samples = [{key: row[key] for key in ("id", "kind", "image_sha256")} for row in selected]
     args.output.mkdir(parents=True, exist_ok=False)
-    result = {"status": "incomplete", "input_fingerprint": prepared["input_fingerprint"], "samples": samples, "tolerances": TOLERANCES, "checks": {}}
+    result = {"status": "incomplete", "input_fingerprint": prepared["input_fingerprint"], "reference_recipe": reference_recipe(config), "samples": samples, "tolerances": TOLERANCES, "checks": {}}
     import numpy as np
 
     try:
@@ -192,7 +202,7 @@ def main():
             if args.reference is None:
                 raise ValueError("Core ML validation requires the retained CPU/MPS reference")
             reference_meta = json.loads((args.reference / "validation.json").read_text())
-            if reference_meta["status"] != "passed" or reference_meta["samples"] != samples:
+            if reference_meta["status"] != "passed" or reference_meta["samples"] != samples or reference_meta["reference_recipe"] != reference_recipe(config):
                 raise ValueError("Reference samples or validation status differ")
             features, result["checks"]["coreml"] = exercise(config, paths, args.output / "batches.npz")
             np.savez(args.output / "features.npz", coreml=features)

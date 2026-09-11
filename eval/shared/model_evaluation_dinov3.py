@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+import time
 
 from model_evaluation_inputs import digest, fingerprint
 
@@ -14,34 +15,43 @@ def load_processor(spec: dict):
 
     profile = spec["preprocessing"]
     if (
-        profile["image_size"] != 512
+        profile["image_size"] not in {384, 512}
         or profile["interpolation"] != "bilinear"
         or profile["antialias"] is not True
         or profile["crop"] is not None
         or profile["mean"] != [0.485, 0.456, 0.406]
         or profile["std"] != [0.229, 0.224, 0.225]
     ):
-        raise ValueError("This experiment requires the pinned Meta 512px transform")
+        raise ValueError("This experiment requires the pinned Meta 384/512px transform")
     # Match Meta's README order: uint8 resize BEFORE rescaling to float32.
     return v2.Compose([
         v2.ToImage(),
-        v2.Resize((512, 512), interpolation=InterpolationMode.BILINEAR, antialias=True),
+        v2.Resize((profile["image_size"], profile["image_size"]), interpolation=InterpolationMode.BILINEAR, antialias=True),
         v2.ToDtype(torch.float32, scale=True),
         v2.Normalize(mean=profile["mean"], std=profile["std"]),
     ])
 
 
-def image_pixels(processor, paths: list[Path]):
+def image_pixels(processor, paths: list[Path], *, image_size=512, timings=None):
     import torch
     from PIL import Image
 
     pixels = []
     for path in paths:
+        started = time.perf_counter()
         with Image.open(path) as opened:
             with opened.convert("RGB") as rgb:
+                decoded = time.perf_counter()
                 pixels.append(processor(rgb))
+                processed = time.perf_counter()
+        if timings is not None:
+            timings["read_rgb_decode"] += decoded - started
+            timings["resize_normalize_stack"] += processed - decoded
+    started = time.perf_counter()
     batch = torch.stack(pixels)
-    if batch.shape != (len(paths), 3, 512, 512) or batch.dtype != torch.float32:
+    if timings is not None:
+        timings["resize_normalize_stack"] += time.perf_counter() - started
+    if batch.shape != (len(paths), 3, image_size, image_size) or batch.dtype != torch.float32:
         raise ValueError("Unexpected DINOv3 processor output")
     return batch
 
@@ -70,7 +80,7 @@ def torch_vision(spec: dict, runtime: dict):
         raise ValueError("Preserve the reference's FP32 RoPE periods and computation")
     encoder = timm.create_model(
         spec["architecture"], pretrained=False, num_classes=0,
-        img_size=512, global_pool="token",
+        img_size=spec["preprocessing"]["image_size"], global_pool="token",
     )
     weights = load_file(str(Path(spec["snapshot_path"]) / "model.safetensors"))
     encoder.load_state_dict(weights, strict=True)
@@ -155,7 +165,11 @@ class DinoV3TorchAdapter:
         return "dinov3-cls:" + fingerprint({"model": self.spec, "runtime": self.runtime})
 
     def encode_images(self, paths: list[Path]):
-        pixels = image_pixels(self.processor, paths).to(device=self.runtime["device"])
+        timings = {"read_rgb_decode": 0.0, "resize_normalize_stack": 0.0}
+        profile = self.runtime.get("stage_timing", False)
+        pixels = image_pixels(self.processor, paths, image_size=self.spec["preprocessing"]["image_size"], timings=timings if profile else None)
+        started = time.perf_counter()
+        pixels = pixels.to(device=self.runtime["device"])
         with self.torch.inference_mode(), self.torch.autocast(
             device_type=self.runtime["device"], dtype=self.torch.float16,
             enabled=self.runtime["precision"] == "float16",
@@ -165,7 +179,12 @@ class DinoV3TorchAdapter:
             raise RuntimeError("DINOv3 features were computed on an unexpected device")
         if features.shape != (len(paths), self.spec["dimensions"]):
             raise ValueError("Unexpected CLS feature shape")
-        return features.float().cpu().tolist()
+        rows = features.float().cpu().tolist()
+        if profile:
+            self.synchronize()
+            timings["predict_transfer_sync"] = time.perf_counter() - started
+            self.last_stage_seconds = timings
+        return rows
 
     def synchronize(self) -> None:
         if self.runtime["device"] == "mps":
@@ -212,7 +231,11 @@ class DinoV3CoreMLAdapter:
         return "dinov3-coreml:" + fingerprint({"model": self.spec, "runtime": self.runtime})
 
     def encode_images(self, paths: list[Path]):
-        pixels = image_pixels(self.processor, paths).numpy()
+        timings = {"read_rgb_decode": 0.0, "resize_normalize_stack": 0.0}
+        profile = self.runtime.get("stage_timing", False)
+        pixels = image_pixels(self.processor, paths, image_size=self.spec["preprocessing"]["image_size"], timings=timings if profile else None)
+        started = time.perf_counter()
+        pixels = pixels.numpy()
         sizes = self.spec["native_batch_sizes"]
         if sizes == [1]:
             batches = [pixels[i:i + 1] for i in range(len(paths))]
@@ -226,6 +249,9 @@ class DinoV3CoreMLAdapter:
             if output.shape != (len(batch), self.spec["dimensions"]):
                 raise ValueError("Unexpected Core ML CLS feature shape")
             rows.extend(output.astype("float32", copy=False).tolist())
+        if profile:
+            timings["predict_transfer_sync"] = time.perf_counter() - started
+            self.last_stage_seconds = timings
         return rows
 
     def synchronize(self) -> None:

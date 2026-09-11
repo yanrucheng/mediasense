@@ -1,0 +1,144 @@
+{
+  "status": "completed_with_input_failures",
+  "human_acceptance": "待人工验收",
+  "baseline_ref": "eval/sessions/260910-1330-chineseclip-business-baseline/metrics/baseline.json",
+  "classification_fingerprint": "d4f8dcf2d38fcc58b8dd2a0b22d1e6360364ac14cce9620c2e12f34f0fa67b01",
+  "input_fingerprint": "2144fcd970052a44d20a378e3819b86b55345d0605b6d71ce073fc2dd5cd5ba0",
+  "source_fingerprint": "ddb7d5cae4a459b2c57cc8d2253db413b6cda3394ede5ccc5db5cea5d55562d8",
+  "classification": {
+    "status": "confirmed",
+    "algorithm": "mediasense_content_boundaries_with_anchor",
+    "video_top_k": 0.5,
+    "profile": {
+      "target_entries": 200,
+      "temporal_scale_seconds": 86400.0,
+      "spatial_scale_meters": 3000.0,
+      "content_distance_scale": 0.311,
+      "representative_top_k": 0.5,
+      "exact_representative_limit": 256,
+      "representative_comparison_budget": 65536,
+      "content_based_boundaries": true
+    }
+  },
+  "counts": {
+    "sources": 2134,
+    "expected_inputs": 551,
+    "prepared": 366,
+    "input_failures": 185,
+    "encoded": 366,
+    "not_encoded": 0,
+    "groups": 157,
+    "business_points": 167,
+    "grouped_sources": 2134,
+    "ungrouped_sources": 0,
+    "omitted": 0
+  },
+  "performance": {
+    "model_load_seconds": 7.160505957901478,
+    "encoding_seconds": 14.86619179113768,
+    "first_batch_seconds": 0.11922787502408028,
+    "encoded_inputs": 366,
+    "embedding_cache_hits": 0,
+    "warmup_inputs": 0,
+    "timing_scope": "Every batch includes file read, RGB decode, processor resize/normalize, inference, result materialization on CPU, and device synchronization. No warmup; first batch included. Excludes fixture verification, video extraction, L2 normalization, vector writes, clustering and preview.",
+    "load_scope": "Adapter/framework import, model and processor loading, device transfer, readiness and synchronization; weight hashing is preflight, outside load timing.",
+    "memory_scope": "Kernel RUSAGE_SELF high-water resident bytes for this encoding PID through completion, including imports, load and encoding; excludes all children and separate preparation/preview processes. Not total system or GPU allocation.",
+    "memory_includes_children": false,
+    "stage_seconds": {
+      "read_rgb_decode": 1.7711845086887479,
+      "resize_normalize_stack": 3.628499426180497,
+      "predict_transfer_sync": 9.29183141537942,
+      "runner_and_adapter_overhead": 0.1746764408890158
+    },
+    "inputs_per_second": 24.619620488024843,
+    "peak_process_rss_bytes": 832962560
+  },
+  "environment": {
+    "python": "3.13.5 (main, Jun 12 2025, 12:22:43) [Clang 20.1.4 ]",
+    "executable": "/private/tmp/mediasense-dinov3-260910/venv/bin/python",
+    "platform": "macOS-26.4.1-arm64-arm-64bit-Mach-O",
+    "machine": "arm64",
+    "pid": 49673,
+    "nice": 10,
+    "macos": "26.4.1",
+    "build": "25E253",
+    "cpu": "Apple M5 Pro",
+    "unified_memory_bytes": 51539607552
+  },
+  "code": {
+    "git_head": "97800edac4b15ea817d74326fe8d025ff6434a0f",
+    "working_tree_dirty": true,
+    "evaluation_files_sha256": {
+      "model_evaluation.py": "46924fa6cd535ca10bb7b9c82b19aad8e37bcb1702d2f614b9b536d0bba675c3",
+      "model_evaluation_business.py": "9323e667af836c3877c5c1a1230dc3db408b615a1bf3a3b66357f9a3428d85d1",
+      "model_evaluation_business_inputs.py": "dba0192d1326709c58900b9e6c1adf7c214536415fe355c7d38542d790b14b14",
+      "model_evaluation_business_preview.py": "3c66cf5e820fa5032bc0b558c4aaf6e5fbc3125e7190cf41f65ebcea38f2eaee",
+      "model_evaluation_dinov3.py": "24dadf228a4c6dcc90028225c597cc2f665ef3797c4e4c66e6c70a75abd1e969",
+      "model_evaluation_encoder.py": "f83d93911a098a85a22dad829c4ed3060b26d7fbbad72ae8717f58312c79572a",
+      "model_evaluation_hierarchy.py": "03e5aa9a5186883dcd1f20c8973b1de53f2e58e62330a343f24171b94c4d356b",
+      "model_evaluation_inputs.py": "71f9cefc699f298f91d80b465a376694dfc0d5995f25f5315119998daae9d6b9",
+      "model_evaluation_preview.py": "8da1502bc8a62f03d30eb8d06e27fe348c77729b9a049a2b77a4a718e182efc1",
+      "model_evaluation_siglip2.py": "c5a71b588a74e0109dedab3c490d26c6543aa9521bb5ff123797f0bf81122602",
+      "prepare_input.py": "5e5870fc39838c378d798417c214402101829e495d0ed4472157227975b27319"
+    }
+  },
+  "business_code": {
+    "package": "mediasense.precheck",
+    "files": 46,
+    "sha256": "255977ab42bc780b9f59ce4ff519be872766f2ee4dfa4ae1cc1eace1dd8b2ff3"
+  },
+  "effective_encoder": {
+    "identity": "dinov3-coreml:05959de6b0c15b7ca6199ae13748643454d53dad78453e02613d95301ff12233",
+    "model_id": "timm/vit_base_patch16_dinov3.lvd1689m",
+    "revision": "c6a5fb7d12bbd3cf3b0079253141c3332aaed7da",
+    "device": "Core ML ALL (actual scheduling unmeasured)",
+    "precision": "FP16 convolution/MLP graph; FP32 attention, normalization, residuals and RoPE; FP32 I/O",
+    "feature_output": "forward_features(pixel_values)[:, 0, :] after final LayerNorm",
+    "source_checkpoint_sha256": "1f9ed8a2378d65e24bb710ba522ac9fa7be4e036d7aefb4384ce022833926332",
+    "native_batch_sizes": [
+      1
+    ],
+    "multi_image_calls": "sequential single-image predictions",
+    "padding": "none",
+    "preprocessing": {
+      "image_size": 512,
+      "image_decode": "Pillow RGB; no EXIF transpose",
+      "recipe": "Meta README make_transform(resize_size=512)",
+      "order": [
+        "ToImage uint8",
+        "Resize square uint8",
+        "ToDtype float32 scale=True",
+        "Normalize"
+      ],
+      "interpolation": "bilinear",
+      "antialias": true,
+      "crop": null,
+      "mean": [
+        0.485,
+        0.456,
+        0.406
+      ],
+      "std": [
+        0.229,
+        0.224,
+        0.225
+      ]
+    },
+    "torch_model_loaded": false,
+    "output_normalization": "runner L2 normalization and float32-le storage",
+    "memory_note": "RUSAGE_SELF excludes Core ML services; total unified/GPU memory unknown"
+  },
+  "embedding_identity": "a487e0508c8623a08f3426113e2c59eceeebde70d1fb458b6b1ed4912499aa93",
+  "encoding_summary": "/Users/chengyanru/repos/personal/mediasense/eval/sessions/260911-0953-dinov3-resolution-384/outputs/512-coreml-batch1/encoding.json",
+  "preview": "/Users/chengyanru/repos/personal/mediasense/eval/sessions/260911-0953-dinov3-resolution-384/outputs/512-coreml-batch1/preview/index.html",
+  "preview_checks": {
+    "source_cards": 2134,
+    "thumbnails": 2118,
+    "thumbnail_failures": [],
+    "external_resources": 0
+  },
+  "result_sha256": "1b6a99c2e9018b064b904b496e9fe71b983605f61668e4bde4e2be6e379872f1",
+  "preparation_failures_by_kind": {
+    "video": 185
+  }
+}

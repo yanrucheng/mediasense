@@ -1,0 +1,312 @@
+{
+  "status": "passed",
+  "runs": {
+    "384-mps": {
+      "vectors": 366,
+      "dimensions": 768,
+      "max_unit_norm_error": 5.102277600421701e-09,
+      "reclassification_exact": true,
+      "groups": 156,
+      "source_count": 2134,
+      "grouped_sources": 2134,
+      "source_exceptions": 0,
+      "single_candidate_groups": 147,
+      "selected_sources": 280,
+      "input_failures": 185,
+      "vectors_sha256": "e24a1598141c9c6bb0175bc2daba138b48f017a798ca24a13dd951684b67297c",
+      "preview_integrity": {
+        "source_cards": 2134,
+        "unique_sources": 2134,
+        "decoded_unique_images": 2118,
+        "existing_local_targets": 4618
+      }
+    },
+    "384-coreml-batch1": {
+      "vectors": 366,
+      "dimensions": 768,
+      "max_unit_norm_error": 5.4699911267164225e-09,
+      "reclassification_exact": true,
+      "groups": 156,
+      "source_count": 2134,
+      "grouped_sources": 2134,
+      "source_exceptions": 0,
+      "single_candidate_groups": 147,
+      "selected_sources": 280,
+      "input_failures": 185,
+      "vectors_sha256": "de4e9dcaa241dadb2140bd584b8adc190bc6e2bd65d553538957888fbd67f724",
+      "preview_integrity": {
+        "source_cards": 2134,
+        "unique_sources": 2134,
+        "decoded_unique_images": 2118,
+        "existing_local_targets": 4618
+      }
+    },
+    "512-mps": {
+      "vectors": 366,
+      "dimensions": 768,
+      "max_unit_norm_error": 6.251451578620504e-09,
+      "reclassification_exact": true,
+      "groups": 157,
+      "source_count": 2134,
+      "grouped_sources": 2134,
+      "source_exceptions": 0,
+      "single_candidate_groups": 148,
+      "selected_sources": 280,
+      "input_failures": 185,
+      "vectors_sha256": "0a4093d752e5349180d11d845a06721f3b3bc25dbb17fc5c1dd4217445c637ee",
+      "preview_integrity": {
+        "source_cards": 2134,
+        "unique_sources": 2134,
+        "decoded_unique_images": 2118,
+        "existing_local_targets": 4618
+      },
+      "vs_historical_512": {
+        "rows": 366,
+        "dimensions": 768,
+        "max_cosine_distance": 1.2502903157241008e-08,
+        "max_pairwise_cosine_error": 0.0,
+        "pairwise_pairs": 66795,
+        "pairwise_over_tolerance": 0,
+        "max_normalized_element_error": 0.0,
+        "max_raw_relative_l2_error": 0.0,
+        "nearest_neighbor_agreement": 366,
+        "changed_rank_positions": 0,
+        "inversions_with_reference_margin_over_0_005": 0,
+        "max_stored_unit_norm_error": 6.251451578620504e-09,
+        "passed": true
+      }
+    },
+    "512-coreml-batch1": {
+      "vectors": 366,
+      "dimensions": 768,
+      "max_unit_norm_error": 4.6975989764774795e-09,
+      "reclassification_exact": true,
+      "groups": 157,
+      "source_count": 2134,
+      "grouped_sources": 2134,
+      "source_exceptions": 0,
+      "single_candidate_groups": 148,
+      "selected_sources": 280,
+      "input_failures": 185,
+      "vectors_sha256": "40a4c9853d74f88d3c18e6eb2fd437202fbff8de231623e221cdacc361d06598",
+      "preview_integrity": {
+        "source_cards": 2134,
+        "unique_sources": 2134,
+        "decoded_unique_images": 2118,
+        "existing_local_targets": 4618
+      },
+      "vs_historical_512": {
+        "rows": 366,
+        "dimensions": 768,
+        "max_cosine_distance": 9.395197841932657e-09,
+        "max_pairwise_cosine_error": 0.0,
+        "pairwise_pairs": 66795,
+        "pairwise_over_tolerance": 0,
+        "max_normalized_element_error": 0.0,
+        "max_raw_relative_l2_error": 0.0,
+        "nearest_neighbor_agreement": 366,
+        "changed_rank_positions": 0,
+        "inversions_with_reference_margin_over_0_005": 0,
+        "max_stored_unit_norm_error": 4.6975989764774795e-09,
+        "passed": true
+      }
+    }
+  },
+  "previews": {
+    "384-mps-085": {
+      "groups": 99,
+      "integrity": {
+        "source_cards": 2134,
+        "unique_sources": 2134,
+        "decoded_unique_images": 2118,
+        "existing_local_targets": 4618
+      },
+      "new_inference": false
+    },
+    "384-coreml-batch1-085": {
+      "groups": 99,
+      "integrity": {
+        "source_cards": 2134,
+        "unique_sources": 2134,
+        "decoded_unique_images": 2118,
+        "existing_local_targets": 4618
+      },
+      "new_inference": false
+    },
+    "512-mps-085": {
+      "groups": 103,
+      "integrity": {
+        "source_cards": 2134,
+        "unique_sources": 2134,
+        "decoded_unique_images": 2118,
+        "existing_local_targets": 4618
+      },
+      "new_inference": false
+    },
+    "512-coreml-batch1-085": {
+      "groups": 104,
+      "integrity": {
+        "source_cards": 2134,
+        "unique_sources": 2134,
+        "decoded_unique_images": 2118,
+        "existing_local_targets": 4618
+      },
+      "new_inference": false
+    },
+    "384_runtime_business_equal": true,
+    "384_runtime_business_equal-085": true
+  },
+  "numerical_384": {
+    "rows": 366,
+    "dimensions": 768,
+    "max_cosine_distance": 5.520175638817904e-07,
+    "max_pairwise_cosine_error": 0.00036605457334792924,
+    "pairwise_pairs": 66795,
+    "pairwise_over_tolerance": 0,
+    "max_normalized_element_error": 0.0001919865608215332,
+    "max_raw_relative_l2_error": 0.0010518805356696248,
+    "nearest_neighbor_agreement": 366,
+    "changed_rank_positions": 6597,
+    "inversions_with_reference_margin_over_0_005": 0,
+    "max_stored_unit_norm_error": 5.4699911267164225e-09,
+    "passed": true
+  },
+  "resolution_comparison": {
+    "mps": {
+      "candidate_groups": 156,
+      "baseline_groups": 157,
+      "exact_membership_matches": 153,
+      "changed_representatives_in_exact_matches": 0,
+      "candidate_groups_within_one_baseline_group": 155,
+      "baseline_groups_spanning_multiple_candidate_groups": 1,
+      "selected_inputs_equal": true,
+      "review_examples": [
+        {
+          "baseline_group": 145,
+          "source_count": 39,
+          "candidate_groups": [
+            143,
+            144
+          ]
+        }
+      ],
+      "quality_judgment": "pending human review; these counts only locate differences"
+    },
+    "coreml-batch1": {
+      "candidate_groups": 156,
+      "baseline_groups": 157,
+      "exact_membership_matches": 153,
+      "changed_representatives_in_exact_matches": 0,
+      "candidate_groups_within_one_baseline_group": 155,
+      "baseline_groups_spanning_multiple_candidate_groups": 1,
+      "selected_inputs_equal": true,
+      "review_examples": [
+        {
+          "baseline_group": 145,
+          "source_count": 39,
+          "candidate_groups": [
+            143,
+            144
+          ]
+        }
+      ],
+      "quality_judgment": "pending human review; these counts only locate differences"
+    },
+    "mps-085": {
+      "candidate_groups": 99,
+      "baseline_groups": 103,
+      "exact_membership_matches": 86,
+      "changed_representatives_in_exact_matches": 1,
+      "candidate_groups_within_one_baseline_group": 91,
+      "baseline_groups_spanning_multiple_candidate_groups": 5,
+      "selected_inputs_equal": true,
+      "review_examples": [
+        {
+          "baseline_group": 20,
+          "source_count": 4,
+          "candidate_groups": [
+            18,
+            19
+          ]
+        },
+        {
+          "baseline_group": 44,
+          "source_count": 2,
+          "candidate_groups": [
+            41,
+            42
+          ]
+        },
+        {
+          "baseline_group": 64,
+          "source_count": 56,
+          "candidate_groups": [
+            60,
+            61
+          ]
+        },
+        {
+          "baseline_group": 72,
+          "source_count": 41,
+          "candidate_groups": [
+            67,
+            68
+          ]
+        },
+        {
+          "baseline_group": 73,
+          "source_count": 4,
+          "candidate_groups": [
+            68,
+            69
+          ]
+        }
+      ],
+      "quality_judgment": "pending human review; these counts only locate differences"
+    },
+    "coreml-batch1-085": {
+      "candidate_groups": 99,
+      "baseline_groups": 104,
+      "exact_membership_matches": 87,
+      "changed_representatives_in_exact_matches": 1,
+      "candidate_groups_within_one_baseline_group": 91,
+      "baseline_groups_spanning_multiple_candidate_groups": 4,
+      "selected_inputs_equal": true,
+      "review_examples": [
+        {
+          "baseline_group": 20,
+          "source_count": 4,
+          "candidate_groups": [
+            18,
+            19
+          ]
+        },
+        {
+          "baseline_group": 44,
+          "source_count": 2,
+          "candidate_groups": [
+            41,
+            42
+          ]
+        },
+        {
+          "baseline_group": 73,
+          "source_count": 41,
+          "candidate_groups": [
+            67,
+            68
+          ]
+        },
+        {
+          "baseline_group": 74,
+          "source_count": 4,
+          "candidate_groups": [
+            68,
+            69
+          ]
+        }
+      ],
+      "quality_judgment": "pending human review; these counts only locate differences"
+    }
+  }
+}

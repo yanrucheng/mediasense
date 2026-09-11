@@ -244,6 +244,16 @@ def encode(config: dict, inputs_path: Path, output: Path) -> dict:
                     )
                     raise
                 performance["encoding_seconds"] += elapsed
+                if config["runtime"].get("stage_timing", False):
+                    stages = dict(adapter.last_stage_seconds)
+                    if set(stages) != {"read_rgb_decode", "resize_normalize_stack", "predict_transfer_sync"} or any(not math.isfinite(value) or value < 0 for value in stages.values()):
+                        raise ValueError("Invalid adapter stage timings")
+                    stages["runner_and_adapter_overhead"] = elapsed - sum(stages.values())
+                    if stages["runner_and_adapter_overhead"] < 0:
+                        raise ValueError("Stage timings overlap or exceed total batch time")
+                    totals = performance.setdefault("stage_seconds", dict.fromkeys(stages, 0.0))
+                    for stage, seconds in stages.items():
+                        totals[stage] += seconds
                 if start == 0:
                     performance["first_batch_seconds"] = elapsed
                 validated = [

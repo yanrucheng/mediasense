@@ -1,0 +1,82 @@
+{
+  "384-coreml-batch1": {
+    "groups": 156,
+    "source_cards": 2134,
+    "expanded": true,
+    "collapsed": true,
+    "video_expanded": true,
+    "decoded_images": 16,
+    "checked_images": 16,
+    "title": "MediaSense \u4e1a\u52a1\u57fa\u7ebf \u00b7 vit_base_patch16_dinov3.lvd1689m"
+  },
+  "384-coreml-batch1-085": {
+    "groups": 99,
+    "source_cards": 2134,
+    "expanded": true,
+    "collapsed": true,
+    "video_expanded": true,
+    "decoded_images": 16,
+    "checked_images": 16,
+    "title": "MediaSense \u4e1a\u52a1\u57fa\u7ebf \u00b7 vit_base_patch16_dinov3.lvd1689m"
+  },
+  "384-mps": {
+    "groups": 156,
+    "source_cards": 2134,
+    "expanded": true,
+    "collapsed": true,
+    "video_expanded": true,
+    "decoded_images": 16,
+    "checked_images": 16,
+    "title": "MediaSense \u4e1a\u52a1\u57fa\u7ebf \u00b7 vit_base_patch16_dinov3.lvd1689m"
+  },
+  "384-mps-085": {
+    "groups": 99,
+    "source_cards": 2134,
+    "expanded": true,
+    "collapsed": true,
+    "video_expanded": true,
+    "decoded_images": 16,
+    "checked_images": 16,
+    "title": "MediaSense \u4e1a\u52a1\u57fa\u7ebf \u00b7 vit_base_patch16_dinov3.lvd1689m"
+  },
+  "512-coreml-batch1": {
+    "groups": 157,
+    "source_cards": 2134,
+    "expanded": true,
+    "collapsed": true,
+    "video_expanded": true,
+    "decoded_images": 16,
+    "checked_images": 16,
+    "title": "MediaSense \u4e1a\u52a1\u57fa\u7ebf \u00b7 vit_base_patch16_dinov3.lvd1689m"
+  },
+  "512-coreml-batch1-085": {
+    "groups": 104,
+    "source_cards": 2134,
+    "expanded": true,
+    "collapsed": true,
+    "video_expanded": true,
+    "decoded_images": 16,
+    "checked_images": 16,
+    "title": "MediaSense \u4e1a\u52a1\u57fa\u7ebf \u00b7 vit_base_patch16_dinov3.lvd1689m"
+  },
+  "512-mps": {
+    "groups": 157,
+    "source_cards": 2134,
+    "expanded": true,
+    "collapsed": true,
+    "video_expanded": true,
+    "decoded_images": 16,
+    "checked_images": 16,
+    "title": "MediaSense \u4e1a\u52a1\u57fa\u7ebf \u00b7 vit_base_patch16_dinov3.lvd1689m"
+  },
+  "512-mps-085": {
+    "groups": 103,
+    "source_cards": 2134,
+    "expanded": true,
+    "collapsed": true,
+    "video_expanded": true,
+    "decoded_images": 16,
+    "checked_images": 16,
+    "title": "MediaSense \u4e1a\u52a1\u57fa\u7ebf \u00b7 vit_base_patch16_dinov3.lvd1689m"
+  }
+}

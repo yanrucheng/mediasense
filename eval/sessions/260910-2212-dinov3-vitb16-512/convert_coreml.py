@@ -17,7 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "shared"))
 from model_evaluation import check_runtime  # noqa: E402
 from model_evaluation_dinov3 import image_pixels, load_processor, torch_vision  # noqa: E402
 from model_evaluation_inputs import digest, validate_inputs, write_json  # noqa: E402
-from validate import compare  # noqa: E402
+from validate import compare, reference_recipe  # noqa: E402
 
 
 def main():
@@ -36,7 +36,7 @@ def main():
     check_runtime(config)
     prepared = validate_inputs(config, args.inputs)
     reference = json.loads((args.reference / "validation.json").read_text())
-    if reference["status"] != "passed" or reference["input_fingerprint"] != prepared["input_fingerprint"]:
+    if reference["status"] != "passed" or reference["input_fingerprint"] != prepared["input_fingerprint"] or reference["reference_recipe"] != reference_recipe(config):
         raise ValueError("A passing matching CPU/MPS reference is required")
     by_id = {row["id"]: row for row in prepared["inputs"]}
     samples = reference["samples"][:4]
@@ -56,7 +56,8 @@ def main():
 
         started = time.perf_counter()
         model = torch_vision(config["model"], {**config["runtime"], "device": "cpu", "precision": "float32"})
-        pixels = image_pixels(load_processor(config["model"]), [Path(row["image_path"]) for row in selected])
+        size = config["model"]["preprocessing"]["image_size"]
+        pixels = image_pixels(load_processor(config["model"]), [Path(row["image_path"]) for row in selected], image_size=size)
         result["timings"]["source_load_and_example_seconds"] = time.perf_counter() - started
 
         class CLS(torch.nn.Module):
@@ -104,7 +105,7 @@ def main():
             selection["fp16" if lower else "keep_fp32"] += 1
             return lower
 
-        shapes = [(batch, 3, 512, 512) for batch in batches]
+        shapes = [(batch, 3, size, size) for batch in batches]
         shape = shapes[0] if len(shapes) == 1 else ct.EnumeratedShapes(shapes=shapes, default=shapes[0])
         print("converting: FP16 convolution/MLP, FP32 attention/residuals", flush=True)
         started = time.perf_counter()
@@ -135,7 +136,7 @@ def main():
         if attention_types["fp16"] or not attention_types["fp32"]:
             raise ValueError(f"Attention precision boundary was not preserved: {attention_types}")
         result.update(nonconstant_float_output_types=dict(types), attention_compute_output_types=dict(attention_types), operation_counts=dict(ops))
-        converted.short_description = "DINOv3 ViT-B/16 CLS at 512px; FP16 conv/MLP, FP32 attention/residuals"
+        converted.short_description = f"DINOv3 ViT-B/16 CLS at {size}px; FP16 conv/MLP, FP32 attention/residuals"
         converted.user_defined_metadata["source_revision"] = config["model"]["revision"]
         converted.user_defined_metadata["source_checkpoint_sha256"] = result["source_checkpoint_sha256"]
         started = time.perf_counter()

@@ -1,0 +1,71 @@
+{
+  "status": "converted_and_compiled; numerical validation pending",
+  "input_fingerprint": "2144fcd970052a44d20a378e3819b86b55345d0605b6d71ce073fc2dd5cd5ba0",
+  "source_checkpoint_sha256": "1f9ed8a2378d65e24bb710ba522ac9fa7be4e036d7aefb4384ce022833926332",
+  "precision": "FP16 convolution/MLP graph; FP32 attention, normalization, residuals and RoPE; FP32 I/O",
+  "native_batch_sizes": [
+    1
+  ],
+  "timings": {
+    "source_load_and_example_seconds": 1.3954052089247853,
+    "trace_and_checks_seconds": 2.933614250039682,
+    "conversion_seconds": 2.2803127919323742,
+    "save_seconds": 0.04048745892941952,
+    "compile_seconds": 0.1189431669190526
+  },
+  "export_compatibility": "RoPE tensor_split(2,-1) replaced by chunk(2,-1) at fixed width 128; process-local tracing only",
+  "trace_vs_cpu_fp32": {
+    "rows": 4,
+    "dimensions": 768,
+    "max_cosine_distance": 3.776030155222543e-09,
+    "max_pairwise_cosine_error": 0.0,
+    "pairwise_pairs": 6,
+    "pairwise_over_tolerance": 0,
+    "max_normalized_element_error": 0.0,
+    "max_raw_relative_l2_error": 0.0,
+    "nearest_neighbor_agreement": 4,
+    "changed_rank_positions": 0,
+    "inversions_with_reference_margin_over_0_005": 0,
+    "max_stored_unit_norm_error": 2.435798229782904e-09,
+    "passed": true
+  },
+  "precision_selection_counts": {
+    "keep_fp32": 1101,
+    "fp16": 106
+  },
+  "nonconstant_float_output_types": {
+    "fp16": 51,
+    "fp32": 486
+  },
+  "attention_compute_output_types": {
+    "fp32": 36
+  },
+  "operation_counts": {
+    "cast": 26,
+    "conv": 1,
+    "transpose": 25,
+    "reshape": 25,
+    "concat": 49,
+    "layer_norm": 25,
+    "linear": 48,
+    "split": 36,
+    "squeeze": 36,
+    "slice_by_index": 49,
+    "mul": 96,
+    "add": 48,
+    "scaled_dot_product_attention": 12,
+    "gelu": 12,
+    "identity": 1
+  },
+  "files_sha256": {
+    "source-config.json": "5ca17ece8677541aa067db570946330ecca4125b713a51e89be9e7ec97395e94",
+    "vision.mlmodelc/analytics/coremldata.bin": "f6065ec149d0dcb0691b87a8aca8920a00ae201ce2502cf1e341c2b7929f8c60",
+    "vision.mlmodelc/coremldata.bin": "c10c5c2dca8f9ad8f0cf055e2e374bf1c976e359ee225ab0641d3d902901c508",
+    "vision.mlmodelc/model.mil": "1759de61d115d7b13a20b7791d2487bfd6caf33ca0fdf8734ac08df02ae28568",
+    "vision.mlmodelc/weights/weight.bin": "91f1bbe173071f2a3427fbd19a3ac515c2e9835a25efe2fb8c48138d959ace21",
+    "vision.mlpackage/Data/com.apple.CoreML/model.mlmodel": "9c5b516c97558b003f7fbeb899740e4e297354a67568aad6b72cf36c2e2012c4",
+    "vision.mlpackage/Data/com.apple.CoreML/weights/weight.bin": "91f1bbe173071f2a3427fbd19a3ac515c2e9835a25efe2fb8c48138d959ace21",
+    "vision.mlpackage/Manifest.json": "f9033fbae39f03365b814dd69c22fe64139666ae74562e478b9b55ece5ff7d0c"
+  },
+  "conversion_process_peak_rss_bytes": 1067581440
+}

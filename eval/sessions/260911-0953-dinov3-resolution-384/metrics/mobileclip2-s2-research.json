@@ -1,0 +1,53 @@
+{
+  "decision": "worth_next_integration_test; no model downloaded/loaded",
+  "official": {
+    "model": "apple/MobileCLIP2-S2",
+    "revision": "72424e7025436db18f15c3eff6ee8c7c15ad4481",
+    "weight_sha256_from_lfs_metadata": "37c2d839a856491f2fcc82c40dc28672dbd0907235b4cd4c38dfff6457f0c09f",
+    "weight_bytes_from_metadata": 398071149,
+    "weight_downloaded": false,
+    "vision_parameters_millions_author_reported": 35.7,
+    "text_parameters_millions_author_reported": 63.4,
+    "image_size": 256,
+    "embedding_dimensions": 512,
+    "architecture": "fastvit_mci2",
+    "imagenet_1k_zero_shot_author": 77.2,
+    "average_38_datasets_author": 64.1,
+    "iphone_latency_not_mac_evidence_ms": 3.6
+  },
+  "community": {
+    "model": "timm/MobileCLIP2-S2-OpenCLIP",
+    "revision": "ac6b37c8fc40b62b623d09ed228a6f0c9bc29fe6",
+    "openclip_version": "3.2.0",
+    "wheel_sha256": "e1f5b3ecbadb6d8ea64b1f887db23efee9739e7c0d0075a8a2a3cabae8fed8d1",
+    "explicit_s2_config_and_pretrained_entry": true,
+    "installed_or_executed": false,
+    "onnx_export": "RuteNL/MobileCLIP2-S2-OpenCLIP-ONNX",
+    "onnx_is_independent_benchmark": false
+  },
+  "mac_evidence": "No verified exact-S2 Mac throughput, RSS, Core ML package or same-task comparison found in this bounded check. MPS/Core ML correctness and reparameterization need local validation next round.",
+  "independent_comparison": "Not established. Author tables repeated by model cards/exports are not independent results.",
+  "retrieval": "Official HF and GitHub direct access timed out; HF text/API retrieved through hf-mirror.com, wheel via Tsinghua PyPI mirror. Apple research page fetched directly. Bing returned irrelevant results; excluded. FiftyOne page was a redirect map; no exact S2 integration established.",
+  "sources": [
+    "https://machinelearning.apple.com/research/mobileclip2",
+    "https://huggingface.co/apple/MobileCLIP2-S2/tree/72424e7025436db18f15c3eff6ee8c7c15ad4481",
+    "https://huggingface.co/timm/MobileCLIP2-S2-OpenCLIP/tree/ac6b37c8fc40b62b623d09ed228a6f0c9bc29fe6",
+    "https://pypi.org/project/open_clip_torch/3.2.0/",
+    "https://huggingface.co/RuteNL/MobileCLIP2-S2-OpenCLIP-ONNX",
+    "https://arxiv.org/abs/2508.20691"
+  ],
+  "retained_reference_sha256": {
+    "MobileCLIP2-S2.json": "4bd3130ec0b2669de4c5c01165f2933e1da4b84de7bc33f7011d2ae63a2582af",
+    "official-tree.json": "b7ad3c891432574674b8866bb05aaee4e52695dc332bf0c9e491992987148eda",
+    "pretrained.py": "5ffc377bb61392ca07581b7fa3705ed358d99188082f9a260854b2044ec3bc45",
+    "onnx-card.md": "c5ea0f2133e76880493686128d0bb1eb60cbc3b2405832ac53607237e71ce81f",
+    "official-api.json": "ab3e8f94fa1f17b5c36e8fe9711c77752f9a20333159bc0c608e26d89b6c7865",
+    "official-card.md": "41e74ac02e21ef7020166f774366a07b7a84370057ac9bc17250953ef96583c4",
+    "openclip-card.md": "6612c2cb933950fad6d76769bf7640d1ea1b958465b4f34792d296a20a3ad623",
+    "apple-research.html": "b90c06ffc619f7ca2106c6e1b7d1e7ea504abd2f5e7b9748fae655eb5fd48597",
+    "openclip-api.json": "9ca034420fde65eadf9a204d2d84ac2c03de667be0b090bcb4bfe93dccf79e67",
+    "timm_model.py": "3a9a1d037ffc1cccde8be020b481ce1527533148ead9f02054ca7d5faeb0442a",
+    "openclip-config.json": "e3b764439eccd2dcd77308978093f6b91cf0a7653606c9c2e758a43b375f7bb6",
+    "official-config.json": "4bd3130ec0b2669de4c5c01165f2933e1da4b84de7bc33f7011d2ae63a2582af"
+  }
+}
