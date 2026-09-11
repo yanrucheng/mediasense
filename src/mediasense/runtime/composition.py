@@ -31,7 +31,6 @@ from mediasense.plan import ConfirmationContext, PlanWorkTool
 from mediasense.plan._update_execution import UpdateExecution
 from mediasense.precheck import (
     AccountingStore,
-    ChineseCLIPEncoder,
     EmbeddingProfile,
     PrecheckConfirmationContext,
     PrecheckExecutionDependencies,
@@ -113,15 +112,9 @@ class DatasetRuntime:
         AccountingStore(precheck_database).register_dataset(self.dataset_id)
         self.geo_query = _geo_tool(workspace / "geo", config)
         embedding = config.embedding
-        encoder = (
-            None
-            if embedding is None
-            else ChineseCLIPEncoder(
-                model_id=embedding["model_id"],
-                revision=embedding["revision"],
-                device=embedding["device"],
-            )
-        )
+        from .embedding import make_encoder
+
+        encoder = None if embedding is None else make_encoder(embedding)
         execution_config = (
             PrecheckExecutionConfig()
             if embedding is None
@@ -136,6 +129,7 @@ class DatasetRuntime:
             )
         )
         from dataclasses import replace
+        execution_config = replace(execution_config, metadata_profile=config.metadata_profile())
         from mediasense.precheck.sensitivity import (
             NudeNetDetector,
             TransformersNSFWDetector,
@@ -275,6 +269,23 @@ class DatasetRuntime:
                         "run_ref": active["run_ref"],
                     }
                 }
+            from .config import ConfigurationError, load_runtime_config
+
+            try:
+                updated = load_runtime_config(
+                    dataset_workspace=self.opened.workspace,
+                    user_config=self.config.user_config_path,
+                )
+            except ConfigurationError as error:
+                return {"error": {"code": "configuration_invalid", "message": str(error)}}
+            self.precheck_run._execution_config = replace(
+                self.precheck_run._execution_config,
+                metadata_profile=updated.metadata_profile(),
+            )
+            self.config = replace(
+                self.config, metadata=updated.metadata,
+                manufacturer_knowledge=updated.manufacturer_knowledge,
+            )
             requested_dataset = request.get("dataset_ref")
             if (
                 requested_dataset is not None
@@ -330,7 +341,11 @@ class DatasetRuntime:
             if state in {"paused", "blocked"}:
                 from .config import load_runtime_config
 
-                updated = load_runtime_config(dataset_workspace=self.opened.workspace)
+                updated = load_runtime_config(
+                    dataset_workspace=self.opened.workspace,
+                    user_config=self.config.user_config_path,
+                    load_manufacturers=False,
+                )
                 if updated.geo_network != self.config.geo_network:
                     geo = _geo_tool(self.opened.workspace / "geo", updated)
                     self.geo_query = geo

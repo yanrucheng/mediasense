@@ -10,6 +10,7 @@ from jsonschema import Draft202012Validator
 ROOT = Path(__file__).parents[1]
 CONTRACT = ROOT / "docs/spec/contract"
 FAMILIES = {
+    "manufacturer-knowledge",
     "precheck-read",
     "precheck-run",
     "geo-query",

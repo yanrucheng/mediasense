@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from email.parser import Parser
 import json
 import os
 import subprocess
@@ -11,11 +12,6 @@ import tempfile
 import tomllib
 import zipfile
 from pathlib import Path
-
-import anyio
-from mcp import ClientSession, StdioServerParameters
-from mcp.client.stdio import stdio_client
-
 
 EXPECTED_TOOLS = {
     "mediasense.dataset.open",
@@ -26,20 +22,10 @@ EXPECTED_TOOLS = {
     "mediasense.apply.run",
     "mediasense.apply.read",
 }
-EXPECTED_CONTRACT_FILES = {
-    "apply-read.tool.json",
-    "apply-receipt.schema.json",
-    "apply-run.tool.json",
-    "dataset-open.tool.json",
-    "frozen-plan.schema.json",
-    "geo-query.tool.json",
-    "plan-work.tool.json",
-    "precheck-read.tool.json",
-    "precheck-run.tool.json",
-}
 EXPECTED_SKILL_FILES = {
     "mediasense/SKILL.md",
     "mediasense/agents/openai.yaml",
+    "mediasense/references/installation.md",
     "mediasense-apply/SKILL.md",
     "mediasense-apply/agents/openai.yaml",
     "mediasense-plan/SKILL.md",
@@ -60,6 +46,22 @@ def main() -> int:
         action="store_true",
         help="Require every dependency to be available in the local uv cache.",
     )
+    parser.add_argument(
+        "--verify-only",
+        action="store_true",
+        help="Check the artifact against this source without installing or launching it.",
+    )
+    parser.add_argument(
+        "--constraints", type=Path, help="Use these dependency constraints in isolation."
+    )
+    parser.add_argument(
+        "--python",
+        type=Path,
+        help="Existing target interpreter; defaults to the runner's Python.",
+    )
+    parser.add_argument(
+        "--extra", action="append", default=[], choices=("embeddings", "local-models")
+    )
     args = parser.parse_args()
     wheel = args.wheel.resolve(strict=True)
     expected_version = tomllib.loads(
@@ -68,6 +70,13 @@ def main() -> int:
         )
     )["project"]["version"]
     _verify_wheel(wheel, expected_version)
+    if args.verify_only:
+        print("distribution artifact: ok")
+        return 0
+    import anyio
+
+    constraints = args.constraints.resolve(strict=True) if args.constraints else None
+    target_python = (args.python or Path(sys.executable)).resolve(strict=True)
     with tempfile.TemporaryDirectory(prefix="mediasense-clean-install-") as temporary:
         root = Path(temporary)
         tool_root = root / "tools"
@@ -95,12 +104,17 @@ def main() -> int:
         install_command = ["uv", "tool", "install"]
         if args.offline:
             install_command.append("--offline")
+        if constraints is not None:
+            install_command.extend(["--constraints", str(constraints)])
+        wheel_spec = str(wheel)
+        if args.extra:
+            wheel_spec += "[" + ",".join(sorted(set(args.extra))) + "]"
         install_command.extend(
             [
                 "--python",
-                str(Path(sys.executable).resolve()),
+                str(target_python),
                 "--no-python-downloads",
-                str(wheel),
+                wheel_spec,
             ]
         )
         _run(
@@ -167,6 +181,10 @@ def main() -> int:
             )
         ):
             raise AssertionError("Skills were not installed under the explicit target")
+        runbook = skills_target / "mediasense/references/installation.md"
+        canonical_runbook = Path(__file__).resolve().parents[1] / "readme/installation.md"
+        if runbook.read_bytes() != canonical_runbook.read_bytes():
+            raise AssertionError("installed Skill runbook differs from its authoring source")
         _assert_no_agent_configuration(home)
         if (Path(first["workspace"]) / ".agents").exists() or (
             Path(first["workspace"]) / ".codex"
@@ -258,6 +276,9 @@ async def _mcp_scenario(
     result_ref: str,
     expected_version: str,
 ) -> None:
+    from mcp import ClientSession, StdioServerParameters
+    from mcp.client.stdio import stdio_client
+
     parameters = StdioServerParameters(
         command=str(executable),
         args=["mcp"],
@@ -359,8 +380,44 @@ async def _mcp_scenario(
 
 
 def _verify_wheel(wheel: Path, expected_version: str) -> None:
+    repository = Path(__file__).resolve().parents[1]
+    package = repository / "src/mediasense"
+    expected_package = {
+        "mediasense/" + path.relative_to(package).as_posix(): path.read_bytes()
+        for path in package.rglob("*")
+        if path.is_file() and "__pycache__" not in path.parts and path.suffix != ".pyc"
+    }
+    canonical_runbook = (repository / "readme/installation.md").read_bytes()
+    runbook_name = "mediasense/_resources/skills/mediasense/references/installation.md"
+    if expected_package.get(runbook_name) != canonical_runbook:
+        raise AssertionError("packaged runbook is not synchronized with readme/installation.md")
+    contract_sources = {
+        path.name: path
+        for path in (repository / "docs/spec/contract").rglob("*.json")
+        if path.name.endswith((".tool.json", ".schema.json"))
+    }
+    for name, source in contract_sources.items():
+        if expected_package.get(f"mediasense/_resources/contracts/{name}") != source.read_bytes():
+            raise AssertionError(f"packaged contract is not synchronized: {name}")
     with zipfile.ZipFile(wheel) as archive:
         names = archive.namelist()
+        actual_package = {
+            name: archive.read(name)
+            for name in names
+            if name.startswith("mediasense/") and not name.endswith("/")
+        }
+        if actual_package != expected_package:
+            missing = sorted(expected_package.keys() - actual_package.keys())
+            extra = sorted(actual_package.keys() - expected_package.keys())
+            changed = sorted(
+                name
+                for name in expected_package.keys() & actual_package.keys()
+                if expected_package[name] != actual_package[name]
+            )
+            raise AssertionError(
+                f"wheel differs from selected source: missing={missing}, extra={extra}, "
+                f"changed={changed}"
+            )
         metadata_name = next(
             name for name in names if name.endswith(".dist-info/METADATA")
         )
@@ -379,11 +436,19 @@ def _verify_wheel(wheel: Path, expected_version: str) -> None:
             for name in names
             if "/_resources/skills/" in name
         }
-    if f"Version: {expected_version}" not in metadata:
+    project = tomllib.loads((repository / "pyproject.toml").read_text())["project"]
+    parsed_metadata = Parser().parsestr(metadata)
+    if parsed_metadata["Version"] != expected_version:
         raise AssertionError("wheel metadata version does not match pyproject.toml")
+    if parsed_metadata["Name"] != project["name"]:
+        raise AssertionError("wheel metadata name does not match pyproject.toml")
+    if parsed_metadata["Requires-Python"] != project["requires-python"]:
+        raise AssertionError("wheel Python requirement does not match pyproject.toml")
+    if parsed_metadata.get_payload().rstrip() != (repository / project["readme"]).read_text().rstrip():
+        raise AssertionError("wheel README does not match the selected source")
     if "mediasense = mediasense.cli:main" not in entry_points:
         raise AssertionError("wheel does not contain the mediasense entry point")
-    if contracts != EXPECTED_CONTRACT_FILES:
+    if contracts != set(contract_sources):
         raise AssertionError(f"wheel contract resources mismatch: {sorted(contracts)}")
     if skill_files != EXPECTED_SKILL_FILES:
         raise AssertionError(f"wheel Skill resources mismatch: {sorted(skill_files)}")

@@ -4,7 +4,7 @@ title: "Migration Capability Ledger"
 type: eval
 status: active
 created: 2026-08-23
-updated: 2026-09-11
+updated: 2026-09-12
 timezone: "Asia/Shanghai"
 parent: "eval-260823-1918-ai-album-migration-baseline"
 depends-on:
@@ -47,7 +47,7 @@ Implementation status is independent of the difference class:
 | 60-second adjacent chaining | Chained adjacent groups without limiting total span | `precheck` | Intentionally change or bound after evaluation; never hide span | Over-merge/under-merge review, span and boundary metrics |
 | Representative selection | Chose one preferred file per bundle | `precheck` and `plan` | Preserve stable identity; improve semantic evidence selection separately | Representative stability and coverage |
 | Batch metadata extraction | Used ExifTool and configured tags | `precheck` | Preserve and strengthen provenance/error semantics | Value equality, source tags, failures, throughput |
-| Manufacturer information maintenance system | User YAML supplied conditional timestamp exceptions and configurable extraction fields; some photography-context mappings were disconnected | `precheck`, with maintained device knowledge and user/Dataset configuration | Preserve effective scoped adaptation and configuration-based extension; current loss is a regression, separately from improved generic metadata interpretation | User configuration → requested tags → conditional selection → installed execution → public observations → correct invalidation after edits |
+| Manufacturer information maintenance system | User YAML supplied conditional timestamp exceptions and configurable extraction fields; some photography-context mappings were disconnected | `precheck`, with bundled knowledge, user YAML and user/Dataset metadata context | Preserve scoped adaptation and configuration-based extension; the 2026-09-11 regression and 2026-09-12 isolated delivery are recorded separately below | User configuration → requested tags → conditional selection → installed execution → public observations → correct invalidation after edits |
 | Coordinate reverse geocoding and nearby-place lookup | Reverse-geocoded each GPS-bearing bundle representative; AMap returned address/POI in one logical lookup, while Google called reverse and nearby endpoints and could switch provider/language across neighboring media | Shared Geo capability, consumed by `precheck` and available to `plan` for bounded investigation | Preserve datum conversion, address/POI normalization, fallback, and rate limiting; replace hidden continuity state, unstable per-file cache identity, failure ambiguity, and uncounted requests with a stage-neutral Tool, explicit authorization, stable observation identity, and enforced budgets. The accepted M2 evidence below covers acquisition-unit boundaries and per-Source-Item projection; real-place threshold quality and applicability remain uncertified | Located Source Item outcome coverage, query-point/source-coordinate differences and reuse limits, unique logical-query count, actual provider requests, switching hit rate, normalized values, reuse, privacy, user confirmation, and failure/partial semantics |
 | Timestamp fallback | Batch and single-item paths behaved differently | `precheck` | Intentionally change: unified typed candidates and confidence | `000114`, `260428`, missing-time fixtures |
 | Video frame sampling | Up to 20 frames, roughly 10-second interval | `precheck` | Preserve the capability, leave sampling strategy open | Decode coverage, representative quality, cost |
@@ -63,6 +63,44 @@ Implementation status is independent of the difference class:
 | Thumbnail/link/move output modes and generic copy helper | `original` moved files; `link` created relative symbolic links for preview; `thumbnail` used generic metadata-copy code, while no user-facing original-copy branch existed | `plan`, `precheck`, and `apply` | Preserve move; move preview to Plan; preserve rendition production in PreCheck; defer persistent links and any new original-copy profile until they have independent accepted lifecycle semantics | No overwrite/loss, source retention, dangling-link behavior, authorization, rewind, receipts |
 | Per-stage cache | Many results were reusable by flags and hashes | `precheck` | Preserve and strengthen: checkpointing, atomic writes, provenance, dependency-aware invalidation | Resume work, cache hits, interrupted equivalence |
 | Usage monitoring | Optional log, absent from final production run | all | Intentionally change: relevant cost/operation accounting is part of stage results | Zero external calls for local-only runs; confirmed logical work versus actual provider calls for enabled external producers; plan visual cost; apply operations |
+
+<a id="manufacturer-information-delivery"></a>
+
+## 2026-09-12：厂商知识文件契约与隔离安装交付
+
+用户选择 B 方案（随包基础知识＋个人 YAML 增量），授权先定文件结构和字段契约再开发。[当前契约](../../spec/contract/manufacturer-knowledge/index.md)已承接唯一字段定义、示例和失败语义；[设计](../../design/design-260911-1834-manufacturer-information-system.md)记录目的与权威边界。本次完成了源码、隔离安装、正常 Host/Run 与 Read 的接通；下方 2026-09-11 审计仍保留当时的回归事实。此记录不表示用户逐字段另行验收、日常安装已切换或完整发布完成。
+
+### 能力处置与实际证据
+
+| 能力单位 | 差异与状态 | 本次交付及边界 |
+| --- | --- | --- |
+| 按设备、媒体及来源条件适配 | `preserved`，`implemented` | DJI 照片和 Canon EOS DSLR 时间规则、Sony XML 字段映射、DJI 原生视频 Encoder 条件均进入随包 YAML。条件及目标标签参与真实提取；未知条件、明确不匹配、优先级和同属性冲突有独立语义。DJI 历史缺时区经验按已记录范围保留，不编造固件范围。真实 ExifTool/MCP 验证含竞争 EXIF/XMP 的 DJI 照片；其他规则及反例由安装代码测试覆盖。 |
+| 用户配置新增规则及提取字段 | `preserved`，`implemented` | 在用户配置根的 `manufacturers/` 中新增 YAML，无需修改 Python。实际安装的 ACME 规则改变时间选择，并将 `EXIF:Artist` 作为 `manufacturer.acme.operator` 经 Read 交付，含 Source Item 引用和规则依据。 |
+| 知识维护与明确覆盖 | `intentionally_changed`，`implemented` | 旧版整文件覆盖改为稳定 ID 的 add / 完整 replace / disable；重复操作、未知字段和非法正则明确拒绝。doctor / Dataset Open 报告来源、被覆盖来源、停用项及快照身份，执行仍为 not_checked。时区上下文留在现有 TOML，Dataset 只覆盖明确提供的 metadata 键。 |
+| 规则修订、失效和恢复 | `intentionally_changed`，`implemented` | 完整知识及上下文进入已有 Run execution_config，metadata Work 依赖快照身份；新 Run 重读，幂等重放和恢复保留旧快照。四次安装 Run 证明无变更复用、修改/停用后重评、删除增量后恢复内置及旧 Result 不变。重开 RuntimeHost 后配置变化/删除的恢复测试通过；已有真实依赖测试继续验证 metadata → GPX/关联/压缩。历史 execution_config 5/6 恢复为无厂商规则语义，不套用当前文件。 |
+| 时间解释及局部失败 | `preserved` / `intentionally_changed`，`implemented` | 分开无偏移时区、输出时区、字段 UTC/本地含义和设备时钟补偿。显式偏移仍参与解释；无法表示的补偿保留原候选和失败原因，遵守 fallback，其他属性继续处理。来源、规则竞争和被拒候选不因最终选择而抹去。 |
+
+### 精确构建与环境
+
+- 基础提交：`f5a17634be32afff998b31079c010e1b5c5050ef`。最终候选位于 `/private/tmp/mediasense-manufacturer-release-260912-5/`；`source-manifest.json` 记录选入的38个文件及全部735个源码文件的 SHA-256，清单自身 SHA-256 为 `b9f6495a32850d54f73655d9fb0161e6383d5bfe849287ee9fd8967aba98b56a`。
+- wheel：`wheel/mediasense-0.10.1-py3-none-any.whl`，SHA-256 **`4faa4237cf6b62e453b2d60575c54477465c6ba27b1b65bb8c55cac400bb683f`**。版本沿用同期补丁元数据，不能凭 0.10.1 字符串识别此内容。
+- 候选保留一致的厂商 runtime/config/composition/doctor 快照，排除同期 DINO 接入；明确选入当时的安装 runbook、Skill 副本与一致性检查。当前共享工作区的 DINO 及其他改动保留；额外运行工作区相关测试，不以此宣称完整 DINO 安装认证。
+- 安装目标为 `/private/tmp/mediasense-manufacturer-install-260912-5/`，Python **3.11.13**、核心依赖、无模型 extra。基础依赖新增 **PyYAML 6.0.3**，其版本原已锁定；`dependencies.txt`、`test-dependencies.txt` 和 `package-verification.json` 保留确切版本。隔离准备时仅缺缓存的 av 16.1.0 wheel 曾经显式获取，后续构建与最终安装均离线，未下载模型。
+- artifact-only 分发检查通过；全部124个包内文件与安装字节一致，源码清单和安装依赖约束逐项匹配。未替换真实用户配置、日常 CLI、项目 Skill 或业务 Dataset。
+
+### 验证结果与保留的失败
+
+| 检查 | 结果与范围 |
+| --- | --- |
+| 最终候选默认源码测试 | **1,151 passed，16 deselected，221.81 s**。以物理 `/private/tmp` 路径执行；既有本地回环测试获准运行。默认排除项仍未执行。 |
+| 最终 wheel 安装代码测试 | **244 passed，15.46 s**。清除 PYTHONPATH、使用 `pytest -o pythonpath=''`；覆盖厂商、时间、元数据、历史特征、runtime 配置/Host/Dataset 与 Run/Read 契约。 |
+| 当前共享工作区相关测试 | **253 passed，12.82 s**。包含最终时钟边界修复、厂商接入、公开契约及安装说明副本一致性；不覆盖所有同期功能。 |
+| [真实安装 CLI/MCP 测试](../../../tests/run_manufacturer_knowledge_smoke.py) | 2张生成 JPEG、4个完成 Run；无变更无新增 Work attempt，修改补偿/停用规则改变后继结果，删除用户文件恢复基线；原媒体哈希不变，旧 Result 内容不变，快照可重建。无效 YAML 下幂等 start 重放仍成功，新 start 返回 configuration_invalid。 |
+| 静态与资源检查 | 相关 Ruff、diff 空白检查、Schema 副本和文档检查通过；锁文件通过离线一致性检查。安装媒体验证无模型调用、无外部 provider 调用，未使用 HK fixture。 |
+
+失败记录不以最终成功覆盖：初轮默认测试发现 Dataset Open 机器定义缺少新 metadata 摘要，已补齐严格字段及示例；本地回环受 sandbox 限制的测试经明确放行后通过；同期版本变更造成开发环境 editable 元数据过期，已刷新。候选1的 `/tmp` 别名触发既有 Reader 路径一致性检查，改用物理 `/private/tmp` 后通过，未放松 Reader。候选2误带共享 runtime 的 DINO 引用但未带其模块，后续改用一致隔离快照。候选3的测试脚本误将预期 MCP 错误响应断言为成功，修正后通过；其源码测试的同类路径别名问题亦已消除。候选4全套1,146项通过后，额外发现大数/日历边界补偿会溢出，候选5以局部失败和5个回归案例修复。曾尝试全套安装代码测试，其中旧 Plan 测试依赖 checkout 相对文档而无法收集；最终明确分开完整源码测试与适用的安装代码测试。
+
+上述构建和失败材料各留在原候选目录，最终响应及摘要位于候选5的 `installed-smoke/`。此轮证明维护机制和受控输入执行；真实设备所有型号/固件、侧车/转封装矩阵、厂商规则规模与大数据吞吐仍未认证。原片、知识来源、配置、执行和交付的责任不因这些未认证范围而合并。
 
 <a id="manufacturer-information-audit"></a>
 
@@ -651,3 +689,135 @@ The historical tree provides useful upper-bound scenarios even though its groups
 This suggests that a first semantic pass on the Hong Kong fixture can plausibly start at 32-64 images and expand only heterogeneous or uncertain regions. It does not establish that every dataset, especially a hundred-thousand-item collection with many independent events, can be understood with the same fixed count.
 
 The stopping rule should combine budget, mass/quality-weighted coverage, residual uncertainty, and marginal information gain. A fixed `N images per cluster` rule is not sufficient.
+
+
+### 0.10.1 实际安装与统一 runbook 交付（2026-09-12）
+
+用户先确认统一安装/升级 runbook，再明确授权执行实际升级。本次按
+`readme/installation.md` 执行，发布输入固定为提交
+`f5a17634be32afff998b31079c010e1b5c5050ef`、已确认的 runbook 及其发布检查改动、
+0.10.1 补丁版本元数据。同期尚在开发的厂商知识和独立审计不混入本包；工作区保留。
+准确文件范围和内容哈希在下述保留目录的 `scope.json`、`source-hashes.json`。
+
+- 发布目录：`dist/releases/0.10.1-20260912/`；确切 wheel 为
+  `wheel/mediasense-0.10.1-py3-none-any.whl`，SHA-256
+  `227f20a968359a0e4301b2ccc7636af8e0e8cac09086f77800a703af0a0961c3`。
+  119 个包文件与隔离发布源码、实际安装逐字节一致；合约、Skill schema 和离线
+  runbook 副本一致。源码导出和 wheel 保留在此目录，不能当成可覆盖临时文件。
+- 源码默认套件：1115 passed、16 deselected；唯一失败为旧开发环境发行元数据仍是
+  0.10.0，目标版本断言为0.10.1。用已安装0.10.1环境单项复核通过；不将首次执行
+  写成整套一次通过。安装包禁用源码注入后的 Plan 并发、取消、重试、Read复用及
+  版本专项 **62 passed**。Python3.13.5、原 embeddings 依赖约束下的独立 uv tool
+  distribution smoke 通过，涵盖实际CLI/MCP及四个Skill安装。
+- 真实隔离安装和日常安装分别实跑合成图像/视频：公开Run/Read均交付5帧/2表，
+  实际PTS正确，后继Run没有新增metadata/抽帧，源和旧Result字节不变，网络尝试0。
+  本次不重新认证模型质量、完整业务媒体或真实地图服务。
+- 日常入口仍为 `/Users/chengyanru/.local/bin/mediasense`，原uv tool管理；
+  0.10.0→0.10.1，Python3.13.5、`embeddings` extra和原53项依赖版本保留。
+  仅新增PyAV16.1.0；cp313 macOS arm64 wheel按锁文件地址下载并校验
+  `408dbe6a2573ca58a855eb8cd854112b33ea598651902c36709f5f84c991ed8e`。
+  依赖安装与正式切换离线完成，未下载模型、启用敏感性或更改embedding配置。
+- 操作项目 `/Users/chengyanru/Downloads/ai-album-hk-representative-v1` 的四个Skills
+  由原 `npx skills@1.5.25` 离线整组同步，关闭遥测。原11个文件匹配旧wheel，无本地
+  定制；新12个文件匹配本次wheel，每个项目lock的computedHash经原生localeCompare
+  排序及SHA256(path+content)核对。为保留确切版本，local source明确改为上述发布目录
+  的 `source/`，不再依赖持续变动的checkout；其他Skill目标没有变化。
+- 原MCP配置及凭据加载脚本保留。按项目原 `/bin/sh` 启动方式运行的doctor为ok，
+  实际Host initialize为0.10.1，7个Tool的contract ID/digest与安装清单一致，临时
+  Dataset Open→PreCheck Start通过。业务Dataset没有打开、迁移或恢复；只读inspect
+  确认其manifest3、PreCheck17、Plan3、Geo2、Apply2，与本包格式一致。
+- 已确认的旧Host PID18354（idle，父18263）通过TERM退休，Agent父进程保留。
+  原Agent会话并未重新加载；独立Host验证不冒充业务会话验收。
+
+回退材料保存在同一发布目录的 `before/`（旧wheel、uv receipt、依赖清单、四个
+Skills和项目lock）。本次不迁移业务store；回退仍必须按runbook判断当前格式并用
+各自manager恢复匹配集合。汇总 `installation-verification.json`、实际包/Skill/
+launcher核对及视频配方输出都在保留目录内，不入Git。
+
+**剩余会话交接：** 在上述操作项目中新开Agent会话，确认读取本项目新Skill与其
+runbook、Host0.10.1及7个匹配合约后再继续业务。当前开发会话没有MediaSense MCP；
+本次没有向旧业务Agent发送输入、恢复业务Run、修改Plan语义或冻结/执行Plan。
+
+
+### DINOv3 384 正式入口与本机更新（2026-09-12）
+
+用户明确选择已人工认可的 **DINOv3 ViT-B/16、384px**，授权正式接入、必要依赖／
+固定权重准备和本机更新。依据 `readme/installation.md` 执行；公开 Tool 合约未因本次
+实现改变。开始时的已有改动备份于 `/tmp/mediasense-dinov3-start-20260912-030026`。
+厂商知识和独立审计改动保留，任务期间还观察到厂商分支文件更新；未将其混入本次安装。
+
+| 能力／运行品质 | 迁移分类 | 本次结论与交付门 |
+| --- | --- | --- |
+| 本地高分辨率材料／视频帧 embedding、代表选择、源只读 | `preserved` | 沿现有 Encoder port、Work／Artifact、压缩与代表选择消费；正式 DatasetRuntime 已按配置装配，实际 CLI/MCP 推理通过。不是仅存在一个 eval adapter。 |
+| ChineseCLIP Huge 224／1024 维 → DINOv3 ViT-B/16 384／768 维推荐 | `intentionally_changed` | 新配置显式启用且未指定模型时推荐 DINOv3；旧显式 ChineseCLIP 表（包括省略 enabled 的完整表）继续选择 ChineseCLIP。表缺省／空表／false 保持关闭，不改已有 Dataset 配置。 |
+| 权重／预处理／后端与缓存身份 | `intentionally_changed` | 固定 revision、编译图文件 SHA-256、384 uint8 resize 配方、CLS、L2／float32、混合精度、ALL、线程、库版本和 OS／架构；输入与归一化进入既有 Work 依赖。与 ChineseCLIP、512 配方隔离。相同模型副本换位置不失效；有效上游准备独立复用。 |
+| 下载、费用、失败与恢复 | `preserved` | Run/doctor 不下载、不转换模型、不回退远程或其他后端。已知依赖／模型条件阻塞并可恢复；未预期预测异常直接失败。真实测试网络尝试 0、Provider／收费调用 0。 |
+| 运行成本与吞吐 | `intentionally_changed` | 复用已验收 366 输入证据：384 Core ML 9.335 s，ChineseCLIP CPU 155.29 s；是整体运行方案比较，不是纯架构速度或完整 PreCheck 耗时。本次 8 输入仅证明安装执行，不制造新的吞吐成绩。 |
+| Intel macOS／Windows | `not_comparable` | 本次 DINOv3 均未发布／未验证，运行时明确拒绝。PyPI 核对：Torch 2.7／Torchvision 0.22 无 Intel macOS wheel，Windows x64 有 wheel；Core ML tools 9 有 Intel wheel、无 Windows prediction runtime。Intel Torch 2.2.2 CPU 或 Windows Torch CPU/CUDA 是待验证路线，不自动采用。 |
+
+模型为 `timm/vit_base_patch16_dinov3.lvd1689m@c6a5fb7d12bbd3cf3b0079253141c3332aaed7da`，
+原 checkpoint SHA-256 `1f9ed8a2378d65e24bb710ba522ac9fa7be4e036d7aefb4384ce022833926332`。
+使用最终 LayerNorm 后 CLS；图中 FP16 卷积／MLP、FP32 attention／归一化／残差／RoPE／I/O。
+生产 `_resources/dinov3-384.json` 固定配方和已验收编译文件；实际后端为 **Core ML ALL**，
+不声称测得 CPU／GPU／ANE 的具体调度。要求 Apple Silicon、macOS 15+，本机 M5 Pro／
+macOS 26.4.1 实测；其他满足前置条件的 Mac 仍须做本机推理检查。
+
+**分组与人工决定边界：** 复用 `260911-0953-dinov3-resolution-384/report.md`：
+384 模型／代表质量已获人工认可，两档 0.311／0.85 分别为 156／99 组，Core ML／MPS
+成员、代表及选帧一致。现有 `compression.py`、`_compression_producer.py`、
+`_compression_strategy.py` 与评测环境副本逐字节相同；时间 86400 s、空间 3000 m、
+代表 top-half、exact limit 256、比较预算 65536 不变。历史稀疏视频帧不足以认证复杂
+关键帧排序；本次不把模型认可扩大为该保证。**未改变当前算法的 0.311 默认值，也未将其
+标成人工确认的生产粒度；已向用户提出 0.311／0.85 的默认粒度确认，答复仍待接收。**
+这项未决选择不改变旧 Result，也不触发已有 Dataset 重算。
+
+发布保留目录为 `.local/releases/0.10.1-dinov3-20260912/`。以上一次已安装 0.10.1
+源快照为基底，仅合入本次 delta；不额外提交用户工作。此次仍为 0.10.1 的独立本地内容
+构建，确切 `wheel-02/mediasense-0.10.1-py3-none-any.whl` SHA-256：
+`eb851b9491eb112d0d146adc8c6cb05f5735460b214464c90b5745a7ecaa487b`。
+`scope.json`、`release-diff.patch`、`source-hashes.json`、`dependencies.txt` 和安装收据
+共同识别本次构建，不能只凭版本号确认。早期候选 wheel 保留，不覆盖已有校验值。
+
+- 隔离发布默认套件 **1132 passed、16 deselected**；包含工作区既有改动的整体检查
+  **1162 passed、16 deselected**。DINOv3／配置／Embedding／CLI 专项 45 项通过；
+  静态检查通过。artifact-only 与真实隔离 uv tool distribution smoke 均通过。
+- 完整 HK verifier 通过，10,608 文件、1,759,421,497 bytes。复用 8 个校验过的既有
+  输入对比接受的 Core ML 向量，归一化最大元素误差 `6.76545e-9`、余弦距离 `1.60946e-9`。
+  未重跑模型质量评测、未改历史输入或阈值以追平组数。
+- 隔离 wheel 和实际 `/Users/chengyanru/.local/bin/mediasense` 分别经 MCP 执行 8 输入，
+  输出均为 768 维有限单位向量，Run 记录 DINOv3 384 encoder identity。后继 Run 的
+  metadata／rendition／embedding attempt 数和输出摘要不变。测试模型 locator 移除后
+  `embedding_backend_unavailable`，恢复相同模型、新 Host resume 后完成且继续复用。
+  源副本字节不变，真实模型未移除，既有业务 Dataset 未打开／迁移／批量重建。
+- Python 3.13.5、embeddings extra 保留。Torch 2.13.0→2.7.0、NumPy 2.5.2→2.2.6；
+  新增 Torchvision 0.22.0、Core ML tools 9.0、cattrs 26.2.0、pyaml 26.7.0、protobuf 7.36.1。
+  Pillow 12.3.0 与其他原依赖版本保留；新增依赖复用评测版本，wheel 经固定 SHA-256 校验
+  留存后离线安装。ChineseCLIP 原固定权重在更新后的实际环境单张离线推理通过（1024 维）。
+- 已校验 384 编译模型持久存放于
+  `~/Library/Caches/MediaSense/models/dinov3-vitb16-384-c6a5fb7d12bbd3cf3b0079253141c3332aaed7da`。
+  `scripts/prepare_dinov3.py` 从可信固定导出原子复制、校验并幂等复用；本次未重新下载权重。
+  它不提供从任意 checkpoint 自动转换的承诺，缺少该固定导出时按安装文档明确处理。
+- 实际安装 **122 个包文件**与 wheel 一致；原操作项目
+  `/Users/chengyanru/Downloads/ai-album-hk-representative-v1` 的四个 Skills 由原
+  `npx skills@1.5.25` 离线同步，**12 个文件**匹配 wheel，四个锁的 computedHash 复核通过。
+  非 MediaSense 锁条目及原 MCP 配置逐字节不变。权威安装文档与发布 Skill 快照同步。
+- 替换前未发现运行的 MediaSense Host。实际 CLI／七 Tool discovery 与最小分发通过，
+  原凭据加载启动方式下 doctor=ok、DINOv3 prerequisites=prepared、embedding=disabled。
+  安装版真实推理证明执行；doctor 自身仍正确报告 execution=not_checked。
+
+详细证据保存在同一发布目录的 `actual-content-verification.json`、
+`actual-dinov3-evidence.json`、`isolated-dinov3-evidence.json`、`numerical-verification.json`、
+`chineseclip-installed-check.json`。完整临时输出位于 `/private/tmp/mediasense-dinov3-installed-*`，
+均不进入 Git。初期脚本的 Dataset 初始化顺序和 Work 输出包裹层断言曾失败，修正测试后
+完整重跑通过；沙箱 Core ML 访问系统缓存曾被拒绝，按授权获得系统执行权限后通过，
+不把这些初次执行写成一次全绿。
+
+`before/` 保留旧 wheel、uv receipt、四个 Skills／项目锁／MCP 配置用于回退；本次没有
+业务 store 迁移。回退依赖和 Skills 仍须按 runbook 成套恢复，不以同为 0.10.1 推定相同内容。
+**剩余事项：** 默认分组粒度的人工作答；在原操作项目中新开 Agent 会话以加载更新后的
+Skills／Host。独立 MCP 验证已完成，但没有把磁盘更新冒充原业务 Agent 已热重载。
+
+补充核对：原项目 MCP 注册在切换后新启动的独立 Host，其初始化版本、7 个 Tool 的
+传输 schema 与 contract ID/digest 均匹配已验证安装；`actual-launcher-verification.json`
+记录此证据。检查器最初按原始合约而非既有 MCP 包装比较，修正检查器后通过，未修改合约。
+最后安装文档／Skill 同步与 CLI 专项 19 项通过。汇总见同目录 `installation-verification.json`。

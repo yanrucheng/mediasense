@@ -18,6 +18,26 @@
       "apply": 2
     },
     "configuration": {
+      "metadata": {
+        "assumed_timezone": "Asia/Shanghai",
+        "output_timezone": "Asia/Shanghai",
+        "manufacturer_knowledge": {
+          "identity": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sources": [
+            {
+              "layer": "builtin",
+              "file": "dji.yaml",
+              "document_identity": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            }
+          ],
+          "active_rules": [
+            "dji.photo-time"
+          ],
+          "disabled_rules": [],
+          "execution": "not_checked",
+          "overridden_rules": []
+        }
+      },
       "sources": [],
       "providers": {
         "amap": {

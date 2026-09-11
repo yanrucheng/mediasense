@@ -1,0 +1,38 @@
+schema_version: 1
+rules:
+  - id: dji.photo-time
+    operation: add
+    summary: DJI 照片的已知缺失时区路径采用本地拍摄字段。
+    when:
+      - tags: [EXIF:Make]
+        pattern: '(?i)dji'
+      - tags: [File:MIMEType]
+        pattern: '(?i)^image/'
+    apply:
+      capture_time:
+        tags: [EXIF:DateTimeOriginal, XMP:DateTimeOriginal]
+        naive_time: source_local
+    basis:
+      sources:
+        - 'AI Album c90aa8f:src/conf/conf.yml exif.missing_timezone_cases.dji'
+        - 'AI Album c90aa8f:docs/spec/spec-251017-exif-time-data.md 大疆照片观察'
+      limitations:
+        - 历史记录未提供完整型号或固件范围；沿用已认可的照片条件，不外推到视频。
+        - 所采用的本地时区来自明确的 metadata 上下文，不从厂商国别推断。
+  - id: dji.video-encoder-model
+    operation: add
+    summary: 已知 DJI 原生视频可从设备写入的 Encoder 读取型号信息。
+    when:
+      - tags: [QuickTime:Encoder]
+        pattern: '(?i)^DJI(?:\s|$)'
+      - tags: [File:MIMEType]
+        pattern: '^video/'
+    apply:
+      fields:
+        - name: camera_model
+          tags: [EXIF:Model, XMP:Model, QuickTime:Model, QuickTime:Encoder]
+    basis:
+      sources: ['AI Album c90aa8f:src/conf/conf.yml exif.camera.model 的 DJI Pocket 3 视频入口']
+      limitations:
+        - 历史入口按 DJI 设备原生 Encoder 使用；不识别 Lavf 等转封装工具为相机。
+        - 不认证所有 DJI 型号或固件的 Encoder 内容。

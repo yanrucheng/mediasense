@@ -1,0 +1,22 @@
+schema_version: 1
+rules:
+  - id: sony.xml-device-fields
+    operation: add
+    summary: Sony 设备 XML 的型号、序列号和镜头字段使用历史已知入口。
+    when:
+      - tags: [XML:DeviceManufacturer, XML:Manufacturer]
+        pattern: '(?i)^sony$'
+        scope: associated
+    apply:
+      fields:
+        - name: camera_model
+          tags: [EXIF:Model, XMP:Model, QuickTime:Model, XML:DeviceModelName, XML:ModelName]
+        - name: camera_serial_number
+          tags: [XMP:SerialNumber, EXIF:SerialNumber, XML:DeviceSerialNo, XML:SerialNo]
+        - name: lens_model
+          tags: [XMP:LensModel, EXIF:LensModel, XML:LensModelName]
+    basis:
+      sources: ['AI Album c90aa8f:src/conf/conf.yml exif.camera 与 exif.lens 的 Sony XML 入口']
+      limitations:
+        - 仅用于已经关联并实际读取的 Sony XML，不能凭相邻路径推断设备归属。
+        - 不认证未观察过的型号、固件或 XML 格式。

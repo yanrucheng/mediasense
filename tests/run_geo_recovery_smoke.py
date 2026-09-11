@@ -234,7 +234,7 @@ async def scenario(
             check=True,
         ).stdout
         diagnostics[name] = output.strip() if name == "version" else json.loads(output)
-    assert "0.10.0" in diagnostics["version"]
+    assert "0.10.1" in diagnostics["version"]
     assert diagnostics["doctor"]["status"] == "ok", diagnostics["doctor"]
     assert len(diagnostics["tools"]["tools"]) == 7
     confirmations = []

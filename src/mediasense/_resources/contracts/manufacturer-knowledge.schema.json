@@ -1,0 +1,264 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:mediasense:manufacturer-knowledge:1",
+  "title": "MediaSense manufacturer knowledge file",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "rules"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "rules": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/rule"
+      }
+    }
+  },
+  "$defs": {
+    "tags": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z][A-Za-z0-9_-]*:[A-Za-z][A-Za-z0-9_]*$"
+      }
+    },
+    "rule": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "id",
+            "operation",
+            "summary",
+            "when",
+            "apply",
+            "basis"
+          ],
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9._-]*$"
+            },
+            "operation": {
+              "enum": [
+                "add",
+                "replace"
+              ]
+            },
+            "summary": {
+              "type": "string",
+              "minLength": 1
+            },
+            "priority": {
+              "type": "integer",
+              "default": 0
+            },
+            "when": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "tags",
+                  "pattern"
+                ],
+                "properties": {
+                  "tags": {
+                    "$ref": "#/$defs/tags"
+                  },
+                  "pattern": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "scope": {
+                    "enum": [
+                      "source",
+                      "associated"
+                    ],
+                    "default": "source"
+                  }
+                }
+              }
+            },
+            "apply": {
+              "type": "object",
+              "additionalProperties": false,
+              "minProperties": 1,
+              "properties": {
+                "capture_time": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "tags"
+                  ],
+                  "properties": {
+                    "tags": {
+                      "$ref": "#/$defs/tags"
+                    },
+                    "fallback": {
+                      "type": "boolean",
+                      "default": true
+                    },
+                    "naive_time": {
+                      "enum": [
+                        "source_local",
+                        "utc"
+                      ]
+                    },
+                    "shift_seconds": {
+                      "type": "number",
+                      "default": 0
+                    }
+                  }
+                },
+                "fields": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "name",
+                          "tags"
+                        ],
+                        "properties": {
+                          "name": {
+                            "enum": [
+                              "camera_make",
+                              "camera_model",
+                              "camera_serial_number",
+                              "camera_firmware",
+                              "lens_model",
+                              "lens_serial_number",
+                              "focal_length_mm",
+                              "focal_length_35mm_equivalent_mm",
+                              "aperture_f_number",
+                              "exposure_time_seconds",
+                              "iso",
+                              "orientation",
+                              "media_type",
+                              "source_file_format",
+                              "gps_altitude_meters",
+                              "gps_version"
+                            ]
+                          },
+                          "tags": {
+                            "$ref": "#/$defs/tags"
+                          },
+                          "fallback": {
+                            "type": "boolean",
+                            "default": true
+                          }
+                        }
+                      },
+                      {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "name",
+                          "tags",
+                          "value_type",
+                          "description"
+                        ],
+                        "properties": {
+                          "name": {
+                            "type": "string",
+                            "pattern": "^manufacturer\\.[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$"
+                          },
+                          "tags": {
+                            "$ref": "#/$defs/tags"
+                          },
+                          "fallback": {
+                            "type": "boolean",
+                            "default": true
+                          },
+                          "value_type": {
+                            "enum": [
+                              "string",
+                              "number",
+                              "integer",
+                              "boolean"
+                            ]
+                          },
+                          "description": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "unit": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "minLength": 1
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            },
+            "basis": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "sources",
+                "limitations"
+              ],
+              "properties": {
+                "sources": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "limitations": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "id",
+            "operation",
+            "reason"
+          ],
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9._-]*$"
+            },
+            "operation": {
+              "const": "disable"
+            },
+            "reason": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      ]
+    }
+  }
+}

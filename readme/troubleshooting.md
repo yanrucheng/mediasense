@@ -8,7 +8,8 @@ mediasense doctor
 
 The command does not install dependencies, contact providers, or alter a Dataset.
 Warnings identify optional capabilities; errors identify prerequisites required by
-the installed runtime.
+the installed runtime. Follow the single [installation and upgrade runbook](installation.md)
+for any repair that changes the CLI, Skills, configuration, or installed release.
 
 ## A Dataset does not open
 
@@ -54,14 +55,10 @@ Then run `mediasense mcp` from a terminal. It intentionally waits for MCP messag
 and writes protocol frames only to stdout. Stop it with Ctrl-C after confirming it
 starts without an immediate error.
 
-For Codex, inspect the selected Honeycomb's exact `.codex/config.toml`. The
-MediaSense registration must be:
-
-```toml
-[mcp_servers.mediasense]
-command = "mediasense"
-args = ["mcp"]
-```
+For Codex, inspect the selected Honeycomb's exact `.codex/config.toml` and the
+resolved executable/environment of its launcher. A valid absolute command or
+credential-loading wrapper is supported; the runbook's minimal registration is
+an example for new connections, not a reason to replace an existing wrapper.
 
 Check these cases distinctly:
 
@@ -69,8 +66,8 @@ Check these cases distinctly:
   only after identifying the trusted source and destination;
 - if the project is untrusted, Codex skips its `.codex/` layer, so trust the
   intended project through the client's normal trust flow before retrying;
-- if the same table exists with different values, treat it as a conflict and do
-  not overwrite it;
+- if the launcher resolves to a different executable or has invalid settings,
+  resolve that specific mismatch through the runbook; preserve intentional wrappers;
 - if the table was added during the current session, start a new Agent session
   from that Honeycomb;
 - in the new session, verify all seven MediaSense Tools through discovery rather
@@ -91,7 +88,9 @@ prerequisite is available.
 
 ## Uninstall or rollback
 
-Removing the executable does not remove Dataset workspaces. Preserve the complete
+Use the [runbook recovery conditions](installation.md#recovery-and-rollback) and
+[uninstall procedure](installation.md#uninstall-and-cleanup). Removing the
+executable does not remove Dataset workspaces. Preserve the complete
 `.mediasense/datasets/` tree when moving or backing up an external Dataset. Before
 deleting any workspace, use `mediasense dataset inspect` and retain any Result,
 Frozen Plan, Receipt, or recovery record still needed.

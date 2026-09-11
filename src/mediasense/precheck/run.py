@@ -598,10 +598,11 @@ class PrecheckRunTool:
                 source_root,
                 rebind_reason=rebind_reason,
             )
-        self._store.configure_execution(
-            run_ref,
-            self._resolved_execution_config(accounting_run_id).value(),
-        )
+        if record["execution_config"] is None:
+            self._store.configure_execution(
+                run_ref,
+                self._resolved_execution_config(accounting_run_id).value(),
+            )
         checkpoint = self._store.get(run_ref)["execution_checkpoint"]
         assert isinstance(checkpoint, dict)
         if checkpoint["phase"] not in _PHASE_NAMES:

@@ -6,9 +6,17 @@ import os
 import re
 import sys
 import tomllib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+from mediasense.manufacturers import (
+    KnowledgeError,
+    KnowledgeSnapshot,
+    builtin_knowledge,
+    load_knowledge,
+)
 
 
 class ConfigurationError(RuntimeError):
@@ -23,6 +31,23 @@ class RuntimeConfig:
     embedding: dict[str, Any] | None = None
     sensitivity: dict[str, Any] | None = None
     geo_network: dict[str, Any] | None = None
+    metadata: dict[str, str] = field(
+        default_factory=lambda: {
+            "assumed_timezone": "Asia/Shanghai",
+            "output_timezone": "Asia/Shanghai",
+        }
+    )
+    manufacturer_knowledge: KnowledgeSnapshot = field(default_factory=builtin_knowledge)
+    user_config_path: Path | None = None
+
+    def metadata_profile(self):
+        from mediasense.precheck.metadata import MetadataProfile
+
+        return MetadataProfile(
+            timezone=self.metadata["output_timezone"],
+            assumed_timezone=self.metadata["assumed_timezone"],
+            knowledge=self.manufacturer_knowledge,
+        )
 
     def public_value(self) -> dict[str, object]:
         from mediasense.geo import UrllibJsonTransport
@@ -34,6 +59,10 @@ class RuntimeConfig:
             configured=True,
         )
         return {
+            "metadata": {
+                **self.metadata,
+                "manufacturer_knowledge": self.manufacturer_knowledge.summary(),
+            },
             "geo_network": transport.network_profile,
             "sources": [str(path) for path in self.sources],
             "local_embedding": {
@@ -97,21 +126,37 @@ def load_runtime_config(
     *,
     dataset_workspace: Path | None = None,
     user_config: Path | None = None,
+    load_manufacturers: bool = True,
 ) -> RuntimeConfig:
     values: dict[str, Any] = {
         "amap_api_key_env": "AMAP_API_KEY",
         "google_maps_api_key_env": "GOOGLE_MAPS_API_KEY",
+        "metadata": {
+            "assumed_timezone": "Asia/Shanghai",
+            "output_timezone": "Asia/Shanghai",
+        },
     }
     sources: list[Path] = []
-    candidates = [Path(user_config or default_user_config_path())]
+    user_path = Path(user_config or default_user_config_path())
+    candidates = [user_path]
     if dataset_workspace is not None:
         candidates.append(Path(dataset_workspace) / "config.toml")
     for path in candidates:
         if not path.exists():
             continue
         parsed = _read_config(path)
+        if "metadata" in parsed:
+            values["metadata"].update(parsed.pop("metadata"))
         values.update(parsed)
         sources.append(path)
+    try:
+        knowledge = (
+            load_knowledge(user_path.parent)
+            if load_manufacturers
+            else KnowledgeSnapshot.empty()
+        )
+    except KnowledgeError as error:
+        raise ConfigurationError(str(error)) from error
     return RuntimeConfig(
         amap_api_key_env=str(values["amap_api_key_env"]),
         google_maps_api_key_env=str(values["google_maps_api_key_env"]),
@@ -119,6 +164,9 @@ def load_runtime_config(
         embedding=values.get("embedding"),
         sensitivity=values.get("sensitivity"),
         geo_network=values.get("geo_network"),
+        metadata=values["metadata"],
+        manufacturer_knowledge=knowledge,
+        user_config_path=user_path,
     )
 
 
@@ -129,7 +177,13 @@ def _read_config(path: Path) -> dict[str, object]:
         raise ConfigurationError(
             f"Cannot read configuration {path}: {error}"
         ) from error
-    if set(value) - {"providers", "embedding", "sensitivity", "geo_network"}:
+    if set(value) - {
+        "providers",
+        "embedding",
+        "sensitivity",
+        "geo_network",
+        "metadata",
+    }:
         raise ConfigurationError(f"Unknown configuration section in {path}")
     providers = value.get("providers", {})
     if not isinstance(providers, dict):
@@ -137,6 +191,23 @@ def _read_config(path: Path) -> dict[str, object]:
     if set(providers) - {"amap_api_key_env", "google_maps_api_key_env"}:
         raise ConfigurationError(f"Unknown provider configuration key in {path}")
     result: dict[str, object] = {}
+    if "metadata" in value:
+        metadata = value["metadata"]
+        if not isinstance(metadata, dict) or set(metadata) - {
+            "assumed_timezone",
+            "output_timezone",
+        }:
+            raise ConfigurationError(f"Invalid metadata configuration in {path}")
+        for key, zone in metadata.items():
+            try:
+                if not isinstance(zone, str) or not zone:
+                    raise ValueError("timezone must be a non-empty IANA name")
+                ZoneInfo(zone)
+            except (ValueError, ZoneInfoNotFoundError) as error:
+                raise ConfigurationError(
+                    f"Invalid metadata.{key} timezone in {path}: {zone}"
+                ) from error
+        result["metadata"] = metadata
     if "geo_network" in value:
         from math import isfinite
         from urllib.parse import urlsplit
@@ -192,14 +263,24 @@ def _read_config(path: Path) -> dict[str, object]:
             "dimensions",
             "device",
             "batch_size",
+            "image_size",
+            "model_path",
         }:
             raise ConfigurationError("Unknown embedding configuration key")
-        enabled = embedding.get("enabled", True)
+        # Preserve legacy complete ChineseCLIP tables that omitted enabled.
+        # New shorthand needs an explicit opt-in; an empty table stays off.
+        enabled = embedding.get("enabled", "model_id" in embedding)
         if not isinstance(enabled, bool):
             raise ConfigurationError("embedding.enabled must be a boolean")
         if not enabled:
             result["embedding"] = None
+        elif embedding.get("model_id", "timm/vit_base_patch16_dinov3.lvd1689m") == "timm/vit_base_patch16_dinov3.lvd1689m":
+            from .embedding import dinov3_profile
+
+            result["embedding"] = dinov3_profile(embedding)
         else:
+            if "image_size" in embedding or "model_path" in embedding:
+                raise ConfigurationError("image_size and model_path belong to the DINOv3 profile")
             model_id = embedding.get("model_id")
             revision = embedding.get("revision")
             dimensions = embedding.get("dimensions")

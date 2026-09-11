@@ -3,17 +3,29 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Mapping, Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
 import re
 import subprocess
+from functools import lru_cache
 from threading import Event, Lock, Thread
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from ._metadata_fields import FIELD_TAGS, DIMENSION_TAGS, EXTRA_TAGS, photographic_observations
+from mediasense.manufacturers import (
+    KnowledgeSnapshot,
+    builtin_knowledge,
+    evaluate_rules,
+)
+
+from ._metadata_fields import (
+    FIELD_TAGS,
+    DIMENSION_TAGS,
+    EXTRA_TAGS,
+    photographic_observations,
+)
 from ._exiftool import ExifToolCancelled, StayOpenExifTool
 from ._fingerprint import SourceChangedDuringRead
 from ._sqlite_scope import connection_scope
@@ -44,6 +56,8 @@ class MetadataProfile:
 
     profile_id: str = "index-v2"
     timezone: str = "Asia/Shanghai"
+    assumed_timezone: str | None = None
+    knowledge: KnowledgeSnapshot = field(default_factory=builtin_knowledge)
     time_tags: tuple[str, ...] = (
         "XMP:DateTimeOriginal",
         "Composite:SubSecDateTimeOriginal",
@@ -73,6 +87,7 @@ class MetadataProfile:
             raise ValueError("metadata profile_id must be non-empty")
         try:
             ZoneInfo(self.timezone)
+            ZoneInfo(self.assumed_timezone or self.timezone)
         except ZoneInfoNotFoundError as error:
             raise ValueError(f"unknown metadata timezone: {self.timezone}") from error
         for name, tags in (
@@ -83,6 +98,30 @@ class MetadataProfile:
             if not tags or any(not tag.strip() for tag in tags):
                 raise ValueError(f"metadata {name} must contain non-empty tags")
 
+    def value(self) -> dict[str, Any]:
+        return {
+            "profile_id": self.profile_id,
+            "timezone": self.timezone,
+            "assumed_timezone": self.assumed_timezone,
+            "time_tags": list(self.time_tags),
+            "latitude_tags": list(self.latitude_tags),
+            "longitude_tags": list(self.longitude_tags),
+            "manufacturer_knowledge": self.knowledge.value(),
+        }
+
+    @classmethod
+    def from_value(cls, value: Mapping[str, Any]) -> MetadataProfile:
+        return cls(
+            profile_id=value["profile_id"],
+            timezone=value["timezone"],
+            assumed_timezone=value["assumed_timezone"],
+            time_tags=tuple(value["time_tags"]),
+            latitude_tags=tuple(value["latitude_tags"]),
+            longitude_tags=tuple(value["longitude_tags"]),
+            knowledge=KnowledgeSnapshot.from_value(value["manufacturer_knowledge"]),
+        )
+
+    @lru_cache(maxsize=64)
     def descriptor(self) -> str:
         return json.dumps(
             {
@@ -92,7 +131,9 @@ class MetadataProfile:
                 "sidecar_precedence": _SIDECAR_SUFFIXES,
                 "time_tags": self.time_tags,
                 "timezone": self.timezone,
-                "time_interpretation": "field-semantics-v2",
+                "assumed_timezone": self.assumed_timezone or self.timezone,
+                "manufacturer_knowledge": self.knowledge.identity,
+                "time_interpretation": "manufacturer-field-semantics-v1",
                 "photographic_fields": FIELD_TAGS,
                 "source_dimensions": DIMENSION_TAGS,
                 "photographic_interpretation": "typed-source-fields-v1",
@@ -180,12 +221,13 @@ class _MetadataLeaseHeartbeat:
             try:
                 observed_at = self._clock()
                 leases = tuple(
-                    lease for lease in self._leases.values()
+                    lease
+                    for lease in self._leases.values()
                     if force or self._renewal_due(lease, observed_at)
                 )
                 for offset in range(0, len(leases), 1024):
                     renewed = self._work.renew_leases(
-                        leases[offset:offset + 1024],
+                        leases[offset : offset + 1024],
                         lease_duration=self._lease_duration,
                         now=observed_at,
                     )
@@ -456,7 +498,7 @@ class MetadataProducer:
         )
         spec = WorkSpec(
             capability="source-metadata",
-            producer_identity="builtin-field-aware-exiftool-metadata-v1",
+            producer_identity="builtin-manufacturer-aware-exiftool-metadata-v1",
             dependencies=tuple(dependencies),
         )
         record = self.work.ensure_work(run_id, spec)
@@ -611,6 +653,7 @@ class MetadataProducer:
                     *profile.latitude_tags,
                     *profile.longitude_tags,
                     *EXTRA_TAGS,
+                    *profile.knowledge.tags,
                     "EXIF:Make",
                     "XMP:Make",
                     "EXIF:Model",
@@ -687,11 +730,43 @@ def select_metadata_observations(
     ordered = [
         path.as_posix() for path in source_precedence if path.as_posix() in indexed
     ]
+    knowledge = evaluate_rules(profile.knowledge, indexed, ordered, subject.as_posix())
+    time_resolution = knowledge.get("capture_time", {})
     observations = [
-        _time_observation(indexed, ordered, profile, subject),
+        _time_observation(
+            indexed,
+            ordered,
+            profile,
+            subject,
+            policy=time_resolution.get("effect"),
+            conflict_tags=time_resolution.get("candidate_tags", ())
+            if time_resolution.get("conflict")
+            else (),
+        ),
         _gps_observation(indexed, ordered, profile),
     ]
-    observations.extend(photographic_observations(indexed, ordered, subject, profile))
+    observations.extend(
+        photographic_observations(indexed, ordered, subject, profile, knowledge)
+    )
+    for observation in observations:
+        resolution = knowledge.get(observation["name"])
+        if resolution is None:
+            continue
+        observation.setdefault("provenance", {})["manufacturer_knowledge"] = resolution[
+            "trace"
+        ]
+        if resolution["conflict"]:
+            observation.pop("value", None)
+            observation["status"] = "failed"
+            observation["basis"] = {"code": "manufacturer_rule_conflict"}
+        elif resolution["unknown"]:
+            observation.setdefault("qualifications", []).append(
+                {
+                    "code": "manufacturer_rule_applicability_unknown",
+                    "effect": "limits_interpretation",
+                    "message": "Some manufacturer rules lack matching evidence; their applicability is not disproved.",
+                }
+            )
     return observations
 
 
@@ -700,10 +775,20 @@ def _time_observation(
     ordered: Sequence[str],
     profile: MetadataProfile,
     subject: Path,
+    *,
+    policy: Mapping[str, Any] | None = None,
+    conflict_tags: Sequence[str] = (),
 ) -> dict[str, Any]:
     candidates = []
-    for tag in profile.time_tags:
+    policy = policy or {}
+    preferred = tuple(policy.get("tags", ()))
+    fallback = policy.get("fallback", True)
+    tags = tuple(dict.fromkeys((*preferred, *profile.time_tags, *conflict_tags)))
+    allowed = set(preferred) | (set(profile.time_tags) if fallback else set())
+    for tag in tags:
         for relative in ordered:
+            if tag.startswith("File:") and relative != subject.as_posix():
+                continue
             value = indexed[relative].get(tag)
             if value in (None, ""):
                 continue
@@ -717,11 +802,23 @@ def _time_observation(
                     if not re.search(r"(?:Z|[+-]\d{2}:?\d{2})$", value):
                         interpreted = value + offset
                         interpretation = "EXIF:OffsetTimeOriginal"
-            normalized = _normalize_datetime(interpreted, profile.timezone)
+            normalized = _normalize_datetime(
+                interpreted, profile.timezone, profile.assumed_timezone
+            )
+            naive_policy = policy.get("naive_time") if tag in preferred else None
+            if normalized is not None and normalized[1] and naive_policy is not None:
+                zone = (
+                    "UTC"
+                    if naive_policy == "utc"
+                    else profile.assumed_timezone or profile.timezone
+                )
+                normalized = _normalize_datetime(interpreted, profile.timezone, zone)
+                interpretation = "manufacturer_" + naive_policy
             if (
                 normalized is not None
                 and normalized[1]
                 and tag == "QuickTime:CreateDate"
+                and naive_policy is None
             ):
                 # ExifTool deliberately returns the unconverted integer-container
                 # clock. Do not let the host's TZ or a video suffix set its meaning.
@@ -731,6 +828,21 @@ def _time_observation(
                 assert normalized is not None
                 normalized = (normalized[0], True)
                 interpretation = "quicktime_integer_utc_assumption"
+            shift = policy.get("shift_seconds", 0) if tag in preferred else 0
+            invalid_reason = None
+            if normalized is not None and shift:
+                try:
+                    instant = datetime.fromisoformat(normalized[0]).astimezone(timezone.utc)
+                    normalized = (
+                        (instant + timedelta(seconds=shift))
+                        .astimezone(ZoneInfo(profile.timezone))
+                        .isoformat(),
+                        normalized[1],
+                    )
+                except OverflowError:
+                    normalized = None
+                    invalid_reason = "manufacturer_clock_correction_out_of_range"
+                interpretation += "+manufacturer_clock_correction"
             candidates.append(
                 {
                     "relative_path": relative,
@@ -739,6 +851,12 @@ def _time_observation(
                     "value": normalized[0] if normalized else None,
                     "timezone_assumed": normalized[1] if normalized else None,
                     "interpretation": interpretation,
+                    **({"invalid_reason": invalid_reason} if invalid_reason else {}),
+                    **(
+                        {"rejection": "manufacturer_fallback_disabled"}
+                        if tag not in allowed
+                        else {}
+                    ),
                 }
             )
 
@@ -757,24 +875,43 @@ def _time_observation(
                     "tag": "filename",
                     "raw_value": filename.group(),
                     "value": naive.replace(
-                        tzinfo=ZoneInfo(profile.timezone)
-                    ).isoformat(),
+                        tzinfo=ZoneInfo(profile.assumed_timezone or profile.timezone)
+                    )
+                    .astimezone(ZoneInfo(profile.timezone))
+                    .isoformat(),
                     "timezone_assumed": True,
                     "interpretation": "filename_local_time_fallback",
+                    **(
+                        {"rejection": "manufacturer_fallback_disabled"}
+                        if not fallback
+                        else {}
+                    ),
                 }
             )
-    valid = [candidate for candidate in candidates if candidate["value"] is not None]
+    valid = [
+        candidate
+        for candidate in candidates
+        if candidate["value"] is not None and "rejection" not in candidate
+    ]
     capture = [
         candidate for candidate in valid if not candidate["tag"].startswith("File:")
     ]
     selected = next(iter(capture or valid), None)
     if selected is None and candidates:
+        rejected_only = all("rejection" in candidate for candidate in candidates)
         return {
             "name": "capture_time",
-            "status": "failed",
+            "status": "missing" if rejected_only else "failed",
+            **(
+                {"basis": {"code": "manufacturer_time_fields_missing"}}
+                if rejected_only
+                else {}
+            ),
             "provenance": {
                 "method": "exiftool",
-                "reason": "unparseable_time",
+                "reason": "manufacturer_time_fields_missing"
+                if rejected_only
+                else "unparseable_time",
                 "candidates": candidates,
             },
         }
@@ -905,7 +1042,9 @@ def _as_numeric(
     return relative, tag, numeric
 
 
-def _normalize_datetime(value: Any, timezone_name: str) -> tuple[str, bool] | None:
+def _normalize_datetime(
+    value: Any, timezone_name: str, assumed_timezone: str | None = None
+) -> tuple[str, bool] | None:
     if not isinstance(value, str) or not value.strip():
         return None
     text = value.strip().replace("Z", "+00:00")
@@ -921,7 +1060,11 @@ def _normalize_datetime(value: Any, timezone_name: str) -> tuple[str, bool] | No
     timezone = ZoneInfo(timezone_name)
     assumed = parsed.tzinfo is None
     normalized = (
-        parsed.replace(tzinfo=timezone) if assumed else parsed.astimezone(timezone)
+        parsed.replace(tzinfo=ZoneInfo(assumed_timezone or timezone_name)).astimezone(
+            timezone
+        )
+        if assumed
+        else parsed.astimezone(timezone)
     )
     return normalized.isoformat(), assumed
 

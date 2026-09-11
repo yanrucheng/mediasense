@@ -39,7 +39,8 @@ from .geocode import (
     ReverseGeocodeProfile,
 )
 from .gpx import GPXMatchProducer, GPXOutcome
-from .metadata import MetadataOutcome, MetadataProducer
+from .metadata import MetadataOutcome, MetadataProducer, MetadataProfile
+from mediasense.manufacturers import KnowledgeSnapshot
 from .rendition import (
     HIGH_RESOLUTION_RENDITION_PROFILE,
     ORDINARY_RENDITION_PROFILE,
@@ -141,6 +142,7 @@ class PrecheckExecutionConfig:
     """Durable internal policy selecting which producer graph a Run demands."""
 
     metadata: bool = True
+    metadata_profile: MetadataProfile = field(default_factory=MetadataProfile)
     gpx: bool = True
     image_renditions: bool = True
     video: bool = True
@@ -218,6 +220,7 @@ class PrecheckExecutionConfig:
             "gpx": self.gpx,
             "image_renditions": self.image_renditions,
             "metadata": self.metadata,
+            "metadata_profile": self.metadata_profile.value(),
             "metadata_batch_size": self.metadata_batch_size,
             "model_batch_size": self.model_batch_size,
             "resource_budget": {
@@ -244,7 +247,7 @@ class PrecheckExecutionConfig:
             ),
             "source_storage": self.source_storage_hint,
             "source_storage_evidence": self.source_storage_evidence,
-            "version": 6,
+            "version": 7,
             "video": self.video,
             "video_frame_limit": self.video_frame_limit,
         }
@@ -321,13 +324,18 @@ class PrecheckExecutionConfig:
 
     @classmethod
     def from_value(cls, value: Mapping[str, object]) -> PrecheckExecutionConfig:
-        if value.get("version") not in {5, 6}:
+        if value.get("version") not in {5, 6, 7}:
             raise ValueError("unsupported PreCheck execution configuration")
         budget_value = cast(Mapping[str, object], value["resource_budget"])
         capacity_value = cast(Mapping[str, object], budget_value["capacity"])
         geocode_value = cast(Mapping[str, object], value["reverse_geocode_profile"])
         return cls(
             metadata=bool(value["metadata"]),
+            metadata_profile=(
+                MetadataProfile.from_value(value["metadata_profile"])
+                if value.get("version") == 7
+                else MetadataProfile(knowledge=KnowledgeSnapshot.empty())
+            ),
             metadata_batch_size=int(value["metadata_batch_size"]),
             ffmpeg_threads=int(value["ffmpeg_threads"]),
             model_batch_size=int(value["model_batch_size"]),
@@ -352,7 +360,7 @@ class PrecheckExecutionConfig:
                 _sensitivity_profile_from_value(p)
                 for p in (
                     value.get("sensitivity_profiles", ())
-                    if value.get("version") == 6
+                    if value.get("version") in {6, 7}
                     else [value["sensitivity_profile"]]
                     if value.get("sensitivity_profile")
                     else ()
@@ -807,7 +815,8 @@ class PrecheckOrchestrator:
                 producer = producers.get()
                 try:
                     return producer.produce_many(
-                        run_id, (item.relative_path for item in batch)
+                        run_id, (item.relative_path for item in batch),
+                        profile=config.metadata_profile,
                     )
                 finally:
                     producers.put(producer)

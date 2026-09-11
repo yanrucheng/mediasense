@@ -6,10 +6,18 @@
   "inputSchema": {
     "type": "object",
     "additionalProperties": false,
-    "required": ["source_root"],
+    "required": [
+      "source_root"
+    ],
     "properties": {
-      "source_root": { "type": "string", "minLength": 1 },
-      "workspace": { "type": "string", "minLength": 1 }
+      "source_root": {
+        "type": "string",
+        "minLength": 1
+      },
+      "workspace": {
+        "type": "string",
+        "minLength": 1
+      }
     }
   },
   "outputSchema": {
@@ -30,105 +38,380 @@
           "warnings"
         ],
         "properties": {
-          "outcome": { "const": "ok" },
-          "dataset_ref": { "type": "string", "pattern": "^dataset:[^\\s]+$" },
-          "source_root": { "type": "string", "minLength": 1 },
-          "workspace": { "type": "string", "minLength": 1 },
-          "selection_tier": {
-            "enum": ["explicit", "external_volume", "local"]
+          "outcome": {
+            "const": "ok"
           },
-          "created": { "type": "boolean" },
-          "manifest_version": { "type": "integer", "minimum": 1 },
+          "dataset_ref": {
+            "type": "string",
+            "pattern": "^dataset:[^\\s]+$"
+          },
+          "source_root": {
+            "type": "string",
+            "minLength": 1
+          },
+          "workspace": {
+            "type": "string",
+            "minLength": 1
+          },
+          "selection_tier": {
+            "enum": [
+              "explicit",
+              "external_volume",
+              "local"
+            ]
+          },
+          "created": {
+            "type": "boolean"
+          },
+          "manifest_version": {
+            "type": "integer",
+            "minimum": 1
+          },
           "store_versions": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["precheck", "plan", "geo", "apply"],
+            "required": [
+              "precheck",
+              "plan",
+              "geo",
+              "apply"
+            ],
             "properties": {
-              "precheck": { "type": "integer", "minimum": 1 },
-              "plan": { "type": "integer", "minimum": 1 },
-              "geo": { "type": "integer", "minimum": 1 },
-              "apply": { "type": "integer", "minimum": 1 }
+              "precheck": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "plan": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "geo": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "apply": {
+                "type": "integer",
+                "minimum": 1
+              }
             }
           },
           "configuration": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["sources", "providers"],
+            "required": [
+              "sources",
+              "providers",
+              "metadata"
+            ],
             "properties": {
+              "metadata": {
+                "$ref": "#/$defs/metadata_configuration"
+              },
               "geo_network": {
-                "type": "object", "additionalProperties": false,
-                "required": ["identity", "proxy_receivers", "no_proxy_configured", "ca_source", "reachability", "tls_verification"],
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "identity",
+                  "proxy_receivers",
+                  "no_proxy_configured",
+                  "ca_source",
+                  "reachability",
+                  "tls_verification"
+                ],
                 "properties": {
-                  "identity": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
-                  "proxy_receivers": { "type": "array", "items": { "type": "string" } },
-                  "no_proxy_configured": { "type": "boolean" },
-                  "ca_source": { "enum": ["system", "configured_bundle"] },
-                  "reachability": { "const": "not_checked" },
-                  "tls_verification": { "const": true }
+                  "identity": {
+                    "type": "string",
+                    "pattern": "^sha256:[0-9a-f]{64}$"
+                  },
+                  "proxy_receivers": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "no_proxy_configured": {
+                    "type": "boolean"
+                  },
+                  "ca_source": {
+                    "enum": [
+                      "system",
+                      "configured_bundle"
+                    ]
+                  },
+                  "reachability": {
+                    "const": "not_checked"
+                  },
+                  "tls_verification": {
+                    "const": true
+                  }
                 }
               },
               "sources": {
                 "type": "array",
-                "items": { "type": "string", "minLength": 1 }
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
               },
               "local_embedding": {
                 "description": "Local encoder configuration, not proof of execution. Run Work and sealed Result context report execution/reuse/failure.",
                 "type": "object",
                 "additionalProperties": false,
-                "required": ["state", "reason", "profile", "execution", "model_downloads"],
+                "required": [
+                  "state",
+                  "reason",
+                  "profile",
+                  "execution",
+                  "model_downloads"
+                ],
                 "properties": {
-                  "state": { "enum": ["disabled", "configured"] },
-                  "reason": { "type": "string" },
-                  "profile": { "type": ["object", "null"] },
-                  "execution": { "const": "not_checked" },
-                  "model_downloads": { "const": false }
+                  "state": {
+                    "enum": [
+                      "disabled",
+                      "configured"
+                    ]
+                  },
+                  "reason": {
+                    "type": "string"
+                  },
+                  "profile": {
+                    "type": [
+                      "object",
+                      "null"
+                    ]
+                  },
+                  "execution": {
+                    "const": "not_checked"
+                  },
+                  "model_downloads": {
+                    "const": false
+                  }
                 }
               },
               "providers": {
                 "type": "object",
                 "additionalProperties": false,
-                "required": ["amap", "google_maps"],
+                "required": [
+                  "amap",
+                  "google_maps"
+                ],
                 "properties": {
-                  "amap": { "$ref": "#/$defs/provider_status" },
-                  "google_maps": { "$ref": "#/$defs/provider_status" }
+                  "amap": {
+                    "$ref": "#/$defs/provider_status"
+                  },
+                  "google_maps": {
+                    "$ref": "#/$defs/provider_status"
+                  }
                 }
               }
             }
           },
           "warnings": {
             "type": "array",
-            "items": { "type": "string", "minLength": 1 }
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
           }
         }
       },
       {
         "type": "object",
         "additionalProperties": false,
-        "required": ["outcome", "error"],
+        "required": [
+          "outcome",
+          "error"
+        ],
         "properties": {
-          "outcome": { "const": "error" },
-          "path": { "type": "string", "minLength": 1 },
+          "outcome": {
+            "const": "error"
+          },
+          "path": {
+            "type": "string",
+            "minLength": 1
+          },
           "error": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["code", "message"],
+            "required": [
+              "code",
+              "message"
+            ],
             "properties": {
-              "code": { "type": "string", "minLength": 1 },
-              "message": { "type": "string", "minLength": 1 }
+              "code": {
+                "type": "string",
+                "minLength": 1
+              },
+              "message": {
+                "type": "string",
+                "minLength": 1
+              }
             }
           }
         }
       }
     ],
     "$defs": {
+      "metadata_configuration": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "assumed_timezone",
+          "output_timezone",
+          "manufacturer_knowledge"
+        ],
+        "properties": {
+          "assumed_timezone": {
+            "type": "string",
+            "minLength": 1
+          },
+          "output_timezone": {
+            "type": "string",
+            "minLength": 1
+          },
+          "manufacturer_knowledge": {
+            "$ref": "#/$defs/manufacturer_knowledge"
+          }
+        }
+      },
+      "manufacturer_origin": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "layer",
+          "file",
+          "document_identity"
+        ],
+        "properties": {
+          "layer": {
+            "enum": [
+              "builtin",
+              "user"
+            ]
+          },
+          "file": {
+            "type": "string",
+            "minLength": 1
+          },
+          "document_identity": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          }
+        }
+      },
+      "manufacturer_knowledge": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "identity",
+          "sources",
+          "active_rules",
+          "disabled_rules",
+          "execution",
+          "overridden_rules"
+        ],
+        "properties": {
+          "identity": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          },
+          "sources": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/manufacturer_origin"
+            }
+          },
+          "active_rules": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "disabled_rules": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "reason",
+                "origin",
+                "replaces"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "reason": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "origin": {
+                  "$ref": "#/$defs/manufacturer_origin"
+                },
+                "replaces": {
+                  "$ref": "#/$defs/manufacturer_origin"
+                }
+              }
+            }
+          },
+          "execution": {
+            "const": "not_checked"
+          },
+          "overridden_rules": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "origin",
+                "replaces"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "origin": {
+                  "$ref": "#/$defs/manufacturer_origin"
+                },
+                "replaces": {
+                  "$ref": "#/$defs/manufacturer_origin"
+                }
+              }
+            }
+          }
+        }
+      },
       "provider_status": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["credential", "capability", "data_handling"],
+        "required": [
+          "credential",
+          "capability",
+          "data_handling"
+        ],
         "properties": {
-          "credential": { "enum": ["configured", "not_configured"] },
-          "capability": { "enum": ["available", "unavailable"] },
-          "data_handling": { "type": "string", "minLength": 1 }
+          "credential": {
+            "enum": [
+              "configured",
+              "not_configured"
+            ]
+          },
+          "capability": {
+            "enum": [
+              "available",
+              "unavailable"
+            ]
+          },
+          "data_handling": {
+            "type": "string",
+            "minLength": 1
+          }
         }
       }
     }

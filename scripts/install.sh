@@ -1,14 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Setup authority: readme/installation.md. This helper only installs a checkout.
 usage() {
   printf '%s\n' \
     'Usage: ./scripts/install.sh [--offline] [--force] [--embeddings] [--local-models]' \
     '' \
     'Installs the current trusted checkout with uv.' \
+    'Uses declared dependency ranges, not uv.lock; does not preserve existing extras.' \
+    'For verified releases, upgrades, and readiness use readme/installation.md.' \
     '--embeddings installs local encoder dependencies; model weights remain separately provisioned.' \
     '--local-models also installs both sensitivity dependencies and packaged NudeNet weights; NSFW weights must already be local.' \
-    'The script never installs uv, system packages, model weights, or Agent configuration.'
+    'The script never bootstraps uv/system tools, downloads separate model files, or edits Agent configuration.'
 }
 
 offline=false

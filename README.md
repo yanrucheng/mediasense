@@ -11,11 +11,16 @@ configuration. MediaSense
 keeps expensive Dataset work beside media on an eligible external volume by
 default and falls back to the platform-local application-data directory when no
 portable workspace exists. The Honeycomb and Dataset workspace are independent.
-See
-[Installation and first use](readme/installation.md) and
-[Agent integration](readme/agent-integration.md) for the complete flow; see
-[Troubleshooting and recovery](readme/troubleshooting.md) when opening or
-connecting fails.
+Use the single [installation and upgrade runbook](readme/installation.md) for
+setup, local upgrades, verification, and rollback.
+[Agent integration](readme/agent-integration.md) explains the client boundaries;
+[Troubleshooting and recovery](readme/troubleshooting.md) helps diagnose opening
+or connection failures.
+
+Local embedding remains opt-in. New enabled profiles recommend DINOv3 ViT-B/16
+at **384px** on the verified Apple Silicon Core ML route; explicit ChineseCLIP
+profiles keep their model selection. See the [installation runbook](readme/installation.md#dinov3-384-local-embedding)
+for fixed assets, platform limits and readiness checks.
 
 For repeatable local embedding-model evaluations, see [Local model evaluation](readme/model-evaluation.md).
 
@@ -42,7 +47,7 @@ The three durable handoff roles are the precheck result, the frozen organization
 
 The [PreCheck evidence-delivery contract](docs/spec/contract/precheck-read/index.md) and its production implementation have passed milestone-one and milestone-two acceptance, including the metadata, historical-detection, and pagination corrections. The [capability ledger](docs/eval/eval-260823-1918-ai-album-migration-baseline/eval-260823-1918B-capability-ledger.md) retains the exact evidence and certification limits.
 
-The `0.10.0` distribution provides the installed `mediasense` executable, portable-
+The `0.10.1` distribution provides the installed `mediasense` executable, portable-
 first Dataset discovery, one local composition root, a packaged product entry
 Skill and three stage Skills, Tool contracts, and an on-demand stdio MCP Host.
 `mediasense mcp` is part of that same

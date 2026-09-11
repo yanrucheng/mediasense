@@ -1,0 +1,60 @@
+{
+  "model_id": "timm/vit_base_patch16_dinov3.lvd1689m",
+  "upstream_model_id": "facebook/dinov3-vitb16-pretrain-lvd1689m",
+  "revision": "c6a5fb7d12bbd3cf3b0079253141c3332aaed7da",
+  "architecture": "vit_base_patch16_dinov3",
+  "dimensions": 768,
+  "vision_parameters": 85641216,
+  "normalization": "unit_length",
+  "vector_dtype": "float32-le",
+  "feature_output": "forward_features(pixel_values)[:, 0, :] after final LayerNorm",
+  "rope_precision": "float32",
+  "rope_periods_policy": "timm native float32 periods; not truncated to Meta bfloat16 values",
+  "attention_implementation": "sdpa-float32",
+  "preprocessing": {
+    "image_size": 384,
+    "image_decode": "Pillow RGB; no EXIF transpose",
+    "recipe": "Meta README make_transform(resize_size=384)",
+    "order": [
+      "ToImage uint8",
+      "Resize square uint8",
+      "ToDtype float32 scale=True",
+      "Normalize"
+    ],
+    "interpolation": "bilinear",
+    "antialias": true,
+    "crop": null,
+    "mean": [
+      0.485,
+      0.456,
+      0.406
+    ],
+    "std": [
+      0.229,
+      0.224,
+      0.225
+    ]
+  },
+  "files_sha256": {
+    "vision.mlmodelc/analytics/coremldata.bin": "f6065ec149d0dcb0691b87a8aca8920a00ae201ce2502cf1e341c2b7929f8c60",
+    "vision.mlmodelc/coremldata.bin": "c10c5c2dca8f9ad8f0cf055e2e374bf1c976e359ee225ab0641d3d902901c508",
+    "vision.mlmodelc/model.mil": "1759de61d115d7b13a20b7791d2487bfd6caf33ca0fdf8734ac08df02ae28568",
+    "vision.mlmodelc/weights/weight.bin": "91f1bbe173071f2a3427fbd19a3ac515c2e9835a25efe2fb8c48138d959ace21"
+  },
+  "source_checkpoint_sha256": "1f9ed8a2378d65e24bb710ba522ac9fa7be4e036d7aefb4384ce022833926332",
+  "native_batch_sizes": [
+    1
+  ],
+  "graph_precision": "FP16 convolution/MLP graph; FP32 attention, normalization, residuals and RoPE; FP32 I/O",
+  "runtime_versions": {
+    "torch": "2.7.0",
+    "torchvision": "0.22.0",
+    "coremltools": "9.0",
+    "numpy": "2.2.6",
+    "Pillow": "12.3.0"
+  },
+  "compute_units": "ALL",
+  "cpu_threads": 2,
+  "inter_op_threads": 1,
+  "producer": "mediasense-dinov3-coreml-384-v1"
+}

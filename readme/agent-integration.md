@@ -44,72 +44,13 @@ A globally available `mediasense` command therefore does not give every Agent
 MediaSense capability. Automatic discovery requires the local product entry and
 stage Skills plus the MCP configuration that apply to that Agent session.
 
-## New-user bootstrap
+## Setup and readiness
 
-The first step uses the Agent client's standard mechanism to place the
-`mediasense` product entry Skill under the selected Honeycomb:
-
-```text
-<honeycomb>/.agents/skills/
-```
-
-The MediaSense source checkout is not an implicit Honeycomb. Its packaged Skill
-sources under `src/mediasense/_resources/skills/` are release assets, not an
-activated local installation. Install into the separate WorkTree where the Agent
-will actually operate MediaSense, unless the Human explicitly chooses the source
-checkout itself for that operational role.
-
-Start the Agent from the Honeycomb. Once `mediasense` is loaded, it owns the
-remaining setup guidance and installs the complete release-matched Skill set:
-
-1. Confirm the Honeycomb root. The current directory is only a candidate when the
-   Human has not explicitly selected a root; no write occurs until its absolute
-   path is shown and confirmed. Dataset paths are never used to infer it.
-2. Check `command -v mediasense` and `mediasense --version`. The current Skill set
-   requires `0.9.x`; an installed `0.3.x` through `0.8.x` host is incompatible and must not be
-   accepted merely because it exposes the expected Tool names.
-3. If the CLI is absent or incompatible, explain the exact trusted source,
-   executable destination, and possible network access. Install only after Human
-   authorization. Installation does not modify Agent configuration.
-4. If the release-matched Skill set is incomplete, show the exact target and,
-   after authorization, run:
-
-   ```bash
-   mediasense skills install --target <absolute-honeycomb>/.agents/skills
-   ```
-
-   Identical content is idempotent. Different existing content is a conflict and
-   is not overwritten.
-   To replace a known older release as one matched set, run:
-
-   ```bash
-   mediasense skills upgrade --target <absolute-honeycomb>/.agents/skills
-   ```
-
-   Upgrade changes only the four MediaSense Skill directories and preserves
-   unrelated Skills.
-5. Inspect and parse `<absolute-honeycomb>/.codex/config.toml`. Show that complete
-   target path and request authorization before creating the file or minimally
-   merging:
-
-   ```toml
-   [mcp_servers.mediasense]
-   command = "mediasense"
-   args = ["mcp"]
-   ```
-
-   Preserve every unrelated TOML value and other MCP server. If a MediaSense
-   table already has different content, or the file is invalid or not writable,
-   report the conflict and stop. Do not silently replace the file or fall back to
-   user-level configuration.
-6. Start a new Agent session from the trusted Honeycomb. Codex only loads project
-   `.codex/` configuration for trusted projects, and an already-running session
-   normally does not acquire a newly added MCP server.
-7. Discover Tools in the new session and verify all seven exact names listed
-   above. File presence or CLI availability alone is not acceptance evidence.
-8. Only then route the request: begin PreCheck for a source that needs preparation,
-   enter Plan for an exact Plan-ready `result_ref`, or enter Apply for an exact
-   Frozen Plan.
+Follow the single [installation and upgrade runbook](installation.md) for first
+use, upgrades, project Skill management, MCP registration, and readiness evidence.
+The `mediasense` entry Skill carries the same procedure as an offline release
+snapshot. This guide explains the integration model; it does not maintain another
+installation sequence or compatible-version declaration.
 
 The intended first request can remain simple:
 

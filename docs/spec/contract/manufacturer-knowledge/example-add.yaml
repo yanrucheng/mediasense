@@ -1,0 +1,20 @@
+schema_version: 1
+rules:
+  - id: acme.photo-time
+    operation: add
+    summary: 受控示例中的 ACME 相机应优先读取 EXIF 拍摄时间。
+    when:
+      - tags: [EXIF:Make]
+        pattern: '^ACME$'
+    apply:
+      capture_time:
+        tags: [EXIF:DateTimeOriginal]
+        naive_time: source_local
+      fields:
+        - name: manufacturer.acme.operator_label
+          tags: [XMP:Creator]
+          value_type: string
+          description: 受控示例中由设备写入的操作者标签。
+    basis:
+      sources: [合成示例，不代表真实厂商事实。]
+      limitations: [只验证配置与执行接通。]

@@ -4,7 +4,7 @@ title: "PreCheck 属性与交付义务"
 type: spec
 status: active
 created: 2026-09-09
-updated: 2026-09-11
+updated: 2026-09-12
 timezone: "Asia/Shanghai"
 parent: "precheck-read"
 depends-on:
@@ -108,6 +108,8 @@ superseded-by: ""
 每个正常 review 项必须各有一条 `capture_time_range` 和 `media_type_counts`。无可用值时保留相应状态，并在 basis 中交代 status_counts；不能省略整条摘要。两者的状态计数都必须覆盖该关系的 source_count。普通属性唯一性适用于 Source Item、Evidence 和关系各自的 observations，也适用于 expand 返回；不同主体之间可使用同一属性名。页内故障记录明确未交付该项，不用空 observations 冒充正常项。
 
 ## 扩展与完成
+
+[厂商知识契约](../manufacturer-knowledge/index.md)使用现有 provenance/basis/qualifications 交付规则选择和修正依据。`provenance.manufacturer_knowledge` 记录快照身份、来源与适用判断；其中素材依据必须引用对应 Source Item。`manufacturer.*` 扩展属性在 provenance.definition 中保留声明的类型、单位和含义，不能覆盖标准属性的语义。明确匹配且有依据的规则可从设备原生 Encoder 提取型号；未采用这种规则时，不把制作软件 Encoder 当作相机。
 
 新增属性沿现有 schema 的具名分支维护类型、单位、主体和状态，不新建注册服务。未知属性作为数据保留；如果其含义影响必须理解的限制，生产者必须通过既有 qualifications 交代，消费者不能将未知解释为已检查或不存在。
 

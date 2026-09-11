@@ -40,6 +40,7 @@ class Diagnostic:
 def diagnose() -> dict[str, object]:
     checks: list[Diagnostic] = []
     sensitivity_configuration = None
+    embedding_configuration = None
     checks.append(
         Diagnostic(
             "python",
@@ -79,6 +80,7 @@ def diagnose() -> dict[str, object]:
                 True,
             )
         )
+    metadata_configuration = None
     try:
         config = load_runtime_config()
     except ConfigurationError as error:
@@ -86,7 +88,9 @@ def diagnose() -> dict[str, object]:
         config_sources: list[str] = []
     else:
         config_sources = [str(path) for path in config.sources]
+        metadata_configuration = config.public_value()["metadata"]
         sensitivity_configuration = config.sensitivity
+        embedding_configuration = config.embedding
         configured_provider = bool(
             os.environ.get(config.amap_api_key_env)
             or os.environ.get(config.google_maps_api_key_env)
@@ -187,6 +191,17 @@ def diagnose() -> dict[str, object]:
             False,
         )
     )
+    from mediasense.precheck.dinov3 import DinoV3CoreMLEncoder, MODEL_ID
+
+    selected_dino = embedding_configuration is not None and embedding_configuration["model_id"] == MODEL_ID
+    dino = DinoV3CoreMLEncoder(
+        model_path=Path(embedding_configuration["model_path"]) if selected_dino else None
+    ).diagnose()
+    checks.append(Diagnostic(
+        "dinov3_384", "error" if selected_dino and dino["state"] == "unavailable" else "ok" if dino["state"] == "prepared" else "warning",
+        "; ".join(dino["issues"]) or "Pinned DINOv3 384 prerequisites verified locally; inference not checked.",
+        selected_dino,
+    ))
     from mediasense.precheck.sensitivity import (
         NudeNetDetector,
         SensitivityBackendUnavailable,
@@ -212,6 +227,14 @@ def diagnose() -> dict[str, object]:
         "status": ("error" if any(item.status == "error" for item in checks) else "ok"),
         "checks": [item.to_value() for item in checks],
         "configuration_sources": config_sources,
+        "metadata": metadata_configuration,
+        "local_embedding": {
+            "state": "configured" if embedding_configuration else "disabled",
+            "profile": embedding_configuration,
+            "execution": "not_checked",
+            "recommended_model": MODEL_ID,
+            "dinov3_384": dino,
+        },
         "local_sensitivity": {
             "state": "configured" if sensitivity_configuration else "disabled",
             "profile": sensitivity_configuration,

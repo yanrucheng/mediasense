@@ -4,7 +4,7 @@ title: "MediaSense 当前合约"
 type: index
 status: active
 created: 2026-09-09
-updated: 2026-09-11
+updated: 2026-09-12
 timezone: "Asia/Shanghai"
 parent: "index-spec"
 depends-on:
@@ -24,6 +24,7 @@ superseded-by: ""
 
 | 当前合约 | 用途 | 本轮变化 |
 | --- | --- | --- |
+| [厂商知识](manufacturer-knowledge/index.md) | 随包知识、用户 YAML 增量及运行快照 | 用户授权 B 方案；固定文件字段、替换/停用、条件、处理和交付语义，实际验证另记台账 |
 | [PreCheck Read](precheck-read/index.md) | 分批读取材料路径、自身属性、压缩关系；调查明细和精确成员 | `review.items`、开放属性、选择已准备 Evidence、完整性和失败语义定稿 |
 | [PreCheck Run](precheck-run/index.md) | 启动、控制和观察准备过程 | 控制接口沿用；补齐本期准备深度与生产接通要求 |
 | [Geo Query](geo-query/index.md) | 有界、受授权的地理候选获取 | 输入和效果语义沿用；明确采集策略与证据投影的责任 |

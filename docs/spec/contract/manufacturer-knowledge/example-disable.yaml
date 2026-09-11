@@ -1,0 +1,5 @@
+schema_version: 1
+rules:
+  - id: dji.photo-time
+    operation: disable
+    reason: 用户选择对本机处理恢复通用字段策略。

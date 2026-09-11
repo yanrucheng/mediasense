@@ -4,7 +4,7 @@ title: "MediaSense PreCheck Run Tool Contract"
 type: spec
 status: active
 created: 2026-08-27
-updated: 2026-09-11
+updated: 2026-09-12
 timezone: "Asia/Shanghai"
 parent: "index-contract"
 depends-on:
@@ -141,6 +141,8 @@ PreCheck 对每个 Source Item 投影地址与附近地点两个 Observation。
 组件状态、消费者校验和合法历史投影。覆盖是否完整与是否 plan_ready 保持独立。
 
 ## 本期准备深度与配置
+
+厂商知识和 metadata 时区按[厂商知识契约](../manufacturer-knowledge/index.md)读取。新 Run 固定完整知识和上下文到现有 execution_config；恢复使用原快照，新 start 重读当前文件，幂等重放不重新解释。`configuration_invalid` 表示新工作采用的配置无效，不创建本次执行；它不同于条件不匹配、缺判断信息或某属性的规则冲突。控制请求沿用当前 schema，不把整份知识重复放进每次 Run 请求。
 
 本节是第一里程碑确认的准备义务；第二里程碑已完成实现和安装入口验证，并通过用户验收，具体范围与仍未认证事项见既有迁移台账。start/status/pause/resume/cancel 的请求字段继续使用现有 schema；不增加任意 producer 参数或新的 stage。
 

@@ -1,0 +1,17 @@
+schema_version: 1
+rules:
+  - id: dji.photo-time
+    operation: replace
+    summary: 用户明确替换的 DJI 照片时间规则示例。
+    when:
+      - tags: [EXIF:Make]
+        pattern: '(?i)dji'
+      - tags: [File:MIMEType]
+        pattern: '^image/'
+    apply:
+      capture_time:
+        tags: [EXIF:DateTimeOriginal, XMP:DateTimeOriginal]
+        naive_time: source_local
+    basis:
+      sources: [用户明确采用的规则副本；使用前填写实际依据。]
+      limitations: [示例不扩大旧规则的设备认证范围。]

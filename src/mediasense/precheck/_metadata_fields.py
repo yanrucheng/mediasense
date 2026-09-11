@@ -117,7 +117,30 @@ def _value(name, raw):
     return value
 
 
-def photographic_observations(indexed, ordered, subject, profile):
+def _custom_value(definition, raw):
+    kind = definition["value_type"]
+    if kind == "string":
+        if isinstance(raw, (dict, list)):
+            raise ValueError("structured value is not a string field")
+        return _value(definition["name"], raw)
+    if kind == "boolean":
+        if type(raw) is bool:
+            return raw
+        if type(raw) in {int, float} and raw in (0, 1):
+            return bool(raw)
+        if isinstance(raw, str) and raw.strip().lower() in {"true", "false", "0", "1"}:
+            return raw.strip().lower() in {"true", "1"}
+        raise ValueError("invalid boolean field")
+    if isinstance(raw, bool):
+        raise ValueError("boolean is not a number")
+    value = float(Fraction(str(raw)))
+    if not math.isfinite(value) or (kind == "integer" and not value.is_integer()):
+        raise ValueError("invalid numeric field")
+    return int(value) if kind == "integer" else value
+
+
+def photographic_observations(indexed, ordered, subject, profile, knowledge=None):
+    knowledge = knowledge or {}
     observations = []
     effective_profile = {
         "name": profile.profile_id,
@@ -125,7 +148,50 @@ def photographic_observations(indexed, ordered, subject, profile):
         + hashlib.sha256(profile.descriptor().encode()).hexdigest(),
         "selection": "first_valid_tag_then_source_precedence",
     }
-    for name, tags in FIELD_TAGS.items():
+    definitions = dict(FIELD_TAGS)
+    definitions.update(
+        {name: () for name in knowledge if name.startswith("manufacturer.")}
+    )
+    for name, default_tags in definitions.items():
+        resolution = knowledge.get(name, {})
+        effect = resolution.get("effect")
+        declaration = resolution.get("declaration")
+        if (
+            declaration is not None
+            and effect is None
+            and not resolution.get("conflict")
+        ):
+            unknown = resolution["unknown"]
+            observations.append(
+                {
+                    "name": name,
+                    "status": "not_checked" if unknown else "not_applicable",
+                    "basis": {
+                        "code": "manufacturer_rule_applicability_unknown"
+                        if unknown
+                        else "manufacturer_rule_not_applicable"
+                    },
+                    "provenance": {
+                        "definition": {
+                            key: declaration[key]
+                            for key in ("value_type", "description", "unit")
+                            if key in declaration
+                        }
+                    },
+                }
+            )
+            continue
+        effect = effect or {}
+        preferred = tuple(effect.get("tags", ()))
+        conflict_tags = (
+            resolution.get("candidate_tags", ()) if resolution.get("conflict") else ()
+        )
+        tags = tuple(dict.fromkeys((*preferred, *default_tags, *conflict_tags)))
+        allowed = set(preferred) | (
+            set(default_tags) if effect.get("fallback", True) else set()
+        )
+        if resolution.get("conflict"):
+            allowed.update(conflict_tags)
         candidates = []
         paths = [subject.as_posix()] if name in SOURCE_ONLY else ordered
         for tag in tags:
@@ -137,12 +203,24 @@ def photographic_observations(indexed, ordered, subject, profile):
                 if raw is None or raw == "":
                     continue
                 candidate = {"relative_path": path, "tag": tag, "raw_value": raw}
-                if name == "camera_model" and tag == "QuickTime:Encoder":
+                if tag not in allowed:
+                    candidate["rejection"] = "manufacturer_fallback_disabled"
+                    candidates.append(candidate)
+                    continue
+                if (
+                    name == "camera_model"
+                    and tag == "QuickTime:Encoder"
+                    and tag not in preferred
+                ):
                     candidate["rejection"] = "encoder_is_not_camera_identity"
                     candidates.append(candidate)
                     continue
                 try:
-                    value = _value(name, raw)
+                    value = (
+                        _custom_value(declaration, raw)
+                        if declaration is not None
+                        else _value(name, raw)
+                    )
                     if name == "gps_altitude_meters" and tag != "Composite:GPSAltitude":
                         ref_tag = tag.split(":")[0] + ":GPSAltitudeRef"
                         altitude_ref = fields.get(ref_tag)
@@ -153,7 +231,7 @@ def photographic_observations(indexed, ordered, subject, profile):
                         else:
                             candidate["altitude_reference"] = "unrecorded"
                     candidate["value"] = value
-                except (ValueError, TypeError, ZeroDivisionError):
+                except (ValueError, TypeError, ZeroDivisionError, OverflowError):
                     candidate["rejection"] = "invalid_metadata_value"
                 candidates.append(candidate)
         valid = [candidate for candidate in candidates if "value" in candidate]
@@ -195,6 +273,12 @@ def photographic_observations(indexed, ordered, subject, profile):
         observation.setdefault(
             "provenance", {"profile": effective_profile, "attempted_tags": list(tags)}
         )
+        if declaration is not None:
+            observation["provenance"]["definition"] = {
+                key: declaration[key]
+                for key in ("value_type", "description", "unit")
+                if key in declaration
+            }
         observations.append(observation)
     fields = indexed.get(subject.as_posix(), {})
     dimension = {"name": "source_pixel_dimensions", "status": "missing"}

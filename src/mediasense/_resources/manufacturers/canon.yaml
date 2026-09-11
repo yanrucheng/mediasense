@@ -1,0 +1,19 @@
+schema_version: 1
+rules:
+  - id: canon.dslr-photo-time
+    operation: add
+    summary: Canon EOS DSLR 的已知缺失时区路径优先采用拍摄字段。
+    when:
+      - tags: [EXIF:Make, XMP:Make]
+        pattern: '(?i)canon'
+      - tags: [EXIF:Model, XMP:Model]
+        pattern: '(?i)eos\s+\w*d'
+    apply:
+      capture_time:
+        tags: [EXIF:DateTimeOriginal, XMP:DateTimeOriginal]
+        naive_time: source_local
+    basis:
+      sources: ['AI Album c90aa8f:src/conf/conf.yml exif.missing_timezone_cases.canon_dslr']
+      limitations:
+        - 沿用历史 Make/Model 条件，不补造未记录的固件版本。
+        - 已有显式时间偏移继续保留，不重复添加时差。

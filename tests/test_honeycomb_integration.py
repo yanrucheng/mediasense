@@ -12,14 +12,6 @@ from mediasense.runtime.versioning import application_version
 
 ROOT = Path(__file__).parents[1]
 PACKAGED_SKILL_ROOT = ROOT / "src" / "mediasense" / "_resources" / "skills"
-TOOL_NAMES = {
-    "mediasense.dataset.open",
-    "mediasense.precheck.run",
-    "mediasense.precheck.read",
-    "mediasense.plan.work",
-    "mediasense.apply.run",
-    "mediasense.apply.read",
-}
 
 
 def test_source_checkout_is_not_an_implicit_honeycomb() -> None:
@@ -63,6 +55,11 @@ def test_skills_install_requires_and_uses_only_explicit_target(
         / "references"
         / "organization-profiles.md"
     ).is_file()
+    # The installed entry must carry the one maintained procedure offline.
+    runbook = Path("mediasense/references/installation.md")
+    assert (target / runbook).read_bytes() == (
+        ROOT / "readme/installation.md"
+    ).read_bytes()
     assert not (home / ".codex").exists()
     assert not (home / ".agents").exists()
     assert list(dataset_workspace.iterdir()) == []
@@ -76,13 +73,11 @@ def test_entry_skill_owns_bootstrap_and_stage_local_prerequisites() -> None:
     apply = (skill_root / "mediasense-apply" / "SKILL.md").read_text()
 
     assert "Establish readiness" in entry
-    assert "<honeycomb>/.codex/config.toml" in entry
-    assert "trusted project" in entry
+    assert "[installation and upgrade runbook](references/installation.md)" in entry
+    assert (skill_root / "mediasense/references/installation.md").is_file()
     assert "MediaSense `0.10.x` CLI" in entry
     assert "MediaSense `0.2.x` CLI" not in entry
     assert "current Agent session" in entry
-    assert "cannot load it dynamically" in entry
-    assert TOOL_NAMES <= set(re.findall(r"`(mediasense\.[a-z.]+)`", entry))
     assert "Route to the owning stage" in entry
     for stage_name in (
         "mediasense-precheck",

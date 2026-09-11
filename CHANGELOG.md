@@ -6,6 +6,36 @@ Versioning, with documented breaking changes permitted in minor releases before
 
 ## [Unreleased]
 
+- Connect the accepted DINOv3 ViT-B/16 **384px** Core ML recipe to the production
+  CLI/MCP runtime as the recommendation for newly enabled local embedding.
+  Embedding stays off by default; explicit ChineseCLIP profiles retain their model.
+- Pin preprocessing/runtime and compiled-weight identity, verify local assets,
+  diagnose unsupported platforms, and refuse downloads or backend fallback.
+  Intel macOS and Windows DINOv3 inference are not released or validated.
+- Add an atomic local model preparation script and installed-path checks for
+  inference, cache reuse, unavailable-backend blocking and recovery. Update the
+  installation runbook and packaged snapshot together. The local 0.10.1 content
+  build and installation evidence are recorded in the migration ledger.
+
+## [0.10.1] - 2026-09-12
+
+### Fixed
+
+- Reuse verified PreCheck Result graphs and bound page reads and schema validation.
+- Make Plan updates observable and cancellable, serialize execution ownership, and
+  recheck durable receipts across concurrent commits and request replay.
+- Reduce metadata coordination cost and restore bounded video-frame coverage with
+  PyAV, reporting requested positions separately from actual presentation times.
+
+### Distribution
+
+- Ship the single installation/upgrade runbook with the product entry Skill;
+  verify source, wheel, project resources, dependency constraints and session readiness.
+- PyAV 16.x is now a core dependency. Existing extras remain optional and disabled
+  capabilities are not enabled by installation. Persistent store formats are unchanged.
+- Existing sealed Results are retained; new decoding does not rewrite old evidence.
+  Local release evidence and installation scope are recorded in the capability ledger.
+
 ## [0.10.0] - 2026-09-10
 
 ### Changed

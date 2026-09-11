@@ -4,7 +4,7 @@ title: "MediaSense Dataset Open Tool Contract"
 type: spec
 status: active
 created: 2026-08-31
-updated: 2026-09-09
+updated: 2026-09-12
 timezone: "Asia/Shanghai"
 parent: "index-contract"
 depends-on:
@@ -50,6 +50,16 @@ context own execution, reuse and failure facts; this Tool owns configuration
 discovery only. No new model registry or model-facing Tool is introduced.
 
 ## Identity and safety
+
+`configuration.metadata` reports `assumed_timezone`, `output_timezone`, and a
+manufacturer-knowledge summary: canonical identity, source document identities,
+active rule IDs, `overridden_rules` linking user replacements to their bundled
+origins, and explicit disabled rules with their original and user sources.
+Its `execution=not_checked` means files validated, not that a rule has processed
+media. The [manufacturer file contract](../manufacturer-knowledge/index.md) owns
+authoring and overlay semantics. A new PreCheck Run freezes full knowledge in its
+existing store; this discovery response does not duplicate the full catalog.
+
 
 The Dataset manifest binds the source locator to observed source and volume
 identity. A compatible mount-path change may reuse verified work; an identity

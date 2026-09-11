@@ -10,6 +10,11 @@ Before architecture, contract, Skill, Tool, or migration work:
 4. For legacy comparison, read `docs/eval/eval-260823-1918-ai-album-migration-baseline/index.md` and its linked modules.
 5. Before using the Hong Kong fixture, read `eval/fixtures/ai-album-hk-representative-v1.yaml`, then the package's own `README.md` and `docs/RESEARCH-AND-HANDOFF.zh-CN.md`. Run the package verifier before trusting its contents.
 
+For installation, local upgrades, readiness verification, rollback, or changes to
+those paths, use the single [installation and upgrade runbook](readme/installation.md).
+Its packaged Skill copy is a release snapshot, not a second authoring source;
+maintain it and its consistency checks in the same change.
+
 For local model evaluation, use the single [model evaluation runbook](readme/model-evaluation.md).
 
 ## Authority and boundaries
