@@ -35,7 +35,8 @@ def reference_recipe(config):
 def normalized(raw):
     import numpy as np
 
-    return np.asarray([validate_vector(row, 768) for row in raw], dtype=np.float64)
+    dimensions = len(raw[0])
+    return np.asarray([validate_vector(row, dimensions) for row in raw], dtype=np.float64)
 
 
 def compare(reference, candidate, *, enforce=True):

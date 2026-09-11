@@ -1,0 +1,395 @@
+{
+  "status": "passed",
+  "recipe": "285aa12eeea97937b5510620f960f3c18dee904fdb9524252b61624e2159bc57",
+  "input_fingerprint": "2144fcd970052a44d20a378e3819b86b55345d0605b6d71ce073fc2dd5cd5ba0",
+  "samples": [
+    {
+      "id": "00000:00",
+      "kind": "image",
+      "image_sha256": "154dd8b745e27f977a0f280f3dbfe6ac069782d9ab4cef45b87503a08ab8bfcd"
+    },
+    {
+      "id": "00482:00",
+      "kind": "image",
+      "image_sha256": "b7fc1d2c1f1ea153587e08519a5d83e7d38b79a80537a6215fa178f5515bf5ab"
+    },
+    {
+      "id": "01640:00",
+      "kind": "image",
+      "image_sha256": "92a3c056f1c00d52643d6764e04f59aa314160f7077ebcba555f899d87124c86"
+    },
+    {
+      "id": "02130:00",
+      "kind": "image",
+      "image_sha256": "2206b6e2d46ca8e350db8c2befeda99113bd43ab80a6a542e6d7ea4a5a31fd08"
+    },
+    {
+      "id": "00416:00",
+      "kind": "video",
+      "image_sha256": "b4133ba5ee7a16c7570fbcb9acf8564d32d225de1808e5cb43c0f0a31e9712c0"
+    },
+    {
+      "id": "00797:00",
+      "kind": "video",
+      "image_sha256": "1dab35916f920e09e1cd3fc4ddb099298be166e3658d562aeefccae972c92836"
+    },
+    {
+      "id": "01623:01",
+      "kind": "video",
+      "image_sha256": "d0d1885b9608bf634c0f35458328b5978c3fe308d8dbe14ce4a18297a755d97f"
+    },
+    {
+      "id": "02133:00",
+      "kind": "video",
+      "image_sha256": "a4fa41531ad42bdc9fbf28179861b5bf0c3ca6f2e9c84214fdc8bd2f48264c74"
+    }
+  ],
+  "tolerances": {
+    "max_cosine_distance": 0.001,
+    "max_pairwise_cosine_error": 0.002,
+    "material_rank_margin": 0.005,
+    "max_stored_unit_norm_error": 1e-06
+  },
+  "checks": {
+    "cpu_fp32": {
+      "single_vs_batch": {
+        "rows": 8,
+        "dimensions": 512,
+        "max_cosine_distance": 1.5921726159717764e-09,
+        "max_pairwise_cosine_error": 9.108486304088004e-08,
+        "pairwise_pairs": 28,
+        "pairwise_over_tolerance": 0,
+        "max_normalized_element_error": 2.682209014892578e-07,
+        "max_raw_relative_l2_error": 6.967026168950606e-07,
+        "nearest_neighbor_agreement": 8,
+        "changed_rank_positions": 0,
+        "inversions_with_reference_margin_over_0_005": 0,
+        "max_stored_unit_norm_error": 5.401742608768245e-09,
+        "passed": true
+      },
+      "reordered": {
+        "rows": 8,
+        "dimensions": 512,
+        "max_cosine_distance": 2.240967744704392e-09,
+        "max_pairwise_cosine_error": 0.0,
+        "pairwise_pairs": 28,
+        "pairwise_over_tolerance": 0,
+        "max_normalized_element_error": 0.0,
+        "max_raw_relative_l2_error": 0.0,
+        "nearest_neighbor_agreement": 8,
+        "changed_rank_positions": 0,
+        "inversions_with_reference_margin_over_0_005": 0,
+        "max_stored_unit_norm_error": 4.228682737306144e-09,
+        "passed": true
+      },
+      "tail": {
+        "rows": 2,
+        "dimensions": 512,
+        "max_cosine_distance": 1.8062888962333545e-09,
+        "max_pairwise_cosine_error": 0.0,
+        "pairwise_pairs": 1,
+        "pairwise_over_tolerance": 0,
+        "max_normalized_element_error": 0.0,
+        "max_raw_relative_l2_error": 0.0,
+        "nearest_neighbor_agreement": 2,
+        "changed_rank_positions": 0,
+        "inversions_with_reference_margin_over_0_005": 0,
+        "max_stored_unit_norm_error": 2.7329603025094684e-09,
+        "passed": true
+      },
+      "duplicate": {
+        "rows": 4,
+        "dimensions": 512,
+        "max_cosine_distance": 2.240967744704392e-09,
+        "max_pairwise_cosine_error": 0.0,
+        "pairwise_pairs": 6,
+        "pairwise_over_tolerance": 0,
+        "max_normalized_element_error": 0.0,
+        "max_raw_relative_l2_error": 0.0,
+        "nearest_neighbor_agreement": 4,
+        "changed_rank_positions": 0,
+        "inversions_with_reference_margin_over_0_005": 0,
+        "max_stored_unit_norm_error": 1.1204839278633472e-09,
+        "passed": true
+      },
+      "description": {
+        "identity": "mobileclip2-image:513673c8b8cbed029c3a20fb2c65ce047e2d8019b3d48992135db4e894b9c9ed",
+        "model_id": "apple/MobileCLIP2-S2",
+        "revision": "72424e7025436db18f15c3eff6ee8c7c15ad4481",
+        "device": "cpu",
+        "precision": "float32",
+        "autocast": false,
+        "vision_parameters": 35702992,
+        "parameters_before_fusion": 35815232,
+        "feature_output": "OpenCLIP TimmModel visual: FastViT final convolution, global average pool and original learned 1280-to-512 head.fc; no text tower",
+        "preprocessing": {
+          "image_size": 256,
+          "resize_mode": "shortest",
+          "crop": "center",
+          "interpolation": "bilinear",
+          "antialias": true,
+          "mean": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "std": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "image_decode": "Pillow RGB; no EXIF transpose"
+        },
+        "reparameterization": "timm reparameterize_model in CPU FP32, eval mode, before device/dtype conversion",
+        "text_tower_loaded": false,
+        "mps_cpu_fallback": false,
+        "output_normalization": "runner L2, float32-le storage",
+        "processor": "Compose(\n    Resize(size=256, interpolation=bilinear, max_size=None, antialias=True)\n    CenterCrop(size=(256, 256))\n    <function _convert_to_rgb at 0x1119bf9c0>\n    ToTensor()\n    Normalize(mean=(0.0, 0.0, 0.0), std=(1.0, 1.0, 1.0))\n)"
+      },
+      "reference": {
+        "preprocessing_exact": true,
+        "full_openclip_unfused_exact": true,
+        "fusion_vs_unfused": {
+          "rows": 4,
+          "dimensions": 512,
+          "max_cosine_distance": 2.577687618909863e-09,
+          "max_pairwise_cosine_error": 6.204872762816116e-07,
+          "pairwise_pairs": 6,
+          "pairwise_over_tolerance": 0,
+          "max_normalized_element_error": 4.470348358154297e-07,
+          "max_raw_relative_l2_error": 2.6877008191749083e-06,
+          "nearest_neighbor_agreement": 4,
+          "changed_rank_positions": 0,
+          "inversions_with_reference_margin_over_0_005": 0,
+          "max_stored_unit_norm_error": 4.228682737306144e-09,
+          "passed": true
+        },
+        "dimensions": 512,
+        "parameters_before_fusion": 35815232,
+        "parameters_after_fusion": 35702992
+      }
+    },
+    "mps_fp32": {
+      "single_vs_batch": {
+        "rows": 8,
+        "dimensions": 512,
+        "max_cosine_distance": 8.807863549620265e-09,
+        "max_pairwise_cosine_error": 2.7516297407270685e-07,
+        "pairwise_pairs": 28,
+        "pairwise_over_tolerance": 0,
+        "max_normalized_element_error": 2.2910535335540771e-07,
+        "max_raw_relative_l2_error": 1.384420404401826e-06,
+        "nearest_neighbor_agreement": 8,
+        "changed_rank_positions": 0,
+        "inversions_with_reference_margin_over_0_005": 0,
+        "max_stored_unit_norm_error": 5.589415708051604e-09,
+        "passed": true
+      },
+      "reordered": {
+        "rows": 8,
+        "dimensions": 512,
+        "max_cosine_distance": 8.13559997148161e-09,
+        "max_pairwise_cosine_error": 0.0,
+        "pairwise_pairs": 28,
+        "pairwise_over_tolerance": 0,
+        "max_normalized_element_error": 0.0,
+        "max_raw_relative_l2_error": 0.0,
+        "nearest_neighbor_agreement": 8,
+        "changed_rank_positions": 0,
+        "inversions_with_reference_margin_over_0_005": 0,
+        "max_stored_unit_norm_error": 4.067799985740805e-09,
+        "passed": true
+      },
+      "tail": {
+        "rows": 2,
+        "dimensions": 512,
+        "max_cosine_distance": 5.416000981028901e-10,
+        "max_pairwise_cosine_error": 1.048714421969521e-07,
+        "pairwise_pairs": 1,
+        "pairwise_over_tolerance": 0,
+        "max_normalized_element_error": 1.6577541828155518e-07,
+        "max_raw_relative_l2_error": 1.0351861129532889e-06,
+        "nearest_neighbor_agreement": 2,
+        "changed_rank_positions": 0,
+        "inversions_with_reference_margin_over_0_005": 0,
+        "max_stored_unit_norm_error": 2.1207762213037995e-09,
+        "passed": true
+      },
+      "duplicate": {
+        "rows": 4,
+        "dimensions": 512,
+        "max_cosine_distance": 1.1841052582894918e-09,
+        "max_pairwise_cosine_error": 0.0,
+        "pairwise_pairs": 6,
+        "pairwise_over_tolerance": 0,
+        "max_normalized_element_error": 0.0,
+        "max_raw_relative_l2_error": 0.0,
+        "nearest_neighbor_agreement": 4,
+        "changed_rank_positions": 0,
+        "inversions_with_reference_margin_over_0_005": 0,
+        "max_stored_unit_norm_error": 2.9298208303885076e-09,
+        "passed": true
+      },
+      "description": {
+        "identity": "mobileclip2-image:bdd7f31a04d24b8ec38469b0063e559f5a2f25886fe7a810c6397bfb84513261",
+        "model_id": "apple/MobileCLIP2-S2",
+        "revision": "72424e7025436db18f15c3eff6ee8c7c15ad4481",
+        "device": "mps",
+        "precision": "float32",
+        "autocast": false,
+        "vision_parameters": 35702992,
+        "parameters_before_fusion": 35815232,
+        "feature_output": "OpenCLIP TimmModel visual: FastViT final convolution, global average pool and original learned 1280-to-512 head.fc; no text tower",
+        "preprocessing": {
+          "image_size": 256,
+          "resize_mode": "shortest",
+          "crop": "center",
+          "interpolation": "bilinear",
+          "antialias": true,
+          "mean": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "std": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "image_decode": "Pillow RGB; no EXIF transpose"
+        },
+        "reparameterization": "timm reparameterize_model in CPU FP32, eval mode, before device/dtype conversion",
+        "text_tower_loaded": false,
+        "mps_cpu_fallback": false,
+        "output_normalization": "runner L2, float32-le storage",
+        "processor": "Compose(\n    Resize(size=256, interpolation=bilinear, max_size=None, antialias=True)\n    CenterCrop(size=(256, 256))\n    <function _convert_to_rgb at 0x1119bf9c0>\n    ToTensor()\n    Normalize(mean=(0.0, 0.0, 0.0), std=(1.0, 1.0, 1.0))\n)"
+      }
+    },
+    "mps_fp32_vs_cpu": {
+      "rows": 8,
+      "dimensions": 512,
+      "max_cosine_distance": 3.5710260304355756e-09,
+      "max_pairwise_cosine_error": 8.701616932560441e-07,
+      "pairwise_pairs": 28,
+      "pairwise_over_tolerance": 0,
+      "max_normalized_element_error": 7.152557373046875e-07,
+      "max_raw_relative_l2_error": 3.5194083354227147e-06,
+      "nearest_neighbor_agreement": 8,
+      "changed_rank_positions": 0,
+      "inversions_with_reference_margin_over_0_005": 0,
+      "max_stored_unit_norm_error": 4.067799985740805e-09,
+      "passed": true
+    },
+    "mps_fp16": {
+      "single_vs_batch": {
+        "rows": 8,
+        "dimensions": 512,
+        "max_cosine_distance": 1.1238383123002293e-06,
+        "max_pairwise_cosine_error": 0.00028120920324120613,
+        "pairwise_pairs": 28,
+        "pairwise_over_tolerance": 0,
+        "max_normalized_element_error": 0.0003103557974100113,
+        "max_raw_relative_l2_error": 0.0015961395066129915,
+        "nearest_neighbor_agreement": 8,
+        "changed_rank_positions": 0,
+        "inversions_with_reference_margin_over_0_005": 0,
+        "max_stored_unit_norm_error": 6.106869676614224e-09,
+        "passed": true
+      },
+      "reordered": {
+        "rows": 8,
+        "dimensions": 512,
+        "max_cosine_distance": 3.952705052157057e-09,
+        "max_pairwise_cosine_error": 0.0,
+        "pairwise_pairs": 28,
+        "pairwise_over_tolerance": 0,
+        "max_normalized_element_error": 0.0,
+        "max_raw_relative_l2_error": 0.0,
+        "nearest_neighbor_agreement": 8,
+        "changed_rank_positions": 0,
+        "inversions_with_reference_margin_over_0_005": 0,
+        "max_stored_unit_norm_error": 1.9763525260785286e-09,
+        "passed": true
+      },
+      "tail": {
+        "rows": 2,
+        "dimensions": 512,
+        "max_cosine_distance": 8.781823034320624e-07,
+        "max_pairwise_cosine_error": 3.6913302903229805e-07,
+        "pairwise_pairs": 1,
+        "pairwise_over_tolerance": 0,
+        "max_normalized_element_error": 0.00018547475337982178,
+        "max_raw_relative_l2_error": 0.001355526630102292,
+        "nearest_neighbor_agreement": 2,
+        "changed_rank_positions": 0,
+        "inversions_with_reference_margin_over_0_005": 0,
+        "max_stored_unit_norm_error": 3.493999645165502e-09,
+        "passed": true
+      },
+      "duplicate": {
+        "rows": 4,
+        "dimensions": 512,
+        "max_cosine_distance": 0.0,
+        "max_pairwise_cosine_error": 0.0,
+        "pairwise_pairs": 6,
+        "pairwise_over_tolerance": 0,
+        "max_normalized_element_error": 0.0,
+        "max_raw_relative_l2_error": 0.0,
+        "nearest_neighbor_agreement": 4,
+        "changed_rank_positions": 0,
+        "inversions_with_reference_margin_over_0_005": 0,
+        "max_stored_unit_norm_error": 1.41226008665285e-09,
+        "passed": true
+      },
+      "description": {
+        "identity": "mobileclip2-image:551297ae3cbcc48c93d3d728257c946b49f8ef5de00cea370a143c53f9cc4b38",
+        "model_id": "apple/MobileCLIP2-S2",
+        "revision": "72424e7025436db18f15c3eff6ee8c7c15ad4481",
+        "device": "mps",
+        "precision": "float16",
+        "autocast": false,
+        "vision_parameters": 35702992,
+        "parameters_before_fusion": 35815232,
+        "feature_output": "OpenCLIP TimmModel visual: FastViT final convolution, global average pool and original learned 1280-to-512 head.fc; no text tower",
+        "preprocessing": {
+          "image_size": 256,
+          "resize_mode": "shortest",
+          "crop": "center",
+          "interpolation": "bilinear",
+          "antialias": true,
+          "mean": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "std": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "image_decode": "Pillow RGB; no EXIF transpose"
+        },
+        "reparameterization": "timm reparameterize_model in CPU FP32, eval mode, before device/dtype conversion",
+        "text_tower_loaded": false,
+        "mps_cpu_fallback": false,
+        "output_normalization": "runner L2, float32-le storage",
+        "processor": "Compose(\n    Resize(size=256, interpolation=bilinear, max_size=None, antialias=True)\n    CenterCrop(size=(256, 256))\n    <function _convert_to_rgb at 0x1119bf9c0>\n    ToTensor()\n    Normalize(mean=(0.0, 0.0, 0.0), std=(1.0, 1.0, 1.0))\n)"
+      }
+    },
+    "mps_fp16_vs_cpu": {
+      "rows": 8,
+      "dimensions": 512,
+      "max_cosine_distance": 2.1329148848558965e-05,
+      "max_pairwise_cosine_error": 0.0012896592260659978,
+      "pairwise_pairs": 28,
+      "pairwise_over_tolerance": 0,
+      "max_normalized_element_error": 0.001153498888015747,
+      "max_raw_relative_l2_error": 0.006610490772857423,
+      "nearest_neighbor_agreement": 8,
+      "changed_rank_positions": 0,
+      "inversions_with_reference_margin_over_0_005": 0,
+      "max_stored_unit_norm_error": 1.9763525260785286e-09,
+      "passed": true
+    }
+  }
+}

@@ -1,0 +1,52 @@
+{
+  "reference": "cpu-fp32",
+  "runs": {
+    "mps-fp32": {
+      "rows": 366,
+      "dimensions": 512,
+      "max_cosine_distance": 1.52207565440321e-08,
+      "max_pairwise_cosine_error": 8.453204279390558e-06,
+      "pairwise_pairs": 66795,
+      "pairwise_over_tolerance": 0,
+      "max_normalized_element_error": 4.547182470560074e-06,
+      "max_raw_relative_l2_error": 3.159813059028238e-05,
+      "nearest_neighbor_agreement": 366,
+      "changed_rank_positions": 66,
+      "inversions_with_reference_margin_over_0_005": 0,
+      "max_stored_unit_norm_error": 1.207459932039967e-08,
+      "passed": true
+    },
+    "coreml-fp32": {
+      "rows": 366,
+      "dimensions": 512,
+      "max_cosine_distance": 1.377592673268424e-08,
+      "max_pairwise_cosine_error": 8.116343136910231e-06,
+      "pairwise_pairs": 66795,
+      "pairwise_over_tolerance": 0,
+      "max_normalized_element_error": 4.925765097141266e-06,
+      "max_raw_relative_l2_error": 3.401574576855637e-05,
+      "nearest_neighbor_agreement": 366,
+      "changed_rank_positions": 58,
+      "inversions_with_reference_margin_over_0_005": 0,
+      "max_stored_unit_norm_error": 1.503004021241594e-08,
+      "passed": true
+    }
+  },
+  "cross_route": {
+    "mps-fp32_vs_coreml-fp32": {
+      "rows": 366,
+      "dimensions": 512,
+      "max_cosine_distance": 1.6529646540419662e-08,
+      "max_pairwise_cosine_error": 6.7197309892574886e-06,
+      "pairwise_pairs": 66795,
+      "pairwise_over_tolerance": 0,
+      "max_normalized_element_error": 6.191432476043701e-06,
+      "max_raw_relative_l2_error": 3.79654265998397e-05,
+      "nearest_neighbor_agreement": 366,
+      "changed_rank_positions": 24,
+      "inversions_with_reference_margin_over_0_005": 0,
+      "max_stored_unit_norm_error": 1.503004021241594e-08,
+      "passed": true
+    }
+  }
+}

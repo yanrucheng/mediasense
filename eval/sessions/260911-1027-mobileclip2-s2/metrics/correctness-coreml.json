@@ -1,0 +1,181 @@
+{
+  "status": "passed",
+  "recipe": "285aa12eeea97937b5510620f960f3c18dee904fdb9524252b61624e2159bc57",
+  "input_fingerprint": "2144fcd970052a44d20a378e3819b86b55345d0605b6d71ce073fc2dd5cd5ba0",
+  "samples": [
+    {
+      "id": "00000:00",
+      "kind": "image",
+      "image_sha256": "154dd8b745e27f977a0f280f3dbfe6ac069782d9ab4cef45b87503a08ab8bfcd"
+    },
+    {
+      "id": "00482:00",
+      "kind": "image",
+      "image_sha256": "b7fc1d2c1f1ea153587e08519a5d83e7d38b79a80537a6215fa178f5515bf5ab"
+    },
+    {
+      "id": "01640:00",
+      "kind": "image",
+      "image_sha256": "92a3c056f1c00d52643d6764e04f59aa314160f7077ebcba555f899d87124c86"
+    },
+    {
+      "id": "02130:00",
+      "kind": "image",
+      "image_sha256": "2206b6e2d46ca8e350db8c2befeda99113bd43ab80a6a542e6d7ea4a5a31fd08"
+    },
+    {
+      "id": "00416:00",
+      "kind": "video",
+      "image_sha256": "b4133ba5ee7a16c7570fbcb9acf8564d32d225de1808e5cb43c0f0a31e9712c0"
+    },
+    {
+      "id": "00797:00",
+      "kind": "video",
+      "image_sha256": "1dab35916f920e09e1cd3fc4ddb099298be166e3658d562aeefccae972c92836"
+    },
+    {
+      "id": "01623:01",
+      "kind": "video",
+      "image_sha256": "d0d1885b9608bf634c0f35458328b5978c3fe308d8dbe14ce4a18297a755d97f"
+    },
+    {
+      "id": "02133:00",
+      "kind": "video",
+      "image_sha256": "a4fa41531ad42bdc9fbf28179861b5bf0c3ca6f2e9c84214fdc8bd2f48264c74"
+    }
+  ],
+  "tolerances": {
+    "max_cosine_distance": 0.001,
+    "max_pairwise_cosine_error": 0.002,
+    "material_rank_margin": 0.005,
+    "max_stored_unit_norm_error": 1e-06
+  },
+  "checks": {
+    "coreml": {
+      "single_vs_batch": {
+        "rows": 8,
+        "dimensions": 512,
+        "max_cosine_distance": 1.1834088708972956e-08,
+        "max_pairwise_cosine_error": 0.0,
+        "pairwise_pairs": 28,
+        "pairwise_over_tolerance": 0,
+        "max_normalized_element_error": 0.0,
+        "max_raw_relative_l2_error": 0.0,
+        "nearest_neighbor_agreement": 8,
+        "changed_rank_positions": 0,
+        "inversions_with_reference_margin_over_0_005": 0,
+        "max_stored_unit_norm_error": 5.917044409997629e-09,
+        "passed": true
+      },
+      "reordered": {
+        "rows": 8,
+        "dimensions": 512,
+        "max_cosine_distance": 1.1834088708972956e-08,
+        "max_pairwise_cosine_error": 0.0,
+        "pairwise_pairs": 28,
+        "pairwise_over_tolerance": 0,
+        "max_normalized_element_error": 0.0,
+        "max_raw_relative_l2_error": 0.0,
+        "nearest_neighbor_agreement": 8,
+        "changed_rank_positions": 0,
+        "inversions_with_reference_margin_over_0_005": 0,
+        "max_stored_unit_norm_error": 5.917044409997629e-09,
+        "passed": true
+      },
+      "tail": {
+        "rows": 2,
+        "dimensions": 512,
+        "max_cosine_distance": 1.985108299962235e-09,
+        "max_pairwise_cosine_error": 0.0,
+        "pairwise_pairs": 1,
+        "pairwise_over_tolerance": 0,
+        "max_normalized_element_error": 0.0,
+        "max_raw_relative_l2_error": 0.0,
+        "nearest_neighbor_agreement": 2,
+        "changed_rank_positions": 0,
+        "inversions_with_reference_margin_over_0_005": 0,
+        "max_stored_unit_norm_error": 3.5224512195952684e-09,
+        "passed": true
+      },
+      "duplicate": {
+        "rows": 4,
+        "dimensions": 512,
+        "max_cosine_distance": 1.0743031797488811e-08,
+        "max_pairwise_cosine_error": 0.0,
+        "pairwise_pairs": 6,
+        "pairwise_over_tolerance": 0,
+        "max_normalized_element_error": 0.0,
+        "max_raw_relative_l2_error": 0.0,
+        "nearest_neighbor_agreement": 4,
+        "changed_rank_positions": 0,
+        "inversions_with_reference_margin_over_0_005": 0,
+        "max_stored_unit_norm_error": 5.371515898744406e-09,
+        "passed": true
+      },
+      "description": {
+        "identity": "mobileclip2-coreml:632211eff45cefcfddc07d3d8a92a5dfc554ffeb5f0ba3764ad3832a395e7736",
+        "model_id": "apple/MobileCLIP2-S2",
+        "revision": "72424e7025436db18f15c3eff6ee8c7c15ad4481",
+        "device": "Core ML ALL; actual dispatch unmeasured",
+        "precision": "FP16 graph, FP32 input/output, CPU FP32 source reparameterization",
+        "feature_output": "OpenCLIP TimmModel visual: FastViT final convolution, global average pool and original learned 1280-to-512 head.fc; no text tower",
+        "preprocessing": {
+          "image_size": 256,
+          "resize_mode": "shortest",
+          "crop": "center",
+          "interpolation": "bilinear",
+          "antialias": true,
+          "mean": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "std": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "image_decode": "Pillow RGB; no EXIF transpose"
+        },
+        "vision_parameters": 35702992,
+        "torch_model_loaded": false,
+        "native_batch_sizes": [
+          1
+        ],
+        "multi_image_calls": "sequential single-image predictions",
+        "output_normalization": "runner L2, float32-le storage",
+        "memory_note": "RSS excludes Core ML services; total unified/GPU memory unknown"
+      }
+    },
+    "coreml_vs_cpu_fp32": {
+      "rows": 8,
+      "dimensions": 512,
+      "max_cosine_distance": 2.0637862959027586e-05,
+      "max_pairwise_cosine_error": 0.0010571575203077166,
+      "pairwise_pairs": 28,
+      "pairwise_over_tolerance": 0,
+      "max_normalized_element_error": 0.001126900315284729,
+      "max_raw_relative_l2_error": 0.006463251770632204,
+      "nearest_neighbor_agreement": 8,
+      "changed_rank_positions": 0,
+      "inversions_with_reference_margin_over_0_005": 0,
+      "max_stored_unit_norm_error": 5.917044409997629e-09,
+      "passed": true
+    },
+    "coreml_vs_mps_fp16": {
+      "rows": 8,
+      "dimensions": 512,
+      "max_cosine_distance": 7.991428918052712e-06,
+      "max_pairwise_cosine_error": 0.0007604500644983747,
+      "pairwise_pairs": 28,
+      "pairwise_over_tolerance": 0,
+      "max_normalized_element_error": 0.0006134212017059326,
+      "max_raw_relative_l2_error": 0.0040343410524188595,
+      "nearest_neighbor_agreement": 8,
+      "changed_rank_positions": 0,
+      "inversions_with_reference_margin_over_0_005": 0,
+      "max_stored_unit_norm_error": 5.917044409997629e-09,
+      "passed": true
+    }
+  }
+}

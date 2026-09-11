@@ -1,0 +1,146 @@
+{
+  "status": "passed",
+  "runs": {
+    "mps-fp32": {
+      "vectors": 366,
+      "dimensions": 512,
+      "max_unit_norm_error": 1.207459932039967e-08,
+      "reclassification_exact": true,
+      "groups": 144,
+      "source_count": 2134,
+      "grouped_sources": 2134,
+      "source_exceptions": 0,
+      "single_candidate_groups": 125,
+      "selected_sources": 280,
+      "input_failures": 185,
+      "vectors_sha256": "24b177462f5c3f0ecdb088c54df8af2544ea50ee4fdaa55c318072c56f1e6257",
+      "preview_integrity": {
+        "source_cards": 2134,
+        "unique_sources": 2134,
+        "decoded_unique_images": 2118,
+        "existing_local_targets": 4618
+      }
+    },
+    "coreml-fp32": {
+      "vectors": 366,
+      "dimensions": 512,
+      "max_unit_norm_error": 1.503004021241594e-08,
+      "reclassification_exact": true,
+      "groups": 144,
+      "source_count": 2134,
+      "grouped_sources": 2134,
+      "source_exceptions": 0,
+      "single_candidate_groups": 125,
+      "selected_sources": 280,
+      "input_failures": 185,
+      "vectors_sha256": "d5b9a1bc87b0de726a6aa9d97e3c485069d5cef09563971671f013704bdb47ec",
+      "preview_integrity": {
+        "source_cards": 2134,
+        "unique_sources": 2134,
+        "decoded_unique_images": 2118,
+        "existing_local_targets": 4618
+      }
+    }
+  },
+  "comparisons": {
+    "mps-fp32_vs_dino384": {
+      "candidate_groups": 144,
+      "baseline_groups": 156,
+      "exact_membership_matches": 132,
+      "changed_representatives_in_exact_matches": 1,
+      "candidate_groups_within_one_baseline_group": 132,
+      "baseline_groups_spanning_multiple_candidate_groups": 0,
+      "selected_inputs_equal": true,
+      "review_examples": [],
+      "quality_judgment": "pending human review; these counts only locate differences"
+    },
+    "mps-fp32-085_vs_dino384": {
+      "candidate_groups": 19,
+      "baseline_groups": 99,
+      "exact_membership_matches": 7,
+      "changed_representatives_in_exact_matches": 0,
+      "candidate_groups_within_one_baseline_group": 8,
+      "baseline_groups_spanning_multiple_candidate_groups": 1,
+      "selected_inputs_equal": true,
+      "review_examples": [
+        {
+          "baseline_group": 74,
+          "source_count": 5,
+          "candidate_groups": [
+            13,
+            14
+          ]
+        }
+      ],
+      "quality_judgment": "pending human review; these counts only locate differences"
+    },
+    "coreml-fp32_vs_dino384": {
+      "candidate_groups": 144,
+      "baseline_groups": 156,
+      "exact_membership_matches": 132,
+      "changed_representatives_in_exact_matches": 1,
+      "candidate_groups_within_one_baseline_group": 132,
+      "baseline_groups_spanning_multiple_candidate_groups": 0,
+      "selected_inputs_equal": true,
+      "review_examples": [],
+      "quality_judgment": "pending human review; these counts only locate differences"
+    },
+    "coreml-fp32-085_vs_dino384": {
+      "candidate_groups": 19,
+      "baseline_groups": 99,
+      "exact_membership_matches": 7,
+      "changed_representatives_in_exact_matches": 0,
+      "candidate_groups_within_one_baseline_group": 8,
+      "baseline_groups_spanning_multiple_candidate_groups": 1,
+      "selected_inputs_equal": true,
+      "review_examples": [
+        {
+          "baseline_group": 74,
+          "source_count": 5,
+          "candidate_groups": [
+            13,
+            14
+          ]
+        }
+      ],
+      "quality_judgment": "pending human review; these counts only locate differences"
+    }
+  },
+  "previews": {
+    "mps-fp32-085": {
+      "integrity": {
+        "source_cards": 2134,
+        "unique_sources": 2134,
+        "decoded_unique_images": 2118,
+        "existing_local_targets": 4618
+      },
+      "groups": 19
+    },
+    "coreml-fp32-085": {
+      "integrity": {
+        "source_cards": 2134,
+        "unique_sources": 2134,
+        "decoded_unique_images": 2118,
+        "existing_local_targets": 4618
+      },
+      "groups": 19
+    }
+  },
+  "numerical": {
+    "rows": 366,
+    "dimensions": 512,
+    "max_cosine_distance": 1.6529646540419662e-08,
+    "max_pairwise_cosine_error": 6.7197309892574886e-06,
+    "pairwise_pairs": 66795,
+    "pairwise_over_tolerance": 0,
+    "max_normalized_element_error": 6.191432476043701e-06,
+    "max_raw_relative_l2_error": 3.79654265998397e-05,
+    "nearest_neighbor_agreement": 366,
+    "changed_rank_positions": 24,
+    "inversions_with_reference_margin_over_0_005": 0,
+    "max_stored_unit_norm_error": 1.503004021241594e-08,
+    "passed": true
+  },
+  "runtime_business_equal_0311": true,
+  "runtime_business_equal_085": true
+}

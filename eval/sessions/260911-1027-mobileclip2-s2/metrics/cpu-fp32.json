@@ -1,0 +1,45 @@
+{
+  "status": "encoded",
+  "counts": {
+    "sources": 2134,
+    "expected_inputs": 551,
+    "prepared": 366,
+    "input_failures": 185,
+    "encoded": 366,
+    "not_encoded": 0
+  },
+  "performance": {
+    "model_load_seconds": 8.96974795893766,
+    "encoding_seconds": 148.6411102891434,
+    "first_batch_seconds": 0.8121010831091553,
+    "encoded_inputs": 366,
+    "embedding_cache_hits": 0,
+    "warmup_inputs": 0,
+    "timing_scope": "Every batch includes file read, RGB decode, processor resize/normalize, inference, result materialization on CPU, and device synchronization. No warmup; first batch included. Excludes fixture verification, video extraction, L2 normalization, vector writes, clustering and preview.",
+    "load_scope": "Adapter/framework import, model and processor loading, device transfer, readiness and synchronization; weight hashing is preflight, outside load timing.",
+    "memory_scope": "Kernel RUSAGE_SELF high-water resident bytes for this encoding PID through completion, including imports, load and encoding; excludes all children and separate preparation/preview processes. Not total system or GPU allocation.",
+    "memory_includes_children": false,
+    "stage_seconds": {
+      "read_rgb_decode": 1.9193960442207754,
+      "resize_normalize_stack": 1.596006579697132,
+      "predict_transfer_sync": 145.07740942016244,
+      "runner_and_adapter_overhead": 0.04829824506305158
+    },
+    "inputs_per_second": 2.4623066881567306,
+    "peak_process_rss_bytes": 934739968
+  },
+  "environment": {
+    "python": "3.13.5 (main, Jun 12 2025, 12:22:43) [Clang 20.1.4 ]",
+    "executable": "/private/tmp/mediasense-mobileclip2-260911/venv/bin/python",
+    "platform": "macOS-26.4.1-arm64-arm-64bit-Mach-O",
+    "machine": "arm64",
+    "pid": 60485,
+    "nice": 10,
+    "macos": "26.4.1",
+    "build": "25E253",
+    "cpu": "Apple M5 Pro",
+    "unified_memory_bytes": 51539607552
+  },
+  "input_fingerprint": "2144fcd970052a44d20a378e3819b86b55345d0605b6d71ce073fc2dd5cd5ba0",
+  "vectors_sha256": "ec8d97d0d858cdbe5695773a853faf5d69dec65646f009ccf0112c37ef5eaee1"
+}

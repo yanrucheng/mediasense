@@ -1,0 +1,40 @@
+{
+  "status": "converted_and_compiled; output validation pending",
+  "recipe": "285aa12eeea97937b5510620f960f3c18dee904fdb9524252b61624e2159bc57",
+  "timings": {
+    "source_load_and_examples_seconds": 2.476827207952738,
+    "trace_and_checks_seconds": 3.5196499589364976,
+    "conversion_seconds": 2.3902519999537617,
+    "save_seconds": 0.022201209096238017,
+    "compile_seconds": 0.13787933299317956
+  },
+  "native_batch_sizes": [
+    1
+  ],
+  "source_checkpoint_sha256": "37c2d839a856491f2fcc82c40dc28672dbd0907235b4cd4c38dfff6457f0c09f",
+  "trace_vs_cpu": {
+    "rows": 4,
+    "dimensions": 512,
+    "max_cosine_distance": 1.5921726159717764e-09,
+    "max_pairwise_cosine_error": 9.108486304088004e-08,
+    "pairwise_pairs": 6,
+    "pairwise_over_tolerance": 0,
+    "max_normalized_element_error": 2.384185791015625e-07,
+    "max_raw_relative_l2_error": 6.967026168950606e-07,
+    "nearest_neighbor_agreement": 4,
+    "changed_rank_positions": 0,
+    "inversions_with_reference_margin_over_0_005": 0,
+    "max_stored_unit_norm_error": 2.4465776071735945e-09,
+    "passed": true
+  },
+  "files_sha256": {
+    "vision.mlpackage/Manifest.json": "0b6b11c3952140a6f8202b3fa51db59572ac9e1cad8547bc23a053eee22b1f19",
+    "vision.mlmodelc/model.mil": "7db1e70c229ee1cec7f4889e0a1636cb56d1af7cc8aba86ecadbb2ed1abd684b",
+    "vision.mlmodelc/coremldata.bin": "bf9a61d686f9239cbf870ec85d2a1d0538ddcfb259ac270bd616dfa4ae4e5cff",
+    "vision.mlmodelc/weights/weight.bin": "aeddb3adbdfe179261639817572e49d1d1c19213f84a3bd913a7736e075388a9",
+    "vision.mlmodelc/analytics/coremldata.bin": "9a35ca5c16f1120c20058b4a459859acb4b38c373a450f0f5b29f36bc4931d36",
+    "vision.mlpackage/Data/com.apple.CoreML/model.mlmodel": "578a9551a8f4ca496f41aac28f8467e61b872fe1a2f722d98d1986acac1a5419",
+    "vision.mlpackage/Data/com.apple.CoreML/weights/weight.bin": "aeddb3adbdfe179261639817572e49d1d1c19213f84a3bd913a7736e075388a9"
+  },
+  "conversion_process_peak_rss_bytes": 968523776
+}

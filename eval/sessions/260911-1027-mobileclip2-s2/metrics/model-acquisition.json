@@ -1,0 +1,12 @@
+{
+  "official_id": "apple/MobileCLIP2-S2",
+  "official_revision": "72424e7025436db18f15c3eff6ee8c7c15ad4481",
+  "weights_sha256": "37c2d839a856491f2fcc82c40dc28672dbd0907235b4cd4c38dfff6457f0c09f",
+  "weights_bytes": 398071149,
+  "download_endpoint": "https://modelscope.cn/api/v1/models/apple/MobileCLIP2-S2/repo?Revision=9b428c3d5b0eb80a1e83caf271d03314657c4f0f&FilePath=mobileclip2_s2.pt",
+  "mirror_revision": "9b428c3d5b0eb80a1e83caf271d03314657c4f0f",
+  "verification": "downloaded SHA256 matches official Hugging Face LFS metadata pinned in previous research",
+  "implementation": "OpenCLIP 3.2.0 + timm 1.0.20; official Apple checkpoint via existing timm checkpoint_filter_fn",
+  "failed_downloads": "HF direct and mirror redirect to cas-bridge timed out; ordinary ModelScope transfer stalled; 4-way 8MiB range download succeeded",
+  "no_private_egress": true
+}

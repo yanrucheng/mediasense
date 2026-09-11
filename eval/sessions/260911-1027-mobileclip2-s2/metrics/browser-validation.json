@@ -1,0 +1,42 @@
+{
+  "coreml-fp32": {
+    "groups": 144,
+    "source_cards": 2134,
+    "expanded": true,
+    "collapsed": true,
+    "video_expanded": true,
+    "decoded_images": 16,
+    "checked_images": 16,
+    "title": "MediaSense \u4e1a\u52a1\u57fa\u7ebf \u00b7 MobileCLIP2-S2"
+  },
+  "coreml-fp32-085": {
+    "groups": 19,
+    "source_cards": 2134,
+    "expanded": true,
+    "collapsed": true,
+    "video_expanded": true,
+    "decoded_images": 16,
+    "checked_images": 16,
+    "title": "MediaSense \u4e1a\u52a1\u57fa\u7ebf \u00b7 MobileCLIP2-S2"
+  },
+  "mps-fp32": {
+    "groups": 144,
+    "source_cards": 2134,
+    "expanded": true,
+    "collapsed": true,
+    "video_expanded": true,
+    "decoded_images": 16,
+    "checked_images": 16,
+    "title": "MediaSense \u4e1a\u52a1\u57fa\u7ebf \u00b7 MobileCLIP2-S2"
+  },
+  "mps-fp32-085": {
+    "groups": 19,
+    "source_cards": 2134,
+    "expanded": true,
+    "collapsed": true,
+    "video_expanded": true,
+    "decoded_images": 16,
+    "checked_images": 16,
+    "title": "MediaSense \u4e1a\u52a1\u57fa\u7ebf \u00b7 MobileCLIP2-S2"
+  }
+}

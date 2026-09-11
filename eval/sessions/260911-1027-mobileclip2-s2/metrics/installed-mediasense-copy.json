@@ -1,0 +1,8 @@
+{
+  "source": "/private/tmp/mediasense-dinov3-260910/venv/lib/python3.13/site-packages",
+  "destination": "/private/tmp/mediasense-mobileclip2-260911/venv/lib/python3.13/site-packages",
+  "version": "0.9.0",
+  "files_verified": 113,
+  "aggregate_sha256": "2ad6e4bc6bf6906b91bb6400cf5036fa480e0978e42b334e463f102a1e36b675",
+  "method": "byte-verified copy of isolated previously validated installed package; no source checkout import"
+}
