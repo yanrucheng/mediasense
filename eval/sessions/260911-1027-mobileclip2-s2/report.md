@@ -14,6 +14,40 @@ baseline_ref: "260911-0953-dinov3-resolution-384; original ChineseCLIP runner co
 FP16 失败路线保留，不作为本次技术通过交付。
 
 
+## 追加粒度预览：99 组（2026-09-11）
+
+用户明确反馈 0.85／19 组“明显就太粗了”，希望看约百组，数量无需精确。
+复用已通过全量检查的 MPS FP32 向量，仅调整视觉距离尺度：0.45→124 组，0.50→111 组，
+0.55→**99 组**后停止。没有重编码、改池化、修改其他分类参数或生成新性能成绩。
+原 144／19 组、编码向量和实测全部保留；99 组**待人工验收**。
+页面已通过本地 WebKit 的 99 组展开／收起、视频展开及 16 图加载；全部源卡片和图片链接另行核对，见
+[重分组核对](metrics/granularity-validation.json)与[浏览器检查](metrics/browser-granularity.json)。
+
+[99 组预览](outputs/mps-fp32-granularity/preview/index.html) · [固定配置](config-mps-fp32-granularity.json) ·
+[参数试查](metrics/granularity-sweep.json) · [生成摘要](metrics/mps-fp32-granularity.json)。
+为满足 runner 同参数参照检查，新增同为 0.55 的 ChineseCLIP 向量重分组控制，未修改原基线。
+页面明确标注复用向量，新编码为 0；原编码性能单列为历史数据。
+
+复现命令（工作目录为仓库根目录，新输出路径必须不存在）：
+
+```bash
+rtk proxy env PYTHONDONTWRITEBYTECODE=1 /private/tmp/mediasense-mobileclip2-260911/venv/bin/python eval/shared/model_evaluation.py preview \
+  --config eval/sessions/260911-1027-mobileclip2-s2/config-mps-fp32-granularity.json \
+  --encoding eval/sessions/260911-1027-mobileclip2-s2/outputs/mps-fp32 \
+  --output eval/sessions/260911-1027-mobileclip2-s2/outputs/mps-fp32-granularity-repeat-01 \
+  --summary eval/sessions/260911-1027-mobileclip2-s2/metrics/mps-fp32-granularity-repeat-01.json
+```
+
+同尺度 ChineseCLIP 控制丢失时，可用以下命令重建到新路径，再将候选配置的 baseline_ref 绑定其新摘要：
+
+```bash
+rtk proxy env PYTHONDONTWRITEBYTECODE=1 /private/tmp/mediasense-mobileclip2-260911/venv/bin/python eval/shared/model_evaluation.py preview \
+  --config eval/sessions/260911-1027-mobileclip2-s2/config-chineseclip-granularity-control.json \
+  --encoding eval/sessions/260910-1330-chineseclip-business-baseline/outputs/baseline \
+  --output eval/sessions/260911-1027-mobileclip2-s2/outputs/chineseclip-granularity-control-repeat-01 \
+  --summary eval/sessions/260911-1027-mobileclip2-s2/metrics/chineseclip-granularity-control-repeat-01.json
+```
+
 ## 可人工验收的结果
 
 建议优先查看 **0.311／144 组**，与已认可 DINOv3-384 的 156 组比较。0.85 的 **19 组**用于检查宽松尺度下是否合并过度。

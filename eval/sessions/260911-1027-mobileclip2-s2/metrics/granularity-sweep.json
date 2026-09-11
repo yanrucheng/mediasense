@@ -1,0 +1,24 @@
+{
+  "method": "bounded trial of only content_distance_scale; stop at 90-110 groups, no quality scoring",
+  "source_vectors_sha256": "24b177462f5c3f0ecdb088c54df8af2544ea50ee4fdaa55c318072c56f1e6257",
+  "performance": null,
+  "newly_encoded": 0,
+  "trials": [
+    {
+      "scale": 0.45,
+      "groups": 124
+    },
+    {
+      "scale": 0.5,
+      "groups": 111
+    },
+    {
+      "scale": 0.55,
+      "groups": 99
+    }
+  ],
+  "selected": {
+    "scale": 0.55,
+    "groups": 99
+  }
+}

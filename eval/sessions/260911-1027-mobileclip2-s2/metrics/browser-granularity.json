@@ -1,0 +1,10 @@
+{
+  "groups": 99,
+  "source_cards": 2134,
+  "expanded": true,
+  "collapsed": true,
+  "video_expanded": true,
+  "decoded_images": 16,
+  "checked_images": 16,
+  "method": "existing local WebKit checker; snapshot remains local"
+}

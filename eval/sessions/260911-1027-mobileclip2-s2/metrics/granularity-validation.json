@@ -1,0 +1,14 @@
+{
+  "scale": 0.55,
+  "groups": 99,
+  "replay_exact": true,
+  "newly_encoded": 0,
+  "reuse_label_present": true,
+  "old_assets_verified_unchanged": 61,
+  "preview_integrity": {
+    "source_cards": 2134,
+    "unique_sources": 2134,
+    "decoded_unique_images": 2118,
+    "existing_local_targets": 4618
+  }
+}
