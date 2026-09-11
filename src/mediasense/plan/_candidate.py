@@ -6,7 +6,7 @@ chooses semantic groups or names; those decisions arrive in candidate content.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import PurePosixPath
@@ -77,7 +77,23 @@ def analyze_candidate(
     plan_ref: str,
     reader: PrecheckReadBoundary,
     schema_validator: Draft202012Validator,
+    checkpoint: Callable[[], None] | None = None,
+    progress: Callable[[str], None] | None = None,
 ) -> CandidateAnalysis:
+    check = checkpoint or (lambda: None)
+
+    def stage(name):
+        check()
+        if progress is not None:
+            progress(name)
+        check()
+
+    def checked(values):
+        for value in values:
+            check()
+            yield value
+
+    stage("schema")
     sealed_content = materialize_candidate(candidate_content, plan_ref=plan_ref)
     issues = _schema_issues(sealed_content, schema_validator)
     if sealed_content.get("result_ref") != result_ref:
@@ -99,6 +115,7 @@ def analyze_candidate(
                 )
             )
     if issues:
+        check()
         return CandidateAnalysis(
             sealed_content=sealed_content,
             content_identity=None,
@@ -112,23 +129,30 @@ def analyze_candidate(
 
     resolver = ResultResolver(result_ref, reader)
     try:
+        stage("scope")
         scope = resolver.resolve(candidate_content["scope"])
+        stage("groups")
         groups = tuple(
             tuple(sorted(resolver.resolve(group["members"])))
-            for group in candidate_content["groups"]
+            for group in checked(candidate_content["groups"])
         )
+        stage("representatives")
         group_representatives = tuple(
             resolver.representative_refs(group["members"], frozenset(members))
-            for group, members in zip(candidate_content["groups"], groups, strict=True)
+            for group, members in checked(
+                zip(candidate_content["groups"], groups, strict=True)
+            )
         )
+        stage("outcomes")
         outcomes = tuple(
             tuple(sorted(resolver.resolve(outcome["members"])))
-            for outcome in candidate_content["other_outcomes"]
+            for outcome in checked(candidate_content["other_outcomes"])
         )
-        for outcome in candidate_content["other_outcomes"]:
-            for evidence_ref in outcome.get("evidence_refs", []):
+        for outcome in checked(candidate_content["other_outcomes"]):
+            for evidence_ref in checked(outcome.get("evidence_refs", [])):
                 resolver.verify_evidence(evidence_ref)
-        for note in candidate_content.get("decision_notes", []):
+        stage("decision_notes")
+        for note in checked(candidate_content.get("decision_notes", [])):
             note_members = resolver.resolve(note["applies_to"])
             if not note_members <= scope:
                 issues.append(
@@ -137,7 +161,7 @@ def analyze_candidate(
                         "A decision note applies to Source Items outside Plan scope.",
                     )
                 )
-            for evidence_ref in note.get("evidence_refs", []):
+            for evidence_ref in checked(note.get("evidence_refs", [])):
                 resolver.verify_evidence(evidence_ref)
     except (CandidateValidationError, ResultAccessError, KeyError) as exc:
         issues.append(ValidationIssue("result_resolution_failed", str(exc)))
@@ -147,23 +171,28 @@ def analyze_candidate(
         outcomes = ()
 
     if scope:
-        _validate_partition(scope, groups, outcomes, issues)
+        stage("partition")
+        _validate_partition(scope, groups, outcomes, issues, checkpoint=check)
+        stage("destinations")
         _validate_destinations(
             candidate_content,
             groups,
             resolver.source_views,
             issues,
+            checkpoint=check,
         )
     elif not issues:
         issues.append(ValidationIssue("empty_scope", "Plan scope must be nonempty."))
 
     identity: str | None = None
     if not issues:
+        stage("identity")
         try:
             identity = content_identity(sealed_content)
         except (CandidateValidationError, FrozenPlanValidationError) as exc:
             issues.append(ValidationIssue("invalid_encoding_profile", str(exc)))
 
+    check()
     return CandidateAnalysis(
         sealed_content=sealed_content,
         content_identity=identity,
@@ -205,10 +234,13 @@ def _validate_partition(
     groups: tuple[tuple[str, ...], ...],
     outcomes: tuple[tuple[str, ...], ...],
     issues: list[ValidationIssue],
+    *,
+    checkpoint: Callable[[], None] = lambda: None,
 ) -> None:
     assigned: set[str] = set()
     for label, collections in (("group", groups), ("outcome", outcomes)):
         for index, members in enumerate(collections):
+            checkpoint()
             member_set = set(members)
             overlap = assigned & member_set
             if overlap:
@@ -242,18 +274,22 @@ def _validate_destinations(
     groups: tuple[tuple[str, ...], ...],
     source_views: Mapping[str, Mapping[str, Any]],
     issues: list[ValidationIssue],
+    *,
+    checkpoint: Callable[[], None] = lambda: None,
 ) -> None:
     paths: set[tuple[str, ...]] = set()
     directory_paths: set[tuple[str, ...]] = {(candidate["logical_root"],)}
     destinations: dict[tuple[str, ...], str] = {}
     root = candidate["logical_root"]
     for group in candidate["groups"]:
+        checkpoint()
         relative = tuple(group["relative_path"])
         for depth in range(1, len(relative) + 1):
             directory_paths.add((root, *relative[:depth]))
     for index, (group, members) in enumerate(
         zip(candidate["groups"], groups, strict=True)
     ):
+        checkpoint()
         relative = tuple(group["relative_path"])
         if relative in paths:
             issues.append(
@@ -275,6 +311,7 @@ def _validate_destinations(
                 )
             )
         for ref in members:
+            checkpoint()
             name = overrides.get(ref) or _source_basename(source_views.get(ref, {}))
             if not name:
                 issues.append(

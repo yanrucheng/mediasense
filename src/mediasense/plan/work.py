@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
+from copy import deepcopy
 from dataclasses import dataclass
 from datetime import datetime, timezone
 import base64
@@ -30,6 +31,12 @@ from ._candidate import (
     materialize_candidate,
 )
 from ._publication import FrozenPlanPublisher, PublicationConflict
+from ._update_execution import (
+    UpdateCancelled,
+    UpdateExecution,
+    UpdateOwnershipError,
+    update_ownership,
+)
 from ._sqlite import (
     IdempotencyConflict,
     RevisionConflict,
@@ -106,6 +113,7 @@ class PlanWorkTool:
         request: Mapping[str, Any],
         *,
         confirmation: ConfirmationContext | None = None,
+        execution: UpdateExecution | None = None,
     ) -> dict[str, Any]:
         action = request.get("action") if isinstance(request, Mapping) else None
         if action not in {"create", "update", "inspect", "seal"}:
@@ -114,10 +122,27 @@ class PlanWorkTool:
             if action == "create":
                 return self._create(dict(request))
             if action == "update":
-                return self._update(dict(request))
+                # Freeze the payload before it may wait for another invocation.
+                return self._update(deepcopy(dict(request)), execution=execution)
             if action == "inspect":
                 return self._inspect(dict(request))
             return self._seal(dict(request), confirmation)
+        except UpdateCancelled:
+            return _error_response(
+                action,
+                PlanFailure(
+                    "operation_failed",
+                    "This update invocation was cancelled before commit; it changed no candidate or revision.",
+                    work_ref=_maybe_work_ref(request),
+                ),
+            )
+        except UpdateOwnershipError as exc:
+            return _error_response(
+                action,
+                PlanFailure(
+                    "operation_failed", str(exc), work_ref=_maybe_work_ref(request)
+                ),
+            )
         except PlanFailure as exc:
             return _error_response(action, exc)
         except WorkNotFound:
@@ -287,7 +312,9 @@ class PlanWorkTool:
             response=result,
         )
 
-    def _update(self, request: dict[str, Any]) -> dict[str, Any]:
+    def _update(
+        self, request: dict[str, Any], *, execution: UpdateExecution | None = None
+    ) -> dict[str, Any]:
         _require_keys(
             request,
             required={
@@ -319,56 +346,79 @@ class PlanWorkTool:
                 work_ref=work_ref,
             )
         digest = _request_digest(request)
-        replay = self.store.replay(request_id, digest)
-        if replay is not None:
-            return replay
+        execution = execution or UpdateExecution()
+        with execution.operation(work_ref, request_id):
+            replay = self.store.replay(request_id, digest)
+            if replay is not None:
+                execution.report("replayed")
+                return replay
+            self._update_snapshot(work_ref, base_revision)
+            candidate = request["candidate_content"]
+            if not isinstance(candidate, Mapping):
+                raise PlanFailure(
+                    "invalid_request",
+                    "candidate_content must be an object.",
+                    work_ref=work_ref,
+                )
+            with update_ownership(self.store.database_path, work_ref, execution):
+                # The owner ahead of us may have committed, failed or cancelled.
+                # Re-read facts after admission; a lock is never a success receipt.
+                replay = self.store.replay(request_id, digest)
+                if replay is not None:
+                    execution.report("replayed")
+                    return replay
+                snapshot = self._update_snapshot(work_ref, base_revision)
+                analysis = analyze_candidate(
+                    candidate,
+                    result_ref=snapshot.result_ref,
+                    plan_ref=snapshot.plan_ref,
+                    reader=execution.reader(self.precheck_read),
+                    schema_validator=self._frozen_content_validator,
+                    checkpoint=execution.checkpoint,
+                    progress=execution.report,
+                )
+                execution.checkpoint()
+                if not analysis.seal_ready or analysis.content_identity is None:
+                    message = "; ".join(issue.message for issue in analysis.issues[:3])
+                    raise PlanFailure(
+                        "candidate_invalid",
+                        message or "Candidate is invalid.",
+                        work_ref=work_ref,
+                        revision=snapshot.revision,
+                    )
+                revision = self._id_factory("work-revision")
+                result = {
+                    "outcome": "ok",
+                    "action": "update",
+                    "work_ref": work_ref,
+                    "result_ref": snapshot.result_ref,
+                    "revision": revision,
+                    "state": "open",
+                }
+                result = self.store.update(
+                    request_id=request_id,
+                    request_digest=digest,
+                    work_ref=work_ref,
+                    base_revision=base_revision,
+                    revision=revision,
+                    candidate=dict(candidate),
+                    candidate_identity=analysis.content_identity,
+                    organization_preferences=preferences,
+                    response=result,
+                    before_write=execution.begin_commit,
+                )
+                execution.report(
+                    "committed" if execution.commit_started else "replayed"
+                )
+                return result
+
+    def _update_snapshot(self, work_ref: str, base_revision: str) -> WorkSnapshot:
         snapshot = self.store.snapshot(work_ref)
         if snapshot.state != "open":
             raise WorkClosed(work_ref)
         if snapshot.revision != base_revision:
             raise RevisionConflict(snapshot.revision)
-        candidate = request["candidate_content"]
-        if not isinstance(candidate, Mapping):
-            raise PlanFailure(
-                "invalid_request",
-                "candidate_content must be an object.",
-                work_ref=work_ref,
-            )
-        analysis = analyze_candidate(
-            candidate,
-            result_ref=snapshot.result_ref,
-            plan_ref=snapshot.plan_ref,
-            reader=self.precheck_read,
-            schema_validator=self._frozen_content_validator,
-        )
-        if not analysis.seal_ready or analysis.content_identity is None:
-            message = "; ".join(issue.message for issue in analysis.issues[:3])
-            raise PlanFailure(
-                "candidate_invalid",
-                message or "Candidate is invalid.",
-                work_ref=work_ref,
-                revision=snapshot.revision,
-            )
-        revision = self._id_factory("work-revision")
-        result = {
-            "outcome": "ok",
-            "action": "update",
-            "work_ref": work_ref,
-            "result_ref": snapshot.result_ref,
-            "revision": revision,
-            "state": "open",
-        }
-        return self.store.update(
-            request_id=request_id,
-            request_digest=digest,
-            work_ref=work_ref,
-            base_revision=base_revision,
-            revision=revision,
-            candidate=dict(candidate),
-            candidate_identity=analysis.content_identity,
-            organization_preferences=preferences,
-            response=result,
-        )
+        return snapshot
 
     def _inspect(self, request: dict[str, Any]) -> dict[str, Any]:
         _require_keys(

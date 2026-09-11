@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+from collections.abc import Callable
 from dataclasses import dataclass
 import json
 from pathlib import Path
@@ -146,6 +147,7 @@ class SQLitePlanStore:
         candidate_identity: str,
         organization_preferences: dict[str, Any] | None,
         response: dict[str, Any],
+        before_write: Callable[[], None] | None = None,
     ) -> dict[str, Any]:
         with self._transaction() as connection:
             replay = self._replay(connection, request_id, request_digest)
@@ -167,6 +169,9 @@ class SQLitePlanStore:
                 if organization_preferences is None
                 else _json(organization_preferences)
             )
+            candidate_json = _json(candidate)
+            if before_write is not None:
+                before_write()
             connection.execute(
                 """
                 UPDATE plan_works
@@ -177,7 +182,7 @@ class SQLitePlanStore:
                 (
                     revision,
                     preferences_json,
-                    _json(candidate),
+                    candidate_json,
                     candidate_identity,
                     work_ref,
                 ),
@@ -382,7 +387,7 @@ class SQLitePlanStore:
             connection.execute("BEGIN IMMEDIATE")
             yield connection
             connection.commit()
-        except Exception:
+        except BaseException:
             connection.rollback()
             raise
         finally:

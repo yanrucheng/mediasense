@@ -112,14 +112,24 @@ def create_mcp_server(host: RuntimeHost | None = None) -> Server[Any]:
                     if authority is None:
                         result = preflight
                         return _tool_result(result)
-                result = await anyio.to_thread.run_sync(
-                    lambda: runtime.call_tool(
-                        params.name,
-                        dataset_ref=dataset_ref,
-                        request=request,
-                        authority=authority,
+                if (
+                    params.name == "mediasense.plan.work"
+                    and request.get("action") == "update"
+                ):
+                    from ._plan_update import call_plan_update
+
+                    result = await call_plan_update(
+                        runtime, _context, dataset_ref, request, authority
                     )
-                )
+                else:
+                    result = await anyio.to_thread.run_sync(
+                        lambda: runtime.call_tool(
+                            params.name,
+                            dataset_ref=dataset_ref,
+                            request=request,
+                            authority=authority,
+                        )
+                    )
         except HostRequestError as error:
             result = {
                 "outcome": "error",

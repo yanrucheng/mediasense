@@ -28,6 +28,7 @@ from mediasense.capabilities.geo import (
 from mediasense.capabilities.geo.service import GeoCapability
 from mediasense.geo import AMapReverseGeocoder, GoogleMapsReverseGeocoder
 from mediasense.plan import ConfirmationContext, PlanWorkTool
+from mediasense.plan._update_execution import UpdateExecution
 from mediasense.precheck import (
     AccountingStore,
     ChineseCLIPEncoder,
@@ -198,6 +199,8 @@ class DatasetRuntime:
         name: str,
         request: Mapping[str, Any],
         authority: Mapping[str, Any] | None = None,
+        *,
+        plan_update_execution: UpdateExecution | None = None,
     ) -> dict[str, object]:
         payload = dict(request)
         context = dict(authority or {})
@@ -209,6 +212,7 @@ class DatasetRuntime:
             response = self.plan_work.handle(
                 payload,
                 confirmation=_confirmation(context, ConfirmationContext),
+                execution=plan_update_execution,
             )
         elif name == "mediasense.geo.query":
             response = self.geo_query.handle(

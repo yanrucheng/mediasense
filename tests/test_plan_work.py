@@ -11,6 +11,7 @@ import pytest
 from mediasense.plan import PlanWorkTool
 from mediasense.plan import ConfirmationContext
 from mediasense.plan.work import _encode_cursor_value
+from mediasense.runtime.resources import schema_path
 
 from _plan_support import (
     CountingPrecheckReader,
@@ -27,6 +28,7 @@ def _tool(tmp_path, reader=None) -> PlanWorkTool:
         tmp_path / "plan-store",
         reader or MockPrecheckReader(),
         id_factory=StableIdFactory(),
+        frozen_plan_schema=schema_path("frozen-plan.schema.json"),
     )
 
 

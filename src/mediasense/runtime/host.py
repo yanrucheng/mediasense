@@ -6,6 +6,8 @@ from collections.abc import Mapping
 from threading import Lock
 from typing import Any
 
+from mediasense.plan._update_execution import UpdateExecution
+
 from .composition import DatasetRuntime, HostRequestError, tool_descriptors
 from .config import ConfigurationError
 from .dataset import DatasetOpenError, DatasetOpenTool, DatasetResolver
@@ -61,6 +63,7 @@ class RuntimeHost:
         dataset_ref: str,
         request: Mapping[str, Any],
         authority: Mapping[str, Any] | None = None,
+        plan_update_execution: UpdateExecution | None = None,
     ) -> dict[str, object]:
         if name in {"mediasense.precheck.run", "mediasense.precheck.read"}:
             from .resources import contract_validator
@@ -92,7 +95,12 @@ class RuntimeHost:
             raise HostRequestError(
                 "Dataset is not open in this Host process; call mediasense.dataset.open first."
             )
-        result = runtime.call(name, request, authority)
+        if plan_update_execution is None:
+            result = runtime.call(name, request, authority)
+        else:
+            result = runtime.call(
+                name, request, authority, plan_update_execution=plan_update_execution
+            )
         if name in {"mediasense.precheck.run", "mediasense.precheck.read"}:
             contract_validator(name, str(request["action"])).validate(result)
         return result
