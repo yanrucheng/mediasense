@@ -6,20 +6,25 @@ import base64
 from collections import Counter, defaultdict
 from collections.abc import Mapping, Sequence
 from contextlib import contextmanager
+from copy import copy, deepcopy
 from datetime import datetime
 import hashlib
 import hmac
 import json
+import errno
 from pathlib import Path
 import sqlite3
 from typing import Any, Iterator, Protocol, cast
 from types import SimpleNamespace
+from threading import Lock
 from urllib.parse import quote
 
 from ._working_schema import SCHEMA_VERSION
 
 
 _MAX_RESPONSE_BYTES = 512 * 1024
+_READ_PROJECTION_REVISION = 1
+_MAX_CACHED_RESULT_BYTES = 128 * 1024 * 1024
 _EVIDENCE_ROLES = ("representative", "boundary", "outlier", "conflict")
 _OBSERVATION_STATES = (
     "available",
@@ -110,6 +115,8 @@ class _ResultGraph:
                 "The sealed Result graph is structurally invalid.",
             ) from error
 
+        self.reconciliation = None
+        self.source_lineages = {}
         self.artifact_proofs = package.get("_artifact_proofs", {})
         self.workspace = package.get("_workspace")
         self.evidence_records = {
@@ -183,6 +190,8 @@ class PrecheckReadTool:
         self.database_path = Path(database_path)
         self.workspace = self.database_path.parent.absolute()
         self._verify_schema()
+        self._cache_lock = Lock()
+        self._cached_result = None
 
     def read(self, request: dict[str, object]) -> dict[str, object]:
         result_ref = request.get("result_ref")
@@ -223,8 +232,7 @@ class PrecheckReadTool:
                     "invalid_request",
                     "operation must be review, expand, resolve, or geo_summary.",
                 )
-            package, result_digest = self._load(result_ref)
-            graph = _ResultGraph(package)
+            graph, result_digest = self._load(result_ref)
             if graph.result.get("dataset_ref") != request["dataset_ref"]:
                 raise _ReadFailure(
                     "result_not_found", "Result does not exist in this Dataset."
@@ -243,7 +251,7 @@ class PrecheckReadTool:
             else:
                 response = self._resolve(graph, result_digest, request)
             contract_validator(self.name, operation).validate(response)
-            return response
+            return deepcopy(response)
         except _ReadFailure as failure:
             return _error(
                 result_ref if isinstance(result_ref, str) else None,
@@ -251,43 +259,116 @@ class PrecheckReadTool:
                 failure,
             )
 
-    def _load(self, result_ref: str) -> tuple[dict[str, object], str]:
+    def _result_snapshot(self, result_ref):
         with self._connect() as connection:
+            connection.execute("BEGIN")
             row = connection.execute(
                 "SELECT * FROM sealed_results WHERE result_ref = ?", (result_ref,)
             ).fetchone()
-            artifact_rows = (
-                ()
-                if row is None
-                else tuple(
-                    connection.execute(
-                        """
-                        SELECT artifacts.* FROM result_artifacts
-                        JOIN artifacts USING (artifact_id)
-                        WHERE result_ref = ? ORDER BY artifact_id
-                        """,
-                        (result_ref,),
-                    )
+            if row is None:
+                raise _ReadFailure("result_not_found", "Result does not exist.")
+            artifacts = tuple(
+                connection.execute(
+                    """SELECT artifact_id, digest_algorithm, digest, size_bytes, relative_path FROM result_artifacts
+                JOIN artifacts USING (artifact_id)
+                WHERE result_ref = ? ORDER BY artifact_id""",
+                    (result_ref,),
                 )
             )
-        if row is None:
-            raise _ReadFailure("result_not_found", "Result does not exist.")
-        path = self.workspace / str(row["relative_path"])
-        try:
-            encoded = path.read_bytes()
-        except OSError as error:
-            raise _ReadFailure(
-                "result_unavailable",
-                "Sealed Result bytes are unavailable.",
-                retryable=True,
-            ) from error
-        if (
-            len(encoded) != int(row["size_bytes"])
-            or hashlib.sha256(encoded).hexdigest() != row["digest"]
-        ):
-            raise _ReadFailure(
-                "result_untrusted", "Sealed Result integrity verification failed."
-            )
+        return dict(row), tuple(dict(item) for item in artifacts)
+
+    def _storage_binding(self):
+        database = self.database_path.stat()
+        root = self.workspace.resolve(strict=True)
+        root_stat = root.stat()
+        return (
+            str(root),
+            root_stat.st_dev,
+            root_stat.st_ino,
+            database.st_dev,
+            database.st_ino,
+        )
+
+    def _load(self, result_ref: str) -> tuple[_ResultGraph, str]:
+        from mediasense.runtime.resources import contract_validator
+        from ._read_file import read_sealed_bytes
+
+        # One bounded entry per Reader. The same Reader is shared by Read and Run.
+        # The lock also prevents concurrent cold calls from validating the same
+        # Result repeatedly. No failure is retained as a successful cache entry.
+        with self._cache_lock:
+            try:
+                row, artifact_rows = self._result_snapshot(result_ref)
+                if row["digest_algorithm"] != "sha256":
+                    raise _ReadFailure(
+                        "result_untrusted",
+                        "Unsupported sealed Result digest algorithm.",
+                    )
+                binding = self._storage_binding()
+                schema = contract_validator(self.name, "review").schema
+                key = (
+                    binding,
+                    _canonical_json([row, artifact_rows]),
+                    _READ_PROJECTION_REVISION,
+                    _sha256_identity(_canonical_json(schema).encode()),
+                )
+                cached = self._cached_result
+                candidate = cached is not None and cached[0] == key
+                encoded, identity = read_sealed_bytes(
+                    self.workspace,
+                    row["relative_path"],
+                    row["size_bytes"],
+                    row["digest"],
+                    cached[1] if candidate else None,
+                )
+                if encoded is None:
+                    graph = cached[2]
+                else:
+                    self._cached_result = None
+                    cached = None
+                    graph = self._validate_package(encoded, result_ref, artifact_rows)
+                # Do not publish a verification for a registration/proof snapshot
+                # that changed while its bytes or semantics were being checked.
+                current_row, current_artifacts = self._result_snapshot(result_ref)
+                if current_row != row or self._storage_binding() != binding:
+                    raise _ReadFailure(
+                        "result_untrusted", "Result registration changed while reading."
+                    )
+                if current_artifacts != artifact_rows:
+                    # Access proofs have their own current availability boundary.
+                    # Never turn a changed image proof into a whole-Result error,
+                    # or mutate the graph another reader may already be using.
+                    graph = copy(graph)
+                    graph.artifact_proofs = {
+                        a["artifact_id"]: a for a in current_artifacts
+                    }
+                    self._cached_result = None
+                    return graph, str(row["digest"])
+                if row["size_bytes"] <= _MAX_CACHED_RESULT_BYTES:
+                    self._cached_result = (key, identity, graph)
+                else:
+                    self._cached_result = None
+                return graph, str(row["digest"])
+            except OSError as error:
+                self._cached_result = None
+                if error.errno in {errno.ELOOP, errno.ENOTDIR}:
+                    raise _ReadFailure(
+                        "result_untrusted",
+                        "Sealed Result path is not confined to regular directories.",
+                    ) from error
+                raise _ReadFailure(
+                    "result_unavailable",
+                    "Sealed Result bytes are unavailable.",
+                    retryable=True,
+                ) from error
+            except ValueError as error:
+                self._cached_result = None
+                raise _ReadFailure("result_untrusted", str(error)) from error
+            except BaseException:
+                self._cached_result = None
+                raise
+
+    def _validate_package(self, encoded, result_ref, artifact_rows) -> _ResultGraph:
         try:
             package = json.loads(encoded)
         except (UnicodeDecodeError, json.JSONDecodeError) as error:
@@ -427,7 +508,7 @@ class PrecheckReadTool:
             raise _ReadFailure(
                 "result_untrusted", "Sealed Result has invalid evidence or references."
             ) from error
-        return package, str(row["digest"])
+        return graph
 
     def _review(
         self,
@@ -888,10 +969,12 @@ def _effective_result_view(graph: _ResultGraph) -> dict[str, object]:
             view["readiness"] = "plan_ready"
     if qualifications:
         view["qualifications"] = qualifications
-    return view
+    return deepcopy(view)
 
 
 def _reconciliation(graph: _ResultGraph) -> dict[str, object]:
+    if graph.reconciliation is not None:
+        return graph.reconciliation
     accounted = set(graph.accounts)
     membership_count = 0
     frontier: set[str] = set()
@@ -930,7 +1013,7 @@ def _reconciliation(graph: _ResultGraph) -> dict[str, object]:
         (str(member.get("scope")), str(member.get("condition")))
         for member in graph.accounts.values()
     )
-    return {
+    graph.reconciliation = {
         "total": len(accounted),
         "scope_condition": [
             {"scope": scope, "condition": condition, "count": count}
@@ -948,6 +1031,7 @@ def _reconciliation(graph: _ResultGraph) -> dict[str, object]:
             "represented_unique_source_items": len(frontier),
         },
     }
+    return graph.reconciliation
 
 
 def _represented_refs(graph: _ResultGraph, evidence_ref: str) -> tuple[str, ...]:
@@ -1612,64 +1696,64 @@ def _paged_response(
                 page["stop_reason"] = "byte_limit"
         return {**base, collection: items, "page": page}
 
-    # Exact compact JSON size: empty-array envelope plus encoded items and commas.
-    # stop_reason is included only when the returned page really stops for bytes.
-    def page_size(item_sizes, next_offset, *, byte_limited=False):
-        return (
-            _encoded_size(response([], next_offset, byte_limited=byte_limited))
-            + sum(item_sizes)
-            + max(0, len(item_sizes) - 1)
-        )
+    # Serialize the shared envelope once. Only the cursor/page shape changes
+    # while finding a prefix; the optional audit must not be re-encoded per item.
+    fixed_size = _encoded_size({**base, collection: [], "page": {}}) - 2
 
-    batch = list(values[offset : offset + effective_limit])
-    sizes = [_encoded_size(value) for value in batch]
-    next_offset = offset + len(batch)
-    if page_size(sizes, next_offset) <= budget:
-        return response(batch, next_offset)
-    if page_size([], len(values)) > budget:
+    def envelope_size(next_offset, *, byte_limited=False):
+        page = response([], next_offset, byte_limited=byte_limited)["page"]
+        return fixed_size + _encoded_size(page)
+
+    end = min(len(values), offset + effective_limit)
+    full_envelope = envelope_size(end)
+    if envelope_size(len(values)) > budget:
         raise _ReadFailure(
             "response_item_too_large",
             "The response envelope or execution audit exceeds the byte limit.",
         )
+    if offset == end:
+        return response([], end)
 
-    def localize_oversized_item(index, *, byte_limited=False):
-        single = response([batch[index]], offset + index + 1, byte_limited=byte_limited)
+    fetched = {}
+    for attempt in range(2):
+        batch, size, best = [], 0, 0
+        for index in range(offset, end):
+            if index not in fetched:
+                fetched[index] = values[index]
+            item = fetched[index]
+            batch.append(item)
+            size += _encoded_size(item) + (1 if len(batch) > 1 else 0)
+            next_offset = index + 1
+            if next_offset == end and full_envelope + size <= budget:
+                return response(batch, end)
+            if envelope_size(next_offset, byte_limited=True) + size <= budget:
+                best = len(batch)
+            # A final page loses its cursor. Keep looking only while that smaller
+            # full-page envelope could still make the requested batch fit. This
+            # preserves final/count-limited boundaries without eagerly fetching
+            # every position. Ordinary large records need one boundary lookahead.
+            if full_envelope + size > budget:
+                break
+        if best:
+            return response(batch[:best], offset + best, byte_limited=True)
+        if not review_faults or attempt or "error" in fetched[offset]:
+            break
+        single = response([fetched[offset]], offset + 1, byte_limited=end > offset + 1)
         required = {
-            key: item for key, item in single.items() if key != "execution_boundary"
+            key: value for key, value in single.items() if key != "execution_boundary"
         }
         if _encoded_size(required) <= budget:
             raise _ReadFailure(
                 "response_item_too_large",
                 "The execution audit leaves insufficient room for this Evidence; reduce execution_page or omit the audit.",
             )
-        batch[index] = {
-            "evidence_ref": batch[index]["evidence_ref"],
+        fetched[offset] = {
+            "evidence_ref": fetched[offset]["evidence_ref"],
             "error": {
                 "code": "response_item_too_large",
                 "message": "This Evidence item and its required page envelope exceed the response byte limit.",
             },
         }
-        sizes[index] = _encoded_size(batch[index])
-
-    # Defer later items to their own pages instead of classifying their size
-    # using this page's envelope. Final/count-limited pages need no stop marker.
-    # If no prefix fits, the first item's *actual* single-item page necessarily
-    # stops for bytes. Account for that marker before deciding its local outcome.
-    while True:
-        for count in range(len(batch), 0, -1):
-            byte_limited = count < len(batch)
-            if (
-                page_size(sizes[:count], offset + count, byte_limited=byte_limited)
-                <= budget
-            ):
-                return response(
-                    batch[:count], offset + count, byte_limited=byte_limited
-                )
-        if not review_faults or not batch or "error" in batch[0]:
-            break
-        localize_oversized_item(0, byte_limited=len(batch) > 1)
-        # Repack the brief fault with any following items, keeping cursor/limit
-        # bindings and selection positions unchanged. At most one such retry.
     raise _ReadFailure(
         "response_item_too_large",
         "The response item or required page envelope exceeds the response byte limit.",

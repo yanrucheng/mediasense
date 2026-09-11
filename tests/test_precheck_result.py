@@ -27,9 +27,7 @@ from mediasense.precheck import (
 from mediasense.precheck import discovery
 
 
-SPEC_ROOT = (
-    Path(__file__).parents[1] / "docs" / "spec" / "contract/precheck-read"
-)
+SPEC_ROOT = Path(__file__).parents[1] / "docs" / "spec" / "contract/precheck-read"
 
 
 def test_ordinary_rendition_is_frontier_and_high_resolution_expands_from_it(
@@ -987,7 +985,7 @@ def test_read_integrity_check_does_not_mutate_working_state(tmp_path: Path) -> N
 
 
 def test_unavailable_result_is_retryable_without_changing_the_request(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
 ) -> None:
     database, _source, _source_before, run_id, first, second = _prepared(tmp_path)
     store = ResultStore(database)
@@ -1000,16 +998,12 @@ def test_unavailable_result_is_retryable_without_changing_the_request(
         "result_ref": sealed.result_ref,
         "action": "review",
     }
-    read_bytes = Path.read_bytes
-
-    def unavailable(path: Path) -> bytes:
-        if path == sealed.path:
-            raise OSError("temporary read failure")
-        return read_bytes(path)
-
-    with monkeypatch.context() as patch:
-        patch.setattr(Path, "read_bytes", unavailable)
+    unavailable = sealed.path.with_suffix(".temporarily-unavailable")
+    sealed.path.rename(unavailable)
+    try:
         failed = reader.read(request)
+    finally:
+        unavailable.rename(sealed.path)
 
     assert failed["error"]["code"] == "result_unavailable"
     assert "result" not in failed

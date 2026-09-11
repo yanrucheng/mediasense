@@ -31,7 +31,7 @@ from ._orchestrator import (
     _BlockedExecution,
 )
 from .accounting import AccountingStore
-from .read import PrecheckReadTool, _ReadFailure
+from .read import PrecheckReadTool, _ReadFailure, _ResultGraph
 from .result import ResultDraft, ResultSealError, ResultStore
 from .scope_review import (
     ScopeSelectionError,
@@ -128,6 +128,7 @@ class PrecheckRunTool:
         heartbeat_interval_seconds: float = 30,
         worker_stale_seconds: float = 120,
         progress_stale_seconds: float = 300,
+        reader: PrecheckReadTool | None = None,
     ) -> None:
         if heartbeat_interval_seconds <= 0:
             raise ValueError("heartbeat interval must be positive")
@@ -136,12 +137,19 @@ class PrecheckRunTool:
         if progress_stale_seconds <= 0:
             raise ValueError("progress stale interval must be positive")
         self.database_path = Path(database_path)
+        if (
+            reader is not None
+            and reader.database_path.resolve() != self.database_path.resolve()
+        ):
+            raise ValueError("Run and Reader must use the same Dataset store")
         self._store = SQLiteRunStore(
             self.database_path,
             sqlite_timeout=sqlite_timeout,
             clock=clock,
         )
-        self._reader = PrecheckReadTool(self.database_path)
+        self._reader = (
+            reader if reader is not None else PrecheckReadTool(self.database_path)
+        )
         self._execution_config = execution_config or PrecheckExecutionConfig()
         self._heartbeat_interval_seconds = heartbeat_interval_seconds
         self._worker_stale_after = timedelta(seconds=worker_stale_seconds)
@@ -514,7 +522,11 @@ class PrecheckRunTool:
                 )
             except Exception:
                 _LOGGER.exception("PreCheck execution failed for %s", run_ref)
-                self.mark_failed(run_ref, code="execution_worker_crashed", message="Unexpected implementation failure; inspect the Host diagnostic before retrying.")
+                self.mark_failed(
+                    run_ref,
+                    code="execution_worker_crashed",
+                    message="Unexpected implementation failure; inspect the Host diagnostic before retrying.",
+                )
                 raise
             except BaseException:
                 current = self._store.get(run_ref)
@@ -646,7 +658,7 @@ class PrecheckRunTool:
                 _reason("result_untrusted", str(verified)),
             )
             return self._status_record(failed)
-        result_view, package = verified
+        result_view, graph = verified
         if result_view["dataset_ref"] != record["dataset_ref"]:
             failed = self._store.mark_failed(
                 run_ref,
@@ -656,7 +668,7 @@ class PrecheckRunTool:
                 ),
             )
             return self._status_record(failed)
-        progress = _completed_progress(record["progress"], package, result_ref)
+        progress = _completed_progress(record["progress"], graph)
         self._store.set_progress(run_ref, progress)
         published = {
             "result_ref": result_ref,
@@ -964,16 +976,12 @@ class PrecheckRunTool:
 
     def _verified_result(
         self, result_ref: str
-    ) -> tuple[dict[str, object], dict[str, object]] | _ReadFailure:
+    ) -> tuple[dict[str, object], _ResultGraph] | _ReadFailure:
         try:
-            package, _digest = self._reader._load(result_ref)
+            graph, _digest = self._reader._load(result_ref)
         except _ReadFailure as error:
             return error
-        if not isinstance(package, dict) or not isinstance(package.get("result"), dict):
-            return _ReadFailure(
-                "result_untrusted", "sealed Result has an invalid package shape"
-            )
-        result_view = package["result"]
+        result_view = graph.result
         required = {"ref", "dataset_ref", "coverage", "readiness", "integrity"}
         if not required <= set(result_view):
             return _ReadFailure(
@@ -983,7 +991,7 @@ class PrecheckRunTool:
             return _ReadFailure(
                 "result_untrusted", "sealed Result does not provide valid integrity"
             )
-        return result_view, package
+        return result_view, graph
 
     def _status_record(
         self, record: dict[str, object], *, include: object = (), page: object = None
@@ -1039,9 +1047,9 @@ class PrecheckRunTool:
             )
             if isinstance(verified, _ReadFailure):
                 return _error("status", verified.code, str(verified))
-            from .read import _ResultGraph, _effective_result_view
+            from .read import _effective_result_view
 
-            response["result"] = _effective_result_view(_ResultGraph(verified[1]))
+            response["result"] = _effective_result_view(verified[1])
         issues = self._issues(record)
         if record["execution_checkpoint"].get("progress_scope_changed"):
             scope_reason = _reason(
@@ -1155,7 +1163,8 @@ class PrecheckRunTool:
 
     def _accounting(self, record: dict[str, object]) -> dict[str, object]:
         if record["state"] == "completed":
-            from .read import _ResultGraph, _reconciliation
+            from copy import deepcopy
+            from .read import _reconciliation
 
             verified = (
                 record["_verified_result"]
@@ -1166,11 +1175,11 @@ class PrecheckRunTool:
             )
             if isinstance(verified, _ReadFailure):
                 raise ValueError(str(verified))
-            accounting = _reconciliation(_ResultGraph(verified[1]))
+            accounting = _reconciliation(verified[1])
             result = {
                 "discovered": _known(record["progress"]["discovered"]),
                 "accounted": accounting["total"],
-                "scope_condition": accounting["scope_condition"],
+                "scope_condition": deepcopy(accounting["scope_condition"]),
             }
         else:
             result = (
@@ -1470,23 +1479,12 @@ def _validate_progress(progress: dict[str, object]) -> None:
 
 def _completed_progress(
     current: object,
-    package: dict[str, object],
-    result_ref: str,
+    graph: _ResultGraph,
 ) -> dict[str, object]:
     if not isinstance(current, dict):
         raise ValueError("Run progress is invalid")
-    relationships = package.get("relationships")
-    if not isinstance(relationships, list):
-        raise ValueError("sealed Result relationships are invalid")
-    accounts = [
-        item
-        for item in relationships
-        if isinstance(item, dict)
-        and item.get("origin") == result_ref
-        and item.get("relation") == "accounts_for"
-        and isinstance(item.get("member"), dict)
-    ]
-    conditions = [item["member"].get("condition") for item in accounts]
+    accounts = graph.accounts
+    conditions = [item.get("condition") for item in accounts.values()]
     allowed_conditions = {"usable", *_EXCEPTIONAL_CONDITIONS, "unresolved"}
     if any(condition not in allowed_conditions for condition in conditions):
         raise ValueError("sealed Result contains an invalid accounting condition")

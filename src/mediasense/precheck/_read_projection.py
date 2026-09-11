@@ -32,6 +32,8 @@ def source_lineage(graph, ref, active=None):
         raise _ReadFailure(
             "result_inconsistent", "Evidence derivation contains a cycle."
         )
+    if ref in graph.source_lineages:
+        return list(graph.source_lineages[ref])
     active.add(ref)
     sources = set()
     access = graph.evidence[ref].get("access", {})
@@ -53,7 +55,8 @@ def source_lineage(graph, ref, active=None):
             "result_inconsistent", "Evidence source is outside this Result."
         )
     active.remove(ref)
-    return sorted(sources)
+    graph.source_lineages[ref] = tuple(sorted(sources))
+    return list(graph.source_lineages[ref])
 
 
 def require_evidence_access(graph, ref):
@@ -67,6 +70,8 @@ def require_evidence_access(graph, ref):
     try:
         if proof is None or graph.workspace is None:
             raise ValueError("No retained Artifact proof")
+        if proof.get("digest_algorithm") != "sha256":
+            raise ValueError("Unsupported retained Artifact digest algorithm")
         root = Path(graph.workspace).resolve()
         path = Path(access["locator"]["value"])
         expected = root / proof["relative_path"]

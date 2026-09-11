@@ -161,8 +161,10 @@ class DatasetRuntime:
                 ),
                 sensitivity_detector_identities=tuple(d.identity for d in detectors),
             )
+        self.precheck_read = PrecheckReadTool(precheck_database)
         self.precheck_run = PrecheckRunTool(
             precheck_database,
+            reader=self.precheck_read,
             execution_config=execution_config,
             execution_dependencies=PrecheckExecutionDependencies(
                 geo_tool=self.geo_query,
@@ -170,7 +172,6 @@ class DatasetRuntime:
                 sensitivity_detectors=detectors,
             ),
         )
-        self.precheck_read = PrecheckReadTool(precheck_database)
         bound_read = bind_precheck_read(self.precheck_read, opened.manifest.dataset_ref)
         frozen_plan = schema_path("frozen-plan.schema.json")
         self.plan_work = PlanWorkTool(
