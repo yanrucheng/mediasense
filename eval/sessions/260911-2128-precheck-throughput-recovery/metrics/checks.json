@@ -1,0 +1,55 @@
+{
+  "default_suite": {
+    "command": "rtk proxy .venv/bin/python -m pytest -q",
+    "initial": {
+      "passed": 1104,
+      "failed": 5,
+      "deselected": 16,
+      "seconds": 121.72
+    },
+    "log": "../outputs/pytest-full.log",
+    "repairs": [
+      {
+        "command": "rtk proxy .venv/bin/python -m pytest -q tests/test_geo_network.py",
+        "scope": "127.0.0.1 loopback only, elevated local socket permission",
+        "passed": 4,
+        "seconds": 0.24,
+        "product_change": false
+      },
+      {
+        "command": "rtk proxy .venv/bin/python -m pytest -q tests/test_mediasense_precheck_skill.py tests/test_contract_authority.py",
+        "scope": "synchronized the missed packaged Skill schema copy; related contract/resource checks",
+        "passed": 10,
+        "seconds": 0.89,
+        "log": "../outputs/pytest-packaged-contract.log"
+      }
+    ],
+    "all_default_cases_covered_and_passed": 1109
+  },
+  "focused_checks": [
+    {
+      "scope": "metadata/work/source validity/SQLite scopes/resources",
+      "passed": 44,
+      "seconds": 14.96
+    },
+    {
+      "scope": "video/real decoder/orchestration/doctor",
+      "passed": 44,
+      "seconds": 35.64
+    },
+    {
+      "scope": "Read contract/decoder/new orchestration cases",
+      "passed": 122,
+      "failed": 1,
+      "seconds": 30.43,
+      "failure": "Test initially looked for historical frame data only in the frontier; corrected to public expand of the exact prepared Evidence."
+    },
+    {
+      "scope": "corrected historical Read and killed ExifTool lane restart",
+      "passed": 2,
+      "seconds": 1.62
+    }
+  ],
+  "fixture_acceptance": "See combined.json and validate.py; separate offline fixture route, not the deselected generic local_fixture/scale tests.",
+  "unrelated_work": "Existing uncommitted Plan/runtime/architecture work is preserved; it is not attributed to this change."
+}

@@ -138,7 +138,6 @@ def diagnose() -> dict[str, object]:
     for executable, capability in (
         ("uv", "repeatable installation and upgrade"),
         ("exiftool", "photo metadata extraction"),
-        ("ffmpeg", "video frame extraction"),
         ("ffprobe", "video inspection"),
     ):
         resolved = shutil.which(executable)
@@ -152,6 +151,14 @@ def diagnose() -> dict[str, object]:
                 False,
             )
         )
+    checks.append(
+        Diagnostic(
+            "video_decoder", "ok" if find_spec("av") is not None else "warning",
+            "Packaged PyAV decoder is installed; video execution verifies its local FFmpeg libraries."
+            if find_spec("av") is not None else "PyAV is unavailable; repair this Host installation for video preparation.",
+            False,
+        )
+    )
     local_models = all(
         find_spec(name) is not None for name in ("torch", "transformers", "nudenet")
     )

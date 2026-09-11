@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
+from contextlib import ExitStack
 from dataclasses import asdict, dataclass, field, replace
 import hashlib
 import heapq
 from itertools import islice
 import json
 from pathlib import Path
+from queue import SimpleQueue
 import subprocess
 from typing import Protocol, TypeVar, cast
 
@@ -22,6 +24,7 @@ from ._compression_producer import (
 )
 from ._compression_strategy import AdaptiveCompressionProfile
 from ._work_types import DependencyKind, WorkRecord, WorkStatus
+from ._video_decoder import VideoDecoder, VideoDecoderUnavailable, VideoDecodeCancelled
 from .accounting import AccountingStore
 from .bundling import BundleCandidateOutcome, BundleCandidateProducer
 from .embedding import (
@@ -48,6 +51,7 @@ from .resources import (
     ResourceAdmissionCancelled,
     ResourceBudget,
     ResourceClaim,
+    ResourceLimitExceeded,
     ScheduledCall,
     detect_source_storage,
     resolve_resource_budget,
@@ -407,7 +411,7 @@ class PrecheckExecutionDependencies:
         None
     )
     ffprobe_version: str | None = None
-    ffmpeg_version: str | None = None
+    video_decoder: VideoDecoder | None = None
     embedding_encoder: ImageEmbeddingEncoder | None = None
     sensitivity_detectors: tuple[SensitivityDetector, ...] = ()
     geo_tool: GeoQueryTool | None = None
@@ -787,9 +791,27 @@ class PrecheckOrchestrator:
             kwargs["command_runner"] = self.dependencies.metadata_runner
         if self.dependencies.exiftool_version is not None:
             kwargs["exiftool_version"] = self.dependencies.exiftool_version
-        producer = MetadataProducer(self.database_path, **kwargs)
         batches = _batched(media, config.metadata_batch_size)
-        try:
+        with ExitStack() as stack:
+            # A stay-open process is serial. Each admitted lane owns its own
+            # process; all lanes share the version observation and Work store.
+            producers: SimpleQueue[MetadataProducer] = SimpleQueue()
+            first = stack.enter_context(MetadataProducer(self.database_path, **kwargs))
+            producers.put(first)
+            kwargs["exiftool_version"] = first.exiftool_version
+            lanes = min(4, executor.budget.capacity.exiftool_slots)
+            for _ in range(1, lanes):
+                producers.put(stack.enter_context(MetadataProducer(self.database_path, **kwargs)))
+
+            def produce_batch(batch: tuple[AccountedItem, ...]):
+                producer = producers.get()
+                try:
+                    return producer.produce_many(
+                        run_id, (item.relative_path for item in batch)
+                    )
+                finally:
+                    producers.put(producer)
+
             for _key, _batch_outcomes in self._execute(
                 run_ref,
                 executor,
@@ -806,17 +828,12 @@ class PrecheckOrchestrator:
                             ),
                             exiftool_slots=1,
                         ),
-                        lambda batch=batch: producer.produce_many(
-                            run_id,
-                            (item.relative_path for item in batch),
-                        ),
+                        lambda batch=batch: produce_batch(batch),
                     )
                     for index, batch in enumerate(batches)
                 ),
             ):
                 pass
-        finally:
-            producer.close()
 
     def _renditions(
         self,
@@ -878,13 +895,13 @@ class PrecheckOrchestrator:
         frame_kwargs: dict[str, object] = {}
         if self.dependencies.video_runner is not None:
             probe_kwargs["command_runner"] = self.dependencies.video_runner
-            frame_kwargs["command_runner"] = self.dependencies.video_runner
         if self.dependencies.ffprobe_version is not None:
             probe_kwargs["ffprobe_version"] = self.dependencies.ffprobe_version
-        if self.dependencies.ffmpeg_version is not None:
-            frame_kwargs["ffmpeg_version"] = self.dependencies.ffmpeg_version
+        if self.dependencies.video_decoder is not None:
+            frame_kwargs["decoder"] = self.dependencies.video_decoder
         assert config.ffmpeg_threads is not None
         frame_kwargs["threads"] = config.ffmpeg_threads
+        frame_kwargs["should_continue"] = lambda: self._running(run_ref)
         probe_producer = VideoProbeProducer(self.database_path, **probe_kwargs)
         probes = self._execute(
             run_ref,
@@ -909,39 +926,52 @@ class PrecheckOrchestrator:
         probe_by_path = {
             Path(key.removeprefix("video-probe:")): outcome for key, outcome in probes
         }
-        frame_producer = VideoFrameProducer(self.database_path, **frame_kwargs)
+        if not any(value.probe is not None for value in probe_by_path.values()):
+            return probe_by_path, (), ()
+        try:
+            frame_producer = VideoFrameProducer(self.database_path, **frame_kwargs)
+        except VideoDecoderUnavailable as error:
+            raise _BlockedExecution(
+                "video_decoder_unavailable", str(error),
+                "Repair the local video decoder dependency in this Host, then resume.",
+            ) from error
+
+        def prepare_video(path: Path, outcome: VideoProbeOutcome):
+            assert outcome.probe is not None
+            try:
+                return frame_producer.produce_many(
+                    run_id, path, outcome.work.work_id,
+                    sample_video_times(outcome.probe.duration_seconds, max_frames=config.video_frame_limit),
+                )
+            except VideoDecodeCancelled as error:
+                raise ResourceAdmissionCancelled(str(error)) from error
+
         frame_calls = (
             ScheduledCall(
-                f"video-frame:{path.as_posix()}:{sample_time:.6f}",
+                f"video-frames:{path.as_posix()}",
                 ResourceClaim(
                     source_io_slots=1,
                     workspace_io_slots=1,
                     cpu_slots=config.ffmpeg_threads,
-                    process_slots=1,
-                    memory_bytes=128 * 1024 * 1024,
+                    memory_bytes=max(128 * 1024 * 1024, outcome.probe.width * outcome.probe.height * 32 + 1920 * 1920 * 12),
                     temporary_bytes=32 * 1024 * 1024,
                     decoder_slots=1,
                     encoder_slots=1,
                 ),
-                lambda path=path, outcome=outcome, sample_time=sample_time: (
-                    frame_producer.produce(
-                        run_id,
-                        path,
-                        outcome.work.work_id,
-                        sample_time,
-                    )
-                ),
+                lambda path=path, outcome=outcome: prepare_video(path, outcome),
             )
             for path, outcome in probe_by_path.items()
             if outcome.work.status is WorkStatus.SUCCEEDED and outcome.probe is not None
-            for sample_time in sample_video_times(
-                outcome.probe.duration_seconds,
-                max_frames=config.video_frame_limit,
+        )
+        try:
+            frame_values = tuple(
+                value for _key, values in self._execute(run_ref, executor, frame_calls) for value in values
             )
-        )
-        frame_values = tuple(
-            value for _key, value in self._execute(run_ref, executor, frame_calls)
-        )
+        except ResourceLimitExceeded as error:
+            raise _BlockedExecution(
+                "video_resource_budget_insufficient", str(error),
+                "This Run's effective resource ceiling is frozen. Cancel it and start a successor with a suitable resource configuration or narrower video scope; completed Work remains reusable.",
+            ) from error
         frames_by_path: dict[Path, list[VideoFrameOutcome]] = {}
         for frame in frame_values:
             path = _work_subject(frame.work)

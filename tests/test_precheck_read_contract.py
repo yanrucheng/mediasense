@@ -40,6 +40,24 @@ def identity(value):
     )
 
 
+@pytest.mark.parametrize("name", ["video_frame", "video_contact_sheet"])
+def test_video_observed_position_is_optional_but_cannot_be_negative_or_null(name):
+    frame = {"sample_time_seconds": 12.3123, "decoded_time_seconds": 8.2082}
+    value = ({**frame, "width": 320, "height": 180} if name == "video_frame" else
+             {"columns": 1, "width": 320, "height": 180,
+              "frames": [{"evidence_ref": "evidence:frame", **frame}]})
+    observation = {"name": name, "status": "available", "value": value,
+                   "basis": {"producer": "local-decoder", "position": "presentation_timestamp"}}
+    check = Draft202012Validator({"$defs": TOOL["outputSchema"]["$defs"], "$ref": "#/$defs/observation"})
+    check.validate(observation)
+    position = value if name == "video_frame" else value["frames"][0]
+    for invalid in (-0.001, None):
+        position["decoded_time_seconds"] = invalid
+        assert not check.is_valid(observation)
+    del position["decoded_time_seconds"]
+    check.validate(observation)  # historical requested targets do not become actual PTS
+
+
 def walk(value):
     if isinstance(value, dict):
         yield value

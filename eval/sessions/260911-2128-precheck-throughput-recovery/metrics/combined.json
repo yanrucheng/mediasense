@@ -1,0 +1,422 @@
+{
+  "acceptance": "passed",
+  "metadata": {
+    "seconds": 15.708119958173484,
+    "discovery_seconds": 2.9103742910083383,
+    "requested": 2134,
+    "success": 2134,
+    "reused": 0,
+    "run_id": "38f890f49a4947449973e884bc81fdff",
+    "exif_calls": [
+      {
+        "seconds": 0.04596225009299815,
+        "subjects": 0,
+        "returncode": 0
+      },
+      {
+        "seconds": 2.088952333200723,
+        "subjects": 200,
+        "returncode": 0
+      },
+      {
+        "seconds": 1.7195351251866668,
+        "subjects": 200,
+        "returncode": 0
+      },
+      {
+        "seconds": 1.8283321668859571,
+        "subjects": 200,
+        "returncode": 0
+      },
+      {
+        "seconds": 1.7465870000887662,
+        "subjects": 200,
+        "returncode": 0
+      },
+      {
+        "seconds": 1.6925077911000699,
+        "subjects": 200,
+        "returncode": 0
+      },
+      {
+        "seconds": 0.9916227080393583,
+        "subjects": 134,
+        "returncode": 0
+      },
+      {
+        "seconds": 2.0448214998468757,
+        "subjects": 200,
+        "returncode": 0
+      },
+      {
+        "seconds": 1.6945295000914484,
+        "subjects": 200,
+        "returncode": 0
+      },
+      {
+        "seconds": 2.280993042048067,
+        "subjects": 200,
+        "returncode": 0
+      },
+      {
+        "seconds": 3.1240762919187546,
+        "subjects": 200,
+        "returncode": 0
+      },
+      {
+        "seconds": 2.754607208073139,
+        "subjects": 200,
+        "returncode": 0
+      }
+    ],
+    "resource_budget": {
+      "capacity": {
+        "source_io_slots": 4,
+        "workspace_io_slots": 4,
+        "cpu_slots": 8,
+        "process_slots": 4,
+        "memory_bytes": 4294967296,
+        "temporary_bytes": 1073741824,
+        "gpu_memory_bytes": 0,
+        "model_slots": 1,
+        "exiftool_slots": 4,
+        "decoder_slots": 4,
+        "encoder_slots": 4,
+        "network_slots": 1
+      },
+      "max_workers": 8,
+      "max_pending": 16
+    },
+    "resource_peak_claims": {
+      "source_io_slots": 4,
+      "workspace_io_slots": 0,
+      "cpu_slots": 4,
+      "process_slots": 4,
+      "memory_bytes": 486539264,
+      "temporary_bytes": 0,
+      "gpu_memory_bytes": 0,
+      "model_slots": 0,
+      "exiftool_slots": 4,
+      "decoder_slots": 0,
+      "encoder_slots": 0,
+      "network_slots": 0
+    },
+    "mode": "metadata",
+    "case": "metadata-final",
+    "reuse": false,
+    "python": "3.11.13 (main, Jun 12 2025, 12:22:50) [Clang 20.1.4 ]",
+    "peak_rss_bytes": 323158016,
+    "process_starts": {
+      "diskutil": 2,
+      "vm_stat": 1,
+      "exiftool": 4
+    },
+    "network_denials": [],
+    "product_fingerprint": "3ccb9e365cf1cdd688f264ef9f099c5b2c062d1457f9337b6da93bc293f90f5d"
+  },
+  "metadata_reuse": {
+    "seconds": 3.991957457968965,
+    "discovery_seconds": 8.468902500113472,
+    "requested": 2134,
+    "success": 2134,
+    "reused": 2134,
+    "run_id": "912afb1ffd634db4a9f8a2aa1df6917f",
+    "exif_calls": [
+      {
+        "seconds": 0.19577404181472957,
+        "subjects": 0,
+        "returncode": 0
+      }
+    ],
+    "resource_budget": {
+      "capacity": {
+        "source_io_slots": 4,
+        "workspace_io_slots": 4,
+        "cpu_slots": 8,
+        "process_slots": 4,
+        "memory_bytes": 4294967296,
+        "temporary_bytes": 1073741824,
+        "gpu_memory_bytes": 0,
+        "model_slots": 1,
+        "exiftool_slots": 4,
+        "decoder_slots": 4,
+        "encoder_slots": 4,
+        "network_slots": 1
+      },
+      "max_workers": 8,
+      "max_pending": 16
+    },
+    "resource_peak_claims": {
+      "source_io_slots": 4,
+      "workspace_io_slots": 0,
+      "cpu_slots": 4,
+      "process_slots": 4,
+      "memory_bytes": 486539264,
+      "temporary_bytes": 0,
+      "gpu_memory_bytes": 0,
+      "model_slots": 0,
+      "exiftool_slots": 4,
+      "decoder_slots": 0,
+      "encoder_slots": 0,
+      "network_slots": 0
+    },
+    "mode": "metadata",
+    "case": "metadata-final",
+    "reuse": true,
+    "python": "3.11.13 (main, Jun 12 2025, 12:22:50) [Clang 20.1.4 ]",
+    "peak_rss_bytes": 314753024,
+    "process_starts": {
+      "diskutil": 2,
+      "vm_stat": 1,
+      "exiftool": 1
+    },
+    "network_denials": [],
+    "product_fingerprint": "3ccb9e365cf1cdd688f264ef9f099c5b2c062d1457f9337b6da93bc293f90f5d"
+  },
+  "exif": {
+    "current_seconds": [
+      6.443414791021496,
+      3.3231266250368208,
+      3.450462874956429
+    ],
+    "legacy_four_lane_seconds": [
+      3.3146589170210063,
+      3.477236832957715,
+      3.7175419579725713
+    ],
+    "current_median": 3.450462874956429,
+    "legacy_four_lane_median": 3.477236832957715,
+    "ratio": 0.9923002201784134,
+    "raw_values_equal": true
+  },
+  "video_common": {
+    "seconds": [
+      28.217422290937975,
+      30.1774180829525,
+      27.719507958972827
+    ],
+    "median": 28.217422290937975,
+    "images": 843,
+    "dimensions_equal": true,
+    "real_positions_match": true,
+    "pixel_mae_median": 0.000244140625,
+    "pixel_mae_max": 0.3677571614583333
+  },
+  "video": {
+    "seconds": 22.478002999909222,
+    "discovery_seconds": 11.291693332837895,
+    "requested_videos": 283,
+    "successful_videos": 282,
+    "probe_failures": 1,
+    "distinct_frames": 843,
+    "frame_work_status": {
+      "succeeded": 846
+    },
+    "returned_frame_failures": 0,
+    "frame_work_count": 846,
+    "reused_frames": 0,
+    "contact_sheets": 282,
+    "decoder_opens": 282,
+    "decoder_frame_requests": 846,
+    "run_id": "8ef990da15a44cdf8490c04e8c6dc724",
+    "phase_wall_seconds": {
+      "probe": 2.995528624858707,
+      "frames": 12.656762165948749,
+      "sheets": 6.5952483750879765
+    },
+    "resource_budget": {
+      "capacity": {
+        "source_io_slots": 4,
+        "workspace_io_slots": 4,
+        "cpu_slots": 8,
+        "process_slots": 4,
+        "memory_bytes": 4294967296,
+        "temporary_bytes": 1073741824,
+        "gpu_memory_bytes": 0,
+        "model_slots": 1,
+        "exiftool_slots": 4,
+        "decoder_slots": 4,
+        "encoder_slots": 4,
+        "network_slots": 1
+      },
+      "max_workers": 8,
+      "max_pending": 16
+    },
+    "resource_peak_claims": {
+      "source_io_slots": 4,
+      "workspace_io_slots": 4,
+      "cpu_slots": 8,
+      "process_slots": 4,
+      "memory_bytes": 1684013056,
+      "temporary_bytes": 268435456,
+      "gpu_memory_bytes": 0,
+      "model_slots": 0,
+      "exiftool_slots": 0,
+      "decoder_slots": 4,
+      "encoder_slots": 4,
+      "network_slots": 0
+    },
+    "mode": "video",
+    "case": "video",
+    "reuse": false,
+    "python": "3.11.13 (main, Jun 12 2025, 12:22:50) [Clang 20.1.4 ]",
+    "peak_rss_bytes": 763887616,
+    "process_starts": {
+      "diskutil": 2,
+      "vm_stat": 1,
+      "ffprobe": 284
+    },
+    "network_denials": [],
+    "product_fingerprint": "5657c6580f4c79aaca7983e6563d4584fa67d2887fe447de8de7fae4e95a82e2"
+  },
+  "video_reuse": {
+    "seconds": 6.927903875010088,
+    "discovery_seconds": 3.184808916877955,
+    "requested_videos": 283,
+    "successful_videos": 282,
+    "probe_failures": 1,
+    "distinct_frames": 843,
+    "frame_work_status": {
+      "succeeded": 846
+    },
+    "returned_frame_failures": 0,
+    "frame_work_count": 846,
+    "reused_frames": 843,
+    "contact_sheets": 282,
+    "decoder_opens": 0,
+    "decoder_frame_requests": 0,
+    "run_id": "63e5e28e0352450e8bac2bd2e8d7eaa7",
+    "phase_wall_seconds": {
+      "probe": 1.2443135420326144,
+      "frames": 3.703273250022903,
+      "sheets": 1.4768432918936014
+    },
+    "resource_budget": {
+      "capacity": {
+        "source_io_slots": 4,
+        "workspace_io_slots": 4,
+        "cpu_slots": 8,
+        "process_slots": 4,
+        "memory_bytes": 4294967296,
+        "temporary_bytes": 1073741824,
+        "gpu_memory_bytes": 0,
+        "model_slots": 1,
+        "exiftool_slots": 4,
+        "decoder_slots": 4,
+        "encoder_slots": 4,
+        "network_slots": 1
+      },
+      "max_workers": 8,
+      "max_pending": 16
+    },
+    "resource_peak_claims": {
+      "source_io_slots": 4,
+      "workspace_io_slots": 4,
+      "cpu_slots": 8,
+      "process_slots": 4,
+      "memory_bytes": 1508573184,
+      "temporary_bytes": 268435456,
+      "gpu_memory_bytes": 0,
+      "model_slots": 0,
+      "exiftool_slots": 0,
+      "decoder_slots": 4,
+      "encoder_slots": 4,
+      "network_slots": 0
+    },
+    "mode": "video",
+    "case": "video",
+    "reuse": true,
+    "python": "3.11.13 (main, Jun 12 2025, 12:22:50) [Clang 20.1.4 ]",
+    "peak_rss_bytes": 80166912,
+    "process_starts": {
+      "diskutil": 2,
+      "vm_stat": 1,
+      "ffprobe": 1
+    },
+    "network_denials": [],
+    "product_fingerprint": "5657c6580f4c79aaca7983e6563d4584fa67d2887fe447de8de7fae4e95a82e2"
+  },
+  "validation": {
+    "source_files_unchanged": 2142,
+    "manifest_media_unchanged": 2134,
+    "source_state_canonical_sha256": "426fcfa2bfc87e7ea16a6cd57d6a4d84a0bfaea5de7b58e7de65de6c9f7d1986",
+    "source_snapshot_file_sha256": "4b377b79fd40e2fe952cc849c1b61d70e70879d0604d4911d3065ff09dd25018",
+    "metadata_observations_equal": true,
+    "default_and_common_frame_bytes_equal": true,
+    "decoded_contact_sheets": 282,
+    "selected_paths_equal": true,
+    "selected_sources": 281,
+    "selected_kinds": {
+      "image": 99,
+      "video": 182
+    },
+    "bundles": 167,
+    "grouping_selection_seconds": 2.654990749899298,
+    "selected_video_frames": 540,
+    "grouping_recheck_seconds": 0.6012592909391969
+  },
+  "installed": {
+    "installed_package": "/Users/chengyanru/repos/personal/mediasense/eval/sessions/260911-2128-precheck-throughput-recovery/outputs/install-venv/lib/python3.11/site-packages/mediasense/__init__.py",
+    "python": "3.11.13 (main, Jun 12 2025, 12:22:50) [Clang 20.1.4 ]",
+    "version": "0.10.0",
+    "av_version": "16.1.0",
+    "first_run": "precheck-run:972ecb3567ea4f2385e964c241f674e1",
+    "second_run": "precheck-run:ca16235e5df748f88f8e471ccb01a9b2",
+    "result": "precheck-result:2559faed734ce87fa3de4862de9d50fac96915f2cb384cff80a99b7428b4c0f2",
+    "successor": "precheck-result:481dbca7f7afa670a9afd418113998b59d310cc218d179f652f040d9abb55c77",
+    "first_seconds": 1.7073489998001605,
+    "reuse_seconds": 0.8759019589051604,
+    "public_frames": 5,
+    "public_contact_sheets": 2,
+    "actual_positions": [
+      4.0,
+      0.1,
+      8.0,
+      0.0,
+      0.0
+    ],
+    "work_attempts": {
+      "precheck-run:972ecb3567ea4f2385e964c241f674e1": {
+        "adaptive-compression-group": 3,
+        "bundle-candidate": 3,
+        "image-rendition": 2,
+        "source-metadata": 3,
+        "video-contact-sheet": 2,
+        "video-frame": 6,
+        "video-probe": 2
+      },
+      "precheck-run:ca16235e5df748f88f8e471ccb01a9b2": {}
+    },
+    "source_unchanged": true,
+    "old_result_bytes_unchanged": true,
+    "process_starts": {
+      "diskutil": 14,
+      "df": 3,
+      "vm_stat": 3,
+      "exiftool": 2,
+      "ffprobe": 4
+    },
+    "network_attempts": [],
+    "doctor_decoder": {
+      "name": "video_decoder",
+      "status": "ok",
+      "message": "Packaged PyAV decoder is installed; video execution verifies its local FFmpeg libraries.",
+      "required": false
+    },
+    "result_sha256": "767e8ab39b23cbd102cfd68ae4353d9b9c2f993f922ae38b621e4d8026924ba3"
+  },
+  "wheel_sha256": "b4a16a8f10513896f8f24d3d39529f3fa5237a6a905f687859bbf632f9ed731f",
+  "code_scope": "working tree candidate after b3aa696; every packaged MediaSense file matches source",
+  "baseline_recipe_sha256": {
+    "config.json": "b5494cd613f8846bd6a0cb447666fdeab1ee99ddfec7c7ea11cfb05a5182d71e",
+    "run.py": "02649d575408f211e260bc04cba99dce1da3cffb036303b3c3b213f4e1c98cbc",
+    "worker.py": "445d29b291f3bdac17ca7b1365ac72f9c66b6d394a07c7a1b4d2676225708abb",
+    "validate.py": "7d63a67623dcefe57caedc446bca5de99ab73214662c9a6f457bd0829b8b2728"
+  },
+  "limits": [
+    "local M5 Pro/48 GiB, caches not cleared, machine not exclusive",
+    "proxy fixture and three short native HEVC clips, not original long-video/RAW/storage certification",
+    "memory claims are estimates; time/cancel checks are cooperative between decode steps",
+    "source and isolated wheel only; the live global Host is not switched"
+  ]
+}

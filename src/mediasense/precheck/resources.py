@@ -119,7 +119,7 @@ def resolve_resource_budget(
                 0 if ceiling is None else ceiling.capacity.gpu_memory_bytes
             ),
             model_slots=1,
-            exiftool_slots=1,
+            exiftool_slots=process_lanes,
             decoder_slots=process_lanes,
             encoder_slots=process_lanes,
             network_slots=1 if network_enabled else 0,

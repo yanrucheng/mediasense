@@ -13,6 +13,7 @@ from typing import Iterator
 from ._accounting_types import WorkingRunStatus
 from ._fingerprint import SourceChangedDuringRead, stat_identity
 from ._invalidation import invalidate_source_dependencies
+from ._sqlite_scope import connect
 from ._working_schema import SCHEMA_VERSION
 from ._work_types import WorkDependency, source_content_dependency
 from .discovery import SourceCondition
@@ -213,13 +214,8 @@ class SourceValidityStore:
 
     @contextmanager
     def _connect(self) -> Iterator[sqlite3.Connection]:
-        connection = sqlite3.connect(self.database_path, timeout=30)
-        connection.row_factory = sqlite3.Row
-        connection.execute("PRAGMA foreign_keys = ON")
-        try:
+        with connect(self.database_path) as connection:
             yield connection
-        finally:
-            connection.close()
 
     @contextmanager
     def _transaction(self) -> Iterator[sqlite3.Connection]:

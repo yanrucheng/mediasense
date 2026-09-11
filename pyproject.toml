@@ -9,6 +9,7 @@ description = "Local-first, agent-native media organization with auditable stage
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+  "av>=16.0,<17",
   "jsonschema>=4.25,<5",
   "gpxpy>=1.6,<2",
   "mcp>=2.1,<3",

@@ -1,0 +1,162 @@
+{
+  "source_unchanged": true,
+  "all_six_exif_results_identical": true,
+  "exif_rows_each": 2133,
+  "common_frame_pairs": 843,
+  "common_output_shape_mismatches": [],
+  "common_rgb_64_mae": {
+    "median": 1.24755859375,
+    "p95": 1.3856608072916667,
+    "max": 1.51123046875,
+    "over_5": 0,
+    "qualification": "Resizing/JPEG implementations differ; low pixel error supports frame correspondence, not semantic quality."
+  },
+  "kernel_comparisons": {
+    "exif-kernel": {
+      "legacy": {
+        "n": 3,
+        "median_seconds": 1.3625676250085235,
+        "min_seconds": 1.3183176249731332,
+        "max_seconds": 1.7013317078817636
+      },
+      "current": {
+        "n": 3,
+        "median_seconds": 10.786820041947067,
+        "min_seconds": 10.045447833137587,
+        "max_seconds": 11.145289874868467
+      },
+      "current_over_legacy_seconds": 7.916539219020113
+    },
+    "video-common": {
+      "legacy": {
+        "n": 3,
+        "median_seconds": 31.80012712487951,
+        "min_seconds": 31.778631875058636,
+        "max_seconds": 32.18868104205467
+      },
+      "current": {
+        "n": 3,
+        "median_seconds": 50.593392374925315,
+        "min_seconds": 50.422561125131324,
+        "max_seconds": 51.92236283305101
+      },
+      "current_over_legacy_seconds": 1.5909808214364807
+    }
+  },
+  "native_sampling": {
+    "legacy": {
+      "fresh_seconds": 49.55068358313292,
+      "reuse_seconds": 6.9794457498937845,
+      "frames": 1736,
+      "successful_videos": 282,
+      "failed_videos": 1,
+      "frame_failures": null,
+      "reuse_process_starts": {},
+      "reuse_opencv_capture_starts": 1
+    },
+    "current": {
+      "fresh_seconds": 23.747634041821584,
+      "reuse_seconds": 7.666151457931846,
+      "frames": 370,
+      "successful_videos": 282,
+      "failed_videos": 1,
+      "frame_failures": 285,
+      "reuse_process_starts": {
+        "diskutil": 2,
+        "ffprobe": 1,
+        "ffmpeg": 1
+      },
+      "reuse_opencv_capture_starts": null
+    }
+  },
+  "current_frame_failure_positions": {
+    "duration_endpoint": 282,
+    "inside_duration": 3
+  },
+  "interior_failure_diagnostics": [
+    {
+      "path": "0503/DJI_001-action/DJI_20260503135449_0001_D.MP4",
+      "requested_time": 10.0,
+      "container_duration": 10.143467,
+      "frame_pts": [
+        0.0,
+        3.381156,
+        6.762311
+      ],
+      "last_frame_pts": 6.762311,
+      "request_after_last_frame_pts": true
+    },
+    {
+      "path": "0505/DJI_001-action-sd-noon/DJI_20260505113813_0004_D.MP4",
+      "requested_time": 10.0,
+      "container_duration": 12.3123,
+      "frame_pts": [
+        0.0,
+        4.1041,
+        8.2082
+      ],
+      "last_frame_pts": 8.2082,
+      "request_after_last_frame_pts": true
+    },
+    {
+      "path": "0505/DJI_001-action-sd-steak-house/DJI_20260505195258_0008_D.MP4",
+      "requested_time": 10.0,
+      "container_duration": 10.52,
+      "frame_pts": [
+        0.0,
+        3.506667,
+        7.013333
+      ],
+      "last_frame_pts": 7.013333,
+      "request_after_last_frame_pts": true
+    }
+  ],
+  "all_native_output_images_fully_decoded": {
+    "legacy": 1736,
+    "current": 370
+  },
+  "current_successful_frame_histogram": {
+    "0": 1,
+    "1": 194,
+    "2": 88
+  },
+  "native_by_transform": {
+    "three_frame_nonrepresentative_proxy": {
+      "videos": 185,
+      "legacy_frames": 370,
+      "current_frames": 185,
+      "current_frame_failures": 185
+    },
+    "native_copy": {
+      "videos": 3,
+      "legacy_frames": 6,
+      "current_frames": 3,
+      "current_frame_failures": 3
+    },
+    "sparse_timeline_proxy_from_production_frames": {
+      "videos": 94,
+      "legacy_frames": 1360,
+      "current_frames": 182,
+      "current_frame_failures": 97
+    },
+    "invalid_truncated_fixture": {
+      "videos": 1,
+      "legacy_frames": 0,
+      "current_frames": 0,
+      "current_frame_failures": 0
+    }
+  },
+  "selection_counts_applied_to_retained_results": {
+    "legacy": {
+      "videos": 97,
+      "frames": 1366,
+      "frame_failures": 0
+    },
+    "current": {
+      "videos": 182,
+      "frames": 267,
+      "frame_failures": 184
+    }
+  },
+  "selection_timing": "No full pipeline wall-time comparison; selected subset wall time is not inferred from overlapping tasks."
+}

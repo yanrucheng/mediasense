@@ -23,6 +23,7 @@ from ._accounting_types import (
 )
 from ._fingerprint import CandidateFingerprint, fingerprint_stat_identity
 from ._invalidation import invalidate_source_dependencies
+from ._sqlite_scope import connect
 from .discovery import (
     DiscoveredSource,
     DiscoveryEvent,
@@ -891,14 +892,9 @@ class SQLiteAccounting:
 
     @contextmanager
     def connect(self) -> Iterator[sqlite3.Connection]:
-        connection = sqlite3.connect(self.database_path)
-        connection.row_factory = sqlite3.Row
-        connection.execute("PRAGMA foreign_keys = ON")
-        try:
+        with connect(self.database_path) as connection:
             with connection:
                 yield connection
-        finally:
-            connection.close()
 
     def _write_item(
         self,

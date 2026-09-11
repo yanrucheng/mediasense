@@ -81,10 +81,14 @@ mediasense --version
 mediasense doctor
 ```
 
-`doctor` distinguishes required failures from optional capabilities. ExifTool is
-needed for complete metadata extraction. FFmpeg and ffprobe are needed for video
-inspection and frame extraction. Their absence does not make installation itself
-invalid.
+`doctor` distinguishes required failures from unavailable capabilities. ExifTool
+is needed for complete metadata extraction, and ffprobe (distributed with FFmpeg)
+for video inspection. Frame decoding uses the package's PyAV dependency and its
+local FFmpeg libraries; it does not launch a separate FFmpeg process per frame.
+The `video_decoder` diagnostic checks dependency presence; Run verifies actual
+availability and reports a repairable missing-backend condition when necessary.
+Metadata-only operation does not load the decoder. No decoder or model is
+downloaded during a Run.
 
 Installing a CLI in `PATH` does not make MediaSense available to every Agent. A
 specific Honeycomb must separately contain its local Skills and MCP registration;

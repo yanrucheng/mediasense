@@ -1,0 +1,62 @@
+{
+  "after": {
+    "~:0:<method 'commit' of 'sqlite3.Connection' objects>": {
+      "calls": 1281,
+      "total_seconds": 0.587901063,
+      "cumulative_seconds": 0.587901063
+    },
+    "~:0:<built-in method _sqlite3.connect>": {
+      "calls": 27,
+      "total_seconds": 0.013064089000000001,
+      "cumulative_seconds": 0.013335920000000001
+    }
+  },
+  "before": {
+    "~:0:<method 'commit' of 'sqlite3.Connection' objects>": {
+      "calls": 2305,
+      "total_seconds": 1.4224876830000002,
+      "cumulative_seconds": 1.4224876830000002
+    },
+    "~:0:<built-in method _sqlite3.connect>": {
+      "calls": 3097,
+      "total_seconds": 4.612104502,
+      "cumulative_seconds": 4.63481117
+    },
+    "/Users/chengyanru/repos/personal/mediasense/eval/sessions/260911-1841-hk-preprocess-performance/outputs/mediasense-source/src/mediasense/precheck/_work_sqlite.py:252:renew_lease": {
+      "calls": 1024,
+      "total_seconds": 0.008326515000000001,
+      "cumulative_seconds": 3.946386797
+    }
+  },
+  "after_result": {
+    "seconds": 3.512610417092219,
+    "requested": 256,
+    "success": 256,
+    "failures": 0,
+    "reused": 0,
+    "discovery_seconds": 8.540525374934077,
+    "status": {
+      "succeeded": 256
+    },
+    "exif_seconds": 2.1591558740474284,
+    "exif_calls": [
+      {
+        "seconds": 0.04406416602432728,
+        "returncode": 0,
+        "subjects": 0
+      },
+      {
+        "seconds": 1.6762634159531444,
+        "returncode": 0,
+        "subjects": 200
+      },
+      {
+        "seconds": 0.43882829206995666,
+        "returncode": 0,
+        "subjects": 56
+      }
+    ],
+    "run_id": "727d6773813540e79765fd0488b2eb6c"
+  },
+  "scope": "256 same subjects, original serial recipe; cProfile timing is diagnostic, not a formal performance sample"
+}

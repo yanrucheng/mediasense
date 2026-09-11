@@ -1,0 +1,30 @@
+{
+  "source_root": "/Users/chengyanru/Downloads/ai-album-hk-representative-v1/test-260831/260501-HK美食之旅",
+  "source_files": 2142,
+  "source_bytes": 1095102710,
+  "manifest_media": 2134,
+  "media_bytes": 983284422,
+  "media_types": {
+    "image": 1851,
+    "video": 283
+  },
+  "transforms": {
+    "jpeg_resize_pillow_exif_preserved": 1851,
+    "three_frame_nonrepresentative_proxy": 185,
+    "native_copy": 3,
+    "sparse_timeline_proxy_from_production_frames": 94,
+    "invalid_truncated_fixture": 1
+  },
+  "all_test_media_match_versioned_sha256": true,
+  "source_state_sha256": "4b377b79fd40e2fe952cc849c1b61d70e70879d0604d4911d3065ff09dd25018",
+  "package_verifier": {
+    "listed_sha256": "passed",
+    "whole_package": "failed_size_limit"
+  },
+  "platform": "macOS-26.4.1-arm64-arm-64bit",
+  "tools": {
+    "exiftool": "13.30",
+    "ffmpeg": "ffmpeg version 8.1 Copyright (c) 2000-2026 the FFmpeg developers",
+    "ffprobe": "ffprobe version 8.1 Copyright (c) 2007-2026 the FFmpeg developers"
+  }
+}

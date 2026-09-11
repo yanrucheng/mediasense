@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 import math
 import subprocess
@@ -108,6 +108,8 @@ def sample_video_times(
         raise ValueError("video maximum frame count must be positive")
     if duration_seconds == 0 or max_frames == 1:
         return (0.0,)
+    if max_frames == 3 or (duration_seconds <= interval_seconds and max_frames >= 3):
+        return tuple(dict.fromkeys((0.0, round(duration_seconds / 2, 6), round(duration_seconds, 6))))
     step = max(interval_seconds, duration_seconds / (max_frames - 1))
     samples = [0.0]
     current = step
@@ -116,6 +118,20 @@ def sample_video_times(
         current += step
     samples.append(round(duration_seconds, 6))
     return tuple(dict.fromkeys(samples))
+
+
+def frame_identity(work: WorkRecord) -> tuple[str, object]:
+    """Identity within one source video; unknown positions never become exact PTS."""
+
+    output = work.output if isinstance(work.output, Mapping) else {}
+    value = output.get("value") or {}
+    position = value.get("decoded_time_seconds")
+    if isinstance(position, (int, float)) and math.isfinite(position) and position >= 0:
+        return "pts", position
+    artifacts = output.get("artifacts") or []
+    if artifacts:
+        return "artifact", artifacts[0]["artifact_ref"]
+    return "work", work.work_id
 
 
 __all__ = [

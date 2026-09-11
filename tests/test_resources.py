@@ -46,9 +46,11 @@ def test_resource_resolution_uses_host_facts_and_storage_conservatism() -> None:
 
     assert local.capacity.source_io_slots > 1
     assert local.capacity.process_slots > 1
+    assert 1 < local.capacity.exiftool_slots <= 4
     assert local.max_workers > 2
     assert unknown.capacity.source_io_slots == 1
     assert unknown.capacity.process_slots == 1
+    assert unknown.capacity.exiftool_slots == 1
     assert unknown.capacity.network_slots == 0
 
 

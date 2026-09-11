@@ -47,6 +47,7 @@ Implementation status is independent of the difference class:
 | 60-second adjacent chaining | Chained adjacent groups without limiting total span | `precheck` | Intentionally change or bound after evaluation; never hide span | Over-merge/under-merge review, span and boundary metrics |
 | Representative selection | Chose one preferred file per bundle | `precheck` and `plan` | Preserve stable identity; improve semantic evidence selection separately | Representative stability and coverage |
 | Batch metadata extraction | Used ExifTool and configured tags | `precheck` | Preserve and strengthen provenance/error semantics | Value equality, source tags, failures, throughput |
+| Manufacturer information maintenance system | User YAML supplied conditional timestamp exceptions and configurable extraction fields; some photography-context mappings were disconnected | `precheck`, with maintained device knowledge and user/Dataset configuration | Preserve effective scoped adaptation and configuration-based extension; current loss is a regression, separately from improved generic metadata interpretation | User configuration → requested tags → conditional selection → installed execution → public observations → correct invalidation after edits |
 | Coordinate reverse geocoding and nearby-place lookup | Reverse-geocoded each GPS-bearing bundle representative; AMap returned address/POI in one logical lookup, while Google called reverse and nearby endpoints and could switch provider/language across neighboring media | Shared Geo capability, consumed by `precheck` and available to `plan` for bounded investigation | Preserve datum conversion, address/POI normalization, fallback, and rate limiting; replace hidden continuity state, unstable per-file cache identity, failure ambiguity, and uncounted requests with a stage-neutral Tool, explicit authorization, stable observation identity, and enforced budgets. The accepted M2 evidence below covers acquisition-unit boundaries and per-Source-Item projection; real-place threshold quality and applicability remain uncertified | Located Source Item outcome coverage, query-point/source-coordinate differences and reuse limits, unique logical-query count, actual provider requests, switching hit rate, normalized values, reuse, privacy, user confirmation, and failure/partial semantics |
 | Timestamp fallback | Batch and single-item paths behaved differently | `precheck` | Intentionally change: unified typed candidates and confidence | `000114`, `260428`, missing-time fixtures |
 | Video frame sampling | Up to 20 frames, roughly 10-second interval | `precheck` | Preserve the capability, leave sampling strategy open | Decode coverage, representative quality, cost |
@@ -62,6 +63,50 @@ Implementation status is independent of the difference class:
 | Thumbnail/link/move output modes and generic copy helper | `original` moved files; `link` created relative symbolic links for preview; `thumbnail` used generic metadata-copy code, while no user-facing original-copy branch existed | `plan`, `precheck`, and `apply` | Preserve move; move preview to Plan; preserve rendition production in PreCheck; defer persistent links and any new original-copy profile until they have independent accepted lifecycle semantics | No overwrite/loss, source retention, dangling-link behavior, authorization, rewind, receipts |
 | Per-stage cache | Many results were reusable by flags and hashes | `precheck` | Preserve and strengthen: checkpointing, atomic writes, provenance, dependency-aware invalidation | Resume work, cache hits, interrupted equivalence |
 | Usage monitoring | Optional log, absent from final production run | all | Intentionally change: relevant cost/operation accounting is part of stage results | Zero external calls for local-only runs; confirmed logical work versus actual provider calls for enabled external producers; plan visual cost; apply operations |
+
+<a id="manufacturer-information-audit"></a>
+
+## 2026-09-11：厂商信息维护体系专项核对
+
+用户将“厂商定制适配＋用户通过简单配置扩展”命名为**厂商信息维护体系**，并确认其核心能力定位。本次结论是：**通用元数据解释和可追溯性有进步；按条件维护厂商规则、从用户配置扩展提取的能力发生回归。** 不能用字段交付完成证明这个体系已迁移，也不能将旧版没有实际接通的配置算作成功能力。
+
+### 比较边界与实际路径
+
+- 历史基线为 AI Album `c90aa8f04fd0d3348284e0ad19e18462987b1af2`，以 `git show` 读取。当前 AI Album HEAD `6eccb3711f4817242b0700dc370a070680edbaaf` 已拆分 metadata 模块，只作辅助定位；`src/conf/conf.yml` 与基线一致。
+- MediaSense 源码为 `b3aa69625fdbdc7692cd1e6bdc935464406d962c`；实际安装 **0.10.0** 的 `runtime/config.py`、`precheck/metadata.py`、`precheck/_metadata_fields.py`、`precheck/_orchestrator.py` 与本次源码逐字节一致。
+- 历史执行链：`config_loader.UserAwareConfig` 读取用户 `conf.yml` → `ProjectConfig` → `MetaDataLoader.get_all_config_tags/get_special_recognition_tags` 将条件与目标标签纳入提取 → `get_missing_timezone_config/extract_fields` 执行配置。`missing_timezone_cases` 支持标签、正则及目标时间标签；内置 DJI 规则限定图片，Canon 规则限定 EOS 型号匹配。通用 `exif.<section>.<field>.keys/type` 可增加提取字段。
+- 当前执行链：[RuntimeConfig](../../../src/mediasense/runtime/config.py) 仅接受 providers/embedding/sensitivity/geo_network → [编排](../../../src/mediasense/precheck/_orchestrator.py) 调用 `produce_many` 时未传 metadata profile → [MetadataProfile](../../../src/mediasense/precheck/metadata.py) 使用默认时区及全局时间标签顺序 → [FIELD_TAGS](../../../src/mediasense/precheck/_metadata_fields.py) 使用代码中的摄影字段映射。内部 Python 参数可改不等于用户入口可配置。
+
+### 分项判断
+
+| 能力单位 | 判断与实现状态 | 支持结论的证据及限制 |
+| --- | --- | --- |
+| 通用字段、时间语义及来源交付 | `preserved` / `intentionally_changed`，已有对应 `implemented` 证据继续有效 | EXIF 本地时间、显式偏移、QuickTime UTC 假设分开；原值、候选和冲突保留；实际/等效焦距分开，Encoder 不冒充相机。并非直接复制旧厂商表，也非完整厂商矩阵认证 |
+| 按设备/媒体条件覆盖默认解释 | `regression`；`characterized_only`，未形成可配置安装能力 | 旧版可按 Make/Model/MIME 等条件选择目标标签；当前只有全局标签优先级，无同等厂商规则选择与维护入口。单字段 DJI/Canon 成功不能覆盖竞争字段场景 |
+| 用户配置新增规则、标签优先级和已支持类型的提取字段 | `regression`；`characterized_only` | 历史真实配置加载器和选择函数的合成探针执行新增 ACME 规则及字段成功；安装 0.10.0 拒绝 metadata/厂商配置表，正常入口连 metadata 时区也未开放 |
+| 配置变更后的可追溯重算基础 | `intentionally_changed`，现有 metadata profile/Work 机制已实现；厂商规则修订尚未实现 | profile descriptor、提取器版本和源依赖参与 Work 身份；已有测试证明时间策略改变 GPX 结果、再次运行复用及旧 Result 不变。此基础不等于厂商规则的新增/撤回失效已经完成 |
+
+旧版也有明确限制：用户配置是整文件优先，缺少完整生效快照和配置依赖失效；`get_time_tags/get_all_config_tags` 有进程内缓存。c90 的 `PhotoInfoExtractor._get_field_mappings` 引用不存在的 `src.conf.conf_manager`，会退回内置映射；品牌选择还写死 Canon/Sony/Nikon/DJI/Apple。向 `metadata_field_mappings` 新增品牌不足以接通该路径。这不否定已验证的时间规则和通用字段配置能力，也不能成为丢弃它们的理由。
+
+### 本次验证与可复核反例
+
+合成输入统一为 `EXIF:DateTimeOriginal=2026:05:04 17:33:46`、`XMP:DateTimeOriginal=2026:05:04 09:33:46`、`File:MIMEType=image/jpeg`，另分别使用 DJI/FC220、Canon/EOS 80D、ACME/C1。为 ACME 在用户 YAML 添加 Make 条件和 EXIF 目标；在 `exif.camera` 添加 `operator_label`，来源为 `XMP:Creator=operator-note`。
+
+| 检查 | 实际结果 |
+| --- | --- |
+| c90 用户配置加载与选择 | 使用 `/tmp` 中的用户 override；新增目标标签进入提取清单；三个输入都匹配相应规则并得到 `17:33:46+08:00`；新增字段值均为 `operator-note` |
+| 安装 0.10.0 的同一组字段 | 三者都选择全局优先的 XMP，得到 `09:33:46+08:00`；保留 `capture_timezone_assumed` 和 `capture_time_conflict`。用户无法从正常配置改变这一选择 |
+| 安装 0.10.0 的配置入口 | 临时 TOML 的 `[metadata] timezone="America/New_York"` 与 `[manufacturers.acme]` 均得到 `ConfigurationError: Unknown configuration section`；默认 metadata 时区为 Asia/Shanghai |
+| c90 摄影映射的新增品牌 | 向 `_get_field_value` 提供 ACME 专用值42和 default值24，实际选择24，证明品牌路由仍有限制 |
+| 现有时间与迁移回归 | `rtk proxy .venv/bin/python -m pytest -q tests/test_capture_time.py tests/characterization/test_legacy_metadata.py`：**15 passed，2.32 s** |
+
+历史探针使用 c90 的真实配置加载器、现有 AI Album Python 3.10 环境依赖，以及从 c90 AST 原样选出的时间/字段方法；省略未调用的 Geo/媒体 I/O 方法及全局产品初始化，避免读取真实用户配置。它证明配置→提取标签→选择的能力，不是完整历史 CLI 或真实设备提取认证。安装探针使用实际 uv tool 的 Python 3.13 环境，从 `/tmp` 直接调用配置读取及元数据选择函数；没有将此写成一次 MCP 媒体端到端运行。
+
+这个双时间输入证明两种机制可以产生不同结果，**不证明真实照片中一定是 EXIF 正确、XMP 错误**。真实字段优劣需要有作用范围的设备/制作历史证据。审计未读取 HK fixture、运行模型、调用地图或改动原媒体；吞吐、所有型号/固件、DST 歧义与制作软件矩阵未认证。
+
+### 后续完成门槛
+
+[设计提案](../../design/design-260911-1834-manufacturer-information-system.md)定义规则维护、三种时间含义、生效快照与失效的边界，状态为 review。后续必须同时证明：用户/Dataset 配置新增规则和字段可从安装入口执行并经 Read 交付；同品牌不同范围及冲突场景有明确行为；规则新增/修改/停用正确重评此前未匹配项和真实依赖，旧 Result 不变。发布与验收通过前，本项回归保持开放，不改变此前窄范围字段/时间验收的事实。
 
 ## 2026-09-09：证据交付合约与本期迁移范围
 
@@ -411,7 +456,7 @@ Evidence and exact limitations: [HK audit corrections](../eval-260908-1329-prech
 | Capability / difference | Classification | Delivered evidence and operating qualities |
 | --- | --- | --- |
 | Naive QuickTime integer timestamp interpreted as local time | `regression` (fixed) | Actual c90 standard conversion treated it as UTC; typed field interpretation restores that behavior. 281 fixture video timestamps change, 1,851 others do not. No extra remote cost; interpretation and rejected fields now remain inspectable. |
-| Local camera times, offsets, sidecars, DJI/Canon photo cases | `preserved` | Local EXIF semantics and explicit offsets are retained without copying a mandatory vendor rule table. Tests distinguish camera fields from container fields. |
+| Local camera times, offsets, sidecars, single-candidate DJI/Canon photo examples | `preserved` within the tested field cases | Local EXIF semantics and explicit offsets are retained without copying a mandatory vendor rule table. Tests distinguish camera fields from container fields. This does not establish conditional vendor override or user-configuration parity; the 2026-09-11 manufacturer-system audit above records those regressions. |
 | Generic naive-time handling and timestamp provenance | `intentionally_changed` | Avoid c90's blanket UTC behavior for ordinary EXIF. Preserve raw candidates, uncertainty and filename/mtime fallback qualifications. Versioned metadata Work invalidates dependent GPX/bundle/compression work; old Results remain immutable. |
 | Filename recovery after absent/invalid capture metadata | `regression` (fixed) | TimestampService had a basename fallback; migrated selection could instead select copied mtime. Generic timestamp patterns now precede filesystem fallback without overriding valid camera fields. |
 | Local embedding reachable through installed Host | `regression` (fixed) | Internal adapter existed but runtime configuration/composition and optional dependencies prevented ordinary use. The real MCP path now executes and reuses a pinned local profile. No AI Album runtime dependency or automatic model download. |
@@ -419,7 +464,63 @@ Evidence and exact limitations: [HK audit corrections](../eval-260908-1329-prech
 | Historical 168 representatives versus new frontier / total cost | `not_comparable` | Different boundaries and no new independent Plan quality/cost experiment. CPU work, hidden members and residual investigation are disclosed, not counted as proven savings. |
 | Immutable accounting and independent evaluation boundary | `intentionally_changed` | Keep excluded source identity; remove automatic descendant samples and stage exact allowed inputs outside fixture. Clean judging context is separately required. No original media movement/deletion. |
 
+### 2026-09-11 本机 EXIF 与抽帧性能对照
+
+用户要求在 `/Users/chengyanru/Downloads/ai-album-hk-representative-v1/test-260831`
+实测。完整[配方、报告与小型统计](../../../eval/sessions/260911-1841-hk-preprocess-performance/report.md)
+固定 MediaSense `b3aa696` 与 AI Album `c90aa8f`，使用同一 M5 Pro / 48 GiB 本机。
+主范围是 2,134 个 manifest 媒体，不把同级旧缓存/分类图算作原媒体；指定副本逐项 SHA-256
+相同，主素材目录全部 2,142 个文件测试前后字节、大小、mtime 与路径不变。包 verifier
+的清单 SHA 全通过，但操作目录因额外副本超过原 2 GB 限制而整体返回 1；未篡改门槛。
+
+这些实测补充并限制此前“批量、复用机制已接通”的结论，不将机制测试扩展为性能保留。
+
+| 能力／运行品质 | 本次迁移判断 | 实测与边界 |
+| --- | --- | --- |
+| 同字段 EXIF 原始值 | `preserved`，仅所测字段 | 2,133 项、18 字段、六次返回逐对象相同；不认证归一化时间、厂商规则或所有摄影字段 |
+| 批量 EXIF 吞吐 | `regression`，本机同工作量 | 三轮中位数旧 1.363 s、新 10.787 s，新耗时 7.92×。旧 11 批并发/11 进程，新单 stay-open 顺序执行。旧路线串行控制为 11.548 s，支持批间并发是主要差距；少启动进程不是吞吐保留证据 |
+| 同目标帧提取路线 | `regression`，所测适配与依赖 | 282 个可读视频、843 个实际目标帧、相同输出尺寸上限，三轮中位数旧 31.800 s、新 50.593 s（1.59×）。全部成功、尺寸相同、像素核对支持帧对应。新每轮启动843个FFmpeg；旧OpenCV进程内定位。未把库/线程/编码差异当作单一算法变量 |
+| 默认采样和帧覆盖 | 上限／规格 `intentionally_changed`；末帧位置处理为 `regression` | 同283视频，旧实际 get_frames/cache 首次49.551 s、1,736帧；当前真实producer四线程23.748 s、370帧，同时285次抽帧失败、另1个已知坏视频probe失败。282次请求duration终点，另3次虽在容器时长内但晚于最后一帧PTS。总时间短不能证明同等覆盖更快 |
+| metadata 工作状态与来源证明成本 | 新保障与完整旧流水线 `not_comparable`；当前热点已量化 | 2,134项实际producer首次82.747 s，其中ExifTool18.328 s，其余64.420 s含Python/来源证明/Work/SQLite；后继Run全部复用仍14.961 s，仅一次版本查询。不能未经profiling把其余时间全归于数据库写入 |
+| 成功缓存复用与失败保留 | 复用能力 `preserved`；读取责任 `intentionally_changed` | 旧282个有效视频复用1,736张JPEG需6.979 s；当前370帧复用并保留285个终结失败需7.666 s，仅ffprobe/FFmpeg版本查询，无新帧提取。旧返回已加载像素、新返回验证后的Artifact/Work，不作同单位缓存胜负结论 |
+
+本次重新选择得到167个主素材候选、99个图像与182个视频来源。把全量逐视频结果对应到
+该选择集合，准确复现此前 **267成功帧 / 184抽帧失败 / 1坏视频probe失败**。这些失败是
+操作次数，不是185个坏视频，也不是模型失败；旧97个视频代表与当前182个视频来源不能
+直接视为相同完整流水线。来源、全部默认输出完整解码和受控帧对应均通过复核。
+
+测试没有模型/Geo调用，没有修改产品实现或业务Dataset/Result；原始日志、数据库和
+生成媒体留在ignored outputs。内核三轮、默认链路与producer各一次首次/复用；系统缓存
+未清空，也未独占机器。代理素材、仅3个0.30–2.74秒4K/8K原样短片，均不能认证原始
+879 GiB视频、长GOP、外置盘或完整RAW吞吐。后续先修有效帧位置与覆盖，再恢复资源上限内
+的EXIF批间并发并定位非ExifTool热点，沿同配方复测。更广质量/吞吐门槛仍开放。
+
+用户随后要求先讨论基础方案、再固定具体计划及逐步验收，之后才开发；又明确委托
+Agent自行判断并继续实施。[OpenSpec变更](../../../openspec/changes/restore-precheck-throughput-and-coverage/proposal.md)
+已在产品改动前固定具体任务与门槛。上述数字保留为修复前证据，后续验收如下。
+
+### 2026-09-11 吞吐与有效帧修复验收
+
+状态：本次源码与隔离安装边界 `implemented`。证据见[修复报告和配方](../../../eval/sessions/260911-2128-precheck-throughput-recovery/report.md)、[固定验收](../../../openspec/changes/restore-precheck-throughput-and-coverage/acceptance.md)及[小型指标](../../../eval/sessions/260911-2128-precheck-throughput-recovery/metrics/combined.json)。当前 Run/Read 合约拥有产品含义；本段只认证声明的工作负载与交付边界。
+
+| 能力／运行品质 | 本次处置 | 完成证据与限制 |
+| --- | --- | --- |
+| metadata 字段及吞吐 | 值 `preserved`；已测串行化回归修复，通道方法 `intentionally_changed` | 2,133项同18字段，新四通道中位3.450 s、旧同四并发参考3.477 s，逐对象相同；原11并发1.363 s保留，不混用资源口径 |
+| 正式 metadata producer 与复用 | 保障 `not_comparable` 于旧缓存；MediaSense 内部开销修复 | 全2,134项观察值不变，最终首次82.747→15.708 s、复用14.961→3.992 s，复用零字段提取。256项诊断实际连接3,097→27、提交2,305→1,281；每项提交/错误仍保留，长批仍续租 |
+| 同目标视频帧提取 | 已测回归修复；decoder 可替换 | 同843帧三轮中位28.217 s，相比旧OpenCV31.800 s、原MediaSense50.593 s；位置、尺寸和像素对应通过。CPU codec线程受控，按视频复用容器；未认证所有长码流 |
+| 默认视频有效准备与位置交付 | 采样深度 `intentionally_changed`；285次错误采样修复 | 283视频取得843个不同PTS帧、0采样器失败，1已知坏probe保留；完整阶段含282联系表22.478 s，复用6.928 s且0decode。当前真实选择的182视频范围由267帧/184失败恢复到540帧/0失败，另1坏probe |
+| 已封存结果、局部失效与安装 | 复用能力 `preserved`，强来源/不可变交付 `not_comparable` 于旧体系 | 请求时间保留；实际PTS可选且basis保留真实producer，联系表一致。旧Result字节不变，decoder变化不重做无关Work；实际wheel Host公开Run/Read取得5帧/2表，后继Run无新提取，Source与旧Result不变 |
+
+1,109项默认测试经全量及失败项修复复核完成；4项回环HTTP测试使用本机监听权限，另修复一份遗漏的Skill schema副本。2,142个源文件的路径/字节/大小/mtime保持原样；模型/Geo调用0。wheel SHA-256 `b4a16a8f10513896f8f24d3d39529f3fa5237a6a905f687859bbf632f9ed731f`，包内源码与合同/Skill副本一致。
+
+声明限于本机代理fixture、三个原样短片和隔离安装；日常全局Host未切换。默认新JPEG不放大低清代理，完整视频时长含联系表；其总时长不冒充与旧默认同规格的胜负。扫描/分组在报告中单列。内存准入为估算，时限/取消为协作式；长GOP、全量RAW、物理/远程存储、模型质量及厂商规则配置的独立缺口仍按各自台账判断。
+
 ### 2026-09 PreCheck scale correction
+
+The following records the earlier `scale-precheck-execution` mechanism and its
+then-certified scope. The single ExifTool lane and per-frame FFmpeg description
+are superseded by the scoped 2026-09-11 implementation/acceptance above; prior
+mechanism evidence is retained without extending its original performance claim.
 
 - `preserved`: AI Album's useful funnel—batch enough metadata to group first,
   then create thumbnails, video evidence, embeddings, and sensitivity evidence

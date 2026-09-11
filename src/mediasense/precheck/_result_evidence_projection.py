@@ -189,16 +189,26 @@ def _append_video_evidence(
 ) -> str | None:
     frame_refs: dict[str, str] = {}
     primary_ref: str | None = None
+    distinct_frames: dict[tuple[str, object], str] = {}
     for work in frame_works:
         if not _has_available_artifact(artifacts, work):
             continue
         produced = artifacts.artifacts_for_work(str(work["work_id"]), verify=False)
         output = json.loads(work["output_json"])
         value = output.get("value") or {}
+        position = value.get("decoded_time_seconds")
+        frame_key = ("pts", position) if position is not None else ("artifact", produced[0].artifact_id)
+        if frame_key in distinct_frames:
+            frame_refs[str(work["work_id"])] = distinct_frames[frame_key]
+            continue
         evidence_ref = result_local_reference(
             "evidence", str(work["work_id"]), produced[0].artifact_id
         )
         frame_refs[str(work["work_id"])] = evidence_ref
+        distinct_frames[frame_key] = evidence_ref
+        basis = {"producer": value.get("producer", {"identity": str(work["producer_identity"])}),
+                 "position": value.get("position_basis", {"method": "unknown"})}
+        value = {key: item for key, item in value.items() if key not in {"producer", "position_basis"}}
         evidence.append(
             ResultEvidence(
                 ref=evidence_ref,
@@ -216,8 +226,15 @@ def _append_video_evidence(
                         "name": "video_frame",
                         "status": "available",
                         "value": value,
-                        "basis": "builtin-ffmpeg-video-frame-v1",
+                        "basis": basis,
                     },
+                ),
+                qualifications=(
+                    {"code": "sampled_video_evidence", "effect": "limits_interpretation",
+                     "message": "Prepared frames cover finite positions, not every scene in the source video."},
+                    *(({"code": "decoded_position_unknown", "effect": "limits_interpretation",
+                        "message": "The requested target is known; the actual decoded position was not recorded."},)
+                      if position is None else ()),
                 ),
             )
         )
@@ -289,6 +306,8 @@ def _append_video_evidence(
             {
                 "evidence_ref": frame_refs[work_id],
                 "sample_time_seconds": frame_values[work_id]["sample_time_seconds"],
+                **({"decoded_time_seconds": frame_values[work_id]["decoded_time_seconds"]}
+                   if "decoded_time_seconds" in frame_values[work_id] else {}),
             }
             for work_id in expected_frame_ids
         ]

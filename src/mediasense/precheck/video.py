@@ -1,9 +1,9 @@
 """Stable facade for local video evidence capabilities."""
 
 from ._video_keyframe import VideoKeyFrameCandidateProducer
+from ._video_frames import VideoFrameProducer
 from ._video_producers import (
     ContactSheetProducer,
-    VideoFrameProducer,
     VideoProbeProducer,
 )
 from ._video_types import (

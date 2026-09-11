@@ -4,7 +4,7 @@ title: "MediaSense 当前合约"
 type: index
 status: active
 created: 2026-09-09
-updated: 2026-09-10
+updated: 2026-09-11
 timezone: "Asia/Shanghai"
 parent: "index-spec"
 depends-on:
@@ -17,6 +17,8 @@ superseded-by: ""
 **所有新开发从这里开始。** 本目录是 MediaSense 对外合约的唯一当前权威位置。目录名表示接口职责，不表示版本；不要根据历史文件夹的日期选择合约。稳定目录采用用户指定的命名方式，不再创建带日期的平行当前规范。
 
 第一里程碑固定的是开发必须遵守的承诺。**2026-09-09 第一里程碑已完成；2026-09-10 第二里程碑及验收补修已通过用户验收，以 0.9.0 发布。** 本目录中的 `active` 表示当前规范位置；实际构建、安装验证与认证范围另见迁移台账。
+
+2026-09-11 用户授权 Agent 收敛并开发的吞吐/有效帧修复，补充 Run 的联合运行品质承诺和 Read 的请求位置/实际 PTS 含义。其独立验收见[变更计划](../../../openspec/changes/restore-precheck-throughput-and-coverage/acceptance.md)及[修复评测](../../../eval/sessions/260911-2128-precheck-throughput-recovery/report.md)。源码与隔离 wheel 的认证不等于日常 Host 已升级；不借用 0.9.0 的验收记录扩大当前安装的能力声明。
 
 ## 阅读入口
 

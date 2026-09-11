@@ -1,4 +1,4 @@
-"""FFprobe, FFmpeg, and Pillow producers for local video evidence."""
+"""FFprobe and Pillow producers for local video inspection and contact sheets."""
 
 from __future__ import annotations
 
@@ -14,19 +14,18 @@ from PIL import Image, ImageOps
 
 from ._artifact_types import InvalidArtifactDraft
 from ._fingerprint import SourceChangedDuringRead
+from ._sqlite_scope import connection_scope
 from ._video_types import (
     CommandRunner,
     ContactSheetOutcome,
     ContactSheetProfile,
-    VideoFrameOutcome,
-    VideoFrameProfile,
     VideoProbe,
     VideoProbeOutcome,
     VideoProcessingError,
+    frame_identity,
 )
 from ._work_types import (
     DependencyKind,
-    LeaseLost,
     WorkDependency,
     WorkRecord,
     WorkSpec,
@@ -62,6 +61,10 @@ class VideoProbeProducer:
         *,
         owner: str = "builtin-video-probe",
     ) -> VideoProbeOutcome:
+        with connection_scope(self.database_path):
+            return self._produce(run_id, relative_path, owner=owner)
+
+    def _produce(self, run_id: str, relative_path: Path, *, owner: str) -> VideoProbeOutcome:
         proof = self.validity.prove(run_id, relative_path)
         spec = WorkSpec(
             capability="video-probe",
@@ -167,7 +170,7 @@ class VideoProbeProducer:
             raise VideoProcessingError(
                 "ffprobe returned incomplete video facts"
             ) from error
-        if duration < 0 or width < 1 or height < 1:
+        if not math.isfinite(duration) or duration < 0 or width < 1 or height < 1:
             raise VideoProcessingError("ffprobe returned invalid video facts")
         return VideoProbe(
             duration_seconds=duration,
@@ -176,173 +179,6 @@ class VideoProbeProducer:
             frame_rate=_parse_rate(stream.get("avg_frame_rate")),
             frame_count=_parse_optional_int(stream.get("nb_frames")),
         )
-
-
-class VideoFrameProducer:
-    def __init__(
-        self,
-        database_path: Path,
-        *,
-        executable: str = "ffmpeg",
-        command_runner: CommandRunner | None = None,
-        ffmpeg_version: str | None = None,
-        threads: int = 1,
-    ) -> None:
-        if threads < 1:
-            raise ValueError("FFmpeg thread count must be positive")
-        self.database_path = Path(database_path)
-        self.validity = SourceValidityStore(self.database_path)
-        self.work = WorkStore(self.database_path)
-        self.artifacts = ArtifactStore(self.database_path)
-        self.executable = executable
-        self._run = command_runner or _run_command
-        self.ffmpeg_version = ffmpeg_version or _tool_version(executable, self._run)
-        self.threads = threads
-
-    def produce(
-        self,
-        run_id: str,
-        relative_path: Path,
-        probe_work_id: str,
-        sample_time_seconds: float,
-        *,
-        profile: VideoFrameProfile = VideoFrameProfile(),
-        owner: str = "builtin-video-frame",
-    ) -> VideoFrameOutcome:
-        if not math.isfinite(sample_time_seconds) or sample_time_seconds < 0:
-            raise ValueError("video frame sample time must be nonnegative")
-        proof = self.validity.prove(run_id, relative_path)
-        probe_work = _attached_work(self.work, run_id, probe_work_id, "video-probe")
-        probe = _probe_from_output(probe_work.output)
-        if probe is None or sample_time_seconds > probe.duration_seconds:
-            raise ValueError("video frame sample time is outside the probed duration")
-        spec = WorkSpec(
-            capability="video-frame",
-            producer_identity="builtin-ffmpeg-video-frame-v1",
-            dependencies=(
-                source_revision_dependency(
-                    proof.dataset_id, proof.relative_path, proof.source_revision
-                ),
-                proof.dependency(),
-                upstream_dependency(probe_work),
-                WorkDependency(
-                    DependencyKind.PARAMETER,
-                    "subject_relative_path",
-                    proof.relative_path.as_posix(),
-                ),
-                WorkDependency(
-                    DependencyKind.PARAMETER,
-                    "sample_time_seconds",
-                    f"{sample_time_seconds:.6f}",
-                ),
-                WorkDependency(
-                    DependencyKind.PARAMETER, "max_edge", str(profile.max_edge)
-                ),
-                WorkDependency(
-                    DependencyKind.PARAMETER,
-                    "jpeg_quality",
-                    str(profile.jpeg_quality),
-                ),
-                WorkDependency(
-                    DependencyKind.ENVIRONMENT,
-                    "ffmpeg_version",
-                    self.ffmpeg_version,
-                ),
-                WorkDependency(
-                    DependencyKind.PARAMETER,
-                    "ffmpeg_threads",
-                    str(self.threads),
-                ),
-            ),
-        )
-        record = self.work.ensure_work(run_id, spec)
-        if record.status is WorkStatus.SUCCEEDED:
-            artifacts = self.artifacts.artifacts_for_work(record.work_id)
-            if artifacts and artifacts[0].integrity.value == "available":
-                return VideoFrameOutcome(record, artifacts[0], True)
-            record = self.work.ensure_work(run_id, spec)
-        if record.status not in {WorkStatus.READY, WorkStatus.RETRYABLE_FAILURE}:
-            return VideoFrameOutcome(record, None, False)
-        leases = self.work.claim_ready_work(
-            run_id,
-            owner,
-            lease_duration=timedelta(minutes=5),
-            work_id=record.work_id,
-        )
-        if not leases:
-            return VideoFrameOutcome(self.work.get_work(record.work_id), None, False)
-        lease = leases[0]
-        draft = self.artifacts.create_draft(lease, suffix=".jpg")
-        try:
-            completed = self._run(
-                (
-                    self.executable,
-                    "-v",
-                    "error",
-                    "-y",
-                    "-ss",
-                    f"{sample_time_seconds:.6f}",
-                    "-i",
-                    str(proof.source_path),
-                    "-frames:v",
-                    "1",
-                    "-vf",
-                    (
-                        f"scale={profile.max_edge}:{profile.max_edge}:"
-                        "force_original_aspect_ratio=decrease"
-                    ),
-                    "-q:v",
-                    str(_jpeg_qscale(profile.jpeg_quality)),
-                    "-vcodec",
-                    "mjpeg",
-                    "-threads",
-                    str(self.threads),
-                    "-f",
-                    "image2",
-                    str(draft.path),
-                )
-            )
-            if completed.returncode != 0:
-                raise VideoProcessingError(
-                    completed.stderr.strip() or "ffmpeg exited unsuccessfully"
-                )
-            width, height = _verify_jpeg(draft.path)
-            self.validity.verify(run_id, proof)
-            finished, artifact = self.artifacts.publish(
-                lease,
-                draft,
-                suffix=".jpg",
-                media_type="image/jpeg",
-                role="video_frame",
-                output={
-                    "height": height,
-                    "profile": {
-                        "jpeg_quality": profile.jpeg_quality,
-                        "max_edge": profile.max_edge,
-                    },
-                    "sample_time_seconds": sample_time_seconds,
-                    "width": width,
-                },
-            )
-            return VideoFrameOutcome(finished, artifact, False)
-        except (
-            InvalidArtifactDraft,
-            OSError,
-            subprocess.SubprocessError,
-            ValueError,
-            VideoProcessingError,
-        ) as error:
-            draft.path.unlink(missing_ok=True)
-            try:
-                failed = self.work.fail_work(
-                    lease,
-                    error_code="video_frame_decode_failed",
-                    message=str(error) or type(error).__name__,
-                    retryable=False,
-                )
-            except LeaseLost:
-                failed = self.work.get_work(record.work_id)
-            return VideoFrameOutcome(failed, None, False)
 
 
 class ContactSheetProducer:
@@ -361,6 +197,10 @@ class ContactSheetProducer:
         profile: ContactSheetProfile = ContactSheetProfile(),
         owner: str = "builtin-contact-sheet",
     ) -> ContactSheetOutcome:
+        with connection_scope(self.database_path):
+            return self._produce(run_id, relative_path, frame_work_ids, profile=profile, owner=owner)
+
+    def _produce(self, run_id, relative_path, frame_work_ids, *, profile, owner):
         if not frame_work_ids:
             raise ValueError("contact sheet requires at least one frame Work")
         proof = self.validity.prove(run_id, relative_path)
@@ -368,6 +208,13 @@ class ContactSheetProducer:
             _attached_work(self.work, run_id, work_id, "video-frame")
             for work_id in frame_work_ids
         )
+        if any(next(d.value for d in frame.spec.dependencies if d.key == "subject_relative_path")
+               != proof.relative_path.as_posix() for frame in frames):
+            raise ValueError("video frames belong to another Source Item")
+        distinct: dict[tuple[str, object], WorkRecord] = {}
+        for frame in frames:
+            distinct.setdefault(frame_identity(frame), frame)
+        frames = tuple(distinct.values())
         spec = WorkSpec(
             capability="video-contact-sheet",
             producer_identity="builtin-video-contact-sheet-v1",
@@ -512,17 +359,6 @@ def _parse_optional_int(value: object) -> int | None:
     return parsed if parsed >= 0 else None
 
 
-def _jpeg_qscale(quality: int) -> int:
-    return max(2, min(31, round((100 - quality) * 29 / 99 + 2)))
-
-
-def _verify_jpeg(path: Path) -> tuple[int, int]:
-    with Image.open(path) as image:
-        image.verify()
-    with Image.open(path) as image:
-        return image.size
-
-
 def _render_contact_sheet(
     paths: Sequence[Path], destination: Path, profile: ContactSheetProfile
 ) -> tuple[int, int]:
@@ -604,6 +440,5 @@ def _verify_proof(
 
 __all__ = [
     "ContactSheetProducer",
-    "VideoFrameProducer",
     "VideoProbeProducer",
 ]

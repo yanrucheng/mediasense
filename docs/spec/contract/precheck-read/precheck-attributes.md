@@ -4,7 +4,7 @@ title: "PreCheck 属性与交付义务"
 type: spec
 status: active
 created: 2026-09-09
-updated: 2026-09-09
+updated: 2026-09-11
 timezone: "Asia/Shanghai"
 parent: "precheck-read"
 depends-on:
@@ -80,12 +80,16 @@ superseded-by: ""
 | 属性 | 必需含义 |
 | --- | --- |
 | `pixel_dimensions` | 当前派生图 width/height；已有 profile 保留，和源尺寸分开 |
-| `video_frame` | sample_time_seconds、当前 width/height、已知有效 profile；位置属于源视频时间线 |
+| `video_frame` | sample_time_seconds 为请求目标；decoded_time_seconds 为有证明时的实际解码位置；当前 width/height、已知有效 profile 保留 |
 | `video_contact_sheet` | columns、width/height、有序 frames；每格给 Evidence 引用和采样位置，不给私有 frame_work_ids |
 | `evidence_role` | 当前 Evidence 自身的 role；不输出内部 compression group/work ID。其他已准备角色的引用在 review.roles 中，二者不混用 |
 | 其他已记录公共属性 | 包括角色或比较限制等，按其实际主体保留，不以默认展示清单为由静默丢弃 |
 
 联系表中的 frames 按从左到右、从上到下的格子顺序。帧与视频时长、清晰度、部分解码失败均分别交代。对一个选中 Evidence，默认返回其已有直接属性和实际 Source Item 来源属性；完整派生链通过 provenance 调查，不把所有中间对象重复塞入默认返回。
+
+视频位置以秒表示，相对于源视频流起点，必须为有限非负数。`sample_time_seconds` 是准备时请求的位置；片尾目标可以等于容器时长，但不证明该处存在一帧。`decoded_time_seconds` 只在实际呈现时间戳（PTS）可证明时返回，basis 保留真实生产者、时间依据及选择方法。历史材料缺少该字段时实际位置未知，不能把请求位置补写为实际位置，也不能回写已封存 Result。联系表每格沿用对应帧的请求与已知实际位置。
+
+不同请求落在同一实际帧时，交付按可证明的帧位置去重；没有位置证明时可以按相同派生字节去重，但不能据此推断不同时间的视觉覆盖。只有一帧、两帧或稀疏时间线属于有限可用材料，不因不满足名义帧数而判源损坏。有限材料不承诺发现全部场景；相关限制由现有 qualifications 交代。
 
 输入身份统一使用公开 Source Item/Evidence 引用。现有 producer 若把 frame_work_ids、input_work_id 或私有 group_ref 写进可见值，M2 必须在封存投影处替换为实际公开来源/格子关系，或删除仅用于执行的身份；不能把私有字段改名后原样暴露，也不能丢掉其承载的真实输入关联。
 

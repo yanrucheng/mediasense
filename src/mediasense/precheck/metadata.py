@@ -16,6 +16,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from ._metadata_fields import FIELD_TAGS, DIMENSION_TAGS, EXTRA_TAGS, photographic_observations
 from ._exiftool import ExifToolCancelled, StayOpenExifTool
 from ._fingerprint import SourceChangedDuringRead
+from ._sqlite_scope import connection_scope
 from ._work_types import (
     DependencyKind,
     LeaseLost,
@@ -173,17 +174,22 @@ class _MetadataLeaseHeartbeat:
         if self._thread.is_alive():
             self._thread.join()
 
-    def renew_now(self) -> None:
+    def renew_now(self, *, force: bool = False) -> None:
         with self._lock:
             self._raise_if_failed()
             try:
                 observed_at = self._clock()
-                for work_id, lease in tuple(self._leases.items()):
-                    self._leases[work_id] = self._work.renew_lease(
-                        lease,
+                leases = tuple(
+                    lease for lease in self._leases.values()
+                    if force or self._renewal_due(lease, observed_at)
+                )
+                for offset in range(0, len(leases), 1024):
+                    renewed = self._work.renew_leases(
+                        leases[offset:offset + 1024],
                         lease_duration=self._lease_duration,
                         now=observed_at,
                     )
+                    self._leases.update((lease.work_id, lease) for lease in renewed)
             except BaseException as error:
                 self._record_renewal_failure(error)
 
@@ -192,11 +198,12 @@ class _MetadataLeaseHeartbeat:
             lease = self._active_lease(item)
             observed_at = self._clock()
             try:
-                lease = self._work.renew_lease(
-                    lease,
-                    lease_duration=self._lease_duration,
-                    now=observed_at,
-                )
+                if self._renewal_due(lease, observed_at):
+                    lease = self._work.renew_leases(
+                        (lease,),
+                        lease_duration=self._lease_duration,
+                        now=observed_at,
+                    )[0]
             except BaseException as error:
                 self._record_renewal_failure(error)
             completed = self._work.succeed_work(lease, output, now=observed_at)
@@ -258,11 +265,17 @@ class _MetadataLeaseHeartbeat:
             ) from cleanup_errors[0]
 
     def _run(self) -> None:
-        while not self._stop.wait(self._renew_interval):
-            try:
-                self.renew_now()
-            except MetadataLeaseRenewalError:
-                return
+        with connection_scope(self._work.database_path):
+            while not self._stop.wait(self._renew_interval):
+                try:
+                    self.renew_now(force=True)
+                except MetadataLeaseRenewalError:
+                    return
+
+    def _renewal_due(self, lease: WorkLease, observed_at: datetime) -> bool:
+        return lease.expires_at - observed_at <= max(
+            self._lease_duration / 2, timedelta(seconds=self._renew_interval)
+        )
 
     def _active_lease(self, item: _PreparedMetadata) -> WorkLease:
         self._raise_if_failed()
@@ -326,8 +339,9 @@ class MetadataProducer:
         )
 
     def close(self) -> None:
-        if self._owned_runner is not None:
-            self._owned_runner.close()
+        runner = getattr(self, "_owned_runner", None)
+        if runner is not None:
+            runner.close()
 
     def __enter__(self) -> MetadataProducer:
         return self
@@ -361,6 +375,16 @@ class MetadataProducer:
         *,
         profile: MetadataProfile = MetadataProfile(),
         owner: str = "builtin-source-metadata",
+    ) -> dict[Path, MetadataOutcome]:
+        with connection_scope(self.database_path):
+            return self._produce_many(run_id, relative_paths, profile, owner)
+
+    def _produce_many(
+        self,
+        run_id: str,
+        relative_paths: Iterable[Path],
+        profile: MetadataProfile,
+        owner: str,
     ) -> dict[Path, MetadataOutcome]:
         subjects = tuple(_validated_relative_path(path) for path in relative_paths)
         if len(set(subjects)) != len(subjects):

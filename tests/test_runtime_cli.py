@@ -40,7 +40,7 @@ def test_doctor_distinguishes_optional_missing_dependencies(
         "required": True,
     }
     assert checks["exiftool"]["status"] == "warning"
-    assert checks["ffmpeg"]["status"] == "warning"
+    assert checks["video_decoder"]["status"] == "warning"
     assert checks["local_models"]["status"] == "warning"
 
 

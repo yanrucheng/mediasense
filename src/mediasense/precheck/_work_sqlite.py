@@ -15,6 +15,7 @@ from uuid import uuid4
 
 from ._accounting_types import WorkingRunStatus
 from ._invalidation import invalidate_work_tree
+from ._sqlite_scope import connect
 from ._working_schema import SCHEMA_VERSION
 from ._work_types import (
     AttemptOutcome,
@@ -256,36 +257,60 @@ class SQLiteWorkStore:
         lease_duration: timedelta,
         now: datetime | None = None,
     ) -> WorkLease:
+        return self.renew_leases(
+            (lease,), lease_duration=lease_duration, now=now
+        )[0]
+
+    def renew_leases(
+        self,
+        leases: Iterable[WorkLease],
+        *,
+        lease_duration: timedelta,
+        now: datetime | None = None,
+    ) -> tuple[WorkLease, ...]:
+        """Renew a bounded batch atomically; every owner and expiry must be valid."""
+
         if lease_duration <= timedelta(0):
             raise ValueError("lease_duration must be positive")
+        entries = tuple(leases)
+        if len(entries) > 1024:
+            raise ValueError("lease renewal batch cannot exceed 1024 items")
+        if len({lease.work_id for lease in entries}) != len(entries):
+            raise ValueError("batch Work leases must be unique")
+        if not entries:
+            return ()
         observed_at = _utc(now)
         expires_at = _iso(_as_datetime(observed_at) + lease_duration)
         with self._transaction(immediate=True) as connection:
             self._recover_expired(connection, observed_at)
-            self._require_lease(connection, lease)
-            connection.execute(
+            for lease in entries:
+                self._require_lease(connection, lease)
+            connection.executemany(
                 """
                 UPDATE work_records
                 SET lease_expires_at = ?, updated_at = ?
                 WHERE work_id = ?
                 """,
-                (expires_at, observed_at, lease.work_id),
+                ((expires_at, observed_at, lease.work_id) for lease in entries),
             )
-            connection.execute(
+            connection.executemany(
                 """
                 UPDATE work_attempts
                 SET lease_expires_at = ?
                 WHERE work_id = ? AND attempt_number = ?
                 """,
-                (expires_at, lease.work_id, lease.attempt_number),
+                ((expires_at, lease.work_id, lease.attempt_number) for lease in entries),
             )
-        return WorkLease(
-            work_id=lease.work_id,
-            run_id=lease.run_id,
-            owner=lease.owner,
-            token=lease.token,
-            attempt_number=lease.attempt_number,
-            expires_at=_as_datetime(expires_at),
+        return tuple(
+            WorkLease(
+                work_id=lease.work_id,
+                run_id=lease.run_id,
+                owner=lease.owner,
+                token=lease.token,
+                attempt_number=lease.attempt_number,
+                expires_at=_as_datetime(expires_at),
+            )
+            for lease in entries
         )
 
     def save_checkpoint(
@@ -1247,13 +1272,8 @@ class SQLiteWorkStore:
 
     @contextmanager
     def _connect(self) -> Iterator[sqlite3.Connection]:
-        connection = sqlite3.connect(self.database_path, timeout=30)
-        connection.row_factory = sqlite3.Row
-        connection.execute("PRAGMA foreign_keys = ON")
-        try:
+        with connect(self.database_path) as connection:
             yield connection
-        finally:
-            connection.close()
 
     @contextmanager
     def _transaction(

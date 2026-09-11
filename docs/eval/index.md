@@ -4,7 +4,7 @@ title: "Evaluation Documents"
 type: index
 status: active
 created: 2026-08-23
-updated: 2026-09-08
+updated: 2026-09-11
 timezone: "Asia/Shanghai"
 parent: "index-docs"
 depends-on: []
@@ -15,6 +15,8 @@ superseded-by: ""
 
 | ID | Title | Status | Created | Summary |
 | --- | --- | --- | --- | --- |
+| [260911-2128-precheck-throughput-recovery](../../eval/sessions/260911-2128-precheck-throughput-recovery/report.md) | PreCheck 吞吐与有效帧修复验收 | active | 2026-09-11 | 固定本机预算下核对2,134项metadata、843个有效帧、零重复提取、只读来源及隔离wheel的真实Run/Read；保留原性能基线和未认证范围。 |
+| [eval-260911-1851-agent-capability-commercialization](eval-260911-1851-agent-capability-commercialization.md) | Agent 能力产品商业化调研：定位、呈现、收费与核心价值保护 | review | 2026-09-11 | 对照能力商业化、摄影工作流与宿主扩展案例，区分任务可用性、呈现方式、采用证据、收费与源码边界。 |
 | [eval-260908-1329-precheck-corrections](eval-260908-1329-precheck-corrections.md) | 香港审计后的 PreCheck 修复与验证 | active | 2026-09-08 | 核实并修复时间解释、Host embedding 接入及评估输入暴露；记录真实 MCP 执行、复用和未完成的质量证明。 |
 | [eval-260908-1148-hk-trajectory-audit](eval-260908-1148-hk-trajectory-audit.md) | 香港数据运行轨迹审计：压缩、额外调用与历史答案暴露 | active | 2026-09-08 | 核对真实 Geo 请求、Plan 视觉消费、未启用的 embedding，以及历史分类目录名经范围发现进入上下文的边界。 |
 | [eval-260902-1438-cross-stage-composition-assurance](eval-260902-1438-cross-stage-composition-assurance.md) | Cross-Stage Production Composition Assurance Review | active | 2026-09-02 | Audits material stage and Host edges, distinguishes semantic contracts from executable composition, and assigns the minimum production and release evidence needed to close the Plan incident class. |

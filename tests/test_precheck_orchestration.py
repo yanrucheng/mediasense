@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+from test_video import FakeVideoTools
+
 import json
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from pathlib import Path
 import subprocess
-from threading import Event, Thread
+from threading import Event, Lock, Thread
 
 from PIL import Image
 import pytest
@@ -48,6 +50,7 @@ from mediasense.precheck._orchestrator import (
 )
 from mediasense.precheck.work import WorkStore
 from mediasense.precheck.read import bind_precheck_read
+from mediasense.precheck.resources import BoundedWorkExecutor
 
 
 class FakeExifTool:
@@ -103,42 +106,6 @@ class FakeExifTool:
                     record["XMP:DateTimeOriginal"] = self.capture_times[path.name]
             records.append(record)
         return subprocess.CompletedProcess(command, 0, json.dumps(records), "")
-
-
-class FakeVideoTools:
-    def __init__(self, *, fail_at: set[float] | None = None) -> None:
-        self.calls: list[tuple[str, ...]] = []
-        self.fail_at = fail_at or set()
-
-    def __call__(self, command) -> subprocess.CompletedProcess[str]:
-        command = tuple(command)
-        self.calls.append(command)
-        if "-show_entries" in command:
-            return subprocess.CompletedProcess(
-                command,
-                0,
-                json.dumps(
-                    {
-                        "streams": [
-                            {
-                                "width": 1920,
-                                "height": 1080,
-                                "avg_frame_rate": "30/1",
-                                "nb_frames": "751",
-                            }
-                        ],
-                        "format": {"duration": "25.0"},
-                    }
-                ),
-                "",
-            )
-        sample_time = float(command[command.index("-ss") + 1])
-        if sample_time in self.fail_at:
-            return subprocess.CompletedProcess(command, 1, "", "decode failed")
-        Image.new("RGB", (320, 180), (int(sample_time) % 255, 40, 60)).save(
-            Path(command[-1]), format="JPEG"
-        )
-        return subprocess.CompletedProcess(command, 0, "", "")
 
 
 class FakeEncoder:
@@ -394,7 +361,7 @@ def test_start_then_internal_worker_drives_mixed_source_to_readable_result(
             exiftool_version="13.30",
             video_runner=video,
             ffprobe_version="ffprobe 8.1",
-            ffmpeg_version="ffmpeg 8.1",
+            video_decoder=video,
             embedding_encoder=encoder,
             sensitivity_detectors=(detector,),
             geo_tool=_geo_tool(tmp_path, geo_provider),
@@ -678,6 +645,88 @@ def test_metadata_batches_respect_configured_provider_ceiling(tmp_path: Path) ->
         len(command[command.index("--") + 1 :]) <= 2
         for command in metadata_runner.calls
     )
+
+
+def test_metadata_uses_distinct_bounded_lanes_and_closes_them(tmp_path: Path, monkeypatch) -> None:
+    database, source, _ = _prepare_source_bound_run(tmp_path)
+    for index in range(8):
+        (source / f"image-{index}.jpg").write_bytes(b"fixture")
+    accounting = AccountingStore(database)
+    run_id = accounting.start_or_resume_run("dataset-a", source)
+    accounting.process_run(run_id)
+    created = []
+    gate = Event()
+    lock = Lock()
+    active = peak = versions = 0
+
+    class PersistentLane(FakeExifTool):
+        def __init__(self, *args, **kwargs):
+            super().__init__()
+            self.serial = Lock()
+            self.closed = False
+            created.append(self)
+
+        def __call__(self, command):
+            nonlocal active, peak, versions
+            with self.serial:
+                if "-ver" in command:
+                    versions += 1
+                    return super().__call__(command)
+                with lock:
+                    active += 1
+                    peak = max(peak, active)
+                    if active == 4:
+                        gate.set()
+                try:
+                    assert gate.wait(3), "physical provider lanes were serialized"
+                    return super().__call__(command)
+                finally:
+                    with lock:
+                        active -= 1
+
+        def close(self):
+            self.closed = True
+
+    monkeypatch.setattr("mediasense.precheck.metadata.StayOpenExifTool", PersistentLane)
+    config = PrecheckExecutionConfig(metadata_batch_size=1).resolve_resources(
+        source_storage="local", source_storage_evidence="test_local_ssd",
+        logical_cpu_count=18, available_memory_bytes=8 * 1024**3,
+    )
+
+    class Running:
+        def current_state(self, _ref):
+            return "running"
+
+    PrecheckOrchestrator(database, Running())._metadata(
+        "test", run_id, accounting.iter_run_items(run_id), config,
+        BoundedWorkExecutor(config.resource_budget),
+    )
+    assert peak == len(created) == 4
+    assert versions == 1
+    assert all(lane.closed for lane in created)
+    assert len(tuple(WorkStore(database).iter_run_work(run_id, capability="source-metadata"))) == 8
+
+
+def test_missing_video_decoder_blocks_with_real_repair_condition(tmp_path: Path) -> None:
+    from mediasense.precheck._video_decoder import VideoDecoderUnavailable
+
+    database, source, _ = _prepare_source_bound_run(tmp_path)
+    (source / "clip.mp4").write_bytes(b"test fixture")
+    class MissingDecoder:
+        @property
+        def identity(self):
+            raise VideoDecoderUnavailable("test decoder is missing")
+
+    dependencies = PrecheckExecutionDependencies(
+        metadata_runner=FakeExifTool(), exiftool_version="test",
+        video_runner=FakeVideoTools(), ffprobe_version="test", video_decoder=MissingDecoder(),
+    )
+    tool = PrecheckRunTool(database, execution_dependencies=dependencies)
+    started = tool.run({"action": "start", "dataset_ref": "dataset:dataset-a", "request_id": "missing-video-decoder"})
+    _advance_after_scope(tool, str(started["run_ref"]))
+    status = tool.run({"action": "status", "dataset_ref": "dataset:dataset-a", "run_ref": started["run_ref"]})
+    assert status["state"] == "blocked"
+    assert status["reason"]["code"] == "video_decoder_unavailable"
 
 
 def test_default_orchestration_makes_no_external_requests(tmp_path: Path) -> None:

@@ -115,8 +115,10 @@ class StayOpenExifTool:
             self._terminate_locked()
 
     def _ensure_process(self) -> subprocess.Popen[bytes]:
-        if self._process is not None and self._process.poll() is None:
-            return self._process
+        if self._process is not None:
+            if self._process.poll() is None:
+                return self._process
+            self._terminate_locked()
         self._process = subprocess.Popen(
             (self.executable, "-stay_open", "True", "-@", "-"),
             stdin=subprocess.PIPE,

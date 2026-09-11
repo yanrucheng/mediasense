@@ -156,6 +156,23 @@ def test_real_exiftool_stay_open_process_is_reused_and_closed(tmp_path: Path) ->
     assert runner._process is None
 
 
+@pytest.mark.skipif(shutil.which("exiftool") is None, reason="ExifTool is not installed")
+def test_stay_open_exiftool_restarts_dead_lane_and_closes_old_pipes() -> None:
+    runner = StayOpenExifTool()
+    try:
+        assert runner(("exiftool", "-ver")).returncode == 0
+        first = runner._process
+        first.kill()
+        first.wait(timeout=5)
+        assert runner(("exiftool", "-ver")).returncode == 0
+        assert runner.start_count == 2
+        assert runner._process is not first
+        assert all(stream.closed for stream in (first.stdin, first.stdout, first.stderr))
+    finally:
+        runner.close()
+    assert runner._process is None
+
+
 def test_stay_open_exiftool_honors_cancellation_before_start() -> None:
     runner = StayOpenExifTool("exiftool", should_continue=lambda: False)
 
@@ -248,17 +265,17 @@ def test_metadata_heartbeat_renews_batch_beyond_original_lease(
         lease_renew_interval=0.01,
         clock=clock,
     )
-    original_renew = producer.work.renew_lease
+    original_renew = producer.work.renew_leases
 
     def tracked_renew(*args, **kwargs):
         nonlocal renewal_count
         result = original_renew(*args, **kwargs)
-        renewal_count += 1
+        renewal_count += len(result)
         if clock() >= original_expiry - timedelta(seconds=4):
             renewed.set()
         return result
 
-    monkeypatch.setattr(producer.work, "renew_lease", tracked_renew)
+    monkeypatch.setattr(producer.work, "renew_leases", tracked_renew)
 
     outcomes = producer.produce_many(run_id, subjects)
 
@@ -303,7 +320,7 @@ def test_metadata_heartbeat_failure_releases_active_leases_for_immediate_retry(
         exiftool_version="13.30",
         lease_renew_interval=0.01,
     )
-    original_renew = producer.work.renew_lease
+    original_renew = producer.work.renew_leases
 
     def failing_renew(*args, **kwargs):
         if current_thread().name == "mediasense-metadata-lease-heartbeat":
@@ -311,7 +328,7 @@ def test_metadata_heartbeat_failure_releases_active_leases_for_immediate_retry(
             raise OSError("injected heartbeat renewal failure")
         return original_renew(*args, **kwargs)
 
-    monkeypatch.setattr(producer.work, "renew_lease", failing_renew)
+    monkeypatch.setattr(producer.work, "renew_leases", failing_renew)
 
     with pytest.raises(MetadataLeaseRenewalError, match="lease renewal failed"):
         producer.produce_many(run_id, subjects)

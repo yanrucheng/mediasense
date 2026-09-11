@@ -1515,7 +1515,8 @@
                   "properties": {
                     "sample_time_seconds": {
                       "type": "number",
-                      "minimum": 0
+                      "minimum": 0,
+                      "description": "Requested target in seconds relative to video stream start; not proof of decoded position."
                     },
                     "width": {
                       "type": "integer",
@@ -1524,6 +1525,11 @@
                     "height": {
                       "type": "integer",
                       "minimum": 1
+                    },
+                    "decoded_time_seconds": {
+                      "type": "number",
+                      "minimum": 0,
+                      "description": "Observed presentation timestamp in seconds relative to video stream start; omitted when unknown."
                     }
                   },
                   "required": [
@@ -1579,7 +1585,13 @@
                           },
                           "sample_time_seconds": {
                             "type": "number",
-                            "minimum": 0
+                            "minimum": 0,
+                            "description": "Requested target in seconds relative to video stream start; not proof of decoded position."
+                          },
+                          "decoded_time_seconds": {
+                            "type": "number",
+                            "minimum": 0,
+                            "description": "Observed presentation timestamp in seconds relative to video stream start; omitted when unknown."
                           }
                         },
                         "required": [

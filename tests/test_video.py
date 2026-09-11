@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 import json
+from contextlib import contextmanager
 from pathlib import Path
 import shutil
 import subprocess
 
 from PIL import Image
 import pytest
+
+from mediasense.precheck._video_decoder import DecodedVideoFrame, VideoDecodeCancelled
+from mediasense.precheck._video_types import VideoProcessingError
 
 from mediasense.precheck import (
     AccountingStore,
@@ -33,9 +37,32 @@ def _closed_run(database: Path, source: Path) -> str:
 
 
 class FakeVideoTools:
+    identity = "test-local-video-decoder-v1"
+
     def __init__(self, *, fail_at: set[float] | None = None) -> None:
         self.calls: list[tuple[str, ...]] = []
         self.fail_at = fail_at or set()
+        self.decode_calls: list[tuple[float, int]] = []
+        self.opened: list[Path] = []
+
+    @contextmanager
+    def open(self, path, *, threads, should_continue):
+        self.opened.append(path)
+        parent = self
+
+        class Session:
+            def frame_at(self, target_seconds, *, max_edge):
+                if not should_continue():
+                    raise VideoDecodeCancelled("cancelled")
+                parent.decode_calls.append((target_seconds, threads))
+                if target_seconds in parent.fail_at:
+                    raise VideoProcessingError("decode failed")
+                return DecodedVideoFrame(
+                    Image.new("RGB", (320, 180), (int(target_seconds) % 255, 40, 60)),
+                    target_seconds, 1 / 30,
+                )
+
+        yield Session()
 
     def __call__(self, command) -> subprocess.CompletedProcess[str]:
         command = tuple(command)
@@ -59,13 +86,7 @@ class FakeVideoTools:
                 ),
                 "",
             )
-        sample_time = float(command[command.index("-ss") + 1])
-        if sample_time in self.fail_at:
-            return subprocess.CompletedProcess(command, 1, "", "decode failed")
-        Image.new("RGB", (320, 180), (int(sample_time) % 255, 40, 60)).save(
-            Path(command[-1]), format="JPEG"
-        )
-        return subprocess.CompletedProcess(command, 0, "", "")
+        raise AssertionError(f"unexpected probe command: {command}")
 
 
 class FrameColorEncoder:
@@ -93,8 +114,7 @@ def test_probe_frames_and_contact_sheet_have_independent_work_and_artifacts(
     ).produce(run_id, Path("clip.mp4"))
     frame_producer = VideoFrameProducer(
         database,
-        command_runner=runner,
-        ffmpeg_version="ffmpeg 8.1",
+        decoder=runner,
         threads=2,
     )
     first = frame_producer.produce(run_id, Path("clip.mp4"), probe.work.work_id, 0.0)
@@ -115,10 +135,7 @@ def test_probe_frames_and_contact_sheet_have_independent_work_and_artifacts(
     assert sheet.work.status is WorkStatus.SUCCEEDED
     assert sheet.artifact is not None
     assert sheet.artifact.integrity is ArtifactIntegrity.AVAILABLE
-    frame_commands = [command for command in runner.calls if "-ss" in command]
-    assert all(
-        command[command.index("-threads") + 1] == "2" for command in frame_commands
-    )
+    assert all(threads == 2 for _target, threads in runner.decode_calls)
     with Image.open(sheet.artifact.path) as image:
         assert image.size == (240, 120)
     assert video.read_bytes() == source_before
@@ -160,7 +177,7 @@ def test_video_key_frame_candidate_can_be_the_frontier_without_contact_sheet(
     ).produce(run_id, Path("clip.mp4"))
     frames = tuple(
         VideoFrameProducer(
-            database, command_runner=runner, ffmpeg_version="ffmpeg 8.1"
+            database, decoder=runner
         ).produce(run_id, Path("clip.mp4"), probe.work.work_id, sample_time)
         for sample_time in (0.0, 10.0, 25.0)
     )
@@ -229,7 +246,7 @@ def test_contact_sheet_refuses_incomplete_frame_set(tmp_path: Path) -> None:
         database, command_runner=runner, ffprobe_version="ffprobe 8.1"
     ).produce(run_id, Path("clip.mp4"))
     failed = VideoFrameProducer(
-        database, command_runner=runner, ffmpeg_version="ffmpeg 8.1"
+        database, decoder=runner
     ).produce(run_id, Path("clip.mp4"), probe.work.work_id, 10.0)
 
     try:
@@ -255,7 +272,7 @@ def test_contact_sheet_is_default_evidence_and_expands_to_frames(
         database, command_runner=runner, ffprobe_version="ffprobe 8.1"
     ).produce(run_id, Path("clip.mp4"))
     frame_producer = VideoFrameProducer(
-        database, command_runner=runner, ffmpeg_version="ffmpeg 8.1"
+        database, decoder=runner
     )
     first = frame_producer.produce(run_id, Path("clip.mp4"), probe.work.work_id, 0.0)
     last = frame_producer.produce(run_id, Path("clip.mp4"), probe.work.work_id, 25.0)

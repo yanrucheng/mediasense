@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from threading import Barrier
@@ -322,6 +323,45 @@ def test_renewed_lease_is_not_reclaimed_at_the_original_expiry(
     assert work.recover_expired_leases(now=NOW + timedelta(seconds=16)) == (
         original.work_id,
     )
+
+
+def test_batch_renewal_refuses_stale_or_expired_owners_without_partial_renewal(
+    tmp_path: Path,
+) -> None:
+    database = tmp_path / "working.sqlite3"
+    run_id = _completed_accounting_run(database, tmp_path / "source")
+    work = WorkStore(database)
+    spec = _source_spec()
+    for index in range(3):
+        work.ensure_work(
+            run_id,
+            replace(spec, dependencies=spec.dependencies + (
+                WorkDependency(DependencyKind.PARAMETER, "sample", str(index)),
+            )),
+        )
+    leases = work.claim_ready_work(
+        run_id, "owner", lease_duration=timedelta(seconds=10), limit=3, now=NOW
+    )
+    assert len(leases) == 3
+    with pytest.raises(LeaseLost):
+        work.renew_leases(
+            (*leases[:2], replace(leases[2], token="stale")),
+            lease_duration=timedelta(seconds=10), now=NOW + timedelta(seconds=5),
+        )
+    assert all(work.get_attempts(lease.work_id)[0].lease_expires_at == lease.expires_at
+               for lease in leases)
+    renewed = work.renew_leases(
+        leases, lease_duration=timedelta(seconds=10), now=NOW + timedelta(seconds=5)
+    )
+    assert all(lease.expires_at == NOW + timedelta(seconds=15) for lease in renewed)
+    assert work.recover_expired_leases(now=NOW + timedelta(seconds=11)) == ()
+    with pytest.raises(LeaseLost):
+        work.renew_leases(
+            renewed, lease_duration=timedelta(seconds=10), now=NOW + timedelta(seconds=16)
+        )
+    assert set(work.recover_expired_leases(now=NOW + timedelta(seconds=16))) == {
+        lease.work_id for lease in leases
+    }
 
 
 def test_success_rejects_non_json_or_oversized_inline_output(tmp_path: Path) -> None:
