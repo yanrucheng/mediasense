@@ -348,11 +348,12 @@ class PlanWorkTool:
         digest = _request_digest(request)
         execution = execution or UpdateExecution()
         with execution.operation(work_ref, request_id):
-            replay = self.store.replay(request_id, digest)
+            replay, _ = self._update_preflight(
+                work_ref, base_revision, request_id, digest
+            )
             if replay is not None:
                 execution.report("replayed")
                 return replay
-            self._update_snapshot(work_ref, base_revision)
             candidate = request["candidate_content"]
             if not isinstance(candidate, Mapping):
                 raise PlanFailure(
@@ -363,11 +364,13 @@ class PlanWorkTool:
             with update_ownership(self.store.database_path, work_ref, execution):
                 # The owner ahead of us may have committed, failed or cancelled.
                 # Re-read facts after admission; a lock is never a success receipt.
-                replay = self.store.replay(request_id, digest)
+                replay, snapshot = self._update_preflight(
+                    work_ref, base_revision, request_id, digest
+                )
                 if replay is not None:
                     execution.report("replayed")
                     return replay
-                snapshot = self._update_snapshot(work_ref, base_revision)
+                assert snapshot is not None
                 analysis = analyze_candidate(
                     candidate,
                     result_ref=snapshot.result_ref,
@@ -412,13 +415,27 @@ class PlanWorkTool:
                 )
                 return result
 
-    def _update_snapshot(self, work_ref: str, base_revision: str) -> WorkSnapshot:
-        snapshot = self.store.snapshot(work_ref)
-        if snapshot.state != "open":
-            raise WorkClosed(work_ref)
-        if snapshot.revision != base_revision:
-            raise RevisionConflict(snapshot.revision)
-        return snapshot
+    def _update_preflight(
+        self, work_ref: str, base_revision: str, request_id: str, digest: str
+    ) -> tuple[dict[str, Any] | None, WorkSnapshot | None]:
+        replay = self.store.replay(request_id, digest)
+        if replay is not None:
+            return replay, None
+        try:
+            snapshot = self.store.snapshot(work_ref)
+            if snapshot.state != "open":
+                raise WorkClosed(work_ref)
+            if snapshot.revision != base_revision:
+                raise RevisionConflict(snapshot.revision)
+        except (WorkClosed, RevisionConflict):
+            # A commit may land after the receipt lookup but before the snapshot.
+            # Receipts are durable and atomic with state/revision changes, so
+            # recheck before rejecting. Never repeat candidate validation here.
+            replay = self.store.replay(request_id, digest)
+            if replay is None:
+                raise
+            return replay, None
+        return None, snapshot
 
     def _inspect(self, request: dict[str, Any]) -> dict[str, Any]:
         _require_keys(
