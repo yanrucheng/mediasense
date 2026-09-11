@@ -81,6 +81,10 @@ def contract_validator(name: str, action: str | None = None) -> Draft202012Valid
             **contract["responseSchemas"][action],
         }
     )
+    if name == "mediasense.precheck.read":
+        from ._validation import ReadValidator
+
+        return ReadValidator(schema, format_checker=FORMAT_CHECKER)
     return Draft202012Validator(schema, format_checker=FORMAT_CHECKER)
 
 
