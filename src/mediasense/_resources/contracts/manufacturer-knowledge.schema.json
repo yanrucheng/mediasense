@@ -203,6 +203,86 @@
                             "minLength": 1
                           }
                         }
+                      },
+                      {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "name",
+                          "tag_pairs"
+                        ],
+                        "properties": {
+                          "name": {
+                            "const": "gps_coordinates"
+                          },
+                          "tag_pairs": {
+                            "type": "array",
+                            "minItems": 1,
+                            "uniqueItems": true,
+                            "items": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "required": [
+                                "latitude",
+                                "longitude"
+                              ],
+                              "properties": {
+                                "latitude": {
+                                  "type": "string",
+                                  "pattern": "^[A-Za-z][A-Za-z0-9_-]*:[A-Za-z][A-Za-z0-9_]*$"
+                                },
+                                "longitude": {
+                                  "type": "string",
+                                  "pattern": "^[A-Za-z][A-Za-z0-9_-]*:[A-Za-z][A-Za-z0-9_]*$"
+                                }
+                              }
+                            }
+                          },
+                          "fallback": {
+                            "type": "boolean",
+                            "default": true
+                          }
+                        }
+                      },
+                      {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "name",
+                          "tag_pairs"
+                        ],
+                        "properties": {
+                          "name": {
+                            "const": "source_pixel_dimensions"
+                          },
+                          "tag_pairs": {
+                            "type": "array",
+                            "minItems": 1,
+                            "uniqueItems": true,
+                            "items": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "required": [
+                                "width",
+                                "height"
+                              ],
+                              "properties": {
+                                "width": {
+                                  "type": "string",
+                                  "pattern": "^[A-Za-z][A-Za-z0-9_-]*:[A-Za-z][A-Za-z0-9_]*$"
+                                },
+                                "height": {
+                                  "type": "string",
+                                  "pattern": "^[A-Za-z][A-Za-z0-9_-]*:[A-Za-z][A-Za-z0-9_]*$"
+                                }
+                              }
+                            }
+                          },
+                          "fallback": {
+                            "type": "boolean",
+                            "default": true
+                          }
+                        }
                       }
                     ]
                   }

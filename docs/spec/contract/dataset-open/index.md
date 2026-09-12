@@ -60,6 +60,14 @@ media. The [manufacturer file contract](../manufacturer-knowledge/index.md) owns
 authoring and overlay semantics. A new PreCheck Run freezes full knowledge in its
 existing store; this discovery response does not duplicate the full catalog.
 
+Invalid manufacturer YAML is reported in this summary as
+`error: {code: "configuration_invalid", message: ...}` and
+`execution: "not_checked"`, without claiming an effective knowledge identity or
+rule set. It does not block Dataset access or a Run's stored knowledge snapshot.
+New PreCheck work still validates the current files before it starts; a resume
+without a stored execution snapshot has the same requirement. Other invalid
+runtime settings retain their existing configuration errors.
+
 
 The Dataset manifest binds the source locator to observed source and volume
 identity. A compatible mount-path change may reuse verified work; an identity

@@ -133,10 +133,15 @@ def _custom_value(definition, raw):
         raise ValueError("invalid boolean field")
     if isinstance(raw, bool):
         raise ValueError("boolean is not a number")
-    value = float(Fraction(str(raw)))
-    if not math.isfinite(value) or (kind == "integer" and not value.is_integer()):
+    exact = Fraction(str(raw))
+    if kind == "integer":
+        if exact.denominator != 1:
+            raise ValueError("non-integral integer field")
+        return exact.numerator
+    value = float(exact)
+    if not math.isfinite(value):
         raise ValueError("invalid numeric field")
-    return int(value) if kind == "integer" else value
+    return value
 
 
 def photographic_observations(indexed, ordered, subject, profile, knowledge=None):
@@ -295,5 +300,111 @@ def photographic_observations(indexed, ordered, subject, profile, knowledge=None
                 },
             )
             break
-    observations.append(dimension)
+    observations.append(
+        paired_field_observation(
+            dimension,
+            indexed,
+            ordered,
+            subject,
+            knowledge.get("source_pixel_dimensions", {}),
+        )
+    )
     return observations
+
+
+def paired_field_observation(default, indexed, ordered, subject, resolution):
+    """Resolve a configured pair from one source, retaining the ordinary fallback."""
+    effect = resolution.get("effect")
+    if effect is None and not resolution.get("conflict"):
+        return default
+    effect = effect or {}
+    name = default["name"]
+    dimensions = name == "source_pixel_dimensions"
+    components = ("width", "height") if dimensions else ("latitude", "longitude")
+    paths = [subject.as_posix()] if dimensions else ordered
+    pairs = effect.get("tag_pairs", resolution.get("candidate_pairs", ()))
+    candidates = []
+    for pair in pairs:
+        for path in paths:
+            if path != subject.as_posix() and any(
+                tag.startswith("File:") for tag in pair.values()
+            ):
+                continue
+            fields = indexed.get(path, {})
+            raw = {part: fields.get(pair[part]) for part in components}
+            if all(value is None or value == "" for value in raw.values()):
+                continue
+            candidate = {
+                "relative_path": path,
+                "tags": [pair[part] for part in components],
+                "raw_value": raw,
+            }
+            try:
+                value = {
+                    part: _custom_value(
+                        {"value_type": "integer" if dimensions else "number"},
+                        raw[part],
+                    )
+                    for part in components
+                }
+                if dimensions:
+                    if any(number <= 0 for number in value.values()):
+                        raise ValueError("dimensions must be positive integers")
+                else:
+                    if (
+                        not -90 <= value["latitude"] <= 90
+                        or not -180 <= value["longitude"] <= 180
+                    ):
+                        raise ValueError("coordinates out of range")
+                    value["datum"] = "WGS84"
+                candidate["value"] = value
+            except (ValueError, TypeError, ZeroDivisionError, OverflowError):
+                candidate["rejection"] = "invalid_metadata_pair"
+            candidates.append(candidate)
+    fallback = {"kind": "default_fallback", "observation": default}
+    if default.get("status") == "available":
+        fallback["value"] = default["value"]
+    if not effect.get("fallback", True):
+        fallback["rejection"] = "manufacturer_fallback_disabled"
+    candidates.append(fallback)
+    valid = [
+        candidate
+        for candidate in candidates
+        if "value" in candidate and "rejection" not in candidate
+    ]
+    provenance = {"method": "exiftool", "candidates": candidates}
+    if not valid:
+        failed = any(
+            candidate.get("rejection") == "invalid_metadata_pair"
+            for candidate in candidates
+        ) or (effect.get("fallback", True) and default.get("status") == "failed")
+        return {
+            "name": name,
+            "status": "failed" if failed else "missing",
+            "basis": {
+                "code": "invalid_metadata_pair"
+                if failed
+                else "manufacturer_pair_fields_missing"
+            },
+            "provenance": provenance,
+        }
+    selected = valid[0]
+    if selected is fallback:
+        observation = dict(default)
+        provenance = {**default.get("provenance", {}), **provenance}
+    else:
+        observation = {"name": name, "status": "available", "value": selected["value"]}
+        provenance.update(
+            {key: selected[key] for key in ("relative_path", "tags", "raw_value")}
+        )
+    observation["provenance"] = provenance
+    if any(candidate["value"] != selected["value"] for candidate in valid[1:]):
+        observation["qualifications"] = [
+            *observation.get("qualifications", []),
+            {
+                "code": "metadata_source_conflict",
+                "effect": "limits_interpretation",
+                "message": "Configured pairs and ordinary metadata disagree; inspect the retained candidates.",
+            },
+        ]
+    return observation

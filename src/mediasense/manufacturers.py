@@ -254,7 +254,7 @@ class KnowledgeSnapshot:
             if time:
                 tags.update(time["tags"])
             for effect in rule["apply"].get("fields", []):
-                tags.update(effect["tags"])
+                tags.update(_effect_tags(effect))
         return tuple(sorted(tags))
 
     def summary(self) -> dict[str, Any]:
@@ -406,11 +406,25 @@ def evaluate_rules(
                 dict.fromkeys(
                     tag
                     for candidate in candidates
-                    for tag in candidate["effect"]["tags"]
+                    for tag in _effect_tags(candidate["effect"])
                 )
             ),
+            "candidate_pairs": [
+                json.loads(pair)
+                for pair in dict.fromkeys(
+                    _canonical(pair)
+                    for candidate in candidates
+                    for pair in candidate["effect"].get("tag_pairs", ())
+                )
+            ],
         }
     return resolved
+
+
+def _effect_tags(effect: Mapping[str, Any]):
+    yield from effect.get("tags", ())
+    for pair in effect.get("tag_pairs", ()):
+        yield from pair.values()
 
 
 def _effect_defaults(effect: dict[str, Any], name: str) -> dict[str, Any]:

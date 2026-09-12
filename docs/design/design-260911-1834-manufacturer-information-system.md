@@ -22,7 +22,7 @@ tags: ["manufacturer", "metadata", "configuration", "migration"]
 
 用户已确认名称为**厂商信息维护体系**，并将它定位为 MediaSense 的核心能力。它要持续满足两项目的：按设备和媒体的实际差异提供定制适配；让用户通过简单配置扩充已支持的适配行为。
 
-2026-09-12，用户确认目的与内在逻辑，选择 B 方案（随包基础知识＋用户按厂商维护的增量目录），并授权先固定文件契约再开发。本页维护设计理由；文件字段和生效行为由[当前厂商知识契约](../spec/contract/manufacturer-knowledge/index.md)定义。迁移与实际验证仍在[既有迁移台账](../eval/eval-260823-1918-ai-album-migration-baseline/eval-260823-1918B-capability-ledger.md#manufacturer-information-delivery)维护，不将实现检查冒充发布或所有设备认证。
+2026-09-12，用户确认目的与内在逻辑，选择 B 方案（随包基础知识＋用户按厂商维护的增量目录），并授权先固定文件契约再开发。本页维护设计理由；文件字段和生效行为由[当前厂商知识契约](../spec/contract/manufacturer-knowledge/index.md)定义。迁移与实际验证仍在[既有迁移台账](../eval/eval-260823-1918-ai-album-migration-baseline/eval-260823-1918B-capability-ledger.md#manufacturer-information-repair)维护，不将实现检查冒充所有设备认证。
 
 体系的稳定责任是：**持续维护当前媒体业务所需、无法仅凭用户素材及附带信息可靠确定的厂商行为知识，让它实际参与处理，并允许用户方便地补充和修正。** 第一轮从 AI Album 的时间缺陷、字段来源和选择知识取材。素材自身可读出的型号、序列号或曝光值属于素材观察，不另行登记为厂商事实；通用解析器已可靠解决的部分无需重复维护。
 
@@ -37,7 +37,7 @@ tags: ["manufacturer", "metadata", "configuration", "migration"]
 
 | 项目 | 约束 |
 | --- | --- |
-| 当前形态 | 在已有 0.10.0 产品上开发文件契约与生产接通；在用环境及候选安装分别认证 |
+| 当前形态 | 基于既有三阶段产品扩展文件契约与生产接通；在用环境及候选安装分别认证，构建身份和结果记录在迁移台账 |
 | 兼容政策 | 沿用[当前合约](../spec/contract/index.md)的零公开 API 兼容政策，不设置长期新旧路由、双写或旧配置 runtime adapter |
 | 历史保护 | 已封存 Result 和原始媒体字节不改写；规则修订产生后继结果 |
 | 迁移责任 | 实现方逐条审查旧规则的目的和证据，再表达为新规则；用户已有定制需作为显式迁移输入，不能默默忽略 |

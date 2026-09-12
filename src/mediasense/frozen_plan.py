@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 import hashlib
 import json
+from importlib.resources import files
 from pathlib import Path
 from typing import Any
 
@@ -20,12 +21,12 @@ class FrozenPlanValidationError(ValueError):
 
 
 def frozen_plan_schema_path() -> Path:
-    return (
-        Path(__file__).resolve().parents[2]
-        / "docs"
-        / "spec"
-        / "spec-260827-1138-frozen-plan"
-        / "frozen-plan.schema.json"
+    return Path(
+        str(
+            files("mediasense").joinpath(
+                "_resources", "contracts", "frozen-plan.schema.json"
+            )
+        )
     )
 
 

@@ -37,12 +37,20 @@ class RuntimeConfig:
             "output_timezone": "Asia/Shanghai",
         }
     )
-    manufacturer_knowledge: KnowledgeSnapshot = field(default_factory=builtin_knowledge)
+    manufacturer_knowledge: KnowledgeSnapshot | None = field(
+        default_factory=builtin_knowledge
+    )
+    manufacturer_knowledge_error: str | None = None
     user_config_path: Path | None = None
 
     def metadata_profile(self):
         from mediasense.precheck.metadata import MetadataProfile
 
+        if self.manufacturer_knowledge is None:
+            raise ConfigurationError(
+                self.manufacturer_knowledge_error
+                or "Manufacturer knowledge is unavailable"
+            )
         return MetadataProfile(
             timezone=self.metadata["output_timezone"],
             assumed_timezone=self.metadata["assumed_timezone"],
@@ -61,7 +69,18 @@ class RuntimeConfig:
         return {
             "metadata": {
                 **self.metadata,
-                "manufacturer_knowledge": self.manufacturer_knowledge.summary(),
+                "manufacturer_knowledge": (
+                    self.manufacturer_knowledge.summary()
+                    if self.manufacturer_knowledge is not None
+                    else {
+                        "error": {
+                            "code": "configuration_invalid",
+                            "message": self.manufacturer_knowledge_error
+                            or "Manufacturer knowledge is unavailable",
+                        },
+                        "execution": "not_checked",
+                    }
+                ),
             },
             "geo_network": transport.network_profile,
             "sources": [str(path) for path in self.sources],
@@ -127,6 +146,7 @@ def load_runtime_config(
     dataset_workspace: Path | None = None,
     user_config: Path | None = None,
     load_manufacturers: bool = True,
+    allow_invalid_manufacturers: bool = False,
 ) -> RuntimeConfig:
     values: dict[str, Any] = {
         "amap_api_key_env": "AMAP_API_KEY",
@@ -149,6 +169,7 @@ def load_runtime_config(
             values["metadata"].update(parsed.pop("metadata"))
         values.update(parsed)
         sources.append(path)
+    knowledge_error = None
     try:
         knowledge = (
             load_knowledge(user_path.parent)
@@ -156,7 +177,10 @@ def load_runtime_config(
             else KnowledgeSnapshot.empty()
         )
     except KnowledgeError as error:
-        raise ConfigurationError(str(error)) from error
+        if not allow_invalid_manufacturers:
+            raise ConfigurationError(str(error)) from error
+        knowledge = None
+        knowledge_error = str(error)
     return RuntimeConfig(
         amap_api_key_env=str(values["amap_api_key_env"]),
         google_maps_api_key_env=str(values["google_maps_api_key_env"]),
@@ -166,6 +190,7 @@ def load_runtime_config(
         geo_network=values.get("geo_network"),
         metadata=values["metadata"],
         manufacturer_knowledge=knowledge,
+        manufacturer_knowledge_error=knowledge_error,
         user_config_path=user_path,
     )
 

@@ -20,6 +20,10 @@ superseded-by: ""
 
 2026-09-11 用户授权 Agent 收敛并开发的吞吐/有效帧修复，补充 Run 的联合运行品质承诺和 Read 的请求位置/实际 PTS 含义。其独立验收见[变更计划](../../../openspec/changes/restore-precheck-throughput-and-coverage/acceptance.md)及[修复评测](../../../eval/sessions/260911-2128-precheck-throughput-recovery/report.md)。源码与隔离 wheel 的认证不等于日常 Host 已升级；不借用 0.9.0 的验收记录扩大当前安装的能力声明。
 
+2026-09-12 用户确认 Plan 信息收集与可选工作保存进入研发。本次 **Plan Work 合约变更已定稿，源码及隔离 wheel/MCP 实现验收已完成**：支持可选工作说明、独立偏好更新、候选保留／整体替换／撤下，以及无候选的正常读取。最终确认保留预览 HTML 后聊天接受的方式。开发从[交接包](../../../openspec/changes/refine-plan-interaction/README.md)开始；[实现验收](../../../openspec/changes/refine-plan-interaction/acceptance.md)记录实际入口证据；日常安装与原注册启动链路已按确切 wheel 升级验证；现有 Agent 会话不能由磁盘或相同版本号推断已重载。
+
+2026-09-12 用户复核收窄首轮验收：正常保存路径证据成立，但发现身份字段注入、非法结构错误分类、Preview 图片交付三处缺口。上述三项已通过用户独立复验；后续发现的 Preview 选定 Evidence 分页缺口也已获用户独立复核通过。2026-09-12 按用户授权完成日常安装升级，保留原 Python、extras、依赖和配置。当前契约承诺不变，详细证据见上述实现验收链接。
+
 ## 阅读入口
 
 | 当前合约 | 用途 | 本轮变化 |
@@ -29,7 +33,7 @@ superseded-by: ""
 | [PreCheck Run](precheck-run/index.md) | 启动、控制和观察准备过程 | 控制接口沿用；补齐本期准备深度与生产接通要求 |
 | [Geo Query](geo-query/index.md) | 有界、受授权的地理候选获取 | 输入和效果语义沿用；明确采集策略与证据投影的责任 |
 | [Dataset Open](dataset-open/index.md) | 打开明确的 Dataset | 迁入稳定位置，语义沿用 |
-| [Plan Work](plan-work/index.md) | 维护和冻结 Plan | 迁入稳定位置，语义沿用 |
+| [Plan Work](plan-work/index.md) | 保存规划工作、维护和冻结 Plan | 可选工作说明、字段独立更新和空候选读取已实现；独立复核及日常升级验证通过，已有 Agent 会话加载待确认 |
 | [Frozen Plan](frozen-plan/index.md) | 冻结后的组织意图 | 迁入稳定位置，Source Set 含义沿用 |
 | [组织 Profile](default-organization-profile/index.md) | 默认组织和命名策略 | 迁入稳定位置；明确翻译属于 Plan 判断 |
 | [Apply](apply/index.md) | 已冻结计划的执行合约 | 仅迁入稳定位置，本轮不作全量审计 |

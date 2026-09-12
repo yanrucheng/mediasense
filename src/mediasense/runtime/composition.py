@@ -129,7 +129,8 @@ class DatasetRuntime:
             )
         )
         from dataclasses import replace
-        execution_config = replace(execution_config, metadata_profile=config.metadata_profile())
+        if config.manufacturer_knowledge is not None:
+            execution_config = replace(execution_config, metadata_profile=config.metadata_profile())
         from mediasense.precheck.sensitivity import (
             NudeNetDetector,
             TransformersNSFWDetector,
@@ -230,6 +231,24 @@ class DatasetRuntime:
             raise HostRequestError(f"Unknown MediaSense Tool: {name}")
         return dict(response)
 
+    def _reload_metadata_configuration(self) -> None:
+        from .config import load_runtime_config
+
+        updated = load_runtime_config(
+            dataset_workspace=self.opened.workspace,
+            user_config=self.config.user_config_path,
+        )
+        self.precheck_run._execution_config = replace(
+            self.precheck_run._execution_config,
+            metadata_profile=updated.metadata_profile(),
+        )
+        self.config = replace(
+            self.config,
+            metadata=updated.metadata,
+            manufacturer_knowledge=updated.manufacturer_knowledge,
+            manufacturer_knowledge_error=updated.manufacturer_knowledge_error,
+        )
+
     def _call_precheck(
         self, request: dict[str, Any], authority: Mapping[str, Any]
     ) -> dict[str, object]:
@@ -269,23 +288,12 @@ class DatasetRuntime:
                         "run_ref": active["run_ref"],
                     }
                 }
-            from .config import ConfigurationError, load_runtime_config
+            from .config import ConfigurationError
 
             try:
-                updated = load_runtime_config(
-                    dataset_workspace=self.opened.workspace,
-                    user_config=self.config.user_config_path,
-                )
+                self._reload_metadata_configuration()
             except ConfigurationError as error:
                 return {"error": {"code": "configuration_invalid", "message": str(error)}}
-            self.precheck_run._execution_config = replace(
-                self.precheck_run._execution_config,
-                metadata_profile=updated.metadata_profile(),
-            )
-            self.config = replace(
-                self.config, metadata=updated.metadata,
-                manufacturer_knowledge=updated.manufacturer_knowledge,
-            )
             requested_dataset = request.get("dataset_ref")
             if (
                 requested_dataset is not None
@@ -339,7 +347,13 @@ class DatasetRuntime:
                         }
                     }
             if state in {"paused", "blocked"}:
-                from .config import load_runtime_config
+                from .config import ConfigurationError, load_runtime_config
+
+                if self.precheck_run._store.get(ref)["execution_config"] is None:
+                    try:
+                        self._reload_metadata_configuration()
+                    except ConfigurationError as error:
+                        return {"error": {"code": "configuration_invalid", "message": str(error)}}
 
                 updated = load_runtime_config(
                     dataset_workspace=self.opened.workspace,

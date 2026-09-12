@@ -827,7 +827,7 @@ wheels = [
 
 [[package]]
 name = "mediasense"
-version = "0.10.1"
+version = "0.10.2"
 source = { editable = "." }
 dependencies = [
     { name = "av" },

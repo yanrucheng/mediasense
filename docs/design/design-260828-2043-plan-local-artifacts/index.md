@@ -4,7 +4,7 @@ title: "MediaSense Plan Local Artifact Design"
 type: design
 status: active
 created: 2026-08-28
-updated: 2026-09-09
+updated: 2026-09-12
 timezone: "Asia/Shanghai"
 parent: "index-design"
 depends-on:
@@ -53,16 +53,26 @@ The database supports the mutable and transactional responsibilities already own
 
 - the binding from `work_ref` to one exact `result_ref`;
 - open or closed lifecycle;
-- the current opaque revision and complete candidate content;
+- the current opaque revision and optional complete candidate content;
 - the current plan-scoped `organization_preferences` snapshot;
+- optional Agent-authored `working_notes`, initially empty, under the same revision;
 - idempotency records needed to return the same result for the same accepted `request_id`;
 - concurrency protection needed to reject a stale `base_revision`; and
 - the successful seal outcome needed for retry and recovery.
 
-It is not a Frozen Plan, a PreCheck Result replica, or an Apply input. Provider
-observations remain in the immutable PreCheck Result rather than Plan state. Table
+It is not a Frozen Plan, a PreCheck Result replica, or an Apply input. PreCheck
+observations retain their immutable Result authority. Working notes may describe
+supplemental Human input or authorized Plan-local findings with their actual
+sources and limits; a textual reference does not copy or take custody of the
+referenced material. Notes do not enter the Frozen Plan automatically. Table
 names, columns, indexes, journaling mode, page size, migrations, and other SQLite
 choices remain implementation details.
+
+The existing Work transaction owns notes, preferences, candidate presence and
+content, revision, and the update receipt together. Withdrawing a candidate leaves
+the Work and its notes available, preserves its reserved `plan_ref`, and does not
+promise historical-candidate recovery. No additional persistent component is
+introduced for this capability.
 
 The contract requires only the observable state needed to honor `create`,
 `update`, `inspect`, and `seal`. It does not require permanent storage of every
@@ -98,7 +108,7 @@ Removing a published JSON artifact would destroy the immutable stage handoff eve
 
 | Information | Authoritative home | May be rebuilt? |
 | --- | --- | --- |
-| Open Working State, current revision, candidate, preferences, retry and close state | `work.sqlite3` | No, except through an explicitly defined future recovery path |
+| Open Working State, current revision, candidate, preferences, working notes, retry and close state | `work.sqlite3` | No, except through an explicitly defined future recovery path |
 | Published organization decision and seal | Frozen Plan JSON | No |
 | `plan_ref` to artifact-location lookup | SQLite acceleration index or runtime scan | Yes, from valid Frozen Plan files |
 | Human-readable tree or Markdown preview | Adapter output | Yes; it is not persisted by default |

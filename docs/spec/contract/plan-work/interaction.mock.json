@@ -1,0 +1,1138 @@
+{
+  "purpose": "Human-reviewable synthetic contract examples; no actual Tool execution or Human confirmation is claimed.",
+  "authority": "Accepted contract example. Context is a trusted test-harness input, never part of the ordinary Tool request or a claim of actual Human confirmation.",
+  "scenario": "One plan-ready trusted synthetic Result with source-item:a and source-item:b; a linear persistence scenario, not a mandatory Agent workflow.",
+  "exchanges": [
+    {
+      "name": "create",
+      "request": {
+        "action": "create",
+        "result_ref": "precheck-result:demo",
+        "organization_preferences": {
+          "retrieval_goal": "按活动查找",
+          "preserve_source_basenames": true
+        },
+        "request_id": "request:demo-create"
+      },
+      "response": {
+        "outcome": "ok",
+        "action": "create",
+        "work_ref": "plan-work:demo",
+        "result_ref": "precheck-result:demo",
+        "revision": "work-revision:a",
+        "state": "open",
+        "organization_preferences": {
+          "retrieval_goal": "按活动查找",
+          "preserve_source_basenames": true
+        }
+      }
+    },
+    {
+      "name": "empty-default-inspect",
+      "request": {
+        "action": "inspect",
+        "work_ref": "plan-work:demo"
+      },
+      "response": {
+        "outcome": "ok",
+        "action": "inspect",
+        "work_ref": "plan-work:demo",
+        "result_ref": "precheck-result:demo",
+        "revision": "work-revision:a",
+        "state": "open",
+        "returned_sections": [
+          "overview",
+          "preferences",
+          "working_notes",
+          "content",
+          "validation"
+        ],
+        "sections": {
+          "overview": {
+            "state": "open"
+          },
+          "preferences": {
+            "retrieval_goal": "按活动查找",
+            "preserve_source_basenames": true
+          },
+          "working_notes": "",
+          "content": null,
+          "validation": {
+            "seal_ready": false,
+            "issues": [
+              {
+                "code": "candidate_missing",
+                "severity": "error",
+                "message": "当前没有组织候选；已保存的工作说明和偏好仍可读取。"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "notes-only",
+      "request": {
+        "action": "update",
+        "work_ref": "plan-work:demo",
+        "base_revision": "work-revision:a",
+        "working_notes": "用户已说明 a 为展览参观。b 的活动身份尚未明确，将影响合并或独立组织；需要补充信息或明确较粗的处置。",
+        "request_id": "request:notes-only"
+      },
+      "response": {
+        "outcome": "ok",
+        "action": "update",
+        "work_ref": "plan-work:demo",
+        "result_ref": "precheck-result:demo",
+        "revision": "work-revision:b",
+        "state": "open"
+      }
+    },
+    {
+      "name": "resume-without-candidate",
+      "request": {
+        "action": "inspect",
+        "work_ref": "plan-work:demo"
+      },
+      "response": {
+        "outcome": "ok",
+        "action": "inspect",
+        "work_ref": "plan-work:demo",
+        "result_ref": "precheck-result:demo",
+        "revision": "work-revision:b",
+        "state": "open",
+        "returned_sections": [
+          "overview",
+          "preferences",
+          "working_notes",
+          "content",
+          "validation"
+        ],
+        "sections": {
+          "overview": {
+            "state": "open"
+          },
+          "preferences": {
+            "retrieval_goal": "按活动查找",
+            "preserve_source_basenames": true
+          },
+          "working_notes": "用户已说明 a 为展览参观。b 的活动身份尚未明确，将影响合并或独立组织；需要补充信息或明确较粗的处置。",
+          "content": null,
+          "validation": {
+            "seal_ready": false,
+            "issues": [
+              {
+                "code": "candidate_missing",
+                "severity": "error",
+                "message": "当前没有组织候选；已保存的工作说明和偏好仍可读取。"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "stale-update",
+      "request": {
+        "action": "update",
+        "work_ref": "plan-work:demo",
+        "base_revision": "work-revision:a",
+        "working_notes": "陈旧写入",
+        "request_id": "request:stale"
+      },
+      "response": {
+        "outcome": "error",
+        "action": "update",
+        "work_ref": "plan-work:demo",
+        "revision": "work-revision:b",
+        "error": {
+          "code": "revision_conflict",
+          "message": "读取当前版本后重新决定修改。",
+          "current_revision": "work-revision:b"
+        }
+      }
+    },
+    {
+      "name": "complete-candidate",
+      "request": {
+        "action": "update",
+        "work_ref": "plan-work:demo",
+        "base_revision": "work-revision:b",
+        "working_notes": "用户分别说明 a 为展览参观、b 为家庭聚会；已形成两个活动，尚待审阅完整候选。",
+        "candidate_content": {
+          "result_ref": "precheck-result:demo",
+          "scope": {
+            "kind": "explicit",
+            "source_item_refs": [
+              "source-item:a",
+              "source-item:b"
+            ]
+          },
+          "logical_root": "周末活动",
+          "groups": [
+            {
+              "relative_path": [
+                "展览参观"
+              ],
+              "members": {
+                "kind": "explicit",
+                "source_item_refs": [
+                  "source-item:a"
+                ]
+              },
+              "source_naming": {
+                "default": "preserve_source_basename"
+              }
+            },
+            {
+              "relative_path": [
+                "家庭聚会"
+              ],
+              "members": {
+                "kind": "explicit",
+                "source_item_refs": [
+                  "source-item:b"
+                ]
+              },
+              "source_naming": {
+                "default": "preserve_source_basename"
+              }
+            }
+          ],
+          "other_outcomes": [],
+          "decision_notes": [
+            {
+              "applies_to": {
+                "kind": "explicit",
+                "source_item_refs": [
+                  "source-item:b"
+                ]
+              },
+              "summary": "依据用户补充，将 b 作为独立的家庭聚会组织，未沿用 a 的活动身份。"
+            }
+          ]
+        },
+        "request_id": "request:complete-candidate"
+      },
+      "response": {
+        "outcome": "ok",
+        "action": "update",
+        "work_ref": "plan-work:demo",
+        "result_ref": "precheck-result:demo",
+        "revision": "work-revision:c",
+        "state": "open"
+      }
+    },
+    {
+      "name": "review-candidate",
+      "request": {
+        "action": "inspect",
+        "work_ref": "plan-work:demo",
+        "sections": [
+          "content",
+          "validation"
+        ]
+      },
+      "response": {
+        "outcome": "ok",
+        "action": "inspect",
+        "work_ref": "plan-work:demo",
+        "result_ref": "precheck-result:demo",
+        "revision": "work-revision:c",
+        "state": "open",
+        "returned_sections": [
+          "content",
+          "validation"
+        ],
+        "sections": {
+          "content": {
+            "mode": "complete",
+            "value": {
+              "contract": "mediasense.frozen-plan",
+              "plan_ref": "frozen-plan:demo",
+              "result_ref": "precheck-result:demo",
+              "scope": {
+                "kind": "explicit",
+                "source_item_refs": [
+                  "source-item:a",
+                  "source-item:b"
+                ]
+              },
+              "logical_root": "周末活动",
+              "groups": [
+                {
+                  "relative_path": [
+                    "展览参观"
+                  ],
+                  "members": {
+                    "kind": "explicit",
+                    "source_item_refs": [
+                      "source-item:a"
+                    ]
+                  },
+                  "source_naming": {
+                    "default": "preserve_source_basename"
+                  }
+                },
+                {
+                  "relative_path": [
+                    "家庭聚会"
+                  ],
+                  "members": {
+                    "kind": "explicit",
+                    "source_item_refs": [
+                      "source-item:b"
+                    ]
+                  },
+                  "source_naming": {
+                    "default": "preserve_source_basename"
+                  }
+                }
+              ],
+              "other_outcomes": [],
+              "decision_notes": [
+                {
+                  "applies_to": {
+                    "kind": "explicit",
+                    "source_item_refs": [
+                      "source-item:b"
+                    ]
+                  },
+                  "summary": "依据用户补充，将 b 作为独立的家庭聚会组织，未沿用 a 的活动身份。"
+                }
+              ]
+            }
+          },
+          "validation": {
+            "seal_ready": true,
+            "issues": []
+          }
+        },
+        "candidate_content_identity": "sha256:5640cff1778c552adba0473feac26b85890ad86246a5243611d1a9d7786da470"
+      }
+    },
+    {
+      "name": "supplement-notes",
+      "request": {
+        "action": "update",
+        "work_ref": "plan-work:demo",
+        "base_revision": "work-revision:c",
+        "working_notes": "用户分别说明 a 为展览参观、b 为家庭聚会；已形成两个活动，尚待审阅完整候选。 补记：身份来源为用户的分别说明。",
+        "request_id": "request:supplement-notes"
+      },
+      "response": {
+        "outcome": "ok",
+        "action": "update",
+        "work_ref": "plan-work:demo",
+        "result_ref": "precheck-result:demo",
+        "revision": "work-revision:d",
+        "state": "open"
+      }
+    },
+    {
+      "name": "same-content-new-revision",
+      "request": {
+        "action": "inspect",
+        "work_ref": "plan-work:demo",
+        "sections": [
+          "working_notes",
+          "validation"
+        ]
+      },
+      "response": {
+        "outcome": "ok",
+        "action": "inspect",
+        "work_ref": "plan-work:demo",
+        "result_ref": "precheck-result:demo",
+        "revision": "work-revision:d",
+        "state": "open",
+        "returned_sections": [
+          "working_notes",
+          "validation"
+        ],
+        "sections": {
+          "working_notes": "用户分别说明 a 为展览参观、b 为家庭聚会；已形成两个活动，尚待审阅完整候选。 补记：身份来源为用户的分别说明。",
+          "validation": {
+            "seal_ready": true,
+            "issues": []
+          }
+        },
+        "candidate_content_identity": "sha256:5640cff1778c552adba0473feac26b85890ad86246a5243611d1a9d7786da470"
+      }
+    },
+    {
+      "name": "stale-seal",
+      "request": {
+        "action": "seal",
+        "work_ref": "plan-work:demo",
+        "revision": "work-revision:c",
+        "candidate_content_identity": "sha256:5640cff1778c552adba0473feac26b85890ad86246a5243611d1a9d7786da470",
+        "request_id": "request:stale-seal"
+      },
+      "response": {
+        "outcome": "error",
+        "action": "seal",
+        "work_ref": "plan-work:demo",
+        "revision": "work-revision:d",
+        "error": {
+          "code": "revision_conflict",
+          "message": "工作版本已变化。",
+          "current_revision": "work-revision:d"
+        }
+      },
+      "context": {
+        "human_confirmation": {
+          "principal_ref": "human:synthetic-review",
+          "content_identity": "sha256:5640cff1778c552adba0473feac26b85890ad86246a5243611d1a9d7786da470",
+          "confirmed_at": "2026-09-12T13:32:00+08:00"
+        }
+      }
+    },
+    {
+      "name": "withdraw-candidate",
+      "request": {
+        "action": "update",
+        "work_ref": "plan-work:demo",
+        "base_revision": "work-revision:d",
+        "candidate_content": null,
+        "working_notes": "用户新补充使 b 的活动归属出现冲突；已撤下当前候选，尚待重新决定。",
+        "request_id": "request:withdraw-candidate"
+      },
+      "response": {
+        "outcome": "ok",
+        "action": "update",
+        "work_ref": "plan-work:demo",
+        "result_ref": "precheck-result:demo",
+        "revision": "work-revision:e",
+        "state": "open"
+      }
+    },
+    {
+      "name": "withdrawn-default-inspect",
+      "request": {
+        "action": "inspect",
+        "work_ref": "plan-work:demo"
+      },
+      "response": {
+        "outcome": "ok",
+        "action": "inspect",
+        "work_ref": "plan-work:demo",
+        "result_ref": "precheck-result:demo",
+        "revision": "work-revision:e",
+        "state": "open",
+        "returned_sections": [
+          "overview",
+          "preferences",
+          "working_notes",
+          "content",
+          "validation"
+        ],
+        "sections": {
+          "overview": {
+            "state": "open"
+          },
+          "preferences": {
+            "retrieval_goal": "按活动查找",
+            "preserve_source_basenames": true
+          },
+          "working_notes": "用户新补充使 b 的活动归属出现冲突；已撤下当前候选，尚待重新决定。",
+          "content": null,
+          "validation": {
+            "seal_ready": false,
+            "issues": [
+              {
+                "code": "candidate_missing",
+                "severity": "error",
+                "message": "当前没有组织候选；已保存的工作说明和偏好仍可读取。"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "no-candidate-page",
+      "request": {
+        "action": "inspect",
+        "work_ref": "plan-work:demo",
+        "sections": [
+          "content"
+        ],
+        "page": {
+          "collection": "groups",
+          "limit": 10
+        }
+      },
+      "response": {
+        "outcome": "ok",
+        "action": "inspect",
+        "work_ref": "plan-work:demo",
+        "result_ref": "precheck-result:demo",
+        "revision": "work-revision:e",
+        "state": "open",
+        "returned_sections": [
+          "content"
+        ],
+        "sections": {
+          "content": null
+        }
+      }
+    },
+    {
+      "name": "withdrawn-seal",
+      "request": {
+        "action": "seal",
+        "work_ref": "plan-work:demo",
+        "revision": "work-revision:e",
+        "candidate_content_identity": "sha256:5640cff1778c552adba0473feac26b85890ad86246a5243611d1a9d7786da470",
+        "request_id": "request:withdrawn-seal"
+      },
+      "response": {
+        "outcome": "error",
+        "action": "seal",
+        "work_ref": "plan-work:demo",
+        "revision": "work-revision:e",
+        "error": {
+          "code": "candidate_invalid",
+          "message": "当前没有可冻结的组织候选。"
+        }
+      },
+      "context": {
+        "human_confirmation": {
+          "principal_ref": "human:synthetic-review",
+          "content_identity": "sha256:5640cff1778c552adba0473feac26b85890ad86246a5243611d1a9d7786da470",
+          "confirmed_at": "2026-09-12T13:32:00+08:00"
+        }
+      }
+    },
+    {
+      "name": "atomic-invalid-organization",
+      "request": {
+        "action": "update",
+        "work_ref": "plan-work:demo",
+        "base_revision": "work-revision:e",
+        "working_notes": "本次文字也不能保存。",
+        "organization_preferences": {},
+        "candidate_content": {
+          "result_ref": "precheck-result:demo",
+          "scope": {
+            "kind": "explicit",
+            "source_item_refs": [
+              "source-item:a",
+              "source-item:b"
+            ]
+          },
+          "logical_root": "周末活动",
+          "groups": [
+            {
+              "relative_path": [
+                "展览参观"
+              ],
+              "members": {
+                "kind": "explicit",
+                "source_item_refs": [
+                  "source-item:a"
+                ]
+              },
+              "source_naming": {
+                "default": "preserve_source_basename"
+              }
+            }
+          ],
+          "other_outcomes": [],
+          "decision_notes": []
+        },
+        "request_id": "request:invalid-organization"
+      },
+      "response": {
+        "outcome": "error",
+        "action": "update",
+        "work_ref": "plan-work:demo",
+        "revision": "work-revision:e",
+        "error": {
+          "code": "candidate_invalid",
+          "message": "source-item:b 没有明确去向。"
+        }
+      }
+    },
+    {
+      "name": "failed-write-preserves-work",
+      "request": {
+        "action": "inspect",
+        "work_ref": "plan-work:demo"
+      },
+      "response": {
+        "outcome": "ok",
+        "action": "inspect",
+        "work_ref": "plan-work:demo",
+        "result_ref": "precheck-result:demo",
+        "revision": "work-revision:e",
+        "state": "open",
+        "returned_sections": [
+          "overview",
+          "preferences",
+          "working_notes",
+          "content",
+          "validation"
+        ],
+        "sections": {
+          "overview": {
+            "state": "open"
+          },
+          "preferences": {
+            "retrieval_goal": "按活动查找",
+            "preserve_source_basenames": true
+          },
+          "working_notes": "用户新补充使 b 的活动归属出现冲突；已撤下当前候选，尚待重新决定。",
+          "content": null,
+          "validation": {
+            "seal_ready": false,
+            "issues": [
+              {
+                "code": "candidate_missing",
+                "severity": "error",
+                "message": "当前没有组织候选；已保存的工作说明和偏好仍可读取。"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "restore-and-clear-notes",
+      "request": {
+        "action": "update",
+        "work_ref": "plan-work:demo",
+        "base_revision": "work-revision:e",
+        "candidate_content": {
+          "result_ref": "precheck-result:demo",
+          "scope": {
+            "kind": "explicit",
+            "source_item_refs": [
+              "source-item:a",
+              "source-item:b"
+            ]
+          },
+          "logical_root": "周末活动",
+          "groups": [
+            {
+              "relative_path": [
+                "展览参观"
+              ],
+              "members": {
+                "kind": "explicit",
+                "source_item_refs": [
+                  "source-item:a"
+                ]
+              },
+              "source_naming": {
+                "default": "preserve_source_basename"
+              }
+            },
+            {
+              "relative_path": [
+                "家庭聚会"
+              ],
+              "members": {
+                "kind": "explicit",
+                "source_item_refs": [
+                  "source-item:b"
+                ]
+              },
+              "source_naming": {
+                "default": "preserve_source_basename"
+              }
+            }
+          ],
+          "other_outcomes": [],
+          "decision_notes": [
+            {
+              "applies_to": {
+                "kind": "explicit",
+                "source_item_refs": [
+                  "source-item:b"
+                ]
+              },
+              "summary": "依据用户补充，将 b 作为独立的家庭聚会组织，未沿用 a 的活动身份。"
+            }
+          ]
+        },
+        "working_notes": "",
+        "organization_preferences": {},
+        "request_id": "request:restore-and-clear-notes"
+      },
+      "response": {
+        "outcome": "ok",
+        "action": "update",
+        "work_ref": "plan-work:demo",
+        "result_ref": "precheck-result:demo",
+        "revision": "work-revision:f",
+        "state": "open"
+      }
+    },
+    {
+      "name": "final-review",
+      "request": {
+        "action": "inspect",
+        "work_ref": "plan-work:demo"
+      },
+      "response": {
+        "outcome": "ok",
+        "action": "inspect",
+        "work_ref": "plan-work:demo",
+        "result_ref": "precheck-result:demo",
+        "revision": "work-revision:f",
+        "state": "open",
+        "returned_sections": [
+          "overview",
+          "preferences",
+          "working_notes",
+          "content",
+          "validation"
+        ],
+        "sections": {
+          "overview": {
+            "state": "open"
+          },
+          "preferences": {},
+          "working_notes": "",
+          "content": {
+            "mode": "complete",
+            "value": {
+              "contract": "mediasense.frozen-plan",
+              "plan_ref": "frozen-plan:demo",
+              "result_ref": "precheck-result:demo",
+              "scope": {
+                "kind": "explicit",
+                "source_item_refs": [
+                  "source-item:a",
+                  "source-item:b"
+                ]
+              },
+              "logical_root": "周末活动",
+              "groups": [
+                {
+                  "relative_path": [
+                    "展览参观"
+                  ],
+                  "members": {
+                    "kind": "explicit",
+                    "source_item_refs": [
+                      "source-item:a"
+                    ]
+                  },
+                  "source_naming": {
+                    "default": "preserve_source_basename"
+                  }
+                },
+                {
+                  "relative_path": [
+                    "家庭聚会"
+                  ],
+                  "members": {
+                    "kind": "explicit",
+                    "source_item_refs": [
+                      "source-item:b"
+                    ]
+                  },
+                  "source_naming": {
+                    "default": "preserve_source_basename"
+                  }
+                }
+              ],
+              "other_outcomes": [],
+              "decision_notes": [
+                {
+                  "applies_to": {
+                    "kind": "explicit",
+                    "source_item_refs": [
+                      "source-item:b"
+                    ]
+                  },
+                  "summary": "依据用户补充，将 b 作为独立的家庭聚会组织，未沿用 a 的活动身份。"
+                }
+              ]
+            }
+          },
+          "validation": {
+            "seal_ready": true,
+            "issues": []
+          }
+        },
+        "candidate_content_identity": "sha256:5640cff1778c552adba0473feac26b85890ad86246a5243611d1a9d7786da470"
+      }
+    },
+    {
+      "name": "final-seal",
+      "request": {
+        "action": "seal",
+        "work_ref": "plan-work:demo",
+        "revision": "work-revision:f",
+        "candidate_content_identity": "sha256:5640cff1778c552adba0473feac26b85890ad86246a5243611d1a9d7786da470",
+        "request_id": "request:final-seal"
+      },
+      "response": {
+        "outcome": "ok",
+        "action": "seal",
+        "work_ref": "plan-work:demo",
+        "result_ref": "precheck-result:demo",
+        "revision": "work-revision:f",
+        "state": "closed",
+        "plan_ref": "frozen-plan:demo",
+        "content_identity": "sha256:5640cff1778c552adba0473feac26b85890ad86246a5243611d1a9d7786da470",
+        "frozen_plan": {
+          "sealed_content": {
+            "contract": "mediasense.frozen-plan",
+            "plan_ref": "frozen-plan:demo",
+            "result_ref": "precheck-result:demo",
+            "scope": {
+              "kind": "explicit",
+              "source_item_refs": [
+                "source-item:a",
+                "source-item:b"
+              ]
+            },
+            "logical_root": "周末活动",
+            "groups": [
+              {
+                "relative_path": [
+                  "展览参观"
+                ],
+                "members": {
+                  "kind": "explicit",
+                  "source_item_refs": [
+                    "source-item:a"
+                  ]
+                },
+                "source_naming": {
+                  "default": "preserve_source_basename"
+                }
+              },
+              {
+                "relative_path": [
+                  "家庭聚会"
+                ],
+                "members": {
+                  "kind": "explicit",
+                  "source_item_refs": [
+                    "source-item:b"
+                  ]
+                },
+                "source_naming": {
+                  "default": "preserve_source_basename"
+                }
+              }
+            ],
+            "other_outcomes": [],
+            "decision_notes": [
+              {
+                "applies_to": {
+                  "kind": "explicit",
+                  "source_item_refs": [
+                    "source-item:b"
+                  ]
+                },
+                "summary": "依据用户补充，将 b 作为独立的家庭聚会组织，未沿用 a 的活动身份。"
+              }
+            ]
+          },
+          "seal": {
+            "encoding_profile": "mediasense-json-strings-sha256-v1",
+            "content_identity": "sha256:5640cff1778c552adba0473feac26b85890ad86246a5243611d1a9d7786da470",
+            "final_confirmation": {
+              "confirmed_content_identity": "sha256:5640cff1778c552adba0473feac26b85890ad86246a5243611d1a9d7786da470",
+              "confirmed_at": "2026-09-12T13:40:00+08:00",
+              "confirmed_by": "human:synthetic-review"
+            }
+          }
+        }
+      },
+      "context": {
+        "human_confirmation": {
+          "principal_ref": "human:synthetic-review",
+          "content_identity": "sha256:5640cff1778c552adba0473feac26b85890ad86246a5243611d1a9d7786da470",
+          "confirmed_at": "2026-09-12T13:40:00+08:00"
+        }
+      }
+    },
+    {
+      "name": "same-seal-replay",
+      "request": {
+        "action": "seal",
+        "work_ref": "plan-work:demo",
+        "revision": "work-revision:f",
+        "candidate_content_identity": "sha256:5640cff1778c552adba0473feac26b85890ad86246a5243611d1a9d7786da470",
+        "request_id": "request:final-seal"
+      },
+      "response": {
+        "outcome": "ok",
+        "action": "seal",
+        "work_ref": "plan-work:demo",
+        "result_ref": "precheck-result:demo",
+        "revision": "work-revision:f",
+        "state": "closed",
+        "plan_ref": "frozen-plan:demo",
+        "content_identity": "sha256:5640cff1778c552adba0473feac26b85890ad86246a5243611d1a9d7786da470",
+        "frozen_plan": {
+          "sealed_content": {
+            "contract": "mediasense.frozen-plan",
+            "plan_ref": "frozen-plan:demo",
+            "result_ref": "precheck-result:demo",
+            "scope": {
+              "kind": "explicit",
+              "source_item_refs": [
+                "source-item:a",
+                "source-item:b"
+              ]
+            },
+            "logical_root": "周末活动",
+            "groups": [
+              {
+                "relative_path": [
+                  "展览参观"
+                ],
+                "members": {
+                  "kind": "explicit",
+                  "source_item_refs": [
+                    "source-item:a"
+                  ]
+                },
+                "source_naming": {
+                  "default": "preserve_source_basename"
+                }
+              },
+              {
+                "relative_path": [
+                  "家庭聚会"
+                ],
+                "members": {
+                  "kind": "explicit",
+                  "source_item_refs": [
+                    "source-item:b"
+                  ]
+                },
+                "source_naming": {
+                  "default": "preserve_source_basename"
+                }
+              }
+            ],
+            "other_outcomes": [],
+            "decision_notes": [
+              {
+                "applies_to": {
+                  "kind": "explicit",
+                  "source_item_refs": [
+                    "source-item:b"
+                  ]
+                },
+                "summary": "依据用户补充，将 b 作为独立的家庭聚会组织，未沿用 a 的活动身份。"
+              }
+            ]
+          },
+          "seal": {
+            "encoding_profile": "mediasense-json-strings-sha256-v1",
+            "content_identity": "sha256:5640cff1778c552adba0473feac26b85890ad86246a5243611d1a9d7786da470",
+            "final_confirmation": {
+              "confirmed_content_identity": "sha256:5640cff1778c552adba0473feac26b85890ad86246a5243611d1a9d7786da470",
+              "confirmed_at": "2026-09-12T13:40:00+08:00",
+              "confirmed_by": "human:synthetic-review"
+            }
+          }
+        }
+      },
+      "context": {
+        "human_confirmation": {
+          "principal_ref": "human:synthetic-review",
+          "content_identity": "sha256:5640cff1778c552adba0473feac26b85890ad86246a5243611d1a9d7786da470",
+          "confirmed_at": "2026-09-12T13:40:00+08:00"
+        }
+      }
+    },
+    {
+      "name": "closed-inspect",
+      "request": {
+        "action": "inspect",
+        "work_ref": "plan-work:demo"
+      },
+      "response": {
+        "outcome": "ok",
+        "action": "inspect",
+        "work_ref": "plan-work:demo",
+        "result_ref": "precheck-result:demo",
+        "revision": "work-revision:f",
+        "state": "closed",
+        "returned_sections": [
+          "overview",
+          "preferences",
+          "working_notes",
+          "content",
+          "validation"
+        ],
+        "sections": {
+          "overview": {
+            "state": "closed"
+          },
+          "preferences": {},
+          "working_notes": "",
+          "content": {
+            "mode": "complete",
+            "value": {
+              "contract": "mediasense.frozen-plan",
+              "plan_ref": "frozen-plan:demo",
+              "result_ref": "precheck-result:demo",
+              "scope": {
+                "kind": "explicit",
+                "source_item_refs": [
+                  "source-item:a",
+                  "source-item:b"
+                ]
+              },
+              "logical_root": "周末活动",
+              "groups": [
+                {
+                  "relative_path": [
+                    "展览参观"
+                  ],
+                  "members": {
+                    "kind": "explicit",
+                    "source_item_refs": [
+                      "source-item:a"
+                    ]
+                  },
+                  "source_naming": {
+                    "default": "preserve_source_basename"
+                  }
+                },
+                {
+                  "relative_path": [
+                    "家庭聚会"
+                  ],
+                  "members": {
+                    "kind": "explicit",
+                    "source_item_refs": [
+                      "source-item:b"
+                    ]
+                  },
+                  "source_naming": {
+                    "default": "preserve_source_basename"
+                  }
+                }
+              ],
+              "other_outcomes": [],
+              "decision_notes": [
+                {
+                  "applies_to": {
+                    "kind": "explicit",
+                    "source_item_refs": [
+                      "source-item:b"
+                    ]
+                  },
+                  "summary": "依据用户补充，将 b 作为独立的家庭聚会组织，未沿用 a 的活动身份。"
+                }
+              ]
+            }
+          },
+          "validation": {
+            "seal_ready": true,
+            "issues": []
+          }
+        },
+        "candidate_content_identity": "sha256:5640cff1778c552adba0473feac26b85890ad86246a5243611d1a9d7786da470"
+      }
+    },
+    {
+      "name": "closed-update",
+      "request": {
+        "action": "update",
+        "work_ref": "plan-work:demo",
+        "base_revision": "work-revision:f",
+        "working_notes": "不得改写",
+        "request_id": "request:closed-update"
+      },
+      "response": {
+        "outcome": "error",
+        "action": "update",
+        "work_ref": "plan-work:demo",
+        "revision": "work-revision:f",
+        "error": {
+          "code": "work_closed",
+          "message": "已闭合的 Work 不接受修改。"
+        }
+      }
+    }
+  ],
+  "invalid_requests": [
+    {
+      "name": "no-mutable-field",
+      "request": {
+        "action": "update",
+        "work_ref": "plan-work:demo",
+        "base_revision": "work-revision:e",
+        "request_id": "request:bad-input"
+      },
+      "expected_schema_valid": false,
+      "expected_code_if_dispatched": "invalid_request"
+    },
+    {
+      "name": "null-notes",
+      "request": {
+        "action": "update",
+        "work_ref": "plan-work:demo",
+        "base_revision": "work-revision:e",
+        "request_id": "request:bad-input",
+        "working_notes": null
+      },
+      "expected_schema_valid": false,
+      "expected_code_if_dispatched": "invalid_request"
+    },
+    {
+      "name": "numeric-notes",
+      "request": {
+        "action": "update",
+        "work_ref": "plan-work:demo",
+        "base_revision": "work-revision:e",
+        "request_id": "request:bad-input",
+        "working_notes": 42
+      },
+      "expected_schema_valid": false,
+      "expected_code_if_dispatched": "invalid_request"
+    },
+    {
+      "name": "null-preferences",
+      "request": {
+        "action": "update",
+        "work_ref": "plan-work:demo",
+        "base_revision": "work-revision:e",
+        "request_id": "request:bad-input",
+        "organization_preferences": null
+      },
+      "expected_schema_valid": false,
+      "expected_code_if_dispatched": "invalid_request"
+    },
+    {
+      "name": "partial-candidate",
+      "request": {
+        "action": "update",
+        "work_ref": "plan-work:demo",
+        "base_revision": "work-revision:e",
+        "request_id": "request:bad-input",
+        "candidate_content": {
+          "logical_root": "不能保存的半成品"
+        }
+      },
+      "expected_schema_valid": false,
+      "expected_code_if_dispatched": "candidate_invalid"
+    },
+    {
+      "name": "create-with-notes",
+      "request": {
+        "action": "create",
+        "result_ref": "precheck-result:demo",
+        "request_id": "request:bad-create",
+        "working_notes": "create 输入保持不变"
+      },
+      "expected_schema_valid": false,
+      "expected_code_if_dispatched": "invalid_request"
+    }
+  ]
+}

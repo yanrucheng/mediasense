@@ -11,6 +11,14 @@ rules:
         tags: [EXIF:DateTimeOriginal]
         naive_time: source_local
       fields:
+        - name: gps_coordinates
+          tag_pairs:
+            - latitude: XMP:GPSLatitude
+              longitude: XMP:GPSLongitude
+        - name: source_pixel_dimensions
+          tag_pairs:
+            - width: EXIF:ExifImageWidth
+              height: EXIF:ExifImageHeight
         - name: manufacturer.acme.operator_label
           tags: [XMP:Creator]
           value_type: string

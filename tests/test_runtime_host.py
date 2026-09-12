@@ -232,7 +232,9 @@ def test_successor_start_creates_work_and_never_reports_queued(
 
 def test_scope_confirmation_resume_reuses_the_bound_accounting_run(
     tmp_path: Path,
+    monkeypatch,
 ) -> None:
+    monkeypatch.setenv("MEDIASENSE_CONFIG_HOME", str(tmp_path / "config"))
     source = tmp_path / "source"
     source.mkdir()
     media = source / "original.jpg"

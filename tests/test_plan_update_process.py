@@ -69,9 +69,10 @@ def cleanup(children):
         process.close()
 
 
+@pytest.mark.parametrize("notes_waiter", [False, True])
 @pytest.mark.parametrize("owner_exits", [False, True])
 def test_processes_serialize_and_dead_owner_does_not_leave_a_busy_lock(
-    tmp_path, owner_exits
+    tmp_path, owner_exits, notes_waiter
 ):
     tool = _tool(tmp_path)
     request = update_request(_create(tool))
@@ -81,7 +82,13 @@ def test_processes_serialize_and_dead_owner_does_not_leave_a_busy_lock(
         first = launch(context, tool, request)
         children.append(first)
         assert first[2].wait(10)
-        second = launch(context, tool, request)
+        following = dict(request)
+        if notes_waiter:
+            following.pop("candidate_content")
+            following.update(
+                working_notes="waiting notes", request_id="request:waiting-notes"
+            )
+        second = launch(context, tool, following)
         children.append(second)
         assert second[4].wait(10)
         assert not second[2].is_set()
@@ -95,26 +102,40 @@ def test_processes_serialize_and_dead_owner_does_not_leave_a_busy_lock(
         second[3].set()
         assert second[1].poll(10)
         result = second[1].recv()
-        assert result["outcome"] == "ok"
-        assert second[2].is_set() == owner_exits
+        if notes_waiter and not owner_exits:
+            assert result["error"]["code"] == "revision_conflict"
+        else:
+            assert result["outcome"] == "ok"
+        assert second[2].is_set() == (owner_exits and not notes_waiter)
         if not owner_exits:
             assert first[1].poll(5)
-            assert first[1].recv() == result
-        assert tool.handle(request) == result
+            first_result = first[1].recv()
+            assert first_result["outcome"] == "ok"
+            if not notes_waiter:
+                assert first_result == result
+        if not notes_waiter or owner_exits:
+            assert tool.handle(following) == result
         assert update_count(tool) == 1
     finally:
         cleanup(children)
 
 
+@pytest.mark.parametrize("notes_only", [False, True])
 @pytest.mark.parametrize("crash", ["inside_transaction", "after_commit"])
-def test_process_crash_leaves_an_atomic_recoverable_outcome(tmp_path, crash):
+def test_process_crash_leaves_an_atomic_recoverable_outcome(
+    tmp_path, crash, notes_only
+):
     tool = _tool(tmp_path)
     created = _create(tool)
     request = update_request(created, organization_preferences={})
+    if notes_only:
+        request.pop("candidate_content")
+        request["working_notes"] = "process notes"
     before = tool.store.snapshot(created["work_ref"])
     child = launch(get_context("spawn"), tool, request, crash=crash)
     try:
-        assert child[2].wait(10)
+        if not notes_only:
+            assert child[2].wait(10)
         child[3].set()
         child[0].join(10)
         assert child[0].exitcode == (72 if crash == "inside_transaction" else 73)
@@ -125,7 +146,9 @@ def test_process_crash_leaves_an_atomic_recoverable_outcome(tmp_path, crash):
         else:
             assert after.revision != before.revision
             assert after.organization_preferences == {}
-            assert after.candidate == request["candidate_content"]
+            assert after.candidate == request.get("candidate_content")
+            if notes_only:
+                assert after.working_notes == "process notes"
             assert update_count(tool) == 1
         recovered = tool.handle(request)
         assert recovered["outcome"] == "ok"

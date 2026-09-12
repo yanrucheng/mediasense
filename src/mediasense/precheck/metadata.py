@@ -25,6 +25,7 @@ from ._metadata_fields import (
     DIMENSION_TAGS,
     EXTRA_TAGS,
     photographic_observations,
+    paired_field_observation,
 )
 from ._exiftool import ExifToolCancelled, StayOpenExifTool
 from ._fingerprint import SourceChangedDuringRead
@@ -136,7 +137,7 @@ class MetadataProfile:
                 "time_interpretation": "manufacturer-field-semantics-v1",
                 "photographic_fields": FIELD_TAGS,
                 "source_dimensions": DIMENSION_TAGS,
-                "photographic_interpretation": "typed-source-fields-v1",
+                "photographic_interpretation": "typed-source-fields-v2",
             },
             ensure_ascii=False,
             separators=(",", ":"),
@@ -743,7 +744,13 @@ def select_metadata_observations(
             if time_resolution.get("conflict")
             else (),
         ),
-        _gps_observation(indexed, ordered, profile),
+        paired_field_observation(
+            _gps_observation(indexed, ordered, profile),
+            indexed,
+            ordered,
+            subject,
+            knowledge.get("gps_coordinates", {}),
+        ),
     ]
     observations.extend(
         photographic_observations(indexed, ordered, subject, profile, knowledge)
@@ -832,7 +839,9 @@ def _time_observation(
             invalid_reason = None
             if normalized is not None and shift:
                 try:
-                    instant = datetime.fromisoformat(normalized[0]).astimezone(timezone.utc)
+                    instant = datetime.fromisoformat(normalized[0]).astimezone(
+                        timezone.utc
+                    )
                     normalized = (
                         (instant + timedelta(seconds=shift))
                         .astimezone(ZoneInfo(profile.timezone))
@@ -1037,7 +1046,7 @@ def _as_numeric(
         return None
     try:
         numeric = float(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return None
     return relative, tag, numeric
 

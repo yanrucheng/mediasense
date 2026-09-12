@@ -287,7 +287,9 @@ def test_equivalent_effect_defaults_do_not_create_a_conflict(tmp_path):
         (-3600, "0001:01:01 00:30:00"),
     ],
 )
-def test_time_correction_out_of_range_is_local_and_retains_fallback(tmp_path, shift, stamp):
+def test_time_correction_out_of_range_is_local_and_retains_fallback(
+    tmp_path, shift, stamp
+):
     correction = rule(shift=shift)
     correction["apply"]["capture_time"]["fallback"] = False
     write_rules(tmp_path, [correction])
@@ -473,9 +475,9 @@ def test_sony_associated_xml_and_dji_native_encoder_have_explicit_basis():
     assert remux["status"] == "missing"
 
 
-@pytest.mark.parametrize("remove_file", [False, True])
+@pytest.mark.parametrize("change", ["replace", "delete", "invalid"])
 def test_reopened_host_resumes_frozen_knowledge_after_live_change(
-    tmp_path, monkeypatch, remove_file
+    tmp_path, monkeypatch, change
 ):
     import json
     import sqlite3
@@ -530,12 +532,19 @@ def test_reopened_host_resumes_frozen_knowledge_after_live_change(
             "SELECT execution_config_json FROM precheck_runs WHERE run_ref=?", (ref,)
         ).fetchone()[0]
     assert json.loads(frozen)["metadata_profile"]["manufacturer_knowledge"]
-    if remove_file:
+    if change == "delete":
         path.unlink()
+    elif change == "invalid":
+        path.write_text("rules: [\n")
     else:
         write_rules(user, [rule(shift=7200)])
     reopened = RuntimeHost()
-    assert reopened.open_dataset(str(source), str(workspace))["dataset_ref"] == dataset
+    discovery = reopened.open_dataset(str(source), str(workspace))
+    assert discovery["dataset_ref"] == dataset
+    if change == "invalid":
+        summary = discovery["configuration"]["metadata"]["manufacturer_knowledge"]
+        assert summary["error"]["code"] == "configuration_invalid"
+        assert "identity" not in summary and "active_rules" not in summary
     resumed = call(
         reopened,
         "run",
@@ -569,3 +578,172 @@ def test_reopened_host_resumes_frozen_knowledge_after_live_change(
             == frozen
         )
     assert (source / "photo.jpg").read_bytes() == before
+    if change == "invalid":
+        assert path.read_text() == "rules: [\n"
+        replay = call(reopened, "run", "start", request_id="manufacturer:restart")
+        assert replay["run_ref"] == ref
+        rejected = call(reopened, "run", "start", request_id="manufacturer:invalid")
+        assert rejected["error"]["code"] == "configuration_invalid"
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        (9007199254740993, 9007199254740993),
+        ("9007199254740993", 9007199254740993),
+        ("-9007199254740993", -9007199254740993),
+        ("9007199254740993.0", 9007199254740993),
+        ("18014398509481986/2", 9007199254740993),
+        ("9007199254740993.5", None),
+        ("9007199254740993/2", None),
+    ],
+)
+def test_integer_fields_preserve_exact_value_or_reject_fraction(
+    tmp_path, raw, expected
+):
+    import json
+
+    item = rule()
+    item["apply"] = {
+        "fields": [
+            {
+                "name": "manufacturer.acme.counter",
+                "tags": ["EXIF:ImageUniqueID"],
+                "value_type": "integer",
+                "description": "Exact synthetic counter",
+            }
+        ]
+    }
+    write_rules(tmp_path, [item])
+    value = observe(
+        load_knowledge(tmp_path),
+        fields={
+            "EXIF:Make": "ACME",
+            "EXIF:ImageUniqueID": raw,
+        },
+    )["manufacturer.acme.counter"]
+    if expected is None:
+        assert value["status"] != "available" and "value" not in value
+        assert value["basis"]["code"] == "invalid_metadata_value"
+    else:
+        assert type(value["value"]) is int
+        assert json.loads(json.dumps(value))["value"] == expected
+
+
+def paired_rule(*, fallback=False, priority=0, suffix=""):
+    item = rule("acme.pairs" + suffix, priority=priority)
+    item["apply"] = {
+        "fields": [
+            {
+                "name": "gps_coordinates",
+                "fallback": fallback,
+                "tag_pairs": [
+                    {
+                        "latitude": "MakerNotes:DeviceLatitude" + suffix,
+                        "longitude": "MakerNotes:DeviceLongitude" + suffix,
+                    }
+                ],
+            },
+            {
+                "name": "source_pixel_dimensions",
+                "fallback": fallback,
+                "tag_pairs": [
+                    {
+                        "width": "MakerNotes:SourceWidth" + suffix,
+                        "height": "MakerNotes:SourceHeight" + suffix,
+                    }
+                ],
+            },
+        ]
+    }
+    return item
+
+
+def test_paired_fields_feed_standard_observations_and_request_all_tags(tmp_path):
+    write_rules(tmp_path, [paired_rule()])
+    snapshot = load_knowledge(tmp_path)
+    fields = {
+        "EXIF:Make": "ACME",
+        "EXIF:GPSLatitude": "invalid",
+        "MakerNotes:DeviceLatitude": "223/10",
+        "MakerNotes:DeviceLongitude": "114.2",
+        "MakerNotes:SourceWidth": "6000",
+        "MakerNotes:SourceHeight": "4000/1",
+    }
+    assert set(fields) <= set(snapshot.tags) | {"EXIF:GPSLatitude"}
+    values = observe(snapshot, fields)
+    assert values["gps_coordinates"]["value"] == {
+        "latitude": 22.3,
+        "longitude": 114.2,
+        "datum": "WGS84",
+    }
+    assert values["source_pixel_dimensions"]["value"] == {"width": 6000, "height": 4000}
+    assert values["gps_coordinates"]["provenance"]["raw_value"]["latitude"] == "223/10"
+
+
+@pytest.mark.parametrize("fallback", [False, True])
+def test_paired_fields_do_not_mix_sources_or_use_sidecar_dimensions(tmp_path, fallback):
+    write_rules(tmp_path, [paired_rule(fallback=fallback)])
+    values = select_metadata_observations(
+        [
+            {
+                "relative_path": "photo.jpg",
+                "fields": {
+                    "EXIF:Make": "ACME",
+                    "MakerNotes:DeviceLatitude": 22.3,
+                    "EXIF:GPSLatitude": 20,
+                    "EXIF:GPSLongitude": 110,
+                    "File:ImageWidth": 80,
+                    "File:ImageHeight": 40,
+                },
+            },
+            {
+                "relative_path": "photo.xmp",
+                "fields": {
+                    "MakerNotes:DeviceLongitude": 114.2,
+                    "MakerNotes:SourceWidth": 6000,
+                    "MakerNotes:SourceHeight": 4000,
+                },
+            },
+        ],
+        subject=Path("photo.jpg"),
+        source_precedence=(Path("photo.xmp"), Path("photo.jpg")),
+        profile=MetadataProfile(knowledge=load_knowledge(tmp_path)),
+    )
+    by_name = {value["name"]: value for value in values}
+    if fallback:
+        assert by_name["gps_coordinates"]["value"]["latitude"] == 20
+        assert by_name["source_pixel_dimensions"]["value"] == {
+            "width": 80,
+            "height": 40,
+        }
+    else:
+        assert by_name["gps_coordinates"]["status"] == "failed"
+        assert "value" not in by_name["gps_coordinates"]
+        assert by_name["source_pixel_dimensions"]["status"] == "missing"
+    assert all(
+        candidate.get("relative_path") != "photo.xmp"
+        for candidate in by_name["source_pixel_dimensions"]["provenance"]["candidates"]
+    )
+
+
+def test_paired_field_conflicts_remain_local_and_priority_is_explicit(tmp_path):
+    fields = {"EXIF:Make": "ACME"}
+    for suffix, latitude in [("", 22.3), ("b", 23.4)]:
+        fields.update(
+            {
+                "MakerNotes:DeviceLatitude" + suffix: latitude,
+                "MakerNotes:DeviceLongitude" + suffix: 114.2,
+                "MakerNotes:SourceWidth" + suffix: 80,
+                "MakerNotes:SourceHeight" + suffix: 40,
+            }
+        )
+    write_rules(tmp_path, [paired_rule(), paired_rule(suffix="b")])
+    values = observe(load_knowledge(tmp_path), fields)
+    for name in ("gps_coordinates", "source_pixel_dimensions"):
+        assert values[name]["status"] == "failed"
+        assert values[name]["basis"]["code"] == "manufacturer_rule_conflict"
+    assert values["camera_make"]["value"] == "ACME"
+    write_rules(tmp_path, [paired_rule(), paired_rule(suffix="b", priority=1)])
+    values = observe(load_knowledge(tmp_path), fields)
+    assert values["gps_coordinates"]["value"]["latitude"] == 23.4

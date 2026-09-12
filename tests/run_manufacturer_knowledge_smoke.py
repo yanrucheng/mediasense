@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from contextlib import asynccontextmanager
 import hashlib
 import json
 import os
@@ -14,14 +15,16 @@ import anyio
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 from PIL import Image
+from jsonschema import Draft202012Validator
 import yaml
 
 import mediasense
 from mediasense.manufacturers import KnowledgeSnapshot
-from mediasense.runtime.resources import contract_validator
+from mediasense.runtime.resources import contract_validator, load_contract
+from mediasense.precheck.work import WorkStore
 
 
-def make_source(root):
+def make_source(root, *, include_gps=False):
     root.mkdir()
     for name, make, day in [("acme", "ACME", 4), ("dji", "DJI", 5)]:
         exif = Image.Exif()
@@ -36,6 +39,19 @@ def make_source(root):
                 "exiftool",
                 "-overwrite_original",
                 f"-XMP:DateTimeOriginal=2026:05:0{day} 09:33:46+08:00",
+                "-EXIF:ExifImageWidth=80",
+                "-EXIF:ExifImageHeight=40",
+                "-EXIF:ImageUniqueID=9007199254740993",
+                *(
+                    [
+                        "-EXIF:GPSDestLatitude=22.3",
+                        "-EXIF:GPSDestLatitudeRef=N",
+                        "-EXIF:GPSDestLongitude=114.2",
+                        "-EXIF:GPSDestLongitudeRef=E",
+                    ]
+                    if include_gps and name == "acme"
+                    else []
+                ),
                 str(path),
             ],
             check=True,
@@ -60,11 +76,35 @@ def write_knowledge(path, shift=0, *, disable_dji=False):
                 },
                 "fields": [
                     {
+                        "name": "gps_coordinates",
+                        "tag_pairs": [
+                            {
+                                "latitude": "EXIF:GPSDestLatitude",
+                                "longitude": "EXIF:GPSDestLongitude",
+                            }
+                        ],
+                    },
+                    {
+                        "name": "source_pixel_dimensions",
+                        "tag_pairs": [
+                            {
+                                "width": "EXIF:ExifImageWidth",
+                                "height": "EXIF:ExifImageHeight",
+                            }
+                        ],
+                    },
+                    {
+                        "name": "manufacturer.acme.counter",
+                        "tags": ["EXIF:ImageUniqueID"],
+                        "value_type": "integer",
+                        "description": "Exact synthetic counter",
+                    },
+                    {
                         "name": "manufacturer.acme.operator",
                         "tags": ["EXIF:Artist"],
                         "value_type": "string",
                         "description": "Synthetic device operator label",
-                    }
+                    },
                 ],
             },
             "basis": {
@@ -220,6 +260,15 @@ async def exercise(host, root):
         assert first["acme.jpg"]["capture_time"]["value"] == "2026-05-04T17:33:46+08:00"
         assert first["dji.jpg"]["capture_time"]["value"] == "2026-05-05T17:33:46+08:00"
         assert first["acme.jpg"]["manufacturer.acme.operator"]["value"] == "Operator"
+        assert (
+            first["acme.jpg"]["manufacturer.acme.counter"]["value"] == 9007199254740993
+        )
+        dimensions = first["acme.jpg"]["source_pixel_dimensions"]
+        assert dimensions["value"] == {"width": 80, "height": 40}
+        assert dimensions["provenance"]["tags"] == [
+            "EXIF:ExifImageWidth",
+            "EXIF:ExifImageHeight",
+        ]
         trace = first["acme.jpg"]["capture_time"]["provenance"][
             "manufacturer_knowledge"
         ]
@@ -288,11 +337,16 @@ async def exercise(host, root):
     (root / "responses.json").write_text(
         json.dumps(all_payloads, ensure_ascii=False, indent=2)
     )
+    await exercise_recovery(host, root / "recovery", env)
+    coordinate = await exercise_gps(host, root / "gps", env)
     (root / "summary.json").write_text(
         json.dumps(
             {
-                "source_files": 2,
-                "completed_runs": 4,
+                "source_files": 6,
+                "completed_runs": 5,
+                "gps_probe": coordinate,
+                "invalid_yaml_host_restart": True,
+                "exact_integer": 9007199254740993,
                 "unchanged_reuse": True,
                 "first_result": first_result,
                 "successor_result": fourth_result,
@@ -304,6 +358,227 @@ async def exercise(host, root):
         )
     )
     print("manufacturer installed CLI/MCP smoke: ok")
+
+
+@asynccontextmanager
+async def smoke_session(host, root, env):
+    params = StdioServerParameters(
+        command=str(host),
+        args=["mcp"],
+        cwd=str(root),
+        env={
+            **env,
+            "MEDIASENSE_CONFIG_HOME": str(root / "config"),
+            "MEDIASENSE_DATA_HOME": str(root / "data"),
+        },
+    )
+    async with (
+        stdio_client(params) as (incoming, outgoing),
+        ClientSession(incoming, outgoing) as session,
+    ):
+        await session.initialize()
+        yield session
+
+
+async def checked(session, tool, values, *, error=False):
+    name = (
+        "mediasense.dataset.open" if tool == "open" else "mediasense.precheck." + tool
+    )
+    result = await session.call_tool(name, values)
+    assert bool(result.is_error) == error and result.content == [], result
+    value = result.structured_content
+    validator = (
+        Draft202012Validator(load_contract(name)["outputSchema"])
+        if tool == "open"
+        else contract_validator(name, values["action"])
+    )
+    validator.validate(value)
+    return value
+
+
+async def stopped(session, dataset, ref):
+    with anyio.fail_after(90):
+        while True:
+            value = await checked(
+                session,
+                "run",
+                {"action": "status", "dataset_ref": dataset, "run_ref": ref},
+            )
+            if value["state"] != "running":
+                return value
+            await anyio.sleep(0.05)
+
+
+def scope_resume(dataset, ref, state):
+    return {
+        "action": "resume",
+        "dataset_ref": dataset,
+        "run_ref": ref,
+        "decision": {
+            "kind": "source_scope",
+            "inventory_fingerprint": state["confirmation"]["inventory_fingerprint"],
+            "default_disposition": "include",
+            "exceptions": [],
+        },
+    }
+
+
+async def exercise_recovery(host, root, env):
+    root.mkdir()
+    source, workspace = root / "source", root / "dataset"
+    before = make_source(source)
+    path = root / "config/manufacturers/acme.yaml"
+    write_knowledge(path, shift=3600)
+    async with smoke_session(host, root, env) as session:
+        opened = await checked(
+            session, "open", {"source_root": str(source), "workspace": str(workspace)}
+        )
+        dataset = opened["dataset_ref"]
+        start_request = {
+            "action": "start",
+            "dataset_ref": dataset,
+            "request_id": "manufacturer:recovery",
+        }
+        ref = (await checked(session, "run", start_request))["run_ref"]
+        paused = await stopped(session, dataset, ref)
+        assert paused["state"] == "paused", paused
+    database = workspace / "precheck/work.sqlite3"
+    with sqlite3.connect(database) as connection:
+        frozen = connection.execute(
+            "SELECT execution_config_json FROM precheck_runs WHERE run_ref=?", (ref,)
+        ).fetchone()[0]
+    path.write_text("rules: [\n")
+    async with smoke_session(host, root, env) as session:
+        opened = await checked(
+            session, "open", {"source_root": str(source), "workspace": str(workspace)}
+        )
+        knowledge = opened["configuration"]["metadata"]["manufacturer_knowledge"]
+        assert knowledge["error"]["code"] == "configuration_invalid"
+        assert "identity" not in knowledge
+        assert (await checked(session, "run", start_request))["run_ref"] == ref
+        await checked(session, "run", scope_resume(dataset, ref, paused))
+        final = await stopped(session, dataset, ref)
+        assert final["state"] == "completed", final
+        page = await checked(
+            session,
+            "read",
+            {
+                "action": "review",
+                "dataset_ref": dataset,
+                "result_ref": final["result"]["ref"],
+            },
+        )
+        acme = next(
+            source
+            for item in page["items"]
+            for source in item["source_items"]
+            if source["locator"]["value"] == "acme.jpg"
+        )
+        capture = next(o for o in acme["observations"] if o["name"] == "capture_time")
+        assert capture["value"] == "2026-05-04T18:33:46+08:00"
+        rejected = await checked(
+            session,
+            "run",
+            {**start_request, "request_id": "manufacturer:invalid"},
+            error=True,
+        )
+        assert rejected["error"]["code"] == "configuration_invalid"
+        (root / "responses.json").write_text(
+            json.dumps([opened, final, page, rejected], ensure_ascii=False, indent=2)
+        )
+    with sqlite3.connect(database) as connection:
+        assert (
+            connection.execute(
+                "SELECT execution_config_json FROM precheck_runs WHERE run_ref=?",
+                (ref,),
+            ).fetchone()[0]
+            == frozen
+        )
+    assert path.read_text() == "rules: [\n"
+    assert {
+        p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in source.iterdir()
+    } == before
+
+
+async def exercise_gps(host, root, env):
+    root.mkdir()
+    source, workspace = root / "source", root / "dataset"
+    before = make_source(source, include_gps=True)
+    write_knowledge(root / "config/manufacturers/acme.yaml")
+    async with smoke_session(host, root, env) as session:
+        opened = await checked(
+            session, "open", {"source_root": str(source), "workspace": str(workspace)}
+        )
+        dataset = opened["dataset_ref"]
+        ref = (
+            await checked(
+                session,
+                "run",
+                {
+                    "action": "start",
+                    "dataset_ref": dataset,
+                    "request_id": "manufacturer:gps",
+                },
+            )
+        )["run_ref"]
+        state = await stopped(session, dataset, ref)
+        await checked(session, "run", scope_resume(dataset, ref, state))
+        state = await stopped(session, dataset, ref)
+        assert (
+            state["state"] == "blocked"
+            and state["reason"]["code"] == "provider_unavailable"
+        ), state
+        database = workspace / "precheck/work.sqlite3"
+        with sqlite3.connect(database) as connection:
+            run_id = connection.execute(
+                "SELECT accounting_run_id FROM precheck_runs WHERE run_ref=?", (ref,)
+            ).fetchone()[0]
+        records = WorkStore(database).list_run_work(run_id)
+        coordinates = [
+            json.loads(dependency.value)
+            for record in records
+            if record.spec.capability == "reverse-geocode-observation"
+            for dependency in record.spec.dependencies
+            if dependency.key == "normalized_coordinate"
+        ]
+        assert coordinates == [
+            {"latitude": 22.3, "longitude": 114.2, "datum": "WGS84"}
+        ], coordinates
+        metadata = next(
+            record.output
+            for record in records
+            if record.spec.capability == "source-metadata"
+            and record.output["subject"]["relative_path"] == "acme.jpg"
+        )
+        gps = next(
+            value
+            for value in metadata["observations"]
+            if value["name"] == "gps_coordinates"
+        )
+        assert gps["status"] == "available" and gps["value"] == coordinates[0]
+        cancelled = await checked(
+            session, "run", {"action": "cancel", "dataset_ref": dataset, "run_ref": ref}
+        )
+        assert cancelled["state"] == "cancelled", cancelled
+        (root / "evidence.json").write_text(
+            json.dumps(
+                {
+                    "state_before_cancel": state,
+                    "gps_observation": gps,
+                    "frozen_coordinates": coordinates,
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+    assert {
+        p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in source.iterdir()
+    } == before
+    return {
+        "frozen_coordinates": coordinates,
+        "stopped_at": "provider_unavailable",
+        "cancelled": True,
+    }
 
 
 if __name__ == "__main__":

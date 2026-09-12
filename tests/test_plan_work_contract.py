@@ -30,6 +30,10 @@ def _mock() -> dict:
     return _load(WORK_SPEC / "hong-kong.mock.json")
 
 
+def _interaction_mock() -> dict:
+    return _load(WORK_SPEC / "interaction.mock.json")
+
+
 def _frozen_schema() -> dict:
     return _load(PLAN_SPEC / "frozen-plan.schema.json")
 
@@ -147,7 +151,7 @@ def test_mock_requests_and_responses_conform() -> None:
         output_validator.validate(exchange["response"])
 
 
-def test_contract_exposes_only_five_actions() -> None:
+def test_contract_exposes_only_four_actions() -> None:
     input_defs = _tool()["inputSchema"]["$defs"]
     assert {
         schema["properties"]["action"]["const"]
@@ -219,12 +223,79 @@ def test_preference_object_replaces_and_empty_object_clears_snapshot() -> None:
     }
 
 
-def test_update_requires_full_candidate_and_base_revision() -> None:
+def test_update_requires_at_least_one_mutable_field() -> None:
     validator, _ = _validators()
     update = deepcopy(_exchanges("update")[0]["request"])
     update.pop("candidate_content")
     with pytest.raises(ValidationError):
         validator.validate(update)
+
+
+@pytest.mark.parametrize(
+    "fields",
+    [
+        {"working_notes": "One material decision remains unresolved."},
+        {"working_notes": ""},
+        {"organization_preferences": {}},
+        {"candidate_content": None},
+    ],
+)
+def test_update_accepts_independent_work_fields_and_explicit_clears(fields) -> None:
+    validator, _ = _validators()
+    update = deepcopy(_exchanges("update")[0]["request"])
+    update.pop("candidate_content")
+    update.update(fields)
+    validator.validate(update)
+    update.pop("base_revision")
+    with pytest.raises(ValidationError):
+        validator.validate(update)
+
+
+def test_interaction_mock_requests_and_responses_conform() -> None:
+    input_validator, output_validator = _validators()
+    for exchange in _interaction_mock()["exchanges"]:
+        input_validator.validate(exchange["request"])
+        response = exchange["response"]
+        output_validator.validate(response)
+        if response["action"] == "inspect" and response["outcome"] == "ok":
+            assert set(response["returned_sections"]) == set(response["sections"])
+        if "frozen_plan" in response:
+            _assert_confirmation(exchange)
+            plan = response["frozen_plan"]
+            assert _content_identity(plan["sealed_content"]) == (
+                plan["seal"]["content_identity"]
+            )
+
+
+@pytest.mark.parametrize(
+    "case", _interaction_mock()["invalid_requests"], ids=lambda case: case["name"]
+)
+def test_interaction_invalid_requests_are_rejected(case) -> None:
+    validator, _ = _validators()
+    with pytest.raises(ValidationError):
+        validator.validate(case["request"])
+
+
+@pytest.mark.parametrize("contradiction", ["identity", "seal_ready"])
+def test_absent_candidate_cannot_claim_a_sealable_identity(contradiction) -> None:
+    _, validator = _validators()
+    example = (
+        "no-candidate-page"
+        if contradiction == "identity"
+        else "empty-default-inspect"
+    )
+    response = deepcopy(
+        next(
+            exchange["response"]
+            for exchange in _interaction_mock()["exchanges"]
+            if exchange["name"] == example
+        )
+    )
+    response["candidate_content_identity"] = "sha256:" + "0" * 64
+    if contradiction == "seal_ready":
+        response["sections"]["validation"] = {"seal_ready": True, "issues": []}
+    with pytest.raises(ValidationError):
+        validator.validate(response)
 
 
 def test_update_candidate_reuses_frozen_plan_path_rules() -> None:

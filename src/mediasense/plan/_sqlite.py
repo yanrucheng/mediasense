@@ -52,6 +52,7 @@ class WorkSnapshot:
     candidate_identity: str | None
     plan_ref: str
     published_path: str | None
+    working_notes: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -143,17 +144,19 @@ class SQLitePlanStore:
         work_ref: str,
         base_revision: str,
         revision: str,
-        candidate: dict[str, Any],
-        candidate_identity: str,
+        candidate: dict[str, Any] | None,
+        candidate_identity: str | None,
         organization_preferences: dict[str, Any] | None,
         response: dict[str, Any],
         before_write: Callable[[], None] | None = None,
+        replace_candidate: bool = True,
+        working_notes: str | None = None,
     ) -> dict[str, Any]:
         with self._transaction() as connection:
             replay = self._replay(connection, request_id, request_digest)
             if replay is not None:
                 return replay
-            row = self._row(connection, work_ref)
+            row = self._row(connection, work_ref, include_candidate=False)
             if row["state"] != "open":
                 raise WorkClosed(work_ref)
             reserved = connection.execute(
@@ -169,21 +172,26 @@ class SQLitePlanStore:
                 if organization_preferences is None
                 else _json(organization_preferences)
             )
-            candidate_json = _json(candidate)
+            candidate_json = None if candidate is None else _json(candidate)
             if before_write is not None:
                 before_write()
             connection.execute(
                 """
                 UPDATE plan_works
                 SET revision = ?, organization_preferences_json = ?,
-                    candidate_json = ?, candidate_identity = ?, updated_at = CURRENT_TIMESTAMP
+                    candidate_json = CASE WHEN ? THEN ? ELSE candidate_json END,
+                    candidate_identity = CASE WHEN ? THEN ? ELSE candidate_identity END,
+                    working_notes = COALESCE(?, working_notes), updated_at = CURRENT_TIMESTAMP
                 WHERE work_ref = ?
                 """,
                 (
                     revision,
                     preferences_json,
+                    replace_candidate,
                     candidate_json,
+                    replace_candidate,
                     candidate_identity,
+                    working_notes,
                     work_ref,
                 ),
             )
@@ -192,9 +200,11 @@ class SQLitePlanStore:
             )
         return response
 
-    def snapshot(self, work_ref: str) -> WorkSnapshot:
+    def snapshot(
+        self, work_ref: str, *, include_candidate: bool = True
+    ) -> WorkSnapshot:
         with self._connect() as connection:
-            row = self._row(connection, work_ref)
+            row = self._row(connection, work_ref, include_candidate=include_candidate)
         return _snapshot(row)
 
     def reserve_seal(
@@ -337,6 +347,7 @@ class SQLitePlanStore:
                     state TEXT NOT NULL CHECK (state IN ('open', 'closed')),
                     revision TEXT NOT NULL,
                     organization_preferences_json TEXT NOT NULL,
+                    working_notes TEXT NOT NULL DEFAULT '',
                     candidate_json TEXT,
                     candidate_identity TEXT,
                     plan_ref TEXT NOT NULL UNIQUE,
@@ -379,6 +390,17 @@ class SQLitePlanStore:
             ).fetchone()[0]
             if version != SCHEMA_VERSION:
                 raise RuntimeError(f"unsupported Plan schema version: {version}")
+        # Additive extension retains v3 Works, receipts, keys and reservations.
+        # Serialize discovery + ALTER across concurrent openers.
+        with self._transaction() as connection:
+            columns = {
+                row["name"]
+                for row in connection.execute("PRAGMA table_info(plan_works)")
+            }
+            if "working_notes" not in columns:
+                connection.execute(
+                    "ALTER TABLE plan_works ADD COLUMN working_notes TEXT NOT NULL DEFAULT ''"
+                )
 
     @contextmanager
     def _transaction(self) -> Iterator[sqlite3.Connection]:
@@ -400,9 +422,19 @@ class SQLitePlanStore:
         return connection
 
     @staticmethod
-    def _row(connection: sqlite3.Connection, work_ref: str) -> sqlite3.Row:
+    def _row(
+        connection: sqlite3.Connection, work_ref: str, *, include_candidate: bool = True
+    ) -> sqlite3.Row:
+        columns = (
+            "*"
+            if include_candidate
+            else (
+                "work_ref, result_ref, state, revision, organization_preferences_json, "
+                "working_notes, NULL AS candidate_json, candidate_identity, plan_ref, published_path"
+            )
+        )
         row = connection.execute(
-            "SELECT * FROM plan_works WHERE work_ref = ?", (work_ref,)
+            f"SELECT {columns} FROM plan_works WHERE work_ref = ?", (work_ref,)
         ).fetchone()
         if row is None:
             raise WorkNotFound(work_ref)
@@ -454,6 +486,7 @@ def _snapshot(row: sqlite3.Row) -> WorkSnapshot:
         candidate_identity=row["candidate_identity"],
         plan_ref=row["plan_ref"],
         published_path=row["published_path"],
+        working_notes=row["working_notes"],
     )
 
 

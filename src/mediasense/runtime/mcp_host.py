@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 from datetime import datetime, timezone
 import json
 import logging
@@ -17,6 +18,7 @@ from mcp.shared.exceptions import NoBackChannelError
 
 from .composition import HostRequestError, ToolDescriptor, tool_descriptors
 from .host import RuntimeHost
+from .resources import schema_path
 from .versioning import application_version
 
 
@@ -207,12 +209,23 @@ def run_stdio() -> None:
 
 
 def _mcp_tool(descriptor: ToolDescriptor) -> types.Tool:
+    request_schema = descriptor.input_schema
+    response_schema = descriptor.output_schema
+    if descriptor.name == "mediasense.plan.work":
+        # MCP clients have no access to the Host's local schema registry. Bundle
+        # the canonical resource (with its $id) so absolute references resolve
+        # offline, including recursive Source Sets. Contract bytes stay canonical.
+        frozen = json.loads(schema_path("frozen-plan.schema.json").read_text())
+        request_schema = deepcopy(request_schema)
+        response_schema = deepcopy(response_schema)
+        request_schema.setdefault("$defs", {})["frozen_plan_resource"] = frozen
+        response_schema.setdefault("$defs", {})["frozen_plan_resource"] = frozen
     if descriptor.name in {
         "mediasense.dataset.open",
         "mediasense.precheck.run",
         "mediasense.precheck.read",
     }:
-        input_schema = {"type": "object", **descriptor.input_schema}
+        input_schema = {"type": "object", **request_schema}
     else:
         properties: dict[str, object] = {
             "dataset_ref": {
@@ -220,7 +233,7 @@ def _mcp_tool(descriptor: ToolDescriptor) -> types.Tool:
                 "pattern": "^dataset:[^\\s]+$",
                 "description": "Exact identity returned by mediasense.dataset.open.",
             },
-            "request": descriptor.input_schema,
+            "request": request_schema,
         }
         if descriptor.name not in {
             "mediasense.precheck.run",
@@ -243,7 +256,7 @@ def _mcp_tool(descriptor: ToolDescriptor) -> types.Tool:
         name=descriptor.name,
         description=descriptor.description,
         input_schema=input_schema,
-        output_schema={"type": "object", **descriptor.output_schema},
+        output_schema={"type": "object", **response_schema},
         meta={
             "contract_id": descriptor.contract_id,
             "contract_digest": descriptor.contract_digest,

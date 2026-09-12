@@ -210,8 +210,9 @@ def test_cancellation_at_validation_boundaries_never_publishes(tmp_path, stage):
     assert tool.handle(request)["outcome"] == "ok"
 
 
+@pytest.mark.parametrize("notes_only", [False, True])
 def test_cancellation_at_commit_gate_rolls_back_without_a_receipt(
-    tmp_path, monkeypatch
+    tmp_path, monkeypatch, notes_only
 ):
     tool = _tool(tmp_path)
     created = _create(tool)
@@ -229,16 +230,26 @@ def test_cancellation_at_commit_gate_rolls_back_without_a_receipt(
         return update(**{**kwargs, "before_write": before_write})
 
     monkeypatch.setattr(tool.store, "update", cancel_at_gate)
-    result = tool.handle(update_request(created), execution=execution)
+    request = update_request(created)
+    if notes_only:
+        request.pop("candidate_content")
+        request["working_notes"] = "before cancellation"
+    result = tool.handle(request, execution=execution)
     assert result["error"]["code"] == "operation_failed"
     assert tool.store.snapshot(created["work_ref"]) == before
     assert update_count(tool) == 0
 
 
-def test_commit_winning_cancellation_remains_replayable(tmp_path, monkeypatch):
+@pytest.mark.parametrize("notes_only", [False, True])
+def test_commit_winning_cancellation_remains_replayable(
+    tmp_path, monkeypatch, notes_only
+):
     tool = _tool(tmp_path)
     created = _create(tool)
     request = update_request(created, organization_preferences={})
+    if notes_only:
+        request.pop("candidate_content")
+        request["working_notes"] = "committed notes"
     phases = []
     execution = UpdateExecution(observe=lambda event: phases.append(event["phase"]))
     record = tool.store._record_request
@@ -254,18 +265,24 @@ def test_commit_winning_cancellation_remains_replayable(tmp_path, monkeypatch):
     snapshot = tool.store.snapshot(created["work_ref"])
     assert snapshot.revision == result["revision"]
     assert snapshot.organization_preferences == {}
-    assert snapshot.candidate == request["candidate_content"]
+    assert snapshot.candidate == request.get("candidate_content")
+    if notes_only:
+        assert snapshot.working_notes == "committed notes"
     assert tool.handle(request) == result
     assert update_count(tool) == 1
 
 
+@pytest.mark.parametrize("notes_only", [False, True])
 def test_failure_inside_commit_rolls_back_and_does_not_hold_ownership(
-    tmp_path, monkeypatch
+    tmp_path, monkeypatch, notes_only
 ):
     tool = _tool(tmp_path)
     created = _create(tool)
     before = tool.store.snapshot(created["work_ref"])
     request = update_request(created, organization_preferences={})
+    if notes_only:
+        request.pop("candidate_content")
+        request["working_notes"] = "rollback notes"
 
     def fail(*_args):
         raise RuntimeError("injected transaction failure")

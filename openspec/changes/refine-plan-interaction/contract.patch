@@ -1,0 +1,1474 @@
+--- a/docs/spec/contract/plan-work/plan-work.tool.json
++++ b/docs/spec/contract/plan-work/plan-work.tool.json
+@@ -2,7 +2,7 @@
+   "$schema": "https://json-schema.org/draft/2020-12/schema",
+   "$id": "urn:mediasense:tool:plan-work",
+   "name": "mediasense.plan.work",
+-  "description": "Manage one mutable, revisioned Plan Working State and seal an exact Human-confirmed revision into a conforming immutable Frozen Plan.",
++  "description": "Save optional planning notes, organization preferences, and complete candidates in one revisioned Plan Work; seal exact Human-confirmed content into an immutable Frozen Plan.",
+   "inputSchema": {
+     "$schema": "https://json-schema.org/draft/2020-12/schema",
+     "$id": "urn:mediasense:tool:plan-work-input",
+@@ -105,20 +105,34 @@
+           "action",
+           "work_ref",
+           "base_revision",
+-          "candidate_content",
+           "request_id"
+         ],
+         "properties": {
+           "action": { "const": "update" },
+           "work_ref": { "$ref": "#/$defs/work_ref" },
+           "base_revision": { "$ref": "#/$defs/revision" },
+-          "candidate_content": { "$ref": "#/$defs/candidate_content" },
++          "candidate_content": {
++            "description": "Omit to preserve the current candidate. Supply a complete object to replace it after validation, or null to withdraw it and clear its sealable identity.",
++            "oneOf": [
++              { "$ref": "#/$defs/candidate_content" },
++              { "type": "null" }
++            ]
++          },
++          "working_notes": {
++            "type": "string",
++            "description": "Agent-authored work summary. Omit to preserve; supply a string to replace, including an empty string to clear. This is not verified evidence, material retention, or Human confirmation."
++          },
+           "organization_preferences": { "$ref": "#/$defs/organization_preferences" },
+           "request_id": { "$ref": "#/$defs/request_id" }
+-        }
++        },
++        "anyOf": [
++          { "required": ["organization_preferences"] },
++          { "required": ["working_notes"] },
++          { "required": ["candidate_content"] }
++        ]
+       },
+       "section": {
+-        "enum": ["overview", "preferences", "content", "validation"]
++        "enum": ["overview", "preferences", "working_notes", "content", "validation"]
+       },
+       "page_request": {
+         "type": "object",
+@@ -378,7 +392,8 @@
+       "content_section": {
+         "oneOf": [
+           { "$ref": "#/$defs/complete_content_section" },
+-          { "$ref": "#/$defs/paged_content_section" }
++          { "$ref": "#/$defs/paged_content_section" },
++          { "type": "null" }
+         ]
+       },
+       "inspect_sections": {
+@@ -393,6 +408,7 @@
+             "properties": { "state": { "enum": ["open", "closed"] } }
+           },
+           "preferences": { "$ref": "#/$defs/organization_preferences" },
++          "working_notes": { "type": "string" },
+           "content": { "$ref": "#/$defs/content_section" },
+           "validation": { "$ref": "#/$defs/validation" }
+         }
+@@ -412,7 +428,7 @@
+             "type": "array",
+             "minItems": 1,
+             "uniqueItems": true,
+-            "items": { "enum": ["overview", "preferences", "content", "validation"] }
++            "items": { "enum": ["overview", "preferences", "working_notes", "content", "validation"] }
+           },
+           "sections": { "$ref": "#/$defs/inspect_sections" },
+           "candidate_content_identity": { "$ref": "#/$defs/content_identity" }
+@@ -451,6 +467,45 @@
+               "required": ["sections"]
+             },
+             "then": { "not": { "required": ["candidate_content_identity"] } }
++          },
++          {
++            "if": {
++              "properties": {
++                "sections": {
++                  "properties": {
++                    "content": {
++                      "type": "null"
++                    }
++                  },
++                  "required": [
++                    "content"
++                  ]
++                }
++              },
++              "required": [
++                "sections"
++              ]
++            },
++            "then": {
++              "not": {
++                "required": [
++                  "candidate_content_identity"
++                ]
++              },
++              "properties": {
++                "sections": {
++                  "properties": {
++                    "validation": {
++                      "properties": {
++                        "seal_ready": {
++                          "const": false
++                        }
++                      }
++                    }
++                  }
++                }
++              }
++            }
+           }
+         ]
+       },
+--- a/docs/spec/contract/plan-work/index.md
++++ b/docs/spec/contract/plan-work/index.md
+@@ -4,7 +4,7 @@
+ type: spec
+ status: active
+ created: 2026-08-27
+-updated: 2026-09-09
++updated: 2026-09-12
+ timezone: "Asia/Shanghai"
+ parent: "index-contract"
+ depends-on:
+@@ -23,7 +23,7 @@
+ 
+ ## Decision
+ 
+-`mediasense.plan.work` owns one mutable, revisioned Plan Working State and the deterministic transition from one exact revision to a conforming, immutable Frozen Plan. It stores decisions already made by an Agent or Human; it does not interpret media, recognize events, choose groups, generate names, or modify source files.
++`mediasense.plan.work` owns one mutable, revisioned Plan Working State and the deterministic transition from one exact revision to a conforming, immutable Frozen Plan. It stores Agent-authored working notes, Human organization preferences, and complete candidate decisions. It does not interpret media, recognize events, choose groups, generate names, decide what to ask, or modify source files.
+ 
+ [`plan-work.tool.json`](plan-work.tool.json) is the authoritative request and response shape. [`hong-kong.mock.json`](hong-kong.mock.json) is a complete human-readable transcript validated by [`tests/test_plan_work_contract.py`](../../../../tests/test_plan_work_contract.py).
+ 
+@@ -43,7 +43,7 @@
+ The Tool is authoritative for:
+ 
+ - one `work_ref`, its exact bound `result_ref`, open or closed lifecycle, and revision tokens;
+-- the current organization preference snapshot and complete candidate organization content;
++- the current organization preference snapshot, optional working-note text, and optional complete candidate organization content;
+ - deterministic validation issues and the global identity of an exact sealable candidate; and
+ - the successful transition from an exact confirmed candidate to one `plan_ref`.
+ 
+@@ -67,8 +67,10 @@
+ not inspect Geo acquisition summaries, batches, deduplication, caching, or
+ provider-request state.
+ 
+-A new Working State is `open`. Every accepted `update` replaces its candidate
+-atomically and produces a new opaque revision token. Successful `seal` closes the
++A new Working State is `open`, has empty working notes, and has no Candidate.
++Each newly accepted `update` atomically changes its explicitly supplied fields and
++produces a new opaque revision token, including a same-value write. An idempotent
++replay returns the original receipt without another revision. Successful `seal` closes the
+ exact revision, publishes a Frozen Plan, and returns that complete Frozen Plan
+ object as the formal input to Apply preparation. A closed Work remains inspectable
+ but rejects update and a semantically different seal. Later changes require
+@@ -97,28 +99,93 @@
+ 
+ There is no preference patch or merge behavior. The Tool preserves the resulting snapshot for re-entry and inspection but does not treat an unknown preference as authority to invent organization semantics. Final organization decisions must appear in candidate content and, after sealing, in the Frozen Plan.
+ 
++## Working notes
++
++`working_notes` is optional free text inside the existing Working State. It holds
++only the work summary an Agent chooses to save: relevant understanding, supplied
++information and its source, affected scope, material alternatives, and unresolved
++implications when needed to continue. It is not a full transcript, a structured
++partial organization, a verified Observation, an attachment store, or confirmation.
++
++On `update`, omission preserves the text, a string replaces it completely, and
++`""` clears it. New Works read as `""`. The field has no additional character cap
++or pagination in this profile. Accepted text must be preserved and read back in
++full without silent truncation or normalization; existing whole-request transport
++and resource limits still apply. A textual path does not create a retention or
++reading guarantee for the referenced material.
++
++Working notes and preferences never enter the Frozen Plan or its content identity.
++The Agent transfers any material final rationale into existing `decision_notes`
++and uses only Result-local Evidence in `evidence_refs`. Additional information
++keeps its actual source and never rewrites the bound Result or expands its scope.
++
+ ## Candidate content and `update`
+ 
+-Each `update` supplies one complete `candidate_content`, not JSON Patch, natural language, or work-only group entities. The content composes the existing Frozen Plan source-set, logical-group, other-outcome, and decision-note schemas by reference. It omits only fields owned by sealing: `contract`, `plan_ref`, and the `seal` envelope.
+-
+-The Tool validates the request against the exact bound Result and either replaces the whole candidate and preference snapshot or changes nothing. It may store diffs internally, but diff format is not public.
+-
+-Before returning a sealable candidate, the Tool reserves the future `plan_ref` and constructs the exact Frozen Plan `sealed_content`, including `contract` and that `plan_ref`. Reservation does not create an authoritative Frozen Plan. It is necessary because the existing Frozen Plan contract covers `plan_ref` with the confirmed content digest.
++`update` requires `work_ref`, `base_revision`, `request_id`, and at least one of
++`organization_preferences`, `working_notes`, or `candidate_content`. Supplying a
++field counts even if its value is unchanged. The three fields can change together
++in one atomic update; an invalid field or Candidate rejects the entire write.
++
++`candidate_content` has three distinct meanings:
++
++- omitted: preserve the current Candidate and identity, including their absence;
++- a complete object: validate and atomically replace the whole Candidate; and
++- `null`: clear the current Candidate and its sealable identity.
++
++An object composes the existing Frozen Plan source-set, logical-group,
++other-outcome, and decision-note schemas. It omits only fields owned by sealing:
++`contract`, `plan_ref`, and the `seal` envelope. Partial objects, JSON Patch, and
++natural-language instructions are not candidate content.
++
++Only a supplied complete Candidate is analyzed against the exact bound Result.
++Notes-only, preferences-only, and withdrawal updates perform no Candidate
++analysis or PreCheck Read; they preserve the same concurrency, cancellation,
++commit and seal-recovery protections. Invalid candidate structure, references or
++organization change nothing. The Tool does not interpret notes or preferences to
++decide whether to preserve, replace, or withdraw a Candidate.
++
++The reserved future `plan_ref` remains attached to the Work, including after
++withdrawal. It is included in the materialized `sealed_content` and its digest;
++reservation creates no published Frozen Plan. A new Work revision therefore need
++not change `candidate_content_identity`. Clearing does not promise recovery of
++historical candidates, and re-entering a sealable state requires a complete
++Candidate submission. Closed Works remain immutable.
+ 
+ ## `inspect` and pagination
+ 
+-`inspect` reads one exact revision. If the request omits `revision`, the Tool atomically resolves the current revision and returns its opaque token. Supported sections are:
+-
+-- `overview`;
+-- `preferences`;
+-- `content`; and
+-- `validation`.
+-
+-Omitting `sections` requests all sections. The default complete content section is the exact candidate `sealed_content` conforming to the existing Frozen Plan `$defs.sealedContent` schema. Large `groups`, `other_outcomes`, or `decision_notes` collections may instead be returned page by page.
+-
+-Every cursor binds `work_ref`, revision, collection, query shape, and continuation position. A page from another revision or section is invalid. Paging changes only transport: every page of one sealable revision reports the same global `candidate_content_identity`. Page identities do not exist. The complete candidate must remain obtainable by following `next_cursor` until `complete: true`.
+-
+-Validation issues are deterministic Tool findings, not Agent judgments. `seal_ready: true` requires a complete candidate content identity. `seal_ready: false` returns issues and no sealable identity.
++`inspect` reads one exact revision. Omitting `revision` atomically resolves the
++current revision and returns its opaque token; supplying a stale token returns
++`revision_conflict`. Historical revision retrieval is not promised.
++
++Supported sections, also returned by default in this order, are `overview`,
++`preferences`, `working_notes`, `content`, and `validation`. Explicit selection
++returns only the requested sections, in the same canonical order.
++`returned_sections` and the actual section fields agree.
++
++When no Candidate exists, the Work is normally readable. Requested `content` is
++JSON `null`; requested `validation` is `seal_ready: false` with a
++`candidate_missing` error issue. No candidate identity is returned. Notes and
++preferences remain available, including `""` and `{}` when empty. A valid paged
++request without a cursor also returns `content: null` in this state, not an empty
++organization or a continuation. Request, revision and cursor checks still apply;
++an old or invalid cursor is never silently ignored after withdrawal.
++
++When a Candidate exists, the complete content section contains its exact
++`sealed_content` conforming to Frozen Plan `$defs.sealedContent`. Large `groups`,
++`other_outcomes`, or `decision_notes` collections may be requested page by page.
++Page requests still require `sections: ["content"]`.
++
++Every cursor binds `work_ref`, revision, collection, query shape, and continuation
++position. A page from another revision or section is invalid. Every page of a
++sealable revision reports the same global `candidate_content_identity`; page
++identities do not exist. Following `next_cursor` until `complete: true` obtains
++the complete requested collection without changing the Candidate's meaning.
++
++Validation reports the saved deterministic Candidate validation. It does not
++reacquire evidence for a note edit or prove semantic correctness, preference fit,
++current availability of external material, or Human acceptance. `seal_ready: true`
++requires a complete candidate identity; `false` returns issues and no sealable
++identity. Sealing revalidates the conditions owned by that operation.
+ 
+ ## `seal`
+ 
+@@ -138,6 +205,12 @@
+ 2. records the trusted confirming principal and time in the existing `seal.final_confirmation` fields;
+ 3. closes the Working State; and
+ 4. returns the complete conforming Frozen Plan plus `plan_ref`, `result_ref`, and `content_identity`.
++
++A stale Work revision is rejected even when candidate content is unchanged.
++After reading the current revision, the same exact content may be sealed under a
++still-valid trusted confirmation; a note edit alone does not require another
++semantic discussion. User withdrawal or correction cannot be overridden by an
++unchanged digest. Working-note prose never supplies authentication.
+ 
+ The returned `plan_ref` becomes authoritative only on successful seal. Repeating the identical request in the same confirmation context returns the same artifact. A new semantic change requires another Working State and another Human confirmation.
+ 
+@@ -161,6 +234,14 @@
+ - `access_denied`; and
+ - `operation_failed`.
+ 
++Missing update fields, wrong top-level field types and unknown request fields use
++`invalid_request`. A supplied Candidate object that fails its structure, reference
++or organization validation uses `candidate_invalid` and changes no field. A
++transport may reject a schema-invalid request before Tool dispatch. An ordinary
++inspect without a Candidate is successful; seal without a Candidate uses
++`candidate_invalid` when its other preconditions hold. These statements do not
++prescribe a total error order for multiply-invalid calls.
++
+ Existing Result-local reference failures retain the meanings established by the PreCheck read and Frozen Plan contracts. Errors never silently rebind a Work, repair a candidate, reinterpret a source set, or widen Human authority.
+ 
+ ## Boundaries
+@@ -177,4 +258,9 @@
+ 
+ The primary Mock uses the exact plan-ready, valid partial Result from the existing PreCheck read Mock and returns the exact Frozen Plan from the existing Frozen Plan Mock. It demonstrates create, atomic update, current-revision inspect, paged inspection, trusted Human seal, safe seal retry, and closed-work rejection. The active Geo Tool Mock and Plan Geo workflow fixtures additionally demonstrate authorization preflight, revision-bound enrichment, refusal, continuation, partial failure, and restart-safe replay.
+ 
++[`interaction.mock.json`](interaction.mock.json) adds synthetic examples for optional
++work saving, absent Candidates, preservation and withdrawal, atomic failures,
++revision/content separation and final sealing. Its trusted context is test input,
++not a claim that the JSON request can authenticate a Human.
++
+ JSON Schema validates all request and response shapes with Draft 2020-12 strict compilation and registered external schemas. Semantic tests additionally prove Result entry gates, revision conflicts, cursor binding, one global candidate identity, Human confirmation boundaries, idempotency, Working State closure, and complete Frozen Plan conformance.
+--- a/docs/spec/contract/plan-work/hong-kong.mock.json
++++ b/docs/spec/contract/plan-work/hong-kong.mock.json
+@@ -139,7 +139,7 @@
+         "result_ref": "precheck-result:hk-review-slice-002",
+         "revision": "work-revision:hk-002",
+         "state": "open",
+-        "returned_sections": ["overview", "preferences", "content", "validation"],
++        "returned_sections": ["overview", "preferences", "working_notes", "content", "validation"],
+         "sections": {
+           "overview": { "state": "open" },
+           "preferences": {
+@@ -147,6 +147,7 @@
+             "maximum_depth": 3,
+             "keep_related_raw_and_jpeg_together": true
+           },
++          "working_notes": "",
+           "content": {
+             "mode": "complete",
+             "value": {
+--- /dev/null
++++ b/docs/spec/contract/plan-work/interaction.mock.json
+@@ -0,0 +1,1138 @@
++{
++  "purpose": "Human-reviewable synthetic contract examples; no actual Tool execution or Human confirmation is claimed.",
++  "authority": "Proposed review packet. Context is a trusted test-harness input, never part of the ordinary Tool request.",
++  "scenario": "One plan-ready trusted synthetic Result with source-item:a and source-item:b; a linear persistence scenario, not a mandatory Agent workflow.",
++  "exchanges": [
++    {
++      "name": "create",
++      "request": {
++        "action": "create",
++        "result_ref": "precheck-result:demo",
++        "organization_preferences": {
++          "retrieval_goal": "按活动查找",
++          "preserve_source_basenames": true
++        },
++        "request_id": "request:demo-create"
++      },
++      "response": {
++        "outcome": "ok",
++        "action": "create",
++        "work_ref": "plan-work:demo",
++        "result_ref": "precheck-result:demo",
++        "revision": "work-revision:a",
++        "state": "open",
++        "organization_preferences": {
++          "retrieval_goal": "按活动查找",
++          "preserve_source_basenames": true
++        }
++      }
++    },
++    {
++      "name": "empty-default-inspect",
++      "request": {
++        "action": "inspect",
++        "work_ref": "plan-work:demo"
++      },
++      "response": {
++        "outcome": "ok",
++        "action": "inspect",
++        "work_ref": "plan-work:demo",
++        "result_ref": "precheck-result:demo",
++        "revision": "work-revision:a",
++        "state": "open",
++        "returned_sections": [
++          "overview",
++          "preferences",
++          "working_notes",
++          "content",
++          "validation"
++        ],
++        "sections": {
++          "overview": {
++            "state": "open"
++          },
++          "preferences": {
++            "retrieval_goal": "按活动查找",
++            "preserve_source_basenames": true
++          },
++          "working_notes": "",
++          "content": null,
++          "validation": {
++            "seal_ready": false,
++            "issues": [
++              {
++                "code": "candidate_missing",
++                "severity": "error",
++                "message": "当前没有组织候选；已保存的工作说明和偏好仍可读取。"
++              }
++            ]
++          }
++        }
++      }
++    },
++    {
++      "name": "notes-only",
++      "request": {
++        "action": "update",
++        "work_ref": "plan-work:demo",
++        "base_revision": "work-revision:a",
++        "working_notes": "用户已说明 a 为展览参观。b 的活动身份尚未明确，将影响合并或独立组织；需要补充信息或明确较粗的处置。",
++        "request_id": "request:notes-only"
++      },
++      "response": {
++        "outcome": "ok",
++        "action": "update",
++        "work_ref": "plan-work:demo",
++        "result_ref": "precheck-result:demo",
++        "revision": "work-revision:b",
++        "state": "open"
++      }
++    },
++    {
++      "name": "resume-without-candidate",
++      "request": {
++        "action": "inspect",
++        "work_ref": "plan-work:demo"
++      },
++      "response": {
++        "outcome": "ok",
++        "action": "inspect",
++        "work_ref": "plan-work:demo",
++        "result_ref": "precheck-result:demo",
++        "revision": "work-revision:b",
++        "state": "open",
++        "returned_sections": [
++          "overview",
++          "preferences",
++          "working_notes",
++          "content",
++          "validation"
++        ],
++        "sections": {
++          "overview": {
++            "state": "open"
++          },
++          "preferences": {
++            "retrieval_goal": "按活动查找",
++            "preserve_source_basenames": true
++          },
++          "working_notes": "用户已说明 a 为展览参观。b 的活动身份尚未明确，将影响合并或独立组织；需要补充信息或明确较粗的处置。",
++          "content": null,
++          "validation": {
++            "seal_ready": false,
++            "issues": [
++              {
++                "code": "candidate_missing",
++                "severity": "error",
++                "message": "当前没有组织候选；已保存的工作说明和偏好仍可读取。"
++              }
++            ]
++          }
++        }
++      }
++    },
++    {
++      "name": "stale-update",
++      "request": {
++        "action": "update",
++        "work_ref": "plan-work:demo",
++        "base_revision": "work-revision:a",
++        "working_notes": "陈旧写入",
++        "request_id": "request:stale"
++      },
++      "response": {
++        "outcome": "error",
++        "action": "update",
++        "work_ref": "plan-work:demo",
++        "revision": "work-revision:b",
++        "error": {
++          "code": "revision_conflict",
++          "message": "读取当前版本后重新决定修改。",
++          "current_revision": "work-revision:b"
++        }
++      }
++    },
++    {
++      "name": "complete-candidate",
++      "request": {
++        "action": "update",
++        "work_ref": "plan-work:demo",
++        "base_revision": "work-revision:b",
++        "working_notes": "用户分别说明 a 为展览参观、b 为家庭聚会；已形成两个活动，尚待审阅完整候选。",
++        "candidate_content": {
++          "result_ref": "precheck-result:demo",
++          "scope": {
++            "kind": "explicit",
++            "source_item_refs": [
++              "source-item:a",
++              "source-item:b"
++            ]
++          },
++          "logical_root": "周末活动",
++          "groups": [
++            {
++              "relative_path": [
++                "展览参观"
++              ],
++              "members": {
++                "kind": "explicit",
++                "source_item_refs": [
++                  "source-item:a"
++                ]
++              },
++              "source_naming": {
++                "default": "preserve_source_basename"
++              }
++            },
++            {
++              "relative_path": [
++                "家庭聚会"
++              ],
++              "members": {
++                "kind": "explicit",
++                "source_item_refs": [
++                  "source-item:b"
++                ]
++              },
++              "source_naming": {
++                "default": "preserve_source_basename"
++              }
++            }
++          ],
++          "other_outcomes": [],
++          "decision_notes": [
++            {
++              "applies_to": {
++                "kind": "explicit",
++                "source_item_refs": [
++                  "source-item:b"
++                ]
++              },
++              "summary": "依据用户补充，将 b 作为独立的家庭聚会组织，未沿用 a 的活动身份。"
++            }
++          ]
++        },
++        "request_id": "request:complete-candidate"
++      },
++      "response": {
++        "outcome": "ok",
++        "action": "update",
++        "work_ref": "plan-work:demo",
++        "result_ref": "precheck-result:demo",
++        "revision": "work-revision:c",
++        "state": "open"
++      }
++    },
++    {
++      "name": "review-candidate",
++      "request": {
++        "action": "inspect",
++        "work_ref": "plan-work:demo",
++        "sections": [
++          "content",
++          "validation"
++        ]
++      },
++      "response": {
++        "outcome": "ok",
++        "action": "inspect",
++        "work_ref": "plan-work:demo",
++        "result_ref": "precheck-result:demo",
++        "revision": "work-revision:c",
++        "state": "open",
++        "returned_sections": [
++          "content",
++          "validation"
++        ],
++        "sections": {
++          "content": {
++            "mode": "complete",
++            "value": {
++              "contract": "mediasense.frozen-plan",
++              "plan_ref": "frozen-plan:demo",
++              "result_ref": "precheck-result:demo",
++              "scope": {
++                "kind": "explicit",
++                "source_item_refs": [
++                  "source-item:a",
++                  "source-item:b"
++                ]
++              },
++              "logical_root": "周末活动",
++              "groups": [
++                {
++                  "relative_path": [
++                    "展览参观"
++                  ],
++                  "members": {
++                    "kind": "explicit",
++                    "source_item_refs": [
++                      "source-item:a"
++                    ]
++                  },
++                  "source_naming": {
++                    "default": "preserve_source_basename"
++                  }
++                },
++                {
++                  "relative_path": [
++                    "家庭聚会"
++                  ],
++                  "members": {
++                    "kind": "explicit",
++                    "source_item_refs": [
++                      "source-item:b"
++                    ]
++                  },
++                  "source_naming": {
++                    "default": "preserve_source_basename"
++                  }
++                }
++              ],
++              "other_outcomes": [],
++              "decision_notes": [
++                {
++                  "applies_to": {
++                    "kind": "explicit",
++                    "source_item_refs": [
++                      "source-item:b"
++                    ]
++                  },
++                  "summary": "依据用户补充，将 b 作为独立的家庭聚会组织，未沿用 a 的活动身份。"
++                }
++              ]
++            }
++          },
++          "validation": {
++            "seal_ready": true,
++            "issues": []
++          }
++        },
++        "candidate_content_identity": "sha256:5640cff1778c552adba0473feac26b85890ad86246a5243611d1a9d7786da470"
++      }
++    },
++    {
++      "name": "supplement-notes",
++      "request": {
++        "action": "update",
++        "work_ref": "plan-work:demo",
++        "base_revision": "work-revision:c",
++        "working_notes": "用户分别说明 a 为展览参观、b 为家庭聚会；已形成两个活动，尚待审阅完整候选。 补记：身份来源为用户的分别说明。",
++        "request_id": "request:supplement-notes"
++      },
++      "response": {
++        "outcome": "ok",
++        "action": "update",
++        "work_ref": "plan-work:demo",
++        "result_ref": "precheck-result:demo",
++        "revision": "work-revision:d",
++        "state": "open"
++      }
++    },
++    {
++      "name": "same-content-new-revision",
++      "request": {
++        "action": "inspect",
++        "work_ref": "plan-work:demo",
++        "sections": [
++          "working_notes",
++          "validation"
++        ]
++      },
++      "response": {
++        "outcome": "ok",
++        "action": "inspect",
++        "work_ref": "plan-work:demo",
++        "result_ref": "precheck-result:demo",
++        "revision": "work-revision:d",
++        "state": "open",
++        "returned_sections": [
++          "working_notes",
++          "validation"
++        ],
++        "sections": {
++          "working_notes": "用户分别说明 a 为展览参观、b 为家庭聚会；已形成两个活动，尚待审阅完整候选。 补记：身份来源为用户的分别说明。",
++          "validation": {
++            "seal_ready": true,
++            "issues": []
++          }
++        },
++        "candidate_content_identity": "sha256:5640cff1778c552adba0473feac26b85890ad86246a5243611d1a9d7786da470"
++      }
++    },
++    {
++      "name": "stale-seal",
++      "request": {
++        "action": "seal",
++        "work_ref": "plan-work:demo",
++        "revision": "work-revision:c",
++        "candidate_content_identity": "sha256:5640cff1778c552adba0473feac26b85890ad86246a5243611d1a9d7786da470",
++        "request_id": "request:stale-seal"
++      },
++      "response": {
++        "outcome": "error",
++        "action": "seal",
++        "work_ref": "plan-work:demo",
++        "revision": "work-revision:d",
++        "error": {
++          "code": "revision_conflict",
++          "message": "工作版本已变化。",
++          "current_revision": "work-revision:d"
++        }
++      },
++      "context": {
++        "human_confirmation": {
++          "principal_ref": "human:synthetic-review",
++          "content_identity": "sha256:5640cff1778c552adba0473feac26b85890ad86246a5243611d1a9d7786da470",
++          "confirmed_at": "2026-09-12T13:32:00+08:00"
++        }
++      }
++    },
++    {
++      "name": "withdraw-candidate",
++      "request": {
++        "action": "update",
++        "work_ref": "plan-work:demo",
++        "base_revision": "work-revision:d",
++        "candidate_content": null,
++        "working_notes": "用户新补充使 b 的活动归属出现冲突；已撤下当前候选，尚待重新决定。",
++        "request_id": "request:withdraw-candidate"
++      },
++      "response": {
++        "outcome": "ok",
++        "action": "update",
++        "work_ref": "plan-work:demo",
++        "result_ref": "precheck-result:demo",
++        "revision": "work-revision:e",
++        "state": "open"
++      }
++    },
++    {
++      "name": "withdrawn-default-inspect",
++      "request": {
++        "action": "inspect",
++        "work_ref": "plan-work:demo"
++      },
++      "response": {
++        "outcome": "ok",
++        "action": "inspect",
++        "work_ref": "plan-work:demo",
++        "result_ref": "precheck-result:demo",
++        "revision": "work-revision:e",
++        "state": "open",
++        "returned_sections": [
++          "overview",
++          "preferences",
++          "working_notes",
++          "content",
++          "validation"
++        ],
++        "sections": {
++          "overview": {
++            "state": "open"
++          },
++          "preferences": {
++            "retrieval_goal": "按活动查找",
++            "preserve_source_basenames": true
++          },
++          "working_notes": "用户新补充使 b 的活动归属出现冲突；已撤下当前候选，尚待重新决定。",
++          "content": null,
++          "validation": {
++            "seal_ready": false,
++            "issues": [
++              {
++                "code": "candidate_missing",
++                "severity": "error",
++                "message": "当前没有组织候选；已保存的工作说明和偏好仍可读取。"
++              }
++            ]
++          }
++        }
++      }
++    },
++    {
++      "name": "no-candidate-page",
++      "request": {
++        "action": "inspect",
++        "work_ref": "plan-work:demo",
++        "sections": [
++          "content"
++        ],
++        "page": {
++          "collection": "groups",
++          "limit": 10
++        }
++      },
++      "response": {
++        "outcome": "ok",
++        "action": "inspect",
++        "work_ref": "plan-work:demo",
++        "result_ref": "precheck-result:demo",
++        "revision": "work-revision:e",
++        "state": "open",
++        "returned_sections": [
++          "content"
++        ],
++        "sections": {
++          "content": null
++        }
++      }
++    },
++    {
++      "name": "withdrawn-seal",
++      "request": {
++        "action": "seal",
++        "work_ref": "plan-work:demo",
++        "revision": "work-revision:e",
++        "candidate_content_identity": "sha256:5640cff1778c552adba0473feac26b85890ad86246a5243611d1a9d7786da470",
++        "request_id": "request:withdrawn-seal"
++      },
++      "response": {
++        "outcome": "error",
++        "action": "seal",
++        "work_ref": "plan-work:demo",
++        "revision": "work-revision:e",
++        "error": {
++          "code": "candidate_invalid",
++          "message": "当前没有可冻结的组织候选。"
++        }
++      },
++      "context": {
++        "human_confirmation": {
++          "principal_ref": "human:synthetic-review",
++          "content_identity": "sha256:5640cff1778c552adba0473feac26b85890ad86246a5243611d1a9d7786da470",
++          "confirmed_at": "2026-09-12T13:32:00+08:00"
++        }
++      }
++    },
++    {
++      "name": "atomic-invalid-organization",
++      "request": {
++        "action": "update",
++        "work_ref": "plan-work:demo",
++        "base_revision": "work-revision:e",
++        "working_notes": "本次文字也不能保存。",
++        "organization_preferences": {},
++        "candidate_content": {
++          "result_ref": "precheck-result:demo",
++          "scope": {
++            "kind": "explicit",
++            "source_item_refs": [
++              "source-item:a",
++              "source-item:b"
++            ]
++          },
++          "logical_root": "周末活动",
++          "groups": [
++            {
++              "relative_path": [
++                "展览参观"
++              ],
++              "members": {
++                "kind": "explicit",
++                "source_item_refs": [
++                  "source-item:a"
++                ]
++              },
++              "source_naming": {
++                "default": "preserve_source_basename"
++              }
++            }
++          ],
++          "other_outcomes": [],
++          "decision_notes": []
++        },
++        "request_id": "request:invalid-organization"
++      },
++      "response": {
++        "outcome": "error",
++        "action": "update",
++        "work_ref": "plan-work:demo",
++        "revision": "work-revision:e",
++        "error": {
++          "code": "candidate_invalid",
++          "message": "source-item:b 没有明确去向。"
++        }
++      }
++    },
++    {
++      "name": "failed-write-preserves-work",
++      "request": {
++        "action": "inspect",
++        "work_ref": "plan-work:demo"
++      },
++      "response": {
++        "outcome": "ok",
++        "action": "inspect",
++        "work_ref": "plan-work:demo",
++        "result_ref": "precheck-result:demo",
++        "revision": "work-revision:e",
++        "state": "open",
++        "returned_sections": [
++          "overview",
++          "preferences",
++          "working_notes",
++          "content",
++          "validation"
++        ],
++        "sections": {
++          "overview": {
++            "state": "open"
++          },
++          "preferences": {
++            "retrieval_goal": "按活动查找",
++            "preserve_source_basenames": true
++          },
++          "working_notes": "用户新补充使 b 的活动归属出现冲突；已撤下当前候选，尚待重新决定。",
++          "content": null,
++          "validation": {
++            "seal_ready": false,
++            "issues": [
++              {
++                "code": "candidate_missing",
++                "severity": "error",
++                "message": "当前没有组织候选；已保存的工作说明和偏好仍可读取。"
++              }
++            ]
++          }
++        }
++      }
++    },
++    {
++      "name": "restore-and-clear-notes",
++      "request": {
++        "action": "update",
++        "work_ref": "plan-work:demo",
++        "base_revision": "work-revision:e",
++        "candidate_content": {
++          "result_ref": "precheck-result:demo",
++          "scope": {
++            "kind": "explicit",
++            "source_item_refs": [
++              "source-item:a",
++              "source-item:b"
++            ]
++          },
++          "logical_root": "周末活动",
++          "groups": [
++            {
++              "relative_path": [
++                "展览参观"
++              ],
++              "members": {
++                "kind": "explicit",
++                "source_item_refs": [
++                  "source-item:a"
++                ]
++              },
++              "source_naming": {
++                "default": "preserve_source_basename"
++              }
++            },
++            {
++              "relative_path": [
++                "家庭聚会"
++              ],
++              "members": {
++                "kind": "explicit",
++                "source_item_refs": [
++                  "source-item:b"
++                ]
++              },
++              "source_naming": {
++                "default": "preserve_source_basename"
++              }
++            }
++          ],
++          "other_outcomes": [],
++          "decision_notes": [
++            {
++              "applies_to": {
++                "kind": "explicit",
++                "source_item_refs": [
++                  "source-item:b"
++                ]
++              },
++              "summary": "依据用户补充，将 b 作为独立的家庭聚会组织，未沿用 a 的活动身份。"
++            }
++          ]
++        },
++        "working_notes": "",
++        "organization_preferences": {},
++        "request_id": "request:restore-and-clear-notes"
++      },
++      "response": {
++        "outcome": "ok",
++        "action": "update",
++        "work_ref": "plan-work:demo",
++        "result_ref": "precheck-result:demo",
++        "revision": "work-revision:f",
++        "state": "open"
++      }
++    },
++    {
++      "name": "final-review",
++      "request": {
++        "action": "inspect",
++        "work_ref": "plan-work:demo"
++      },
++      "response": {
++        "outcome": "ok",
++        "action": "inspect",
++        "work_ref": "plan-work:demo",
++        "result_ref": "precheck-result:demo",
++        "revision": "work-revision:f",
++        "state": "open",
++        "returned_sections": [
++          "overview",
++          "preferences",
++          "working_notes",
++          "content",
++          "validation"
++        ],
++        "sections": {
++          "overview": {
++            "state": "open"
++          },
++          "preferences": {},
++          "working_notes": "",
++          "content": {
++            "mode": "complete",
++            "value": {
++              "contract": "mediasense.frozen-plan",
++              "plan_ref": "frozen-plan:demo",
++              "result_ref": "precheck-result:demo",
++              "scope": {
++                "kind": "explicit",
++                "source_item_refs": [
++                  "source-item:a",
++                  "source-item:b"
++                ]
++              },
++              "logical_root": "周末活动",
++              "groups": [
++                {
++                  "relative_path": [
++                    "展览参观"
++                  ],
++                  "members": {
++                    "kind": "explicit",
++                    "source_item_refs": [
++                      "source-item:a"
++                    ]
++                  },
++                  "source_naming": {
++                    "default": "preserve_source_basename"
++                  }
++                },
++                {
++                  "relative_path": [
++                    "家庭聚会"
++                  ],
++                  "members": {
++                    "kind": "explicit",
++                    "source_item_refs": [
++                      "source-item:b"
++                    ]
++                  },
++                  "source_naming": {
++                    "default": "preserve_source_basename"
++                  }
++                }
++              ],
++              "other_outcomes": [],
++              "decision_notes": [
++                {
++                  "applies_to": {
++                    "kind": "explicit",
++                    "source_item_refs": [
++                      "source-item:b"
++                    ]
++                  },
++                  "summary": "依据用户补充，将 b 作为独立的家庭聚会组织，未沿用 a 的活动身份。"
++                }
++              ]
++            }
++          },
++          "validation": {
++            "seal_ready": true,
++            "issues": []
++          }
++        },
++        "candidate_content_identity": "sha256:5640cff1778c552adba0473feac26b85890ad86246a5243611d1a9d7786da470"
++      }
++    },
++    {
++      "name": "final-seal",
++      "request": {
++        "action": "seal",
++        "work_ref": "plan-work:demo",
++        "revision": "work-revision:f",
++        "candidate_content_identity": "sha256:5640cff1778c552adba0473feac26b85890ad86246a5243611d1a9d7786da470",
++        "request_id": "request:final-seal"
++      },
++      "response": {
++        "outcome": "ok",
++        "action": "seal",
++        "work_ref": "plan-work:demo",
++        "result_ref": "precheck-result:demo",
++        "revision": "work-revision:f",
++        "state": "closed",
++        "plan_ref": "frozen-plan:demo",
++        "content_identity": "sha256:5640cff1778c552adba0473feac26b85890ad86246a5243611d1a9d7786da470",
++        "frozen_plan": {
++          "sealed_content": {
++            "contract": "mediasense.frozen-plan",
++            "plan_ref": "frozen-plan:demo",
++            "result_ref": "precheck-result:demo",
++            "scope": {
++              "kind": "explicit",
++              "source_item_refs": [
++                "source-item:a",
++                "source-item:b"
++              ]
++            },
++            "logical_root": "周末活动",
++            "groups": [
++              {
++                "relative_path": [
++                  "展览参观"
++                ],
++                "members": {
++                  "kind": "explicit",
++                  "source_item_refs": [
++                    "source-item:a"
++                  ]
++                },
++                "source_naming": {
++                  "default": "preserve_source_basename"
++                }
++              },
++              {
++                "relative_path": [
++                  "家庭聚会"
++                ],
++                "members": {
++                  "kind": "explicit",
++                  "source_item_refs": [
++                    "source-item:b"
++                  ]
++                },
++                "source_naming": {
++                  "default": "preserve_source_basename"
++                }
++              }
++            ],
++            "other_outcomes": [],
++            "decision_notes": [
++              {
++                "applies_to": {
++                  "kind": "explicit",
++                  "source_item_refs": [
++                    "source-item:b"
++                  ]
++                },
++                "summary": "依据用户补充，将 b 作为独立的家庭聚会组织，未沿用 a 的活动身份。"
++              }
++            ]
++          },
++          "seal": {
++            "encoding_profile": "mediasense-json-strings-sha256-v1",
++            "content_identity": "sha256:5640cff1778c552adba0473feac26b85890ad86246a5243611d1a9d7786da470",
++            "final_confirmation": {
++              "confirmed_content_identity": "sha256:5640cff1778c552adba0473feac26b85890ad86246a5243611d1a9d7786da470",
++              "confirmed_at": "2026-09-12T13:40:00+08:00",
++              "confirmed_by": "human:synthetic-review"
++            }
++          }
++        }
++      },
++      "context": {
++        "human_confirmation": {
++          "principal_ref": "human:synthetic-review",
++          "content_identity": "sha256:5640cff1778c552adba0473feac26b85890ad86246a5243611d1a9d7786da470",
++          "confirmed_at": "2026-09-12T13:40:00+08:00"
++        }
++      }
++    },
++    {
++      "name": "same-seal-replay",
++      "request": {
++        "action": "seal",
++        "work_ref": "plan-work:demo",
++        "revision": "work-revision:f",
++        "candidate_content_identity": "sha256:5640cff1778c552adba0473feac26b85890ad86246a5243611d1a9d7786da470",
++        "request_id": "request:final-seal"
++      },
++      "response": {
++        "outcome": "ok",
++        "action": "seal",
++        "work_ref": "plan-work:demo",
++        "result_ref": "precheck-result:demo",
++        "revision": "work-revision:f",
++        "state": "closed",
++        "plan_ref": "frozen-plan:demo",
++        "content_identity": "sha256:5640cff1778c552adba0473feac26b85890ad86246a5243611d1a9d7786da470",
++        "frozen_plan": {
++          "sealed_content": {
++            "contract": "mediasense.frozen-plan",
++            "plan_ref": "frozen-plan:demo",
++            "result_ref": "precheck-result:demo",
++            "scope": {
++              "kind": "explicit",
++              "source_item_refs": [
++                "source-item:a",
++                "source-item:b"
++              ]
++            },
++            "logical_root": "周末活动",
++            "groups": [
++              {
++                "relative_path": [
++                  "展览参观"
++                ],
++                "members": {
++                  "kind": "explicit",
++                  "source_item_refs": [
++                    "source-item:a"
++                  ]
++                },
++                "source_naming": {
++                  "default": "preserve_source_basename"
++                }
++              },
++              {
++                "relative_path": [
++                  "家庭聚会"
++                ],
++                "members": {
++                  "kind": "explicit",
++                  "source_item_refs": [
++                    "source-item:b"
++                  ]
++                },
++                "source_naming": {
++                  "default": "preserve_source_basename"
++                }
++              }
++            ],
++            "other_outcomes": [],
++            "decision_notes": [
++              {
++                "applies_to": {
++                  "kind": "explicit",
++                  "source_item_refs": [
++                    "source-item:b"
++                  ]
++                },
++                "summary": "依据用户补充，将 b 作为独立的家庭聚会组织，未沿用 a 的活动身份。"
++              }
++            ]
++          },
++          "seal": {
++            "encoding_profile": "mediasense-json-strings-sha256-v1",
++            "content_identity": "sha256:5640cff1778c552adba0473feac26b85890ad86246a5243611d1a9d7786da470",
++            "final_confirmation": {
++              "confirmed_content_identity": "sha256:5640cff1778c552adba0473feac26b85890ad86246a5243611d1a9d7786da470",
++              "confirmed_at": "2026-09-12T13:40:00+08:00",
++              "confirmed_by": "human:synthetic-review"
++            }
++          }
++        }
++      },
++      "context": {
++        "human_confirmation": {
++          "principal_ref": "human:synthetic-review",
++          "content_identity": "sha256:5640cff1778c552adba0473feac26b85890ad86246a5243611d1a9d7786da470",
++          "confirmed_at": "2026-09-12T13:40:00+08:00"
++        }
++      }
++    },
++    {
++      "name": "closed-inspect",
++      "request": {
++        "action": "inspect",
++        "work_ref": "plan-work:demo"
++      },
++      "response": {
++        "outcome": "ok",
++        "action": "inspect",
++        "work_ref": "plan-work:demo",
++        "result_ref": "precheck-result:demo",
++        "revision": "work-revision:f",
++        "state": "closed",
++        "returned_sections": [
++          "overview",
++          "preferences",
++          "working_notes",
++          "content",
++          "validation"
++        ],
++        "sections": {
++          "overview": {
++            "state": "closed"
++          },
++          "preferences": {},
++          "working_notes": "",
++          "content": {
++            "mode": "complete",
++            "value": {
++              "contract": "mediasense.frozen-plan",
++              "plan_ref": "frozen-plan:demo",
++              "result_ref": "precheck-result:demo",
++              "scope": {
++                "kind": "explicit",
++                "source_item_refs": [
++                  "source-item:a",
++                  "source-item:b"
++                ]
++              },
++              "logical_root": "周末活动",
++              "groups": [
++                {
++                  "relative_path": [
++                    "展览参观"
++                  ],
++                  "members": {
++                    "kind": "explicit",
++                    "source_item_refs": [
++                      "source-item:a"
++                    ]
++                  },
++                  "source_naming": {
++                    "default": "preserve_source_basename"
++                  }
++                },
++                {
++                  "relative_path": [
++                    "家庭聚会"
++                  ],
++                  "members": {
++                    "kind": "explicit",
++                    "source_item_refs": [
++                      "source-item:b"
++                    ]
++                  },
++                  "source_naming": {
++                    "default": "preserve_source_basename"
++                  }
++                }
++              ],
++              "other_outcomes": [],
++              "decision_notes": [
++                {
++                  "applies_to": {
++                    "kind": "explicit",
++                    "source_item_refs": [
++                      "source-item:b"
++                    ]
++                  },
++                  "summary": "依据用户补充，将 b 作为独立的家庭聚会组织，未沿用 a 的活动身份。"
++                }
++              ]
++            }
++          },
++          "validation": {
++            "seal_ready": true,
++            "issues": []
++          }
++        },
++        "candidate_content_identity": "sha256:5640cff1778c552adba0473feac26b85890ad86246a5243611d1a9d7786da470"
++      }
++    },
++    {
++      "name": "closed-update",
++      "request": {
++        "action": "update",
++        "work_ref": "plan-work:demo",
++        "base_revision": "work-revision:f",
++        "working_notes": "不得改写",
++        "request_id": "request:closed-update"
++      },
++      "response": {
++        "outcome": "error",
++        "action": "update",
++        "work_ref": "plan-work:demo",
++        "revision": "work-revision:f",
++        "error": {
++          "code": "work_closed",
++          "message": "已闭合的 Work 不接受修改。"
++        }
++      }
++    }
++  ],
++  "invalid_requests": [
++    {
++      "name": "no-mutable-field",
++      "request": {
++        "action": "update",
++        "work_ref": "plan-work:demo",
++        "base_revision": "work-revision:e",
++        "request_id": "request:bad-input"
++      },
++      "expected_schema_valid": false,
++      "expected_code_if_dispatched": "invalid_request"
++    },
++    {
++      "name": "null-notes",
++      "request": {
++        "action": "update",
++        "work_ref": "plan-work:demo",
++        "base_revision": "work-revision:e",
++        "request_id": "request:bad-input",
++        "working_notes": null
++      },
++      "expected_schema_valid": false,
++      "expected_code_if_dispatched": "invalid_request"
++    },
++    {
++      "name": "numeric-notes",
++      "request": {
++        "action": "update",
++        "work_ref": "plan-work:demo",
++        "base_revision": "work-revision:e",
++        "request_id": "request:bad-input",
++        "working_notes": 42
++      },
++      "expected_schema_valid": false,
++      "expected_code_if_dispatched": "invalid_request"
++    },
++    {
++      "name": "null-preferences",
++      "request": {
++        "action": "update",
++        "work_ref": "plan-work:demo",
++        "base_revision": "work-revision:e",
++        "request_id": "request:bad-input",
++        "organization_preferences": null
++      },
++      "expected_schema_valid": false,
++      "expected_code_if_dispatched": "invalid_request"
++    },
++    {
++      "name": "partial-candidate",
++      "request": {
++        "action": "update",
++        "work_ref": "plan-work:demo",
++        "base_revision": "work-revision:e",
++        "request_id": "request:bad-input",
++        "candidate_content": {
++          "logical_root": "不能保存的半成品"
++        }
++      },
++      "expected_schema_valid": false,
++      "expected_code_if_dispatched": "candidate_invalid"
++    },
++    {
++      "name": "create-with-notes",
++      "request": {
++        "action": "create",
++        "result_ref": "precheck-result:demo",
++        "request_id": "request:bad-create",
++        "working_notes": "create 输入保持不变"
++      },
++      "expected_schema_valid": false,
++      "expected_code_if_dispatched": "invalid_request"
++    }
++  ]
++}

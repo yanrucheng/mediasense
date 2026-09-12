@@ -368,3 +368,127 @@ def test_mcp_cancel_after_commit_gate_recovers_the_committed_result(
             )
 
     anyio.run(scenario)
+
+
+def test_mcp_full_plan_schema_is_self_contained_and_seal_uses_client_context(tmp_path):
+    from mediasense.runtime.mcp_host import _mcp_tool
+    from mediasense.runtime.composition import tool_descriptors
+    from jsonschema import Draft202012Validator
+
+    tool = _tool(tmp_path)
+    created = _create(tool)
+    host = TrackingHost(tool)
+    descriptor = next(
+        item for item in tool_descriptors() if item.name == "mediasense.plan.work"
+    )
+    advertised = _mcp_tool(descriptor)
+    request = update_request(created)
+    # No registry or network resolver supplied, as in an ordinary MCP client.
+    Draft202012Validator(advertised.input_schema).validate(
+        {"dataset_ref": "dataset:test", "request": request}
+    )
+
+    async def scenario():
+        async with connection(host) as (session, _cancelled, _tasks):
+            await session.list_tools()
+            result = await call_update(session, request)
+            current = result.structured_content
+            inspected = await call_update(
+                session, {"action": "inspect", "work_ref": created["work_ref"]}
+            )
+            assert inspected.content == []
+            identity = inspected.structured_content["candidate_content_identity"]
+            sealed = await session.call_tool(
+                "mediasense.plan.work",
+                {
+                    "dataset_ref": "dataset:test",
+                    "request": {
+                        "action": "seal",
+                        "work_ref": created["work_ref"],
+                        "revision": current["revision"],
+                        "candidate_content_identity": identity,
+                        "request_id": "request:self-contained-seal",
+                    },
+                    "authority": {
+                        "principal_ref": "human:test",
+                        "confirmed_content_identity": identity,
+                        "confirmed_at": "2026-09-12T10:00:00Z",
+                    },
+                },
+            )
+            assert sealed.content == []
+            assert sealed.structured_content["outcome"] == "ok"
+
+    anyio.run(scenario)
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("plan_ref", "frozen-plan:injected"),
+        ("contract", "mediasense.frozen-plan"),
+        ("seal", {}),
+        ("other_outcomes", [None]),
+        ("other_outcomes", 1),
+    ],
+)
+def test_mcp_rejects_invalid_candidate_atomically_and_preserves_plan_identity(
+    tmp_path, field, value
+):
+    from test_plan_work import _update
+
+    tool = _tool(tmp_path)
+    state = _update(tool, _create(tool))
+    before = tool.store.snapshot(state["work_ref"])
+    host = TrackingHost(tool)
+    candidate = valid_candidate()
+    candidate[field] = value
+
+    async def scenario():
+        async with connection(host) as (session, _cancelled, _tasks):
+            response = await call_update(
+                session,
+                update_request(
+                    state,
+                    candidate_content=candidate,
+                    working_notes="must not save",
+                    organization_preferences={},
+                    request_id="request:invalid-entry",
+                ),
+            )
+            assert response.content == []
+            assert response.structured_content["error"]["code"] == "candidate_invalid"
+            assert tool.store.snapshot(state["work_ref"]) == before
+            inspected = (
+                await call_update(
+                    session, {"action": "inspect", "work_ref": state["work_ref"]}
+                )
+            ).structured_content
+            identity = inspected["candidate_content_identity"]
+            sealed = await session.call_tool(
+                "mediasense.plan.work",
+                {
+                    "dataset_ref": "dataset:test",
+                    "request": {
+                        "action": "seal",
+                        "work_ref": state["work_ref"],
+                        "revision": state["revision"],
+                        "candidate_content_identity": identity,
+                        "request_id": "request:after-invalid-seal",
+                    },
+                    "authority": {
+                        "principal_ref": "human:test",
+                        "confirmed_content_identity": identity,
+                        "confirmed_at": "2026-09-12T10:00:00Z",
+                    },
+                },
+            )
+            result = sealed.structured_content
+            assert result["outcome"] == "ok"
+            assert (
+                result["plan_ref"]
+                == result["frozen_plan"]["sealed_content"]["plan_ref"]
+                == before.plan_ref
+            )
+
+    anyio.run(scenario)

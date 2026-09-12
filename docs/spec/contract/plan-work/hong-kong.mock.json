@@ -139,7 +139,7 @@
         "result_ref": "precheck-result:hk-review-slice-002",
         "revision": "work-revision:hk-002",
         "state": "open",
-        "returned_sections": ["overview", "preferences", "content", "validation"],
+        "returned_sections": ["overview", "preferences", "working_notes", "content", "validation"],
         "sections": {
           "overview": { "state": "open" },
           "preferences": {
@@ -147,6 +147,7 @@
             "maximum_depth": 3,
             "keep_related_raw_and_jpeg_together": true
           },
+          "working_notes": "",
           "content": {
             "mode": "complete",
             "value": {

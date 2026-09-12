@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:mediasense:tool:plan-work",
   "name": "mediasense.plan.work",
-  "description": "Manage one mutable, revisioned Plan Working State and seal an exact Human-confirmed revision into a conforming immutable Frozen Plan.",
+  "description": "Save optional planning notes, organization preferences, and complete candidates in one revisioned Plan Work; seal exact Human-confirmed content into an immutable Frozen Plan.",
   "inputSchema": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "$id": "urn:mediasense:tool:plan-work-input",
@@ -105,20 +105,34 @@
           "action",
           "work_ref",
           "base_revision",
-          "candidate_content",
           "request_id"
         ],
         "properties": {
           "action": { "const": "update" },
           "work_ref": { "$ref": "#/$defs/work_ref" },
           "base_revision": { "$ref": "#/$defs/revision" },
-          "candidate_content": { "$ref": "#/$defs/candidate_content" },
+          "candidate_content": {
+            "description": "Omit to preserve the current candidate. Supply a complete object to replace it after validation, or null to withdraw it and clear its sealable identity.",
+            "oneOf": [
+              { "$ref": "#/$defs/candidate_content" },
+              { "type": "null" }
+            ]
+          },
+          "working_notes": {
+            "type": "string",
+            "description": "Agent-authored work summary. Omit to preserve; supply a string to replace, including an empty string to clear. This is not verified evidence, material retention, or Human confirmation."
+          },
           "organization_preferences": { "$ref": "#/$defs/organization_preferences" },
           "request_id": { "$ref": "#/$defs/request_id" }
-        }
+        },
+        "anyOf": [
+          { "required": ["organization_preferences"] },
+          { "required": ["working_notes"] },
+          { "required": ["candidate_content"] }
+        ]
       },
       "section": {
-        "enum": ["overview", "preferences", "content", "validation"]
+        "enum": ["overview", "preferences", "working_notes", "content", "validation"]
       },
       "page_request": {
         "type": "object",
@@ -378,7 +392,8 @@
       "content_section": {
         "oneOf": [
           { "$ref": "#/$defs/complete_content_section" },
-          { "$ref": "#/$defs/paged_content_section" }
+          { "$ref": "#/$defs/paged_content_section" },
+          { "type": "null" }
         ]
       },
       "inspect_sections": {
@@ -393,6 +408,7 @@
             "properties": { "state": { "enum": ["open", "closed"] } }
           },
           "preferences": { "$ref": "#/$defs/organization_preferences" },
+          "working_notes": { "type": "string" },
           "content": { "$ref": "#/$defs/content_section" },
           "validation": { "$ref": "#/$defs/validation" }
         }
@@ -412,7 +428,7 @@
             "type": "array",
             "minItems": 1,
             "uniqueItems": true,
-            "items": { "enum": ["overview", "preferences", "content", "validation"] }
+            "items": { "enum": ["overview", "preferences", "working_notes", "content", "validation"] }
           },
           "sections": { "$ref": "#/$defs/inspect_sections" },
           "candidate_content_identity": { "$ref": "#/$defs/content_identity" }
@@ -451,6 +467,45 @@
               "required": ["sections"]
             },
             "then": { "not": { "required": ["candidate_content_identity"] } }
+          },
+          {
+            "if": {
+              "properties": {
+                "sections": {
+                  "properties": {
+                    "content": {
+                      "type": "null"
+                    }
+                  },
+                  "required": [
+                    "content"
+                  ]
+                }
+              },
+              "required": [
+                "sections"
+              ]
+            },
+            "then": {
+              "not": {
+                "required": [
+                  "candidate_content_identity"
+                ]
+              },
+              "properties": {
+                "sections": {
+                  "properties": {
+                    "validation": {
+                      "properties": {
+                        "seal_ready": {
+                          "const": false
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
           }
         ]
       },

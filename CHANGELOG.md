@@ -6,6 +6,18 @@ Versioning, with documented breaking changes permitted in minor releases before
 
 ## [Unreleased]
 
+## [0.10.2] - 2026-09-12
+
+- Deliver bundled manufacturer knowledge and personal YAML additions, full
+  replacements and disabling, with source evidence and frozen Run snapshots.
+- Add paired manufacturer mappings for standard GPS coordinates and source pixel
+  dimensions. Keep paired values on the same source and preserve fallback evidence.
+- Reopen Datasets and resume frozen work when current manufacturer YAML is invalid;
+  report its diagnostic explicitly and reject new work until the configuration is fixed.
+- Preserve exact custom integer values, including values beyond binary floating-point
+  precision. Invalidate affected metadata work without rewriting sealed Results.
+- Preserve existing installation extras, model choices and persistent store formats.
+
 - Connect the accepted DINOv3 ViT-B/16 **384px** Core ML recipe to the production
   CLI/MCP runtime as the recommendation for newly enabled local embedding.
   Embedding stays off by default; explicit ChineseCLIP profiles retain their model.

@@ -579,6 +579,7 @@ def test_stdio_mcp_scope_confirmation_resume_continues_the_same_run(
             command=sys.executable,
             args=["-m", "mediasense", "mcp"],
             cwd=str(ROOT),
+            env={"MEDIASENSE_CONFIG_HOME": str(tmp_path / "config")},
         )
         async with (
             stdio_client(parameters) as (read_stream, write_stream),

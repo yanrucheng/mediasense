@@ -4,7 +4,7 @@ title: "MediaSense Foundation"
 type: design
 status: active
 created: 2026-08-23
-updated: 2026-09-07
+updated: 2026-09-12
 timezone: "Asia/Shanghai"
 parent: "index-design"
 depends-on: []
@@ -65,10 +65,32 @@ Exact implementations—ExifTool, FFmpeg, embedding model, index, clustering alg
 
 ### `mediasense.plan`: interactive convergence
 
-`plan` starts from one static precheck result. It may use a modern multimodal model
-for semantic interpretation, but it must not inspect every asset. It progressively selects representative, boundary, outlier,
-and conflict evidence under explicit visual, model, cost, and user-attention
-budgets. If a complete PreCheck Result contains a suspiciously broad location
+`plan` binds one exact PreCheck Result and uses it as the economical starting
+point for understanding the collection. Plan owns the sufficiency of information
+for the organization decisions it proposes: it develops and revises its
+understanding of the Human's retrieval purpose and the media, and actively seeks
+relevant context or evidence when a material decision lacks adequate support.
+Human interaction can supply information, clarify meaning, change a preference,
+or confirm a decision; final Plan confirmation is a separate authority boundary.
+
+The Result's immutable scope and observations do not close the Agent's sources of
+knowledge. Human-supplied information and authorized investigative results retain
+their actual sources, limitations, and affected scope. Plan owns their use and the
+retained basis of its decisions. Receiving additional information does not itself
+add media to the organization scope or authorize further external effects.
+Investigation, interaction, input forms, and processing methods remain open.
+
+The Agent may finish discussion before saving a Candidate or optionally save a
+work summary in the existing Work when useful for continuation. Saving notes does
+not establish semantic correctness, a complete Candidate, or Human acceptance.
+Important final explanations belong in the Candidate's decision notes and remain
+available in the exact-content review; working notes do not automatically enter
+the Frozen Plan. Neither Tool persistence nor Skill guidance prescribes a question
+for every uncertain item or a fixed conversation sequence.
+
+Plan may use a modern multimodal model for interpretation, but it must not inspect
+every asset. It selects representative, boundary, outlier, and conflict evidence
+under explicit visual, model, cost, and user-attention budgets. If a complete PreCheck Result contains a suspiciously broad location
 assignment, Plan may issue a bounded, separately authorized query to the shared
 Geo Tool for selected coordinates. That local investigation neither mutates the
 Result nor repairs missing PreCheck coverage. If source coverage itself is

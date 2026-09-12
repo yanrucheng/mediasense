@@ -73,9 +73,13 @@ Dataset 不另外发现厂商知识目录。它的普通 metadata 设置可以�
 
 旧 DJI 照片及 Canon EOS DSLR 经验优先采用 EXIF/XMP 拍摄字段并按源时区解释无偏移值；不将其改写为对所有视频或所有带偏移时间机械移动八小时。历史未记录的版本保持未记录。其他明确有依据的时钟偏差可通过 shift_seconds 表达。
 
-`apply.fields` 为非空列表，每项含 name、tags、可选 fallback（默认true）。内置摄影属性沿 [Read 属性定义](../precheck-read/precheck-attributes.md)固定类型、单位和实际来源；这里只改变标签选择，不能重定义属性含义。默认追加通用候选；fallback=false 时只允许指定标签参与选择。相机型号的显式字段规则可以在有条件和依据时采用设备的 Encoder 值，未采用该规则时继续保留通用的 Encoder 拒绝规则。
+`apply.fields` 为非空列表，单值字段含 name、tags、可选 fallback（默认true）。内置摄影属性沿 [Read 属性定义](../precheck-read/precheck-attributes.md)固定类型、单位和实际来源；这里只改变标签选择，不能重定义属性含义。默认追加通用候选；fallback=false 时只允许指定标签参与选择。相机型号的显式字段规则可以在有条件和依据时采用设备的 Encoder 值，未采用该规则时继续保留通用的 Encoder 拒绝规则。
+
+`gps_coordinates` 和 `source_pixel_dimensions` 使用同一个 fields 列表，以 `tag_pairs` 代替单值的 tags。每对分别包含 latitude / longitude 或 width / height，值为一个 ExifTool 标签。按配对顺序、再按既有来源优先级选择完整有效的一对；不将不同文件的两个分量拼成一个观察。GPS 映射沿现有标准属性的 WGS84 十进制度数语义；尺寸为正整数像素，始终只读当前素材，不能采用侧车自身或派生图尺寸。fallback 默认true，在所有映射对不可用时采用既有通用观察；false 禁止通用回退。原始配对、无效分量和被拒回退保留在 provenance。标准坐标直接进入已有 GPX/Geo/关联处理，不能以 manufacturer.* 自定义属性冒充接通。
 
 扩展字段必须使用 `manufacturer.<namespace>.<name>`，额外提供 `value_type: string / number / integer / boolean` 和 description，可提供 unit（字符串或null）。同名扩展在整份有效知识里必须有一致的类型、单位和含义；冲突在配置检查时拒绝。number/integer 支持数值和分数字符串；boolean 只接受布尔值、0/1或明确的 true/false 字符串。扩展值仍属于来源 Source Item，使用既有 Observation，未知属性不成为新的主体。
+
+integer 采用精确整数语义：整数和可整除的十进制/分数字符串保留全部有效数字；不能先转浮点再截断或四舍五入。非整数候选明确无效。number 仍为有限数值，不能用它替代需要精确整数的字段。
 
 ## 时区上下文
 
@@ -94,6 +98,8 @@ output_timezone = "Asia/Shanghai"
 Dataset Open 和 doctor 校验知识，报告 `identity`、`sources`、`active_rules`、`overridden_rules` 和 `disabled_rules`，execution 保持 not_checked。`overridden_rules` 同时给出替换规则的用户来源与被替换的内置来源，便于升级后核对仍被个人规则覆盖的知识。新 Run 在接受新工作前重新读取当前文件；幂等 start 重放不读取新知识。Run 把完整解析内容（含已覆盖的内置来源）、时区上下文和规范化 JSON 摘要保存进已有 execution_config，不只存文件路径或版本号。恢复使用快照，即使文件随后变化或删除，也不混用新规则。旧配置没有知识快照的历史 Run 沿已知的无厂商规则语义恢复，不自动套入新版知识。
 
 无效配置拒绝本次生效，并定位文件、规则或字段；不悄悄退回内置知识。未知处理类型明确拒绝，不接受任意脚本/import/命令。运行中的实现异常按 Foundation 直接暴露。字段缺失、规则不适用和规则冲突按前述观察语义分别交代。
+
+当前厂商 YAML 无效不阻止 Dataset 打开、旧结果读取或使用已保存快照恢复任务。Dataset Open 的 manufacturer_knowledge 此时只报告 `error: {code: configuration_invalid, message: ...}` 与 `execution: not_checked`，不伪造有效规则或内容身份。doctor 仍报告配置错误；新 Run 和没有执行快照的恢复仍须通过当前配置校验。修复文件后可重新打开查看有效摘要，也可正常开始新 Run。
 
 对应 Observation 的 `provenance.manufacturer_knowledge` 保留快照身份、规则 ID/来源/basis、匹配依据及使用结果；匹配依据中的媒体路径投影为公开 Source Item 引用。规则选择与修正不会抹掉未选择候选。Read 原样交付这些已知依据；不把配置存在说成规则已执行。扩展字段的类型、单位和说明进入其 provenance。
 

@@ -1,0 +1,61 @@
+{
+  "purpose": "Compare Falconsai, Marqo and Freepik on the same actual images/frames; retain evidence separately from user policy",
+  "models": {
+    "falconsai": {
+      "model_id": "Falconsai/nsfw_image_detection",
+      "revision": "04367978d3474804ab1a00a9bd6548b741764069",
+      "loader": "transformers",
+      "labels": ["normal", "nsfw"],
+      "snapshot": "/Users/chengyanru/.cache/huggingface/hub/models--Falconsai--nsfw_image_detection/snapshots/04367978d3474804ab1a00a9bd6548b741764069",
+      "weight_file": "pytorch_model.bin",
+      "weight_sha256": "2a6b06faec569ad6b3873b7040020ab170be9d78d1cd1099a9d331b568aed12d",
+      "files_sha256": {
+        "config.json": "cd8c0a19566f199b5c64da402f1d6a9daf80d094fe6536befb060a2cc59449c2",
+        "preprocessor_config.json": "a34861a24e781942424ad790b82bc99348404a2e64ea882de88c40905851698d"
+      }
+    },
+    "marqo": {
+      "model_id": "Marqo/nsfw-image-detection-384",
+      "revision": "0c26ec22111b83f106d72a55f611ec35962bcb65",
+      "loader": "timm",
+      "labels": ["NSFW", "SFW"],
+      "snapshot": "/private/tmp/mediasense-nsfw-260912/models/marqo",
+      "weight_file": "model.safetensors",
+      "weight_sha256": "6bf2e0f64a1d20169736c2836e3a787b12379fdc08ba87f7d94a7a3d58eeefce",
+      "files_sha256": null
+    },
+    "freepik": {
+      "model_id": "Freepik/nsfw_image_detector",
+      "revision": "15b85477e4fd2000db76ae9aae0f89a72f95e2e3",
+      "loader": "transformers_timm",
+      "labels": ["neutral", "low", "medium", "high"],
+      "snapshot": "/private/tmp/mediasense-nsfw-260912/models/freepik",
+      "weight_file": "model.safetensors",
+      "weight_sha256": "024a9d4818fae2656403bf626c9f8c9e7789c2da274749fbebb1060d8fdaa7ab",
+      "files_sha256": null
+    }
+  },
+  "runtime": {
+    "python": "/private/tmp/mediasense-mobileclip2-260911/venv/bin/python",
+    "python_version": "3.13.5",
+    "packages": {
+      "torch": "2.7.0",
+      "torchvision": "0.22.0",
+      "transformers": "4.57.6",
+      "timm": "1.0.20",
+      "pillow": "12.3.0",
+      "numpy": "2.2.6",
+      "safetensors": "0.8.0",
+      "huggingface_hub": "0.36.2"
+    },
+    "cpu_threads": 2,
+    "nice": 10,
+    "precision": "float32"
+  },
+  "inputs": {
+    "quality_source": null,
+    "quality_labels": null,
+    "decode": "Pillow Image.open then RGB; reject EXIF orientation other than absent/1 and multi-frame images; use prepared oriented stills/frames",
+    "video_scope": "Only the actual image/frame bytes in the input manifest; no whole-video conclusion"
+  }
+}

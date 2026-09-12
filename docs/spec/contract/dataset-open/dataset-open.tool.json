@@ -300,92 +300,126 @@
         }
       },
       "manufacturer_knowledge": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "identity",
-          "sources",
-          "active_rules",
-          "disabled_rules",
-          "execution",
-          "overridden_rules"
-        ],
-        "properties": {
-          "identity": {
-            "type": "string",
-            "pattern": "^sha256:[0-9a-f]{64}$"
-          },
-          "sources": {
-            "type": "array",
-            "items": {
-              "$ref": "#/$defs/manufacturer_origin"
-            }
-          },
-          "active_rules": {
-            "type": "array",
-            "uniqueItems": true,
-            "items": {
-              "type": "string",
-              "minLength": 1
-            }
-          },
-          "disabled_rules": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "additionalProperties": false,
-              "required": [
-                "id",
-                "reason",
-                "origin",
-                "replaces"
-              ],
-              "properties": {
-                "id": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "identity",
+              "sources",
+              "active_rules",
+              "disabled_rules",
+              "execution",
+              "overridden_rules"
+            ],
+            "properties": {
+              "identity": {
+                "type": "string",
+                "pattern": "^sha256:[0-9a-f]{64}$"
+              },
+              "sources": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/manufacturer_origin"
+                }
+              },
+              "active_rules": {
+                "type": "array",
+                "uniqueItems": true,
+                "items": {
                   "type": "string",
                   "minLength": 1
-                },
-                "reason": {
-                  "type": "string",
-                  "minLength": 1
-                },
-                "origin": {
-                  "$ref": "#/$defs/manufacturer_origin"
-                },
-                "replaces": {
-                  "$ref": "#/$defs/manufacturer_origin"
+                }
+              },
+              "disabled_rules": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "id",
+                    "reason",
+                    "origin",
+                    "replaces"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "reason": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "origin": {
+                      "$ref": "#/$defs/manufacturer_origin"
+                    },
+                    "replaces": {
+                      "$ref": "#/$defs/manufacturer_origin"
+                    }
+                  }
+                }
+              },
+              "execution": {
+                "const": "not_checked"
+              },
+              "overridden_rules": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "id",
+                    "origin",
+                    "replaces"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "origin": {
+                      "$ref": "#/$defs/manufacturer_origin"
+                    },
+                    "replaces": {
+                      "$ref": "#/$defs/manufacturer_origin"
+                    }
+                  }
                 }
               }
             }
           },
-          "execution": {
-            "const": "not_checked"
-          },
-          "overridden_rules": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "additionalProperties": false,
-              "required": [
-                "id",
-                "origin",
-                "replaces"
-              ],
-              "properties": {
-                "id": {
-                  "type": "string",
-                  "minLength": 1
-                },
-                "origin": {
-                  "$ref": "#/$defs/manufacturer_origin"
-                },
-                "replaces": {
-                  "$ref": "#/$defs/manufacturer_origin"
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "error",
+              "execution"
+            ],
+            "properties": {
+              "execution": {
+                "const": "not_checked"
+              },
+              "error": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "code",
+                  "message"
+                ],
+                "properties": {
+                  "code": {
+                    "const": "configuration_invalid"
+                  },
+                  "message": {
+                    "type": "string",
+                    "minLength": 1
+                  }
                 }
               }
             }
           }
-        }
+        ]
       },
       "provider_status": {
         "type": "object",

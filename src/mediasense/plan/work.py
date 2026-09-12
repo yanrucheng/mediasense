@@ -53,7 +53,13 @@ _RESULT_REF = re.compile(r"^precheck-result:[^\s]+$")
 _REVISION = re.compile(r"^work-revision:[^\s]+$")
 _REQUEST_ID = re.compile(r"^request:[^\s]+$")
 _CONTENT_IDENTITY = re.compile(r"^sha256:[0-9a-f]{64}$")
-_DEFAULT_SECTIONS = ("overview", "preferences", "content", "validation")
+_DEFAULT_SECTIONS = (
+    "overview",
+    "preferences",
+    "working_notes",
+    "content",
+    "validation",
+)
 _SECTIONS = _DEFAULT_SECTIONS
 _COLLECTIONS = ("groups", "other_outcomes", "decision_notes")
 
@@ -321,7 +327,6 @@ class PlanWorkTool:
                 "action",
                 "work_ref",
                 "base_revision",
-                "candidate_content",
                 "request_id",
             },
             allowed={
@@ -331,8 +336,18 @@ class PlanWorkTool:
                 "candidate_content",
                 "request_id",
                 "organization_preferences",
+                "working_notes",
             },
         )
+        if (
+            not {"candidate_content", "organization_preferences", "working_notes"}
+            & request.keys()
+        ):
+            raise PlanFailure(
+                "invalid_request", "update requires at least one modifiable field."
+            )
+        if "working_notes" in request and not isinstance(request["working_notes"], str):
+            raise PlanFailure("invalid_request", "working_notes must be a string.")
         work_ref = _require_ref(request["work_ref"], _WORK_REF, "work_ref")
         base_revision = _require_ref(
             request["base_revision"], _REVISION, "base_revision"
@@ -354,11 +369,11 @@ class PlanWorkTool:
             if replay is not None:
                 execution.report("replayed")
                 return replay
-            candidate = request["candidate_content"]
-            if not isinstance(candidate, Mapping):
+            candidate = request.get("candidate_content")
+            if candidate is not None and not isinstance(candidate, Mapping):
                 raise PlanFailure(
                     "invalid_request",
-                    "candidate_content must be an object.",
+                    "candidate_content must be an object or null.",
                     work_ref=work_ref,
                 )
             with update_ownership(self.store.database_path, work_ref, execution):
@@ -371,24 +386,30 @@ class PlanWorkTool:
                     execution.report("replayed")
                     return replay
                 assert snapshot is not None
-                analysis = analyze_candidate(
-                    candidate,
-                    result_ref=snapshot.result_ref,
-                    plan_ref=snapshot.plan_ref,
-                    reader=execution.reader(self.precheck_read),
-                    schema_validator=self._frozen_content_validator,
-                    checkpoint=execution.checkpoint,
-                    progress=execution.report,
-                )
-                execution.checkpoint()
-                if not analysis.seal_ready or analysis.content_identity is None:
-                    message = "; ".join(issue.message for issue in analysis.issues[:3])
-                    raise PlanFailure(
-                        "candidate_invalid",
-                        message or "Candidate is invalid.",
-                        work_ref=work_ref,
-                        revision=snapshot.revision,
+                candidate_identity = None
+                if candidate is not None:
+                    analysis = analyze_candidate(
+                        candidate,
+                        result_ref=snapshot.result_ref,
+                        plan_ref=snapshot.plan_ref,
+                        reader=execution.reader(self.precheck_read),
+                        schema_validator=self._frozen_content_validator,
+                        checkpoint=execution.checkpoint,
+                        progress=execution.report,
                     )
+                    execution.checkpoint()
+                    if not analysis.seal_ready or analysis.content_identity is None:
+                        message = "; ".join(
+                            issue.message for issue in analysis.issues[:3]
+                        )
+                        raise PlanFailure(
+                            "candidate_invalid",
+                            message or "Candidate is invalid.",
+                            work_ref=work_ref,
+                            revision=snapshot.revision,
+                        )
+                    candidate_identity = analysis.content_identity
+                execution.checkpoint()
                 revision = self._id_factory("work-revision")
                 result = {
                     "outcome": "ok",
@@ -404,8 +425,10 @@ class PlanWorkTool:
                     work_ref=work_ref,
                     base_revision=base_revision,
                     revision=revision,
-                    candidate=dict(candidate),
-                    candidate_identity=analysis.content_identity,
+                    candidate=None if candidate is None else dict(candidate),
+                    candidate_identity=candidate_identity,
+                    replace_candidate="candidate_content" in request,
+                    working_notes=request.get("working_notes"),
                     organization_preferences=preferences,
                     response=result,
                     before_write=execution.begin_commit,
@@ -422,7 +445,7 @@ class PlanWorkTool:
         if replay is not None:
             return replay, None
         try:
-            snapshot = self.store.snapshot(work_ref)
+            snapshot = self.store.snapshot(work_ref, include_candidate=False)
             if snapshot.state != "open":
                 raise WorkClosed(work_ref)
             if snapshot.revision != base_revision:
@@ -446,7 +469,7 @@ class PlanWorkTool:
         work_ref = _require_ref(request["work_ref"], _WORK_REF, "work_ref")
         snapshot = self.store.snapshot(work_ref)
         requested_revision = request.get("revision")
-        if requested_revision is not None:
+        if "revision" in request:
             _require_ref(requested_revision, _REVISION, "revision")
             if requested_revision != snapshot.revision:
                 raise RevisionConflict(snapshot.revision)
@@ -454,6 +477,7 @@ class PlanWorkTool:
         if (
             not isinstance(sections, list)
             or not sections
+            or any(not isinstance(section, str) for section in sections)
             or len(sections) != len(set(sections))
             or any(section not in _SECTIONS for section in sections)
         ):
@@ -463,7 +487,7 @@ class PlanWorkTool:
                 work_ref=work_ref,
             )
         page_request = request.get("page")
-        if page_request is not None and (
+        if "page" in request and (
             sections != ["content"] or not isinstance(page_request, Mapping)
         ):
             raise PlanFailure(
@@ -471,14 +495,6 @@ class PlanWorkTool:
                 "page requires content as the only requested section.",
                 work_ref=work_ref,
             )
-        if "content" in sections and snapshot.candidate is None:
-            raise PlanFailure(
-                "candidate_invalid",
-                "The Working State has no candidate content.",
-                work_ref=work_ref,
-                revision=snapshot.revision,
-            )
-
         returned: list[str] = []
         values: dict[str, Any] = {}
         if "overview" in sections:
@@ -487,8 +503,10 @@ class PlanWorkTool:
         if "preferences" in sections:
             returned.append("preferences")
             values["preferences"] = snapshot.organization_preferences
+        if "working_notes" in sections:
+            returned.append("working_notes")
+            values["working_notes"] = snapshot.working_notes
         if "content" in sections:
-            assert snapshot.candidate is not None
             returned.append("content")
             values["content"] = self._content_section(snapshot, page_request)
         if "validation" in sections:
@@ -524,13 +542,18 @@ class PlanWorkTool:
         self,
         snapshot: WorkSnapshot,
         page_request: Mapping[str, Any] | None,
-    ) -> dict[str, Any]:
-        assert snapshot.candidate is not None
-        sealed_content = materialize_candidate(
-            snapshot.candidate, plan_ref=snapshot.plan_ref
-        )
+    ) -> dict[str, Any] | None:
         if page_request is None:
-            return {"mode": "complete", "value": sealed_content}
+            return (
+                None
+                if snapshot.candidate is None
+                else {
+                    "mode": "complete",
+                    "value": materialize_candidate(
+                        snapshot.candidate, plan_ref=snapshot.plan_ref
+                    ),
+                }
+            )
         allowed = {"collection", "limit", "cursor"}
         _require_keys(page_request, required={"collection"}, allowed=allowed)
         collection = page_request["collection"]
@@ -562,6 +585,11 @@ class PlanWorkTool:
                 requested_limit=requested_limit,
                 signing_key=self._cursor_signing_key,
             )
+        if snapshot.candidate is None:
+            return None
+        sealed_content = materialize_candidate(
+            snapshot.candidate, plan_ref=snapshot.plan_ref
+        )
         items = sealed_content.get(collection, [])
         page_items = items[offset : offset + limit]
         complete = offset + len(page_items) >= len(items)

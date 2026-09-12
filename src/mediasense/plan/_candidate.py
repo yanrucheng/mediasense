@@ -9,14 +9,17 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from copy import deepcopy
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import PurePosixPath
 from typing import Any
 
 from jsonschema import Draft202012Validator
+from referencing import Registry, Resource
 
 from mediasense.frozen_plan import (
     FrozenPlanValidationError,
     content_identity,
+    load_frozen_plan_schema,
 )
 from mediasense.precheck.read import PrecheckReadBoundary
 from mediasense.source_sets import (
@@ -62,10 +65,12 @@ class CandidateValidationError(ValueError):
 def materialize_candidate(
     candidate_content: Mapping[str, Any], *, plan_ref: str
 ) -> dict[str, Any]:
+    if {"contract", "plan_ref", "seal"} & candidate_content.keys():
+        raise CandidateValidationError("Candidate contains Tool-owned sealing fields")
     content = {
+        **deepcopy(dict(candidate_content)),
         "contract": "mediasense.frozen-plan",
         "plan_ref": plan_ref,
-        **deepcopy(dict(candidate_content)),
     }
     return content
 
@@ -94,26 +99,32 @@ def analyze_candidate(
             yield value
 
     stage("schema")
-    sealed_content = materialize_candidate(candidate_content, plan_ref=plan_ref)
-    issues = _schema_issues(sealed_content, schema_validator)
-    if sealed_content.get("result_ref") != result_ref:
+    # Validate the input representation, before adding Tool-owned fields or
+    # traversing any nested value. A valid sealedContent is not a valid Candidate.
+    issues = _schema_issues(candidate_content, _candidate_validator())
+    sealed_content = {}
+    if not issues:
+        sealed_content = materialize_candidate(candidate_content, plan_ref=plan_ref)
+        issues.extend(_schema_issues(sealed_content, schema_validator))
+    if candidate_content.get("result_ref") != result_ref:
         issues.append(
             ValidationIssue(
                 "result_binding_mismatch",
                 "Candidate result_ref does not match the Working State.",
             )
         )
-    for index, outcome in enumerate(sealed_content.get("other_outcomes", [])):
-        if (
-            outcome.get("outcome") == "exclude_from_logical_organization"
-            and not str(outcome.get("reason", "")).strip()
-        ):
-            issues.append(
-                ValidationIssue(
-                    "missing_exclusion_reason",
-                    f"other_outcomes[{index}] requires a concrete exclusion reason.",
+    if not issues:
+        for index, outcome in enumerate(sealed_content["other_outcomes"]):
+            if (
+                outcome["outcome"] == "exclude_from_logical_organization"
+                and not outcome["reason"].strip()
+            ):
+                issues.append(
+                    ValidationIssue(
+                        "missing_exclusion_reason",
+                        f"other_outcomes[{index}] requires a concrete exclusion reason.",
+                    )
                 )
-            )
     if issues:
         check()
         return CandidateAnalysis(
@@ -202,6 +213,23 @@ def analyze_candidate(
         outcome_members=outcomes,
         source_views=dict(resolver.source_views),
         issues=tuple(issues),
+    )
+
+
+@lru_cache(maxsize=1)
+def _candidate_validator() -> Draft202012Validator:
+    from mediasense.runtime.resources import load_contract
+
+    inputs = load_contract("mediasense.plan.work")["inputSchema"]
+    frozen = load_frozen_plan_schema()
+    registry = Registry().with_resource(frozen["$id"], Resource.from_contents(frozen))
+    return Draft202012Validator(
+        {
+            "$schema": inputs["$schema"],
+            "$defs": inputs["$defs"],
+            "$ref": "#/$defs/candidate_content",
+        },
+        registry=registry,
     )
 
 

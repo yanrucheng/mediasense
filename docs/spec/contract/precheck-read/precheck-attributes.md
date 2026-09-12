@@ -111,6 +111,8 @@ superseded-by: ""
 
 [厂商知识契约](../manufacturer-knowledge/index.md)使用现有 provenance/basis/qualifications 交付规则选择和修正依据。`provenance.manufacturer_knowledge` 记录快照身份、来源与适用判断；其中素材依据必须引用对应 Source Item。`manufacturer.*` 扩展属性在 provenance.definition 中保留声明的类型、单位和含义，不能覆盖标准属性的语义。明确匹配且有依据的规则可从设备原生 Encoder 提取型号；未采用这种规则时，不把制作软件 Encoder 当作相机。
 
+厂商规则可为 gps_coordinates 和 source_pixel_dimensions 选择成对标签，继续交付标准属性及既有主体、单位和下游意义。配对不得跨来源文件；尺寸只属于当前源素材。integer 扩展保留精确整数，包含超出二进制浮点精确范围的值。
+
 新增属性沿现有 schema 的具名分支维护类型、单位、主体和状态，不新建注册服务。未知属性作为数据保留；如果其含义影响必须理解的限制，生产者必须通过既有 qualifications 交代，消费者不能将未知解释为已检查或不存在。
 
 本页是能力义务，不是“字段越多越好”的要求。框架允许某属性不构成实现完成；[迁移台账](../../../eval/eval-260823-1918-ai-album-migration-baseline/eval-260823-1918B-capability-ledger.md)逐项记录旧用途、当前缺口、生产入口、交付和验证。模型、采样及标签可替换，业务信息不得未说明就省略。

@@ -194,3 +194,273 @@ def test_preview_uses_only_read_contract_and_asset_resolver(tmp_path) -> None:
         "geo_summary",
     }
     assert resolver_calls
+
+
+def test_decision_notes_render_exact_scope_refs_and_escaped_text(tmp_path):
+    tool, created, updated = _prepared_tool(tmp_path)
+    candidate = valid_candidate()
+    candidate["decision_notes"][0]["summary"] = (
+        "用户口述 <script>alert(1)</script> & “只适用这组”"
+    )
+    newer = tool.handle(
+        {
+            "action": "update",
+            "work_ref": created["work_ref"],
+            "base_revision": updated["revision"],
+            "request_id": "request:notes-preview",
+            "candidate_content": candidate,
+        }
+    )
+    renderer = PlanPreviewRenderer(tool, asset_resolver=lambda ref, view: None)
+    document = renderer.build(created["work_ref"], newer["revision"])
+    html = renderer.render_html(document)
+    assert document.decision_notes == tuple(candidate["decision_notes"])
+    assert "<script>alert(1)</script>" not in html
+    assert "&lt;script&gt;alert(1)&lt;/script&gt;" in html
+    assert "决定说明与适用范围" in html
+    assert "适用 Source Set" in html
+    for note in candidate["decision_notes"]:
+        for ref in note.get("evidence_refs", []):
+            assert ref in html
+    assert document.candidate_content_identity in html
+
+
+@pytest.mark.parametrize("artifact_state", ["available", "missing", "corrupt"])
+def test_default_preview_uses_real_prepared_evidence_with_relative_source_locator(
+    tmp_path, monkeypatch, artifact_state
+):
+    from pathlib import Path
+    from urllib.parse import unquote, urlsplit
+    from PIL import Image
+    from test_runtime_host import _opened_host_with_plan_ready_result
+
+    monkeypatch.setenv("MEDIASENSE_CONFIG_HOME", str(tmp_path / "config"))
+    host, dataset, result, _root, source, original = (
+        _opened_host_with_plan_ready_result(tmp_path)
+    )
+    tool = host._datasets[dataset].plan_work
+    created = tool.handle(
+        {"action": "create", "result_ref": result, "request_id": "request:real-preview"}
+    )
+    scope = {
+        "kind": "precheck_relation",
+        "origin": result,
+        "relation": "accounts_for",
+        "direction": "outbound",
+    }
+    updated = tool.handle(
+        {
+            "action": "update",
+            "work_ref": created["work_ref"],
+            "base_revision": created["revision"],
+            "request_id": "request:real-preview-update",
+            "candidate_content": {
+                "result_ref": result,
+                "scope": scope,
+                "logical_root": "Media",
+                "groups": [
+                    {
+                        "relative_path": ["Sample"],
+                        "members": scope,
+                        "source_naming": {"default": "preserve_source_basename"},
+                    }
+                ],
+                "other_outcomes": [],
+            },
+        }
+    )
+    reviewed = tool.precheck_read.read({"action": "review", "result_ref": result})
+    card = reviewed["items"][0]
+    artifact = Path(card["access"]["locator"]["value"])
+    assert artifact.is_file()
+    if artifact_state == "missing":
+        artifact.unlink()
+    elif artifact_state == "corrupt":
+        artifact.unlink()  # replace only this test's synthetic read-only Artifact
+        artifact.write_bytes(b"not an image")
+    renderer = PlanPreviewRenderer(tool)
+    document = renderer.build(created["work_ref"], updated["revision"])
+    html = renderer.render_html(document)
+    sample = document.directories[0].samples[0]
+    if artifact_state == "available":
+        assert sample.evidence_ref == card["evidence_ref"]
+        assert sample.source_item_ref == card["source_items"][0]["source_item_ref"]
+        assert sample.label == "original.jpg"
+        assert Path(unquote(urlsplit(sample.uri).path)) == artifact
+        with Image.open(artifact) as image:
+            image.load()
+            assert image.width > 0 and image.height > 0
+        assert "<img " in html and "Preview unavailable" not in html
+        assert sample.evidence_ref in html
+    else:
+        assert sample.uri is None
+        assert "Preview unavailable" in html
+    assert (source / "original.jpg").read_bytes() == original
+
+
+def test_default_preview_does_not_label_covering_evidence_as_another_source(
+    tmp_path, monkeypatch
+):
+    from PIL import Image
+
+    tool, created, updated = _prepared_tool(tmp_path)
+    path = tmp_path / 'prepared # "图".png'
+    Image.new("RGB", (12, 8), "purple").save(path)
+    original_read = tool.precheck_read.read
+
+    def read(request):
+        response = original_read(request)
+        if request["action"] == "review":
+            for card in response["items"]:
+                card["access"] = {
+                    "kind": "local_artifact",
+                    "locator": {"kind": "local_file_path", "value": str(path)},
+                }
+                # All pictures actually derive from the excluded outcome item,
+                # although their represents relation covers logical-group items.
+                for origin in card["source_items"]:
+                    origin["source_item_ref"] = "source-item:215"
+        return response
+
+    monkeypatch.setattr(tool.precheck_read, "read", read)
+    renderer = PlanPreviewRenderer(tool)
+    doc = renderer.build(created["work_ref"], updated["revision"])
+    assert all(
+        sample.uri is None
+        for directory in doc.directories
+        for sample in directory.samples
+    )
+
+
+@pytest.mark.parametrize("continuation", ["complete", "repeated_cursor", "read_error"])
+def test_preview_follows_byte_limited_review_to_image_on_second_page(
+    tmp_path, monkeypatch, continuation
+):
+    from dataclasses import replace
+    from pathlib import Path
+    from urllib.parse import unquote, urlsplit
+    from PIL import Image
+    from mediasense.precheck import PrecheckReadTool
+    from test_precheck_delivery import prepared
+
+    database, store, draft, _ = prepared(tmp_path)
+    selected = sorted(draft.entry_evidence)[:2]
+    evidence = []
+    for item in draft.evidence:
+        if item.ref in selected:
+            item = replace(
+                item,
+                observations=(
+                    *item.observations,
+                    {
+                        "name": "retained_text",
+                        "status": "available",
+                        "value": "x" * 300_000,
+                    },
+                ),
+            )
+        if item.ref == selected[0]:
+            item = replace(
+                item,
+                access={
+                    "kind": "inline",
+                    "value": {"description": "non-image context"},
+                },
+                artifact_id=None,
+                work_id=None,
+            )
+        evidence.append(item)
+    sealed = store.seal(replace(draft, evidence=tuple(evidence)))
+    sources = sorted(
+        {
+            r.target_ref
+            for r in draft.relationships
+            if r.origin_ref in selected and r.relation == "represents"
+        }
+    )
+    reader = PrecheckReadTool(database)
+    from mediasense.precheck.read import bind_precheck_read
+
+    tool = PlanWorkTool(
+        tmp_path / "plan", bind_precheck_read(reader, "dataset:delivery")
+    )
+    created = tool.handle(
+        {
+            "action": "create",
+            "result_ref": sealed.result_ref,
+            "request_id": "request:paged-preview",
+        }
+    )
+    assert created["outcome"] == "ok", created
+    scope = {"kind": "explicit", "source_item_refs": sources}
+    updated = tool.handle(
+        {
+            "action": "update",
+            "work_ref": created["work_ref"],
+            "base_revision": created["revision"],
+            "request_id": "request:paged-candidate",
+            "candidate_content": {
+                "result_ref": sealed.result_ref,
+                "scope": scope,
+                "logical_root": "Media",
+                "groups": [
+                    {
+                        "relative_path": ["Together"],
+                        "members": scope,
+                        "source_naming": {"default": "preserve_source_basename"},
+                    }
+                ],
+                "other_outcomes": [],
+            },
+        }
+    )
+    assert updated["outcome"] == "ok", updated
+    calls, responses = [], []
+    original_read = reader.read
+
+    def read(request):
+        if "cursor" in request.get("page", {}) and continuation == "repeated_cursor":
+            response = deepcopy(responses[0])
+        elif "cursor" in request.get("page", {}) and continuation == "read_error":
+            response = original_read(
+                {**request, "page": {"limit": 16, "cursor": "invalid-cursor"}}
+            )
+        else:
+            response = original_read(request)
+        if request["action"] == "review" and "evidence_refs" in request:
+            calls.append(deepcopy(request))
+            responses.append(response)
+        return response
+
+    monkeypatch.setattr(reader, "read", read)
+    renderer = PlanPreviewRenderer(tool)
+    if continuation != "complete":
+        output = tmp_path / "preview.html"
+        output.write_text("previous complete preview")
+        with pytest.raises(
+            PreviewError, match="pagination made no progress|invalid_cursor"
+        ):
+            renderer.write_html(created["work_ref"], updated["revision"], output)
+        assert output.read_text() == "previous complete preview"
+        assert len(calls) == 2
+        return
+    document = renderer.build(created["work_ref"], updated["revision"])
+    assert len(calls) == 2
+    assert calls[0]["result_ref"] == calls[1]["result_ref"] == sealed.result_ref
+    assert calls[0]["evidence_refs"] == calls[1]["evidence_refs"]
+    assert sorted(calls[0]["evidence_refs"]) == selected
+    assert calls[0]["page"] == {"limit": 16}
+    assert responses[0]["page"]["stop_reason"] == "byte_limit"
+    assert responses[0]["items"][0]["access"]["kind"] == "inline"
+    assert calls[1]["page"] == {
+        "limit": 16,
+        "cursor": responses[0]["page"]["next_cursor"],
+    }
+    assert responses[1]["page"]["next_cursor"] is None
+    sample = document.directories[0].samples[0]
+    assert sample.evidence_ref == selected[1]
+    with Image.open(Path(unquote(urlsplit(sample.uri).path))) as picture:
+        picture.load()
+        assert picture.size == (20, 10)
+    html = renderer.render_html(document)
+    assert "<img " in html and "Preview unavailable" not in html

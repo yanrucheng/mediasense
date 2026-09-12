@@ -133,8 +133,10 @@ def test_create_and_initial_inspect_conform_to_contract(tmp_path) -> None:
     )
     for response in (default_inspect, explicit_content):
         output_validator.validate(response)
-        assert response["error"]["code"] == "candidate_invalid"
-    assert default_inspect == explicit_content
+        assert response["outcome"] == "ok"
+        assert response["sections"]["content"] is None
+        assert "candidate_content_identity" not in response
+    assert default_inspect["sections"]["working_notes"] == ""
 
     metadata = tool.handle(
         {
@@ -243,6 +245,7 @@ def test_all_inspect_shapes_use_only_persisted_validated_revision(tmp_path) -> N
     assert set(responses[4]["returned_sections"]) == {
         "overview",
         "preferences",
+        "working_notes",
         "content",
         "validation",
     }

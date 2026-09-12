@@ -64,6 +64,87 @@ Implementation status is independent of the difference class:
 | Per-stage cache | Many results were reusable by flags and hashes | `precheck` | Preserve and strengthen: checkpointing, atomic writes, provenance, dependency-aware invalidation | Resume work, cache hits, interrupted equivalence |
 | Usage monitoring | Optional log, absent from final production run | all | Intentionally change: relevant cost/operation accounting is part of stage results | Zero external calls for local-only runs; confirmed logical work versus actual provider calls for enabled external producers; plan visual cost; apply operations |
 
+<a id="manufacturer-information-repair"></a>
+
+## 2026-09-12：Plan 日常环境升级完成
+
+用户确认此前四项问题全部独立复核闭合，明确授权执行实际升级。严格使用已验收 wheel，未从共享工作区重建：SHA-256 **`1c454027d2f6b5217e3c3b4f0f6a0f86a7e523bdc4ea282565e0008ce2a4e5e7`**，稳定保留在 `.local/releases/0.10.2-plan-work-20260912/`。该目录的 `installation-receipt.json` 及[日常升级记录](../../../openspec/changes/refine-plan-interaction/acceptance.md#日常环境升级2026-09-12)保存精确目标、依赖、备份、实际入口、回滚命令和失败记录。
+
+| 验收层 | 实际结果 |
+| --- | --- |
+| 安装及依赖 | 原 uv tool 管理的 `/Users/chengyanru/.local/bin/mediasense` 已切换。保留 Python3.13.5、embeddings extra、全部59依赖版本，新增/移除/版本变化均为0。实际127个包文件匹配选定wheel；旧0.10.2 wheel `68e4ec3152091285513724b84f92cce9aad04968b5e2f46313dd234b1f03302c`、收据及约束可回退 |
+| 依赖组合先验 | 原组合在隔离 uv tool 根安装，完整 distribution smoke 和36次 Plan MCP检查先通过；没有把旧Python3.11 core验收直接用于日常extras组合，不下载或执行模型 |
+| 操作项目 Skills | `~/Downloads/ai-album-hk-representative-v1`，原 npx skills@1.5.25、Codex目标、四名allowlist、离线且关闭遥测。12文件匹配wheel，四个原生computedHash正确；lock明确指向新稳定wheel导出的Skills，原无无关条目，检查无额外修改 |
+| MCP启动与配置 | 原项目 `/bin/sh`＋`~/.config/dotfiles/secrets/mediasense.zsh` 包装不变；MCP TOML、凭据加载文件、用户DINO/0.311配置哈希不变。原启动方式的新Host初始化0.10.2、七Tool合约ID/digest匹配；doctor=ok，DINO prerequisites=prepared、execution=not_checked |
+| 业务状态与安全 | 无旧Host进程或Dataset打开句柄，无需中断Agent。四库SQLite一致备份和完整性检查通过，manifest/两份sealed Result备份；两个Work在副本增量加列后原字段及回执/key保留。原业务Dataset未Runtime打开/迁移，状态文件哈希未变，无真实业务恢复/媒体重跑/Geo/模型/Apply |
+| 日常实际入口 | 精确CLI smoke通过。经原注册launcher在新临时合成Dataset执行36次MCP调用，保存、重启、非法候选、撤下、两条Evidence字节分页、80×40图片解码、冻结和重放通过；源字节不变，零新增elicitation |
+
+机器与操作项目资源已升级；独立启动链路已验证。**现有Agent会话未宣称热重载**：用户仍需在 `/Users/chengyanru/Downloads/ai-album-hk-representative-v1` 新开会话，核对四Skills、七Tools及Plan Work digest `sha256:63676aa36966bea23024ae2538ef4830cc2ce8e42b0af8554c28dbd5a37478e1`。这不授权后续真实业务动作。
+
+实际完整报告 `/private/tmp/mediasense-plan-daily-upgrade-verified/report.json` 已复制到稳定 `evidence/actual-plan-smoke.json`。回退以原wheel＋相同依赖组合及原Skill manager来源成套恢复；原业务数据库本次未迁移，不应无故恢复或覆盖后续新工作。既有Artifact/媒体留原处，不声称全量媒体备份。首次实际检查器误要求所有合约含`$id`而失败，实际Plan检查因此在缺少harness时启动失败；按已有descriptor规则修正检查器、生成原注册harness后完整重跑通过，产品包未改。失败版本及记录保留，不抹去此前开发/浏览器失败。
+
+## 2026-09-12：Plan 信息收集与可选工作保存实现验收及补修
+
+[当前 Plan Work 合约](../../spec/contract/plan-work/index.md)及用户已放行的[开发交接](../../../openspec/changes/refine-plan-interaction/README.md)已实现；[实现验收](../../../openspec/changes/refine-plan-interaction/acceptance.md)记录测试、独立合成行为推演、实际 wheel/MCP 和精确构建身份。最终流程保留预览 HTML 后聊天接受，不新增确认弹窗。
+
+| 能力 | 声明与设计 | 运行实现 | 入口与交付 |
+| --- | --- | --- | --- |
+| Agent 获取组织决定所需的信息 | 用户可提供知识、背景和材料；调查方法与提问时机开放 | packaged Plan Skill 已修正偏好限制和确认循环；六类独立合成对话覆盖口述范围、文件读取／能力缺失、信息充分、未回答、候选冲突及局部纠正 | Skill 随精确 wheel 交付；代表性职责路径通过，不认证真实媒体语义质量或所有未来 Agent |
+| 可选说明、独立偏好、候选保留／替换／撤下 | 三字段省略／清空、原子写入、版本／幂等、无候选可读 | 52 组三字段组合及错误／长文本／零 Read／恢复反例通过；复用进程锁、取消提交门和 seal reservation；v3 存储无损增量加列 | 209 项已安装包检查通过；实际 stdio MCP 保存、重启、撤下、再提交和 seal 通过 |
+| 最终预览中的必要决定说明 | 同一 Candidate 的说明、Source Set、Evidence 引用必须可审阅 | PreviewDocument／HTML 交付并转义 decision_notes；无候选拒绝最终 Preview | 真实 wheel HTML 和 identity 核对通过；24 次 MCP 调用均为单一 structuredContent、零新增 elicitation |
+| 最终接受与冻结 | 精确 HTML → 聊天接受 → 同内容冻结；补充信息不等于批准 | 缺失／错误确认及旧 revision 拒绝；记事后刷新 revision 可复用仍有效的同内容接受 | 证明现有本地客户端上下文传递及内容核对，不证明独立真实人类认证；未切换日常 Host |
+
+迁移判断：Agent 组织判断、主动获取信息和显式接受延续 `intentionally_changed`，替代历史固定流水线把局部推断传播为目录名的方式；媒体只读、已有 Work 并发／取消／重放和封存保护 `preserved`。新可选说明在旧实现无对等工作状态，其质量、用户注意力、吞吐及成本比较为 `not_comparable`；这里只证明轻量更新没有 Read／模型／Geo 调用，没有重跑 AI Album 或原事件，不从目录差异推断回归。
+
+隔离 wheel 为 0.10.2，SHA-256 `c6623dd6e96612a816d16ff2363d9d2e58c44439300430fe5478c8c0b7cc3a66`。它包含当前共享工作区，不能仅凭相同版本号视为日常已安装包。本次同时修复实际安装暴露的 MCP schema 外部引用和 Frozen Plan 默认历史路径；未改写合约、封存 Result 或真实媒体。通用 distribution smoke、Skill/runbook 一致性已通过；全局安装切换与真实 Apply 不在本次授权内。最终默认测试 **1271 passed、16 deselected**；初轮环境失败、恢复及命令均见实现验收。
+
+### 用户复核后的三项缺口与补修
+
+用户明确暂不通过首轮整体验收。正常保存路径的 55 项合约检查、旧 wheel 字节和 24 次 MCP 轨迹成立，但不足以证明非法候选身份保护、所有结构错误及真实图片显示；此前的完成表述按此收窄。
+
+| 缺口 | 处置与实际证据 | 状态／界限 |
+| --- | --- | --- |
+| 输入 plan_ref 覆盖 Tool 预留身份 | 按当前 Candidate schema 验证原输入后才 materialize；另外阻止 sealing-owned 字段注入。MCP 对 plan_ref/contract/seal 均返回 candidate_invalid，Work 不变，后续 seal 三处 Plan 编号相同 | 对既定契约的符合性缺陷已修复；不是允许修改 Plan 身份的合约变更 |
+| other_outcomes null/数字成为内部故障 | schema 失败不遍历字段；直接 Tool 和 MCP 反例返回 candidate_invalid 且无 Read／写入 | 保留未知异常立即暴露，不靠宽泛异常捕获通过验收 |
+| HTML 未显示已有准备图片 | 经 Read 获取 covering_evidence 和实际 Evidence access/source_items，核对组内实际来源、解码并呈现 | 新 wheel 的真实准备 JPEG 在 Chrome complete=true、naturalWidth=80、naturalHeight=40；不认证所有浏览器或未选样本 |
+
+补修隔离 wheel SHA-256 `31be3b85e6cd29f08c48f17dab15bfd06a55df5ab50fca07c302f1d9e790e438`，与首轮 wheel 保持分离。新安装包 **226 项**通过、默认测试 **1288 passed／16 deselected**、实际 MCP **35 次**调用通过、通用 distribution smoke 通过；[最新验收记录](../../../openspec/changes/refine-plan-interaction/acceptance.md#用户复核后的三处补修)保留路径、反例、浏览器证据及最终默认测试结果。三项已获用户独立复验通过；无全局切换或真实媒体 Apply。历史 AI Album 比较未重跑，前述 intentionally_changed／not_comparable 边界不变，不能把本次缺陷修复描述为旧模型质量已改善。
+
+### Preview 选定 Evidence 分页补修
+
+用户随后指出新的 P2：选定两条 Evidence 的元数据超过响应上限，第一页无图、第二页有图，渲染器忽略 next_cursor。该问题属于已承诺的读取完整性缺陷，不能用上轮图片显示证据覆盖。现已固定原 Result、原选集和 limit=16 续读至结束，不扩大最多 16 条 Evidence；循环或续读失败明确报错，不发布部分预览。
+
+真实 Result/Read 的字节分页反例在旧 wheel 上复现一次 Read，修复后同一选集两次 Read 并显示第二页图片；源码相关 **136 项**、新隔离 wheel **229 项**、实际 MCP **36 次**调用通过。新 wheel SHA-256 `1c454027d2f6b5217e3c3b4f0f6a0f86a7e523bdc4ea282565e0008ce2a4e5e7`，127 个 package 文件与源码一致，distribution smoke 通过。分页轨迹、独立浏览器 80×40 显示证据及首次可选浏览器超时均保留在[最新验收节](../../../openspec/changes/refine-plan-interaction/acceptance.md#最新补修选定-evidence-的字节分页)。本次未重跑 AI Album 比较或默认全集，不扩大旧测试认证范围；本轮自验完成，待用户复核，未全局切换或执行真实 Apply。
+
+## 2026-09-12：厂商体系三项验收补修与 0.10.2 日常交付
+
+用户复核通过 B 方案和核心结构，同时指出三项未覆盖的反例。本节承接该复核；之前的1,151项源码测试、244项安装测试和四次 Run 仅证明其当时范围，不证明这些反例已通过。三项补修已完成，并在隔离安装和日常 **0.10.2** 中验证。
+
+| 原缺口 | 处置与当前证据 |
+| --- | --- |
+| 配置无法适配标准坐标与源尺寸 | 遗留 `regression` 已修复，配置能力 `preserved`、`implemented`。fields 以 tag_pairs 声明纬度/经度或宽/高；完整配对来自同一文件，尺寸只读当前源素材。安装 ExifTool→MCP→Read 返回配置选择的80×40尺寸；额外 GPS Run 将 EXIF:GPSDestLatitude/Longitude 中的合成测试值送入标准 gps_coordinates，再形成真实 Geo 待处理坐标22.3/114.2（WGS84）。无服务配置时诚实阻塞，测试随后取消该临时 Run；未发出地图请求。 |
+| 重启 Host 后坏 YAML 阻止旧任务恢复 | `intentionally_changed`，`implemented`。Dataset Open 保持可访问并给出配置错误摘要，不伪造有效知识；有快照的恢复及旧 Result 读取独立于当前 YAML，新工作仍严格校验。实际关闭并重开 MCP Host，保持 YAML 损坏，恢复原快照并完成 Result；快照内容和源文件字节不变，新 start 仍返回 configuration_invalid。 |
+| integer 经浮点转换发生精度损失 | `regression` 已修复，类型语义 `preserved`、`implemented`。以精确分数判断整数并返回整数，拒绝非整数；Read 实际返回9007199254740993。测试覆盖原生整数、正负字符串、十进制、可整除分数及大数附近非整数。metadata 解释版本进入 Work 身份，修正不会继续复用旧的错误整数输出，也不改写已封存 Result。 |
+
+契约、机器 Schema、[新增示例](../../spec/contract/manufacturer-knowledge/example-add.yaml)、Dataset Open 诊断和安装说明已同步。文件格式仍为 schema_version 1，复用既有字段、Run 和 Observation；未增加公共 Tool 或独立服务。DJI 随包规则本轮没有修改。
+
+### 精确构建与验证
+
+- 基底为 `20b86a987714e630344d10df9e3807141a8d8474`。发布保留目录 `.local/releases/0.10.2-manufacturers-20260912/`；最终源码在 `candidate-02/source/`，`source-manifest.json`、`source.patch` 保存24个选入变更和完整文件摘要。未提交的其他评测修改未混入包；本节之外的用户文档修改保留。
+- wheel：`candidate-02/wheel/mediasense-0.10.2-py3-none-any.whl`，SHA-256 **`68e4ec3152091285513724b84f92cce9aad04968b5e2f46313dd234b1f03302c`**。candidate-01/02 的包字节完全相同，第二次仅修正测试配置隔离与版本断言，因此125项安装测试及增强厂商 smoke 的证据适用于最终同一包。
+- 最终默认源码套件 **1,179 passed，16 deselected，231.10 s**；安装代码专项 **125 passed，16.84 s**；真实隔离 uv tool 分发检查、Ruff、离线锁一致性和文档/发布副本检查通过。默认排除项未执行。
+- 隔离与日常安装各执行增强 smoke：6张生成 JPEG、5个完成 Run，以及1个进入真实 Geo 待处理集合后取消的 GPS Run。覆盖新增/修订/停用/撤回、无变更复用、原 Result 不变、精确整数、标准尺寸，以及坏 YAML 下跨 Host 恢复。厂商 smoke 的模型和外部 Provider 调用均为0；没有把受阻 GPS Run 计作完成 Result。
+
+### 日常安装与现有环境
+
+日常 `/Users/chengyanru/.local/bin/mediasense` 已由原 uv tool 管理器更新到0.10.2。Python **3.13.5**、`embeddings` extra及**59项依赖版本**全部保留；实际安装的**127个包文件**与该 wheel 一致。`precheck/dinov3.py`、`runtime/embedding.py` 与固定配方文件保持原安装字节；用户启用的 DINO/0.311 配置文件、原 MCP 配置和凭据加载脚本的 SHA-256 均不变。本次未打开或重建业务 Dataset，也没有数据库 schema 迁移。
+
+原操作项目 `/Users/chengyanru/Downloads/ai-album-hk-representative-v1` 的四个 MediaSense Skills 使用原 **npx skills@1.5.25** 离线更新，遥测关闭。12个文件匹配同一 wheel，四个 computedHash 经原生 localeCompare 排序及 SHA256(path+content) 复核；其他锁条目不变。升级前未发现日常 MCP Host。升级后 doctor=ok；使用原 `/bin/sh` 和凭据加载方式启动的新 Host 返回0.10.2、七个匹配的合约 ID/digest，临时 Dataset Open 成功。独立新连接的验证不声称原业务 Agent 已热重载 Skill。
+
+`before/` 保留旧 wheel、收据、依赖、四个 Skill 及项目锁；`actual-installation-verification.json`、`skill-lock-verification.json`、`candidate-02/package-verification.json` 与日志记录结果。生成媒体和状态在 `/private/tmp/mediasense-manufacturer-repair-260912-dr649rbx/`，均不入 Git。回退仍须遵守安装 runbook：旧日常包的解析器不支持新建 Run 的 v7 执行配置，不能仅凭数据库 schema 版本未变就回退后续业务状态；本次没有改动这类业务状态。
+
+保留的失败及范围：首轮相关检查99项通过、1项失败，该旧 Host 用例读入了用户 DINO 默认设置；按隔离配置连同配置/契约检查重跑后118项通过。首次完整套件有1177项通过、2项失败，分别是 MCP 子进程未隔离用户设置及写死0.10.1的断言，修正后的完整套件如上。沙箱下 doctor 将实际默认数据目录判为不可写，按正常系统权限核对后通过，未降低检查。操作项目内的 fixture 校验确认所有列出文件 SHA-256 一致，但整个目录3,188,720,647 bytes超出运输包2 GB上限，因此不宣称整包 verifier 通过；该目录本轮仅作为既有操作项目更新 Skill，厂商测试全部使用独立合成媒体。真实厂商型号/固件矩阵和地图服务质量不属于此次补修认证。
+
 <a id="manufacturer-information-delivery"></a>
 
 ## 2026-09-12：厂商知识文件契约与隔离安装交付
@@ -821,3 +902,28 @@ Skills／Host。独立 MCP 验证已完成，但没有把磁盘更新冒充原�
 传输 schema 与 contract ID/digest 均匹配已验证安装；`actual-launcher-verification.json`
 记录此证据。检查器最初按原始合约而非既有 MCP 包装比较，修正检查器后通过，未修改合约。
 最后安装文档／Skill 同步与 CLI 专项 19 项通过。汇总见同目录 `installation-verification.json`。
+
+
+### DINOv3 默认开启与 0.311 确认（2026-09-12）
+
+用户明确回复“我要开启0.311 和 默认embedding。怎么弄 你直接弄”，据此确认
+**0.311 为当前 DINOv3 384 的生产默认分组尺度**，并授权开启本机用户默认 embedding。
+前一节关于默认粒度“答复待接收”的状态到此结束；原 0.85 评测与人工质量认可保留。
+
+本机原先不存在用户 config.toml，本次在
+`~/Library/Application Support/MediaSense/config.toml` 写入 owner-only 的完整 `[embedding]`
+配置：enabled=true、固定 DINOv3 revision、384px、768 维、Core ML、batch 1。
+0.311 已是安装版实际压缩默认值，无需添加未支持的 TOML 字段或修改算法。
+配置在写入前已由安装版解析并通过固定依赖／模型校验；原启动环境 doctor=ok，
+local_embedding=configured、DINOv3 prerequisites=prepared。
+
+范围是本机用户默认：未单独覆盖 embedding 的 Dataset 在新 Host 打开时采用它；
+Dataset 显式 embedding 表仍有更高优先级，已有 Run 快照和已封存 Result 不修改。
+未打开或批量重建既有业务 Dataset；产品内建默认仍关闭，此次是用户明确选择。
+本次配置前状态、精确配置和验证证据保存在
+`.local/releases/0.10.1-dinov3-20260912/default-enablement/`，不改写前次关闭状态的安装历史。
+
+正式安装 CLI/MCP 的独立单图验证通过：Dataset 没有自身 config.toml，Open 报告仅从
+上述用户配置继承 DINOv3 384；Run 实际生成 768 维单位 embedding 并完成 Result，
+压缩 Work 的 content_distance_scale 依赖实录为 `0.311`。源副本未变，网络尝试为 0。
+具体证据为该目录 `verification.json`；无需重装软件或重建任何既有 Dataset。

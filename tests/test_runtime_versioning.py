@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from pathlib import Path
+import tomllib
+
 import mediasense
 from mediasense.apply.preparation import _SCHEMA_VERSION as APPLY_SCHEMA_VERSION
 from mediasense.capabilities.geo import GeoOperationJournal
@@ -14,7 +17,8 @@ from mediasense.runtime.versioning import application_version
 
 
 def test_package_version_is_runtime_metadata() -> None:
-    assert mediasense.__version__ == application_version() == "0.10.1"
+    declared = tomllib.loads((Path(__file__).parents[1] / "pyproject.toml").read_text())
+    assert mediasense.__version__ == application_version() == declared["project"]["version"]
 
 
 def test_application_version_is_not_a_precheck_validity_input() -> None:

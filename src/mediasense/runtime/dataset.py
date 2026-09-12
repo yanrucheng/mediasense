@@ -511,12 +511,14 @@ class DatasetOpenTool:
             raise DatasetOpenError(
                 "invalid_request", "workspace must be a non-empty path."
             )
-        load_runtime_config()
+        load_runtime_config(allow_invalid_manufacturers=True)
         opened = self.resolver.open(
             Path(source_root),
             explicit_workspace=None if workspace is None else Path(workspace),
         )
-        config = load_runtime_config(dataset_workspace=opened.workspace)
+        config = load_runtime_config(
+            dataset_workspace=opened.workspace, allow_invalid_manufacturers=True
+        )
         result = opened.to_value()
         result["configuration"] = config.public_value()
         return opened, config, result

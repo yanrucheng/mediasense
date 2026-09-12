@@ -18,7 +18,7 @@ or claim the current session reloaded a newly written project configuration.
 
 ## Boundaries
 
-- Read source facts and prepared Evidence only through `mediasense.precheck.read`; never inspect PreCheck databases or caches.
+- Read bound Result facts and prepared Evidence only through `mediasense.precheck.read`; never inspect PreCheck databases or caches. Human knowledge, background, supplementary files and authorized investigative results may also inform Plan. Keep their actual sources and affected scope; they do not rewrite the Result or expand its media scope.
 - Treat `review`, `expand`, and `resolve` as factual consumption boundaries. They expose coverage, observations, Evidence, and exact membership; they do not select a Profile or prove retrieval value.
 - The Agent selects and applies the Profile, interprets evidence, proposes groups and names, and chooses what to ask. `mediasense.plan.work` stores and validates decisions already made; it makes no semantic fallback.
 - Keep Observations, Candidate Relations, Agent judgment, Human preferences, and Human confirmation distinguishable.
@@ -87,13 +87,13 @@ Preserve failure meanings:
 - incomplete pagination requires continuation before relying on unseen content;
 - transient `result_unavailable` may be retried safely;
 - `result_untrusted` or `result_inconsistent` requires repair or a new Result; and
-- a material factual rival that available Evidence cannot distinguish prevents a complete Candidate. Ask the Human only when the unresolved branch is a value or retrieval preference they own.
+- a material factual rival requires further information or a supported coarser disposition. Actively seek information that can change the decision, including Human knowledge, background and corrections, as well as preferences. Do not invent an answer when the Human cannot remember or has not replied; continue independent work while dependent decisions remain unresolved.
 
-Reopen PreCheck when a decision requires missing or misleading upstream Evidence. Ordinary inspection of reachable Evidence and temporary review compositions remains Plan-local.
+Reopen PreCheck when Result integrity, accounting or preparation obligations need correction. Ordinary semantic uncertainty, a recorded location gap or a supplementary input form does not by itself require reopening. Choose available, authorized capabilities to read or compute over supplementary material; receiving a path, reading its contents and establishing an interpretation are distinct. If the needed capability or retained original is unavailable, disclose the limitation. A path in notes is not MediaSense custody of that original. `evidence_refs` remains limited to Evidence in the bound Result.
 
 ## Profile conformance checkpoint
 
-Before `update`, establish and make inspectable when material:
+Before submitting a complete `candidate_content` through `update`, establish and make inspectable when material:
 
 - why the active Profile fits and which primary and secondary retrieval axes the Candidate uses;
 - which Evidence supports the proposed chapters, scenes, names, and exceptions, including material counterevidence;
@@ -105,9 +105,9 @@ If the Candidate fails this checkpoint, continue investigating or show a directi
 
 ## Human interaction and directional Preview
 
-Do not make the Human choose internal Profile labels or answer a long intake questionnaire. Ask a small number of questions only when the answers can change a high-impact semantic boundary, the active Profile, or the future retrieval path.
+The Agent owns information sufficiency for the proposed organization. Choose when to investigate or ask using the decision’s importance, available support, cost, Human attention and authorized scope. Ask for knowledge, context or supplementary material when it can materially change a decision; do not limit interaction to preferences. When information is sufficient, proceed directly. Input forms, investigation methods and conversation pace remain open; no universal uncertainty threshold, fixed shortlist or required question per item applies. Do not make the Human choose internal Profile labels or complete a fixed intake questionnaire.
 
-Before `update`, show a directional Preview whenever Profile fit, the primary organization axis, high-impact names, or large heterogeneous groups remain material. It may be incomplete, compare only live alternatives, show questions and unsupported paths, and use representative visuals or find-questions. It is not a Candidate identity and must not be presented as sealable.
+Before submitting a complete Candidate, show a directional Preview whenever Profile fit, the primary organization axis, high-impact names, or large heterogeneous groups remain material. It may be incomplete, compare only live alternatives, show questions and unsupported paths, and use representative visuals or find-questions. It is not a Candidate identity and must not be presented as sealable.
 
 When the Human accepts a user-visible direction, preserve that scope precisely. Confirmation of one event, person, restaurant, or group does not silently confirm unrelated media or the complete Candidate.
 
@@ -128,11 +128,19 @@ by Plan. Do not mutate the immutable Result or create a second PreCheck lifecycl
 Human-supplied place meaning remains Human input, never provider or PreCheck
 observation.
 
+## Optional work saving
+
+Discussion may finish before `create` or a complete Candidate submission. When continuation benefits from saving work, use the existing Work's `working_notes` for the current understanding, material basis and source, affected scope, and unresolved consequences. Do not record every conversation turn or private reasoning. Complete-Candidate checkpoints do not block earlier notes or preference saves.
+
+`update` requires `work_ref`, `base_revision`, `request_id` and at least one mutable field. Omission preserves; a string replaces notes (`""` clears), an object replaces preferences (`{}` clears), a complete object replaces Candidate, and `candidate_content: null` withdraws it. Choose explicitly whether a material conflict requires replacing or withdrawing the Candidate; a contrary note does not change it. Partial Candidates are rejected. Combined writes are atomic; a rejected Candidate saves none of the supplied changes. Notes/preferences/withdrawal perform no PreCheck Read, model or Geo calls.
+
+Default `inspect` returns overview, preferences, working_notes, content and validation; select sections when only notes are needed. No Candidate is a readable Work with null content, no identity and `candidate_missing`. Retry a lost response with the same request; a changed request needs a new ID. A stale revision requires rereading and deciding again. A new same-value save still changes revision; notes/preferences never change a retained Candidate identity or enter Frozen Plan.
+
 ## Build, preview, and freeze
 
-After the conformance checkpoint passes, submit one complete coherent Candidate through `update`; do not encode conversational turns as revisions. Every scoped Source Item must resolve to exactly one logical group or explicit other outcome. Keep exclusions, damaged items, auxiliary material, and unresolved media visible. Store material Agent rationale and Profile departures in decision notes, not `organization_preferences`.
+After the conformance checkpoint passes, submit one complete coherent Candidate through `update`. Every scoped Source Item must resolve to exactly one logical group or explicit other outcome. Keep exclusions, damaged items, auxiliary material, and unresolved media visible. Store material Agent rationale and Profile departures in decision notes, not `organization_preferences`.
 
-Generate the final Preview for the exact returned revision and `candidate_content_identity`. Present the final tree, expanded counts, representative visuals, every other accounted outcome, material Result Evidence and qualifications, and bounded member detail where needed. Demonstrate representative future-find paths rather than showing only structural completeness.
+Generate the final Preview for the exact returned revision and `candidate_content_identity`. Present the final tree, expanded counts, representative visuals, every other accounted outcome, material Result Evidence and qualifications, and bounded member detail where needed. Include important `decision_notes`, their applicable Source Sets, existing Evidence references and residual uncertainty. Transfer the shortest necessary final explanation and source category from supplementary inputs into these notes; working notes do not automatically enter final review. Without a Candidate, a directional display cannot be labeled a final, sealable Preview. Demonstrate representative future-find paths rather than showing only structural completeness.
 
 Before requesting confirmation, distinguish four claims:
 
@@ -141,7 +149,9 @@ Before requesting confirmation, distinguish four claims:
 - **organization effective:** representative retrieval questions work without avoidable broad rescanning; and
 - **Human confirmed:** the Human reviewed and accepted this exact final Candidate, not merely a Profile direction or earlier Preview.
 
-Request final confirmation only when the Candidate is complete and `seal_ready`, all four claims hold, and the Human reviewed the Preview bound to that exact identity. Confirmation must arrive through the trusted interaction context; never construct or infer authentication claims.
+The first three claims support requesting review of a complete, `seal_ready` Candidate. Show the HTML for that exact Candidate, then obtain explicit acceptance in chat; that actual acceptance establishes the fourth claim. A local factual correction, directional acceptance, saved note saying “confirmed”, or Tool validation is not whole-Plan acceptance. Use the existing local client transport authority to convey that acceptance; do not add an MCP confirmation popup or ask the Human to recite a digest. The local client context is trusted, but a content match is not independent proof of a real Human event: the Agent must preserve the actual acceptance scope and validity.
+
+After a notes-only edit, reread the current revision. Still-valid acceptance of identical content can be carried forward without another semantic confirmation. If organization or important decision notes change, show the new Candidate and obtain acceptance of it; never reuse acceptance of the old HTML. User withdrawal or correction overrides earlier acceptance even if the digest remains unchanged.
 
 Call `seal` with the exact `work_ref`, revision, candidate identity, and a new idempotent request ID. Explain that sealing is not Apply authorization and causes no source-media change. Preserve distinctions among stale revision, identity mismatch, missing confirmation, access denial, invalid candidate, and operation failure; never bypass Tool safety checks.
 

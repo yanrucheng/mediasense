@@ -73,7 +73,8 @@ def test_exclusion_requires_a_reason() -> None:
     candidate = deepcopy(valid_candidate())
     candidate["other_outcomes"][0].pop("reason")
     analysis = _analyze(candidate)
-    assert "missing_exclusion_reason" in {issue.code for issue in analysis.issues}
+    assert "schema_violation" in {issue.code for issue in analysis.issues}
+    assert any("reason" in issue.message for issue in analysis.issues)
 
 
 def test_destination_collision_is_rejected() -> None:

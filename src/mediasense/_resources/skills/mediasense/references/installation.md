@@ -46,6 +46,19 @@ and format declarations. The 0.9 Read change uses `review.items` and one MCP
 The 0.10 Geo journal migration preserves retained evidence but excludes old Host
 writers. No version number alone proves compatibility with a retained Dataset.
 
+The Plan optional-work update adds `working_notes` to the existing v3 Work store
+transactionally on first open. Existing Works start with empty notes; candidates,
+identities, revisions, receipts, cursor keys and pending seal reservations remain
+unchanged. No store is recreated and no Result or Frozen Plan is rewritten. This
+is an additive v3 storage extension, not a claim that an older Host implements
+the new Tool actions or Skill behavior. Back up an existing Dataset consistently
+before opening it with a new build; verify upgrade and recovery on an isolated
+copy first. The bounded Plan delivery check is
+`tests/run_plan_interaction_smoke.py --host <isolated-cli> --output <new-temp-dir>`
+using that installation's Python. It verifies notes, Candidate withdrawal,
+restart and the existing client-confirmation path without applying media.
+
+
 ## Workflow
 
 These checkpoints fix required evidence and ordering where effects depend on it.
@@ -668,6 +681,10 @@ authority and examples are `docs/spec/contract/manufacturer-knowledge/` in the
 selected source. Invalid YAML, duplicate IDs, unknown fields and invalid patterns
 are explicit configuration errors.
 
+Standard GPS and source-dimension mappings use `tag_pairs` in `apply.fields`;
+each coordinate or dimension pair comes from the same file. Dimension rules read
+the source media only. Custom `integer` fields preserve exact integer values.
+
 The existing TOML separates camera-time assumptions from presentation:
 
 ```toml
@@ -684,6 +701,11 @@ A new Run rereads current files and stores its full snapshot in the existing
 PreCheck store. Resume retains that snapshot; edits affect successor Runs, not
 sealed Results. Read delivers the actual rule/source evidence with the resulting
 attributes. Configuration alone does not prove a rule has processed media.
+
+If current manufacturer YAML is invalid, Dataset Open reports its error without
+claiming an active knowledge snapshot. Existing Results and Runs with a frozen
+snapshot remain accessible after a Host restart. New work still fails validation;
+fix the file before starting another Run. `doctor` continues to report the error.
 
 ### Geo network configuration
 
