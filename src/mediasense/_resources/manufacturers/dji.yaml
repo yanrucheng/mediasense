@@ -1,3 +1,4 @@
+# 维护前读同目录 README.md：when=适用条件，apply=处理，basis=依据与限制。
 schema_version: 1
 rules:
   - id: dji.photo-time

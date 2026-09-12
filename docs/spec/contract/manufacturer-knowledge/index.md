@@ -16,10 +16,13 @@ superseded-by: ""
 
 用户已确认目的、行为承诺与 B 方案，并授权先定文件契约再开发。本页是该文件接口的当前权威；它不增加公共 Tool、stage 或服务。实现和安装验证另记[迁移台账](../../../eval/eval-260823-1918-ai-album-migration-baseline/eval-260823-1918B-capability-ledger.md)。
 
+编写或修订记录，从 YAML 旁的[厂商知识维护指南](../../../../src/mediasense/_resources/manufacturers/README.md)开始：它解释 when/apply/basis、依据写法及验证操作；本页和 Schema 继续定义精确字段与生效承诺。
+
 ## 文件位置与权威
 
 ```text
 src/mediasense/_resources/manufacturers/     随包基础知识的唯一创作源
+  README.md                               人和 Agent 的维护入口，随包交付
   dji.yaml
   canon.yaml
   sony.yaml

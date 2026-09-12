@@ -17,6 +17,10 @@ maintain it and its consistency checks in the same change.
 
 For local model evaluation, use the single [model evaluation runbook](readme/model-evaluation.md).
 
+Before reading or maintaining manufacturer YAML, use the adjacent
+[manufacturer knowledge runbook](src/mediasense/_resources/manufacturers/README.md).
+It explains authoring and verification; the linked active contract owns field semantics.
+
 ## Authority and boundaries
 
 - This repository is authoritative for MediaSense product intent, contracts, Skills, Tools, and migration judgments.

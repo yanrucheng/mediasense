@@ -664,6 +664,12 @@ prerequisite, and a capability that is not yet connected to the Host.
 
 ### Manufacturer knowledge
 
+For reading, adding or revising rules, start with the adjacent runbook at
+`mediasense/_resources/manufacturers/README.md` in builds that ship it
+(`src/mediasense/_resources/manufacturers/README.md` in a checkout). It explains
+`when`, `apply`, `basis`, evidence, verification and withdrawal. That file is the
+single authoring source for the maintenance guide; the file contract owns semantics.
+
 In builds containing manufacturer knowledge, the package supplies a YAML baseline
 under `mediasense/_resources/manufacturers/`. Put personal `.yaml` or `.yml` files
 in `manufacturers/` beside the user `config.toml`. On macOS this is normally

@@ -24,6 +24,8 @@ for fixed assets, platform limits and readiness checks.
 
 For repeatable local embedding-model evaluations, see [Local model evaluation](readme/model-evaluation.md).
 
+For manufacturer YAML, see the adjacent [authoring and maintenance runbook](src/mediasense/_resources/manufacturers/README.md), including how to read `when`, `apply` and `basis`.
+
 The product exposes one user-facing entry Skill, `mediasense`, which owns setup,
 readiness verification, and routing. It delegates business work to three stage
 Skills:
