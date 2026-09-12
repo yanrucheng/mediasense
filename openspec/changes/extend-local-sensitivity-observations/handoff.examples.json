@@ -1,0 +1,1105 @@
+{
+  "purpose": "规划期人工可读的 Observation 片段和运行情形；不是当前 Tool 完整请求/返回或已接受 schema",
+  "simulated": true,
+  "implementation_authorized": false,
+  "exact_handoff_review_status": "proposed_not_independently_accepted",
+  "disabled_policy_status": "planning_default_exclude_cached_output; user question remains unanswered",
+  "shared_input_context": {
+    "source_item_ref": "source-item:synthetic-photo",
+    "input_evidence_ref": "evidence:synthetic-photo-highres",
+    "input_kind": "oriented_single_frame_prepared_image",
+    "pixel_dimensions": {
+      "width": 1000,
+      "height": 1500
+    },
+    "represented_source_items": [
+      "source-item:synthetic-photo",
+      "source-item:synthetic-other-1",
+      "source-item:synthetic-other-2"
+    ],
+    "scope_limit": "检测只描述实际输入 E；不把它推广到另外两个被代表成员。"
+  },
+  "examples": [
+    {
+      "id": "both_models_available",
+      "kind": "observation_fragment",
+      "source_item_ref": "source-item:synthetic-photo",
+      "observations": [
+        {
+          "name": "content_sensitivity",
+          "status": "available",
+          "value": {
+            "detector_identity": "Freepik/nsfw_image_detector@15b85477e4fd2000db76ae9aae0f89a72f95e2e3;profile=freepik-ordinal448-mps-fp32-v1",
+            "profile": "freepik-ordinal448-mps-fp32-v1",
+            "classification_distribution": {
+              "taxonomy": "freepik-native-levels",
+              "score_semantics": "categorical_probability",
+              "probabilities": {
+                "neutral": 0.05,
+                "low": 0.15,
+                "medium": 0.7,
+                "high": 0.1
+              }
+            },
+            "cumulative_probabilities": {
+              "at_least_low": 0.95,
+              "at_least_medium": 0.8,
+              "high": 0.1
+            }
+          },
+          "basis": {
+            "cumulative_probabilities": {
+              "operation": "sum",
+              "source_property": "classification_distribution",
+              "events": {
+                "at_least_low": [
+                  "low",
+                  "medium",
+                  "high"
+                ],
+                "at_least_medium": [
+                  "medium",
+                  "high"
+                ],
+                "high": [
+                  "high"
+                ]
+              }
+            }
+          },
+          "provenance": {
+            "detector_identity": "Freepik/nsfw_image_detector@15b85477e4fd2000db76ae9aae0f89a72f95e2e3;profile=freepik-ordinal448-mps-fp32-v1",
+            "profile": "freepik-ordinal448-mps-fp32-v1",
+            "model_id": "Freepik/nsfw_image_detector",
+            "revision": "15b85477e4fd2000db76ae9aae0f89a72f95e2e3",
+            "weights_sha256": "024a9d4818fae2656403bf626c9f8c9e7789c2da274749fbebb1060d8fdaa7ab",
+            "input_evidence_ref": "evidence:synthetic-photo-highres",
+            "observed_at": "2026-09-12T12:00:00+08:00",
+            "producer": "synthetic-handoff-example-only",
+            "actual_execution": {
+              "device": "mps",
+              "precision": "float32"
+            },
+            "definitions": {
+              "provided_properties": [
+                "classification_distribution",
+                "cumulative_probabilities"
+              ],
+              "taxonomy": "freepik-native-levels",
+              "labels": [
+                "neutral",
+                "low",
+                "medium",
+                "high"
+              ],
+              "meaning": "Freepik 原生四类互斥概率；不是统一裸露事实或准确率。"
+            }
+          },
+          "qualifications": [
+            {
+              "code": "model_observation_limits",
+              "effect": "limits_interpretation",
+              "message": "模型候选，仅适用于所指输入；不保证模型分数校准、没有漏检、其他成员一致或允许远程处理。"
+            }
+          ]
+        },
+        {
+          "name": "content_sensitivity",
+          "status": "available",
+          "value": {
+            "detector_identity": "notAI-tech/NudeNet/640m@sha256:04fe3d77980780c1f8297dc6d7f942fd5b3abe6942a188f742a85241e4f634eb;profile=nudenet640-native-cpu-fp32-v1",
+            "profile": "nudenet640-native-cpu-fp32-v1",
+            "region_detections": {
+              "taxonomy": "nudenet-3.4.2-native-body-labels",
+              "score_semantics": "model_detection_score",
+              "coordinate_system": "input_evidence_pixels_xyxy",
+              "input_dimensions": {
+                "width": 1000,
+                "height": 1500
+              },
+              "instances": [
+                {
+                  "label": "FEMALE_BREAST_EXPOSED",
+                  "score": 0.91,
+                  "box_xyxy": [
+                    100,
+                    300,
+                    220,
+                    430
+                  ]
+                },
+                {
+                  "label": "FEMALE_BREAST_EXPOSED",
+                  "score": 0.86,
+                  "box_xyxy": [
+                    260,
+                    305,
+                    380,
+                    435
+                  ]
+                },
+                {
+                  "label": "FACE_FEMALE",
+                  "score": 0.98,
+                  "box_xyxy": [
+                    170,
+                    60,
+                    320,
+                    250
+                  ]
+                }
+              ]
+            }
+          },
+          "basis": {
+            "postprocessing": {
+              "candidate_confidence": 0.2,
+              "nms_score_threshold": 0.25,
+              "nms_iou": 0.45,
+              "class_agnostic": true,
+              "coordinate_projection": "native integer xywh -> [x,y,x+w,y+h]; no second clipping or NMS"
+            }
+          },
+          "provenance": {
+            "detector_identity": "notAI-tech/NudeNet/640m@sha256:04fe3d77980780c1f8297dc6d7f942fd5b3abe6942a188f742a85241e4f634eb;profile=nudenet640-native-cpu-fp32-v1",
+            "profile": "nudenet640-native-cpu-fp32-v1",
+            "model_id": "notAI-tech/NudeNet/640m",
+            "revision": "nudenet-3.4.2/v3.4-weights",
+            "weights_sha256": "04fe3d77980780c1f8297dc6d7f942fd5b3abe6942a188f742a85241e4f634eb",
+            "input_evidence_ref": "evidence:synthetic-photo-highres",
+            "observed_at": "2026-09-12T12:00:00+08:00",
+            "producer": "synthetic-handoff-example-only",
+            "actual_execution": {
+              "device": "cpu",
+              "precision": "float32"
+            },
+            "definitions": {
+              "provided_properties": [
+                "region_detections"
+              ],
+              "taxonomy": "nudenet-3.4.2-native-body-labels",
+              "meaning": "NudeNet 原生部位检测分数；不是整图敏感概率。缺少某标签不证明现实中不存在。",
+              "labels": [
+                "FEMALE_GENITALIA_COVERED",
+                "FACE_FEMALE",
+                "BUTTOCKS_EXPOSED",
+                "FEMALE_BREAST_EXPOSED",
+                "FEMALE_GENITALIA_EXPOSED",
+                "MALE_BREAST_EXPOSED",
+                "ANUS_EXPOSED",
+                "FEET_EXPOSED",
+                "BELLY_COVERED",
+                "FEET_COVERED",
+                "ARMPITS_COVERED",
+                "ARMPITS_EXPOSED",
+                "FACE_MALE",
+                "BELLY_EXPOSED",
+                "MALE_GENITALIA_EXPOSED",
+                "ANUS_COVERED",
+                "FEMALE_BREAST_COVERED",
+                "BUTTOCKS_COVERED"
+              ]
+            }
+          },
+          "qualifications": [
+            {
+              "code": "model_observation_limits",
+              "effect": "limits_interpretation",
+              "message": "模型候选，仅适用于所指输入；不保证模型分数校准、没有漏检、其他成员一致或允许远程处理。"
+            }
+          ]
+        }
+      ],
+      "expected": "两条观测；完整四类与累计概率；三个实例含同名两个框；没有跨模型合并判断。"
+    },
+    {
+      "id": "successful_empty_regions",
+      "kind": "observation_fragment",
+      "source_item_ref": "source-item:synthetic-photo",
+      "observations": [
+        {
+          "name": "content_sensitivity",
+          "status": "available",
+          "value": {
+            "detector_identity": "notAI-tech/NudeNet/640m@sha256:04fe3d77980780c1f8297dc6d7f942fd5b3abe6942a188f742a85241e4f634eb;profile=nudenet640-native-cpu-fp32-v1",
+            "profile": "nudenet640-native-cpu-fp32-v1",
+            "region_detections": {
+              "taxonomy": "nudenet-3.4.2-native-body-labels",
+              "score_semantics": "model_detection_score",
+              "coordinate_system": "input_evidence_pixels_xyxy",
+              "input_dimensions": {
+                "width": 1000,
+                "height": 1500
+              },
+              "instances": []
+            }
+          },
+          "basis": {
+            "postprocessing": {
+              "candidate_confidence": 0.2,
+              "nms_score_threshold": 0.25,
+              "nms_iou": 0.45,
+              "class_agnostic": true,
+              "coordinate_projection": "native integer xywh -> [x,y,x+w,y+h]; no second clipping or NMS"
+            }
+          },
+          "provenance": {
+            "detector_identity": "notAI-tech/NudeNet/640m@sha256:04fe3d77980780c1f8297dc6d7f942fd5b3abe6942a188f742a85241e4f634eb;profile=nudenet640-native-cpu-fp32-v1",
+            "profile": "nudenet640-native-cpu-fp32-v1",
+            "model_id": "notAI-tech/NudeNet/640m",
+            "revision": "nudenet-3.4.2/v3.4-weights",
+            "weights_sha256": "04fe3d77980780c1f8297dc6d7f942fd5b3abe6942a188f742a85241e4f634eb",
+            "input_evidence_ref": "evidence:synthetic-photo-highres",
+            "observed_at": "2026-09-12T12:00:00+08:00",
+            "producer": "synthetic-handoff-example-only",
+            "actual_execution": {
+              "device": "cpu",
+              "precision": "float32"
+            },
+            "definitions": {
+              "provided_properties": [
+                "region_detections"
+              ],
+              "taxonomy": "nudenet-3.4.2-native-body-labels",
+              "meaning": "NudeNet 原生部位检测分数；不是整图敏感概率。缺少某标签不证明现实中不存在。",
+              "labels": [
+                "FEMALE_GENITALIA_COVERED",
+                "FACE_FEMALE",
+                "BUTTOCKS_EXPOSED",
+                "FEMALE_BREAST_EXPOSED",
+                "FEMALE_GENITALIA_EXPOSED",
+                "MALE_BREAST_EXPOSED",
+                "ANUS_EXPOSED",
+                "FEET_EXPOSED",
+                "BELLY_COVERED",
+                "FEET_COVERED",
+                "ARMPITS_COVERED",
+                "ARMPITS_EXPOSED",
+                "FACE_MALE",
+                "BELLY_EXPOSED",
+                "MALE_GENITALIA_EXPOSED",
+                "ANUS_COVERED",
+                "FEMALE_BREAST_COVERED",
+                "BUTTOCKS_COVERED"
+              ]
+            }
+          },
+          "qualifications": [
+            {
+              "code": "model_observation_limits",
+              "effect": "limits_interpretation",
+              "message": "模型候选，仅适用于所指输入；不保证模型分数校准、没有漏检、其他成员一致或允许远程处理。"
+            }
+          ]
+        }
+      ],
+      "expected": "available + instances=[]，说明已执行后无保留框，不表示没有相关内容。"
+    },
+    {
+      "id": "freepik_disabled_with_cache",
+      "kind": "observation_fragment",
+      "source_item_ref": "source-item:synthetic-photo",
+      "observations": [
+        {
+          "name": "content_sensitivity",
+          "status": "not_checked",
+          "basis": {
+            "code": "capability_disabled",
+            "selection_policy": "exclude_from_successor_result_including_cached_output",
+            "decision_status": "planning_default_not_independently_confirmed"
+          },
+          "provenance": {
+            "detector_identity": "Freepik/nsfw_image_detector@15b85477e4fd2000db76ae9aae0f89a72f95e2e3;profile=freepik-ordinal448-mps-fp32-v1",
+            "profile": "freepik-ordinal448-mps-fp32-v1",
+            "input_evidence_ref": "evidence:synthetic-photo-highres",
+            "identity_basis": "configuration; no execution claimed"
+          }
+        },
+        {
+          "name": "content_sensitivity",
+          "status": "available",
+          "value": {
+            "detector_identity": "notAI-tech/NudeNet/640m@sha256:04fe3d77980780c1f8297dc6d7f942fd5b3abe6942a188f742a85241e4f634eb;profile=nudenet640-native-cpu-fp32-v1",
+            "profile": "nudenet640-native-cpu-fp32-v1",
+            "region_detections": {
+              "taxonomy": "nudenet-3.4.2-native-body-labels",
+              "score_semantics": "model_detection_score",
+              "coordinate_system": "input_evidence_pixels_xyxy",
+              "input_dimensions": {
+                "width": 1000,
+                "height": 1500
+              },
+              "instances": [
+                {
+                  "label": "FEMALE_BREAST_EXPOSED",
+                  "score": 0.91,
+                  "box_xyxy": [
+                    100,
+                    300,
+                    220,
+                    430
+                  ]
+                },
+                {
+                  "label": "FEMALE_BREAST_EXPOSED",
+                  "score": 0.86,
+                  "box_xyxy": [
+                    260,
+                    305,
+                    380,
+                    435
+                  ]
+                },
+                {
+                  "label": "FACE_FEMALE",
+                  "score": 0.98,
+                  "box_xyxy": [
+                    170,
+                    60,
+                    320,
+                    250
+                  ]
+                }
+              ]
+            }
+          },
+          "basis": {
+            "postprocessing": {
+              "candidate_confidence": 0.2,
+              "nms_score_threshold": 0.25,
+              "nms_iou": 0.45,
+              "class_agnostic": true,
+              "coordinate_projection": "native integer xywh -> [x,y,x+w,y+h]; no second clipping or NMS"
+            }
+          },
+          "provenance": {
+            "detector_identity": "notAI-tech/NudeNet/640m@sha256:04fe3d77980780c1f8297dc6d7f942fd5b3abe6942a188f742a85241e4f634eb;profile=nudenet640-native-cpu-fp32-v1",
+            "profile": "nudenet640-native-cpu-fp32-v1",
+            "model_id": "notAI-tech/NudeNet/640m",
+            "revision": "nudenet-3.4.2/v3.4-weights",
+            "weights_sha256": "04fe3d77980780c1f8297dc6d7f942fd5b3abe6942a188f742a85241e4f634eb",
+            "input_evidence_ref": "evidence:synthetic-photo-highres",
+            "observed_at": "2026-09-12T12:00:00+08:00",
+            "producer": "synthetic-handoff-example-only",
+            "actual_execution": {
+              "device": "cpu",
+              "precision": "float32"
+            },
+            "definitions": {
+              "provided_properties": [
+                "region_detections"
+              ],
+              "taxonomy": "nudenet-3.4.2-native-body-labels",
+              "meaning": "NudeNet 原生部位检测分数；不是整图敏感概率。缺少某标签不证明现实中不存在。",
+              "labels": [
+                "FEMALE_GENITALIA_COVERED",
+                "FACE_FEMALE",
+                "BUTTOCKS_EXPOSED",
+                "FEMALE_BREAST_EXPOSED",
+                "FEMALE_GENITALIA_EXPOSED",
+                "MALE_BREAST_EXPOSED",
+                "ANUS_EXPOSED",
+                "FEET_EXPOSED",
+                "BELLY_COVERED",
+                "FEET_COVERED",
+                "ARMPITS_COVERED",
+                "ARMPITS_EXPOSED",
+                "FACE_MALE",
+                "BELLY_EXPOSED",
+                "MALE_GENITALIA_EXPOSED",
+                "ANUS_COVERED",
+                "FEMALE_BREAST_COVERED",
+                "BUTTOCKS_COVERED"
+              ]
+            }
+          },
+          "qualifications": [
+            {
+              "code": "model_observation_limits",
+              "effect": "limits_interpretation",
+              "message": "模型候选，仅适用于所指输入；不保证模型分数校准、没有漏检、其他成员一致或允许远程处理。"
+            }
+          ]
+        }
+      ],
+      "valid_freepik_cache_exists": true,
+      "prior_result_retained": true,
+      "expected": "新 Result 不含 Freepik 可用值；旧结果和缓存不删除。此语义为规划默认。"
+    },
+    {
+      "id": "nudenet_disabled",
+      "kind": "observation_fragment",
+      "source_item_ref": "source-item:synthetic-photo",
+      "observations": [
+        {
+          "name": "content_sensitivity",
+          "status": "available",
+          "value": {
+            "detector_identity": "Freepik/nsfw_image_detector@15b85477e4fd2000db76ae9aae0f89a72f95e2e3;profile=freepik-ordinal448-mps-fp32-v1",
+            "profile": "freepik-ordinal448-mps-fp32-v1",
+            "classification_distribution": {
+              "taxonomy": "freepik-native-levels",
+              "score_semantics": "categorical_probability",
+              "probabilities": {
+                "neutral": 0.05,
+                "low": 0.15,
+                "medium": 0.7,
+                "high": 0.1
+              }
+            },
+            "cumulative_probabilities": {
+              "at_least_low": 0.95,
+              "at_least_medium": 0.8,
+              "high": 0.1
+            }
+          },
+          "basis": {
+            "cumulative_probabilities": {
+              "operation": "sum",
+              "source_property": "classification_distribution",
+              "events": {
+                "at_least_low": [
+                  "low",
+                  "medium",
+                  "high"
+                ],
+                "at_least_medium": [
+                  "medium",
+                  "high"
+                ],
+                "high": [
+                  "high"
+                ]
+              }
+            }
+          },
+          "provenance": {
+            "detector_identity": "Freepik/nsfw_image_detector@15b85477e4fd2000db76ae9aae0f89a72f95e2e3;profile=freepik-ordinal448-mps-fp32-v1",
+            "profile": "freepik-ordinal448-mps-fp32-v1",
+            "model_id": "Freepik/nsfw_image_detector",
+            "revision": "15b85477e4fd2000db76ae9aae0f89a72f95e2e3",
+            "weights_sha256": "024a9d4818fae2656403bf626c9f8c9e7789c2da274749fbebb1060d8fdaa7ab",
+            "input_evidence_ref": "evidence:synthetic-photo-highres",
+            "observed_at": "2026-09-12T12:00:00+08:00",
+            "producer": "synthetic-handoff-example-only",
+            "actual_execution": {
+              "device": "mps",
+              "precision": "float32"
+            },
+            "definitions": {
+              "provided_properties": [
+                "classification_distribution",
+                "cumulative_probabilities"
+              ],
+              "taxonomy": "freepik-native-levels",
+              "labels": [
+                "neutral",
+                "low",
+                "medium",
+                "high"
+              ],
+              "meaning": "Freepik 原生四类互斥概率；不是统一裸露事实或准确率。"
+            }
+          },
+          "qualifications": [
+            {
+              "code": "model_observation_limits",
+              "effect": "limits_interpretation",
+              "message": "模型候选，仅适用于所指输入；不保证模型分数校准、没有漏检、其他成员一致或允许远程处理。"
+            }
+          ]
+        },
+        {
+          "name": "content_sensitivity",
+          "status": "not_checked",
+          "basis": {
+            "code": "capability_disabled",
+            "selection_policy": "exclude_from_successor_result_including_cached_output",
+            "decision_status": "planning_default_not_independently_confirmed"
+          },
+          "provenance": {
+            "detector_identity": "notAI-tech/NudeNet/640m@sha256:04fe3d77980780c1f8297dc6d7f942fd5b3abe6942a188f742a85241e4f634eb;profile=nudenet640-native-cpu-fp32-v1",
+            "profile": "nudenet640-native-cpu-fp32-v1",
+            "input_evidence_ref": "evidence:synthetic-photo-highres",
+            "identity_basis": "configuration; no execution claimed"
+          }
+        }
+      ],
+      "expected": "Freepik 仍正常交付，缺少部位信息不变成无框结论。"
+    },
+    {
+      "id": "known_input_failure",
+      "kind": "observation_fragment",
+      "source_item_ref": "source-item:synthetic-photo",
+      "observations": [
+        {
+          "name": "content_sensitivity",
+          "status": "failed",
+          "basis": {
+            "code": "sensitivity_input_read_failed",
+            "message": "合成案例：适配器已知的单输入读取失败，未取得可靠分类值。"
+          },
+          "provenance": {
+            "detector_identity": "Freepik/nsfw_image_detector@15b85477e4fd2000db76ae9aae0f89a72f95e2e3;profile=freepik-ordinal448-mps-fp32-v1",
+            "profile": "freepik-ordinal448-mps-fp32-v1",
+            "model_id": "Freepik/nsfw_image_detector",
+            "revision": "15b85477e4fd2000db76ae9aae0f89a72f95e2e3",
+            "weights_sha256": "024a9d4818fae2656403bf626c9f8c9e7789c2da274749fbebb1060d8fdaa7ab",
+            "input_evidence_ref": "evidence:synthetic-photo-highres",
+            "observed_at": "2026-09-12T12:00:00+08:00",
+            "producer": "synthetic-handoff-example-only",
+            "actual_execution": {
+              "device": "mps",
+              "precision": "float32"
+            },
+            "definitions": {
+              "provided_properties": [
+                "classification_distribution",
+                "cumulative_probabilities"
+              ],
+              "taxonomy": "freepik-native-levels",
+              "labels": [
+                "neutral",
+                "low",
+                "medium",
+                "high"
+              ],
+              "meaning": "Freepik 原生四类互斥概率；不是统一裸露事实或准确率。"
+            }
+          },
+          "qualifications": [
+            {
+              "code": "sensitivity_input_unavailable",
+              "effect": "limits_interpretation",
+              "message": "该输入的 Freepik 分类未取得；其他模型的成功结果独立保留。"
+            }
+          ]
+        },
+        {
+          "name": "content_sensitivity",
+          "status": "available",
+          "value": {
+            "detector_identity": "notAI-tech/NudeNet/640m@sha256:04fe3d77980780c1f8297dc6d7f942fd5b3abe6942a188f742a85241e4f634eb;profile=nudenet640-native-cpu-fp32-v1",
+            "profile": "nudenet640-native-cpu-fp32-v1",
+            "region_detections": {
+              "taxonomy": "nudenet-3.4.2-native-body-labels",
+              "score_semantics": "model_detection_score",
+              "coordinate_system": "input_evidence_pixels_xyxy",
+              "input_dimensions": {
+                "width": 1000,
+                "height": 1500
+              },
+              "instances": [
+                {
+                  "label": "FEMALE_BREAST_EXPOSED",
+                  "score": 0.91,
+                  "box_xyxy": [
+                    100,
+                    300,
+                    220,
+                    430
+                  ]
+                },
+                {
+                  "label": "FEMALE_BREAST_EXPOSED",
+                  "score": 0.86,
+                  "box_xyxy": [
+                    260,
+                    305,
+                    380,
+                    435
+                  ]
+                },
+                {
+                  "label": "FACE_FEMALE",
+                  "score": 0.98,
+                  "box_xyxy": [
+                    170,
+                    60,
+                    320,
+                    250
+                  ]
+                }
+              ]
+            }
+          },
+          "basis": {
+            "postprocessing": {
+              "candidate_confidence": 0.2,
+              "nms_score_threshold": 0.25,
+              "nms_iou": 0.45,
+              "class_agnostic": true,
+              "coordinate_projection": "native integer xywh -> [x,y,x+w,y+h]; no second clipping or NMS"
+            }
+          },
+          "provenance": {
+            "detector_identity": "notAI-tech/NudeNet/640m@sha256:04fe3d77980780c1f8297dc6d7f942fd5b3abe6942a188f742a85241e4f634eb;profile=nudenet640-native-cpu-fp32-v1",
+            "profile": "nudenet640-native-cpu-fp32-v1",
+            "model_id": "notAI-tech/NudeNet/640m",
+            "revision": "nudenet-3.4.2/v3.4-weights",
+            "weights_sha256": "04fe3d77980780c1f8297dc6d7f942fd5b3abe6942a188f742a85241e4f634eb",
+            "input_evidence_ref": "evidence:synthetic-photo-highres",
+            "observed_at": "2026-09-12T12:00:00+08:00",
+            "producer": "synthetic-handoff-example-only",
+            "actual_execution": {
+              "device": "cpu",
+              "precision": "float32"
+            },
+            "definitions": {
+              "provided_properties": [
+                "region_detections"
+              ],
+              "taxonomy": "nudenet-3.4.2-native-body-labels",
+              "meaning": "NudeNet 原生部位检测分数；不是整图敏感概率。缺少某标签不证明现实中不存在。",
+              "labels": [
+                "FEMALE_GENITALIA_COVERED",
+                "FACE_FEMALE",
+                "BUTTOCKS_EXPOSED",
+                "FEMALE_BREAST_EXPOSED",
+                "FEMALE_GENITALIA_EXPOSED",
+                "MALE_BREAST_EXPOSED",
+                "ANUS_EXPOSED",
+                "FEET_EXPOSED",
+                "BELLY_COVERED",
+                "FEET_COVERED",
+                "ARMPITS_COVERED",
+                "ARMPITS_EXPOSED",
+                "FACE_MALE",
+                "BELLY_EXPOSED",
+                "MALE_GENITALIA_EXPOSED",
+                "ANUS_COVERED",
+                "FEMALE_BREAST_COVERED",
+                "BUTTOCKS_COVERED"
+              ]
+            }
+          },
+          "qualifications": [
+            {
+              "code": "model_observation_limits",
+              "effect": "limits_interpretation",
+              "message": "模型候选，仅适用于所指输入；不保证模型分数校准、没有漏检、其他成员一致或允许远程处理。"
+            }
+          ]
+        }
+      ],
+      "expected": "局部 failed 没有 value；640 成功结果保留；失败不冒充输入本身被证明损坏。"
+    },
+    {
+      "id": "unprepared_input",
+      "kind": "observation_fragment",
+      "source_item_ref": "source-item:synthetic-unprepared",
+      "observations": [
+        {
+          "name": "content_sensitivity",
+          "status": "not_checked",
+          "basis": {
+            "code": "evidence_not_prepared"
+          },
+          "provenance": {
+            "detector_identity": "Freepik/nsfw_image_detector@15b85477e4fd2000db76ae9aae0f89a72f95e2e3;profile=freepik-ordinal448-mps-fp32-v1",
+            "profile": "freepik-ordinal448-mps-fp32-v1",
+            "identity_basis": "configuration; input not prepared"
+          }
+        },
+        {
+          "name": "content_sensitivity",
+          "status": "not_checked",
+          "basis": {
+            "code": "evidence_not_prepared"
+          },
+          "provenance": {
+            "detector_identity": "notAI-tech/NudeNet/640m@sha256:04fe3d77980780c1f8297dc6d7f942fd5b3abe6942a188f742a85241e4f634eb;profile=nudenet640-native-cpu-fp32-v1",
+            "profile": "nudenet640-native-cpu-fp32-v1",
+            "identity_basis": "configuration; input not prepared"
+          }
+        }
+      ],
+      "expected": "无可用输入时不制造 input_evidence_ref；两个声明来自配置，不是模型运行。"
+    },
+    {
+      "id": "required_backend_missing",
+      "kind": "run_situation",
+      "selected_models": [
+        "freepik",
+        "nudenet640"
+      ],
+      "freepik_cache_valid": false,
+      "freepik_weights_present": false,
+      "run_state": "blocked",
+      "reason_code": "sensitivity_backend_unavailable",
+      "retained_successes": [
+        "nudenet640 for the prepared input"
+      ],
+      "published_result_ref": null,
+      "expected": "缺失固定后端的实际新工作未完成；没有发布本次完整 Result，也不下载或回退。"
+    },
+    {
+      "id": "valid_cache_without_model",
+      "kind": "run_situation",
+      "selected_models": [
+        "freepik"
+      ],
+      "freepik_cache_valid": true,
+      "freepik_weights_present": false,
+      "fresh_model_attempts": 0,
+      "reused_model_work": 1,
+      "retains_original_observation_time": true,
+      "expected": "经身份和输出完整性校验后复用已提交结果，不加载模型，不伪造新推理。"
+    },
+    {
+      "id": "model_disagreement",
+      "kind": "observation_fragment",
+      "source_item_ref": "source-item:synthetic-photo",
+      "observations": [
+        {
+          "name": "content_sensitivity",
+          "status": "available",
+          "value": {
+            "detector_identity": "Freepik/nsfw_image_detector@15b85477e4fd2000db76ae9aae0f89a72f95e2e3;profile=freepik-ordinal448-mps-fp32-v1",
+            "profile": "freepik-ordinal448-mps-fp32-v1",
+            "classification_distribution": {
+              "taxonomy": "freepik-native-levels",
+              "score_semantics": "categorical_probability",
+              "probabilities": {
+                "neutral": 0.94,
+                "low": 0.04,
+                "medium": 0.015,
+                "high": 0.005
+              }
+            },
+            "cumulative_probabilities": {
+              "at_least_low": 0.06,
+              "at_least_medium": 0.02,
+              "high": 0.005
+            }
+          },
+          "basis": {
+            "cumulative_probabilities": {
+              "operation": "sum",
+              "source_property": "classification_distribution",
+              "events": {
+                "at_least_low": [
+                  "low",
+                  "medium",
+                  "high"
+                ],
+                "at_least_medium": [
+                  "medium",
+                  "high"
+                ],
+                "high": [
+                  "high"
+                ]
+              }
+            }
+          },
+          "provenance": {
+            "detector_identity": "Freepik/nsfw_image_detector@15b85477e4fd2000db76ae9aae0f89a72f95e2e3;profile=freepik-ordinal448-mps-fp32-v1",
+            "profile": "freepik-ordinal448-mps-fp32-v1",
+            "model_id": "Freepik/nsfw_image_detector",
+            "revision": "15b85477e4fd2000db76ae9aae0f89a72f95e2e3",
+            "weights_sha256": "024a9d4818fae2656403bf626c9f8c9e7789c2da274749fbebb1060d8fdaa7ab",
+            "input_evidence_ref": "evidence:synthetic-photo-highres",
+            "observed_at": "2026-09-12T12:00:00+08:00",
+            "producer": "synthetic-handoff-example-only",
+            "actual_execution": {
+              "device": "mps",
+              "precision": "float32"
+            },
+            "definitions": {
+              "provided_properties": [
+                "classification_distribution",
+                "cumulative_probabilities"
+              ],
+              "taxonomy": "freepik-native-levels",
+              "labels": [
+                "neutral",
+                "low",
+                "medium",
+                "high"
+              ],
+              "meaning": "Freepik 原生四类互斥概率；不是统一裸露事实或准确率。"
+            }
+          },
+          "qualifications": [
+            {
+              "code": "model_observation_limits",
+              "effect": "limits_interpretation",
+              "message": "模型候选，仅适用于所指输入；不保证模型分数校准、没有漏检、其他成员一致或允许远程处理。"
+            }
+          ]
+        },
+        {
+          "name": "content_sensitivity",
+          "status": "available",
+          "value": {
+            "detector_identity": "notAI-tech/NudeNet/640m@sha256:04fe3d77980780c1f8297dc6d7f942fd5b3abe6942a188f742a85241e4f634eb;profile=nudenet640-native-cpu-fp32-v1",
+            "profile": "nudenet640-native-cpu-fp32-v1",
+            "region_detections": {
+              "taxonomy": "nudenet-3.4.2-native-body-labels",
+              "score_semantics": "model_detection_score",
+              "coordinate_system": "input_evidence_pixels_xyxy",
+              "input_dimensions": {
+                "width": 1000,
+                "height": 1500
+              },
+              "instances": [
+                {
+                  "label": "FEMALE_BREAST_EXPOSED",
+                  "score": 0.91,
+                  "box_xyxy": [
+                    100,
+                    300,
+                    220,
+                    430
+                  ]
+                },
+                {
+                  "label": "FEMALE_BREAST_EXPOSED",
+                  "score": 0.86,
+                  "box_xyxy": [
+                    260,
+                    305,
+                    380,
+                    435
+                  ]
+                },
+                {
+                  "label": "FACE_FEMALE",
+                  "score": 0.98,
+                  "box_xyxy": [
+                    170,
+                    60,
+                    320,
+                    250
+                  ]
+                }
+              ]
+            }
+          },
+          "basis": {
+            "postprocessing": {
+              "candidate_confidence": 0.2,
+              "nms_score_threshold": 0.25,
+              "nms_iou": 0.45,
+              "class_agnostic": true,
+              "coordinate_projection": "native integer xywh -> [x,y,x+w,y+h]; no second clipping or NMS"
+            }
+          },
+          "provenance": {
+            "detector_identity": "notAI-tech/NudeNet/640m@sha256:04fe3d77980780c1f8297dc6d7f942fd5b3abe6942a188f742a85241e4f634eb;profile=nudenet640-native-cpu-fp32-v1",
+            "profile": "nudenet640-native-cpu-fp32-v1",
+            "model_id": "notAI-tech/NudeNet/640m",
+            "revision": "nudenet-3.4.2/v3.4-weights",
+            "weights_sha256": "04fe3d77980780c1f8297dc6d7f942fd5b3abe6942a188f742a85241e4f634eb",
+            "input_evidence_ref": "evidence:synthetic-photo-highres",
+            "observed_at": "2026-09-12T12:00:00+08:00",
+            "producer": "synthetic-handoff-example-only",
+            "actual_execution": {
+              "device": "cpu",
+              "precision": "float32"
+            },
+            "definitions": {
+              "provided_properties": [
+                "region_detections"
+              ],
+              "taxonomy": "nudenet-3.4.2-native-body-labels",
+              "meaning": "NudeNet 原生部位检测分数；不是整图敏感概率。缺少某标签不证明现实中不存在。",
+              "labels": [
+                "FEMALE_GENITALIA_COVERED",
+                "FACE_FEMALE",
+                "BUTTOCKS_EXPOSED",
+                "FEMALE_BREAST_EXPOSED",
+                "FEMALE_GENITALIA_EXPOSED",
+                "MALE_BREAST_EXPOSED",
+                "ANUS_EXPOSED",
+                "FEET_EXPOSED",
+                "BELLY_COVERED",
+                "FEET_COVERED",
+                "ARMPITS_COVERED",
+                "ARMPITS_EXPOSED",
+                "FACE_MALE",
+                "BELLY_EXPOSED",
+                "MALE_GENITALIA_EXPOSED",
+                "ANUS_COVERED",
+                "FEMALE_BREAST_COVERED",
+                "BUTTOCKS_COVERED"
+              ]
+            }
+          },
+          "qualifications": [
+            {
+              "code": "model_observation_limits",
+              "effect": "limits_interpretation",
+              "message": "模型候选，仅适用于所指输入；不保证模型分数校准、没有漏检、其他成员一致或允许远程处理。"
+            }
+          ]
+        }
+      ],
+      "expected": "保留 neutral 高概率和部位框；不是运行失败，也不自动选出赢家或授权远程。"
+    },
+    {
+      "id": "video_frame_scope",
+      "kind": "observation_fragment",
+      "source_item_ref": "source-item:synthetic-video",
+      "input_context": {
+        "input_evidence_ref": "evidence:synthetic-video-frame",
+        "pixel_dimensions": {
+          "width": 1000,
+          "height": 1500
+        },
+        "sample_time_seconds": 12.6,
+        "decoded_time_seconds": 12.5
+      },
+      "observations": [
+        {
+          "name": "content_sensitivity",
+          "status": "available",
+          "value": {
+            "detector_identity": "notAI-tech/NudeNet/640m@sha256:04fe3d77980780c1f8297dc6d7f942fd5b3abe6942a188f742a85241e4f634eb;profile=nudenet640-native-cpu-fp32-v1",
+            "profile": "nudenet640-native-cpu-fp32-v1",
+            "region_detections": {
+              "taxonomy": "nudenet-3.4.2-native-body-labels",
+              "score_semantics": "model_detection_score",
+              "coordinate_system": "input_evidence_pixels_xyxy",
+              "input_dimensions": {
+                "width": 1000,
+                "height": 1500
+              },
+              "instances": [
+                {
+                  "label": "FEMALE_BREAST_EXPOSED",
+                  "score": 0.91,
+                  "box_xyxy": [
+                    100,
+                    300,
+                    220,
+                    430
+                  ]
+                },
+                {
+                  "label": "FEMALE_BREAST_EXPOSED",
+                  "score": 0.86,
+                  "box_xyxy": [
+                    260,
+                    305,
+                    380,
+                    435
+                  ]
+                },
+                {
+                  "label": "FACE_FEMALE",
+                  "score": 0.98,
+                  "box_xyxy": [
+                    170,
+                    60,
+                    320,
+                    250
+                  ]
+                }
+              ]
+            }
+          },
+          "basis": {
+            "postprocessing": {
+              "candidate_confidence": 0.2,
+              "nms_score_threshold": 0.25,
+              "nms_iou": 0.45,
+              "class_agnostic": true,
+              "coordinate_projection": "native integer xywh -> [x,y,x+w,y+h]; no second clipping or NMS"
+            }
+          },
+          "provenance": {
+            "detector_identity": "notAI-tech/NudeNet/640m@sha256:04fe3d77980780c1f8297dc6d7f942fd5b3abe6942a188f742a85241e4f634eb;profile=nudenet640-native-cpu-fp32-v1",
+            "profile": "nudenet640-native-cpu-fp32-v1",
+            "model_id": "notAI-tech/NudeNet/640m",
+            "revision": "nudenet-3.4.2/v3.4-weights",
+            "weights_sha256": "04fe3d77980780c1f8297dc6d7f942fd5b3abe6942a188f742a85241e4f634eb",
+            "input_evidence_ref": "evidence:synthetic-video-frame",
+            "observed_at": "2026-09-12T12:00:00+08:00",
+            "producer": "synthetic-handoff-example-only",
+            "actual_execution": {
+              "device": "cpu",
+              "precision": "float32"
+            },
+            "definitions": {
+              "provided_properties": [
+                "region_detections"
+              ],
+              "taxonomy": "nudenet-3.4.2-native-body-labels",
+              "meaning": "NudeNet 原生部位检测分数；不是整图敏感概率。缺少某标签不证明现实中不存在。",
+              "labels": [
+                "FEMALE_GENITALIA_COVERED",
+                "FACE_FEMALE",
+                "BUTTOCKS_EXPOSED",
+                "FEMALE_BREAST_EXPOSED",
+                "FEMALE_GENITALIA_EXPOSED",
+                "MALE_BREAST_EXPOSED",
+                "ANUS_EXPOSED",
+                "FEET_EXPOSED",
+                "BELLY_COVERED",
+                "FEET_COVERED",
+                "ARMPITS_COVERED",
+                "ARMPITS_EXPOSED",
+                "FACE_MALE",
+                "BELLY_EXPOSED",
+                "MALE_GENITALIA_EXPOSED",
+                "ANUS_COVERED",
+                "FEMALE_BREAST_COVERED",
+                "BUTTOCKS_COVERED"
+              ]
+            }
+          },
+          "qualifications": [
+            {
+              "code": "model_observation_limits",
+              "effect": "limits_interpretation",
+              "message": "模型候选，仅适用于所指输入；不保证模型分数校准、没有漏检、其他成员一致或允许远程处理。"
+            }
+          ]
+        }
+      ],
+      "expected": "只描述这个实际帧；请求位置与实际位置分开，不把分数推广到全视频。"
+    },
+    {
+      "id": "legacy_v1_read",
+      "kind": "observation_fragment",
+      "source_item_ref": "source-item:synthetic-photo",
+      "observations": [
+        {
+          "name": "content_sensitivity",
+          "status": "available",
+          "value": {
+            "detector_identity": "synthetic-legacy-falconsai",
+            "profile": "falconsai-nsfw-c90-thresholds-v1",
+            "labels": [
+              {
+                "label": "normal",
+                "score": 0.999,
+                "threshold": 99,
+                "mild_threshold": 33,
+                "sensitive": false,
+                "mild_sensitive": false
+              }
+            ]
+          },
+          "provenance": {
+            "detector_identity": "synthetic-legacy-falconsai",
+            "profile": "falconsai-nsfw-c90-thresholds-v1",
+            "input_evidence_ref": "evidence:synthetic-photo-highres",
+            "producer": "synthetic-historical-record"
+          },
+          "qualifications": [
+            {
+              "code": "historical_region_instances_unrecorded",
+              "effect": "limits_interpretation",
+              "message": "该历史格式未记录区域位置或实例数；不能补写空区域列表或恢复多个实例。"
+            }
+          ]
+        }
+      ],
+      "expected": "旧字段、99/33 和 false 原义保留；没有模型也可读，不补造区域属性。"
+    }
+  ],
+  "execution_note": "资源与耗时属于已有 Run/Work 执行诊断；上面的观测不是资源记录或新执行证明。全部数据为合成示例。"
+}
