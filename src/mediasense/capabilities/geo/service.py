@@ -25,6 +25,7 @@ from .model import (
     GeoRouteContext,
     GeoSubject,
     RetryPolicy,
+    raise_for_unresolved_request_failure,
 )
 from .protocol import GeoProvider, GeoRoutingPolicy, GeoProviderExecution
 from .routing import provider_operation
@@ -32,6 +33,21 @@ from .journal import GeoBudgetExhausted
 from ._execution_codec import component as decode_component, attempt as decode_attempt
 
 _EGRESS = ("coordinate", "datum", "locale")
+_PROVIDER_CONDITIONS = {
+    "authentication",
+    "tls_certificate",
+    "tls_failure",
+    "provider_quota",
+    "provider_configuration",
+    "provider_response_invalid",
+}
+
+
+def _raise_unexpected_provider_failure(attempts) -> None:
+    for attempt in attempts:
+        # The Tool has already checkpointed the attempt. These errors cannot
+        # prove a location-level outcome, including when read back after a stop.
+        raise_for_unresolved_request_failure(attempt.provider, attempt.error_code)
 
 
 class GeoCapability:
@@ -64,7 +80,7 @@ class GeoCapability:
     def fingerprint(self, request: GeoRequest) -> str:
         value = {
             "request": request.fingerprint(),
-            "execution_semantics": "component-recovery-v2",
+            "execution_semantics": "component-recovery-v3",
             "retry_policy": self.retry_policy.value(),
         }
         if self.routing_plan(request):
@@ -216,6 +232,9 @@ class GeoCapability:
             stop_code = None
             deadline = self._monotonic() + self.retry_policy.coordinate_deadline_seconds
             for provider_id in routes:
+                # An authorized suitable alternative gets its own bounded cycle.
+                # Request/billable ceilings and the deadline are still rechecked.
+                stop_code = None
                 for attempt_number in range(self.retry_policy.max_attempts):
                     provider = self.providers[provider_id]
                     missing = tuple(
@@ -274,6 +293,12 @@ class GeoCapability:
                             stop_code = "geo_authority_exhausted"
                             break
                         pieces.append(piece)
+                        _raise_unexpected_provider_failure(piece.attempts)
+                        if any(
+                            a.error_code in _PROVIDER_CONDITIONS for a in piece.attempts
+                        ):
+                            stop_code = "geo_provider_condition_unresolved"
+                            break
                         if any(
                             c.status is GeoComponentStatus.INDETERMINATE
                             for c in piece.components
@@ -352,14 +377,19 @@ class GeoCapability:
                         if component is None:
                             component = GeoComponentResult(
                                 operation,
-                                GeoComponentStatus.FAILED,
+                                GeoComponentStatus.NOT_REQUESTED
+                                if stop_code
+                                else GeoComponentStatus.FAILED,
                                 subject_refs,
                                 coordinate,
                                 qualifications=(
                                     {
-                                        "code": "provider_result_incomplete",
+                                        "code": stop_code
+                                        or "provider_result_incomplete",
                                         "message": (
-                                            "Provider omitted a required Geo component."
+                                            "Provider condition prevented this component request."
+                                            if stop_code
+                                            else "Provider omitted a required Geo component."
                                         ),
                                     },
                                 ),
@@ -390,6 +420,8 @@ class GeoCapability:
                         break
                     if all(operation in selected for operation in component_operations):
                         break
+                    if stop_code is not None:
+                        break
                     retryable = (indeterminate and repeat_unknown) or any(
                         attempt.error_code
                         in {
@@ -404,14 +436,7 @@ class GeoCapability:
                     )
                     if not retryable:
                         if any(
-                            a.error_code
-                            in {
-                                "authentication",
-                                "tls_certificate",
-                                "tls_failure",
-                                "provider_quota",
-                                "provider_response_invalid",
-                            }
+                            a.error_code in _PROVIDER_CONDITIONS
                             for a in execution_attempts
                         ):
                             stop_code = "geo_provider_condition_unresolved"

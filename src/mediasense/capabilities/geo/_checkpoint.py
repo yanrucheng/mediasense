@@ -15,7 +15,13 @@ from .model import (
     GeoProviderAttempt,
     GeoOperation,
 )
-from .service import _coordinate_groups, _component_operations, _overall_outcome
+from .service import (
+    _coordinate_groups,
+    _component_operations,
+    _overall_outcome,
+    _raise_unexpected_provider_failure,
+    _PROVIDER_CONDITIONS,
+)
 
 
 def reconcile(journal, entry, request):
@@ -127,17 +133,14 @@ def reconcile(journal, entry, request):
         "rate_limited",
         "dns_failure",
         "connection_refused",
-        "authentication",
-        "tls_certificate",
-        "tls_failure",
-        "provider_quota",
-        "provider_response_invalid",
-    }
+    } | _PROVIDER_CONDITIONS
     needs_attention = any(
         c.status is GeoComponentStatus.NOT_REQUESTED for c in components
     )
     for component in components:
         attempt = latest_attempts.get((component.coordinate, component.operation))
+        if component.status is GeoComponentStatus.FAILED and attempt is not None:
+            _raise_unexpected_provider_failure((attempt,))
         if (
             component.status is GeoComponentStatus.FAILED
             and attempt is not None

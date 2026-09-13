@@ -1,0 +1,15 @@
+{
+  "workspace": "/Users/chengyanru/Library/Application Support/MediaSense/datasets/dataset-b9f71c8826d891a534c33b7e",
+  "fixture": "/Users/chengyanru/Downloads/ai-album-hk-representative-v1",
+  "source": "/Users/chengyanru/Downloads/ai-album-hk-representative-v1/test-260831",
+  "session": "/Users/chengyanru/.codex/sessions/2026/09/12/rollout-2026-09-12T22-09-20-01a095f3-885b-7bb2-a2fd-353b2c870d62.jsonl",
+  "session_prefix_lines": 859,
+  "session_prefix_sha256": "599468d5b3551ed5d1ea13988fbb9e551e4af373974d9dbafe7bbe1df094d600",
+  "run_ref": "precheck-run:8b5ff902fda54e6292b14d4fa5f0de42",
+  "result_ref": "precheck-result:cbd18bc79b56b2b9d257529f878b7151c399b4815acebe74d1ba328e80a7ae57",
+  "work_ref": "plan-work:dbf8a544-c361-49bb-bcbd-615f0a6f2928",
+  "candidate_identity": "sha256:6841c4bd5228fe5f23e7aa1bf99378b0e8879fa877c29aa842cb9bd9747fd56a",
+  "preview": "outputs/preview-after-withdrawal.html",
+  "plan_start_line": 508,
+  "fixture_manifest_sha256": "f56caa6b1f1dd56e1b02850a5bfc17567d11f5617899db166eb8d670889d67fe"
+}

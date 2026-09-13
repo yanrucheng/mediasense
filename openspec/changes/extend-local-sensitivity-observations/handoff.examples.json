@@ -1,9 +1,9 @@
 {
   "purpose": "规划期人工可读的 Observation 片段和运行情形；不是当前 Tool 完整请求/返回或已接受 schema",
   "simulated": true,
-  "implementation_authorized": false,
-  "exact_handoff_review_status": "proposed_not_independently_accepted",
-  "disabled_policy_status": "planning_default_exclude_cached_output; user question remains unanswered",
+  "implementation_authorized": true,
+  "exact_handoff_review_status": "information_meaning_and_failure_boundaries_accepted; precise_exchange_values_delegated",
+  "disabled_policy_status": "accepted_exclude_cached_output_from_new_result",
   "shared_input_context": {
     "source_item_ref": "source-item:synthetic-photo",
     "input_evidence_ref": "evidence:synthetic-photo-highres",
@@ -81,7 +81,7 @@
               "precision": "float32"
             },
             "definitions": {
-              "provided_properties": [
+              "declared_properties": [
                 "classification_distribution",
                 "cumulative_probabilities"
               ],
@@ -174,7 +174,7 @@
               "precision": "float32"
             },
             "definitions": {
-              "provided_properties": [
+              "declared_properties": [
                 "region_detections"
               ],
               "taxonomy": "nudenet-3.4.2-native-body-labels",
@@ -257,7 +257,7 @@
               "precision": "float32"
             },
             "definitions": {
-              "provided_properties": [
+              "declared_properties": [
                 "region_detections"
               ],
               "taxonomy": "nudenet-3.4.2-native-body-labels",
@@ -386,7 +386,7 @@
               "precision": "float32"
             },
             "definitions": {
-              "provided_properties": [
+              "declared_properties": [
                 "region_detections"
               ],
               "taxonomy": "nudenet-3.4.2-native-body-labels",
@@ -487,7 +487,7 @@
               "precision": "float32"
             },
             "definitions": {
-              "provided_properties": [
+              "declared_properties": [
                 "classification_distribution",
                 "cumulative_probabilities"
               ],
@@ -553,7 +553,7 @@
               "precision": "float32"
             },
             "definitions": {
-              "provided_properties": [
+              "declared_properties": [
                 "classification_distribution",
                 "cumulative_probabilities"
               ],
@@ -646,7 +646,7 @@
               "precision": "float32"
             },
             "definitions": {
-              "provided_properties": [
+              "declared_properties": [
                 "region_detections"
               ],
               "taxonomy": "nudenet-3.4.2-native-body-labels",
@@ -807,7 +807,7 @@
               "precision": "float32"
             },
             "definitions": {
-              "provided_properties": [
+              "declared_properties": [
                 "classification_distribution",
                 "cumulative_probabilities"
               ],
@@ -900,7 +900,7 @@
               "precision": "float32"
             },
             "definitions": {
-              "provided_properties": [
+              "declared_properties": [
                 "region_detections"
               ],
               "taxonomy": "nudenet-3.4.2-native-body-labels",
@@ -1023,7 +1023,7 @@
               "precision": "float32"
             },
             "definitions": {
-              "provided_properties": [
+              "declared_properties": [
                 "region_detections"
               ],
               "taxonomy": "nudenet-3.4.2-native-body-labels",
@@ -1080,6 +1080,14 @@
                 "mild_threshold": 33,
                 "sensitive": false,
                 "mild_sensitive": false
+              },
+              {
+                "label": "nsfw",
+                "score": 0.001,
+                "threshold": 0.02,
+                "mild_threshold": 0.006666666666666667,
+                "sensitive": false,
+                "mild_sensitive": false
               }
             ]
           },
@@ -1088,12 +1096,47 @@
             "profile": "falconsai-nsfw-c90-thresholds-v1",
             "input_evidence_ref": "evidence:synthetic-photo-highres",
             "producer": "synthetic-historical-record"
+          }
+        },
+        {
+          "name": "content_sensitivity",
+          "status": "available",
+          "value": {
+            "detector_identity": "synthetic-legacy-nudenet",
+            "profile": "nudenet-body-exposure-c90-thresholds-v1",
+            "labels": [
+              {
+                "label": "FEMALE_BREAST_EXPOSED",
+                "score": 0.91,
+                "threshold": 0.5,
+                "mild_threshold": 0.16666666666666666,
+                "sensitive": true,
+                "mild_sensitive": true
+              },
+              {
+                "label": "FACE_FEMALE",
+                "score": 0.98,
+                "threshold": 99,
+                "mild_threshold": 33,
+                "sensitive": false,
+                "mild_sensitive": false
+              }
+            ]
+          },
+          "basis": {
+            "summary": "历史同名标签最大分摘要；标签条目数量不证明实例数。"
+          },
+          "provenance": {
+            "detector_identity": "synthetic-legacy-nudenet",
+            "profile": "nudenet-body-exposure-c90-thresholds-v1",
+            "input_evidence_ref": "evidence:synthetic-photo-highres",
+            "producer": "synthetic-historical-record"
           },
           "qualifications": [
             {
               "code": "historical_region_instances_unrecorded",
               "effect": "limits_interpretation",
-              "message": "该历史格式未记录区域位置或实例数；不能补写空区域列表或恢复多个实例。"
+              "message": "历史 NudeNet 结果没有保留框和实例数；不能恢复完整区域或补为空框。"
             }
           ]
         }

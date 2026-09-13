@@ -1,0 +1,93 @@
+{
+  "recorded_date": "2026-09-13",
+  "base_commit": "615c3359941927515f0c0a8738a3f08122bcad46",
+  "scope": "source repairs and isolated installation only",
+  "public_contract_changed": false,
+  "daily_installation_changed": false,
+  "real_provider_calls": 0,
+  "business_result_rewritten": false,
+  "wheel": {
+    "file_name": "mediasense-0.10.2-py3-none-any.whl",
+    "sha256": "55db47084afc8c75b3204d358ff0f771f7d8b2a337695efc15573139bdf4c55b",
+    "path": "/tmp/mediasense-run-acceptance-repairs/release-final/wheel/mediasense-0.10.2-py3-none-any.whl",
+    "scope": "HEAD plus this task only; concurrent unrelated edits excluded"
+  },
+  "checks": {
+    "source": {
+      "passed": 158,
+      "wall_seconds": 73.61
+    },
+    "installed": {
+      "passed": 158,
+      "wall_seconds": 71.54,
+      "source_injection": false
+    },
+    "pytest_files": [
+      "tests/test_google_nearby_requests.py",
+      "tests/test_geo_tool.py",
+      "tests/test_geo_recovery.py",
+      "tests/test_geo_process_recovery.py",
+      "tests/test_geo_capability_model.py",
+      "tests/test_geocode.py",
+      "tests/test_gpx.py",
+      "tests/test_gpx_preparation.py",
+      "tests/test_compression.py",
+      "tests/test_compression_gpx.py",
+      "tests/test_source_validity.py",
+      "tests/test_resources.py",
+      "tests/test_precheck_orchestration.py"
+    ],
+    "source_command": "rtk proxy .venv/bin/python -m pytest -q tests/test_google_nearby_requests.py tests/test_geo_tool.py tests/test_geo_recovery.py tests/test_geo_process_recovery.py tests/test_geo_capability_model.py tests/test_geocode.py tests/test_gpx.py tests/test_gpx_preparation.py tests/test_compression.py tests/test_compression_gpx.py tests/test_source_validity.py tests/test_resources.py tests/test_precheck_orchestration.py --tb=short",
+    "installed_command": "rtk proxy env -u PYTHONPATH /tmp/mediasense-run-acceptance-repairs/release/venv/bin/python -m pytest -o pythonpath= -q tests/test_google_nearby_requests.py tests/test_geo_tool.py tests/test_geo_recovery.py tests/test_geo_process_recovery.py tests/test_geo_capability_model.py tests/test_geocode.py tests/test_gpx.py tests/test_gpx_preparation.py tests/test_compression.py tests/test_compression_gpx.py tests/test_source_validity.py tests/test_resources.py tests/test_precheck_orchestration.py --tb=short",
+    "installed_cwd": "/tmp/mediasense-run-acceptance-repairs/release-final/source",
+    "distribution_smoke": "passed: artifact consistency, isolated CLI and MCP; offline core dependencies",
+    "ruff": "passed",
+    "git_diff_check": "passed"
+  },
+  "isolation_root": "/tmp/mediasense-run-acceptance-repairs",
+  "reproduction": {
+    "gpx": "tests/run_gpx_cost_check.py --database <retained-work.sqlite3> --run-id 5ad2ccf2528d4783a1b58c7100d370c7 --output <new-isolated-dir> [--baseline-module <gpx.py from base commit>]",
+    "compression": "tests/run_compression_gpx_check.py --database <retained-work.sqlite3> --run-id 5ad2ccf2528d4783a1b58c7100d370c7 --output <new-isolated-dir>"
+  },
+  "pre_fix_production_path_failures": 5,
+  "offline_vectors": {
+    "success": {
+      "coordinates": 3,
+      "requests": 6,
+      "google_max_result_count": 10,
+      "google_radius_meters": 500,
+      "billable_units": null
+    },
+    "request_defect_or_unclassified_rejection": {
+      "requests_before_error": 2,
+      "checkpoints_preserved": true,
+      "replay_does_not_publish_partial": true
+    },
+    "external_precondition": {
+      "requests_if_reverse_fails": 1,
+      "requests_if_nearby_fails": 2,
+      "outcome": "blocked",
+      "later_components": "not_requested"
+    },
+    "explicit_recovery": {
+      "cumulative_requests": 7,
+      "billable_units": null,
+      "successful_address_retained": true
+    },
+    "authorized_alternative_retry": {
+      "cumulative_requests": 4,
+      "alternative_attempts": 2
+    }
+  },
+  "historical_cause": "out-of-range path proven; missing historical response body prevents attribution of every HTTP 400",
+  "source_files": {
+    "src/mediasense/geo.py": "ebb484b1b134086347486b1f9f37e5e2c2d1a7ec31b0eafa372292e7210b203d",
+    "src/mediasense/capabilities/geo/model.py": "ea966ba8ed4f449be3f0c8c686f29ef9d5b0b0be341e72584cf6ae3e421434e0",
+    "src/mediasense/capabilities/geo/service.py": "d1eb69c0ca4db7fd94ee7167055626279ce4a97972f231eb817265de5aae7cba",
+    "src/mediasense/capabilities/geo/_checkpoint.py": "63b4d87b8314509a335d59987701c340ba31964797c4fd3082461f3199fc152c",
+    "src/mediasense/precheck/geocode.py": "4d461bdb0358ab7ba131a09d1f54d96619764521fe21145ee98eb785aa64e191",
+    "tests/test_geocode.py": "309112263325233ba7120d2810343461abefc83ca349c3db48a75bb3ac5c8d93",
+    "tests/test_google_nearby_requests.py": "262999d08d28647262643a61a231cbe4d1da5b9c74e2fb424b22bce74991c4a3"
+  },
+  "original_result_integrity_verified_after_tests": true
+}

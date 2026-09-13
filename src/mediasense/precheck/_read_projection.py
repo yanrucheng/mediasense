@@ -349,6 +349,19 @@ def project_retained_observations(graph, *, historical):
                 else:
                     item["provenance"] = provenance
             if (
+                item["name"] == "content_sensitivity"
+                and isinstance(value, dict)
+                and "labels" in value
+            ):
+                item["qualifications"] = list(item.get("qualifications", []))
+                item["qualifications"].append(
+                    {
+                        "code": "historical_region_instances_unrecorded",
+                        "effect": "limits_interpretation",
+                        "message": "Historical label summaries do not record region locations or instance counts; these remain unknown.",
+                    }
+                )
+            if (
                 historical
                 and item["status"] in {"not_checked", "not_applicable"}
                 and "basis" not in item

@@ -4,7 +4,7 @@ title: "MediaSense PreCheck Read Contract"
 type: spec
 status: active
 created: 2026-08-26
-updated: 2026-09-10
+updated: 2026-09-13
 timezone: "Asia/Shanghai"
 parent: "index-contract"
 depends-on:
@@ -19,6 +19,8 @@ tags: ["mediasense", "precheck", "contract", "evidence"]
 **第一里程碑已完成；第二里程碑及 metadata、历史检测和近上限中间页续读补修于 2026-09-10 通过用户验收，以 0.9.0 发布。** 本目录是 `mediasense.precheck.read` 的唯一当前合约位置。验收修订已闭合阈值表达、故障项续页和语义检查；已确认的概念模型保持不变。旧日期目录及已安装版本的副本仅说明历史行为，不与本合约并列有效。
 
 [Tool Schema](precheck-read.tool.json)定义唯一交换值形状；[属性与交付义务](precheck-attributes.md)定义本期属性含义与准备要求；[完整合成用例](examples.json)覆盖正常、异常和多来源读取。下方 JSONC 注释供人阅读，不进入返回，不是第二套协议。
+
+2026-09-13 已采用本地敏感性具名值扩展，保持 Observation、Source Item/Evidence 归属及分页结构。准确值约束见[属性义务](precheck-attributes.md#敏感性具名值2026-09-12-授权采用)；工程与隔离安装证据见[实施验收](../../../../openspec/changes/extend-local-sensitivity-observations/acceptance.md)。历史 V1 只读保留，本轮不授权日常部署。
 
 ## 一次读取回答什么
 
@@ -374,3 +376,16 @@ geo_summary 按纬度、经度、datum 稳定排序，复用 page。gps/gpx/comb
 本目录的 schema、JSONC 和 examples 必须互相符合。[合约检查](../../../../tests/test_precheck_read_contract.py)同时验证结构、必需关系摘要、主体内属性唯一性、已有 V1 profile 的实际分类值和多页连续结果；删除摘要、重复属性、吞掉故障项或重复游标都必须被拒绝。纯分类函数比较不运行检测器、模型或 PreCheck，也不能证明生产装配已接通。
 
 按用户确认的收尾条件，Observation 状态／值检查已限定在正式 observations 容器内，合法嵌套扩展正例与非法 Observation 反例均通过检查，第一里程碑完成；本次收尾未改变主体契约。第二里程碑从安装配置→生产装配→公开入口→结果交付验证后才可称能力 implemented。代码、发布快照的实际证据与仍未认证事项见[迁移台账](../../../eval/eval-260823-1918-ai-album-migration-baseline/eval-260823-1918B-capability-ledger.md)。
+
+### 本地模型执行读取（敏感性验收补修）
+
+`review include=["local_execution"]` 返回封存的本地模型预算、汇总及批次明细，使用已有
+execution_page（默认50/最大200）；本次不得同时请求 execution_boundary。
+证据 page 与执行 execution_page 独立，仍遵守524288字节、完整项与显式超限规则。
+字段含义沿 [Run 执行诊断](../precheck-run/index.md#本地模型执行诊断敏感性验收补修)。
+Read 不加载模型、不查私有 Work；旧 Result 未封存执行数据时 status=not_recorded、预算null、
+models/batches为空，绝不假造零成本或从可变数据库补写历史。
+
+封存和 Read 共用敏感性输入关联校验：available/failed 观测必须属于真实 Source Item，
+input_evidence_ref 在同一 Result 且沿实际 derived_from 链回到该源；区域尺寸与实际输入
+Evidence 的尺寸证明一致。represents 不是来源证明，单条 Observation 合法不能代替此检查。

@@ -37,10 +37,20 @@ def test_schemas_compile_and_match_packaged_authority():
     # recovery adds disclosure fields in the current contract, not the old packet.
     for kind, root in (("run", RUN),):
         tool = load(root / f"precheck-{kind}.tool.json")
-        assert (
-            tool["inputSchema"]
-            == load(PACKET / f"contracts/precheck-{kind}.tool.json")["inputSchema"]
-        )
+        historical = load(PACKET / f"contracts/precheck-{kind}.tool.json")[
+            "inputSchema"
+        ]
+
+        def controls(schema):
+            return [
+                branch
+                for branch in schema["oneOf"]
+                if branch["properties"]["action"]["const"] != "status"
+            ]
+
+        assert controls(tool["inputSchema"]) == controls(historical)
+        # status adds an explicit local-execution view; old transcripts below
+        # must remain valid without rewriting the historical packet.
         assert tool == load(
             ROOT / f"src/mediasense/_resources/contracts/precheck-{kind}.tool.json"
         )

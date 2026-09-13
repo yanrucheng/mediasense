@@ -169,6 +169,24 @@ class AdaptiveCompressionProducer:
                     str(profile.representative_comparison_budget),
                 ),
             ]
+            if any(
+                item.gpx_work_id is not None
+                and _gps_value(attached.get(item.metadata_work_id), "gps_coordinates")
+                is None
+                and _gps_value(attached[item.gpx_work_id], "gpx_coordinates")
+                is not None
+                for item in group_inputs
+            ):
+                # The corrected consumer changes evidence/qualifications even
+                # when group membership stays identical. Do not reuse that old
+                # group Work; unrelated groups and upstream Work remain valid.
+                dependencies.append(
+                    WorkDependency(
+                        DependencyKind.PARAMETER,
+                        "coordinate_evidence_policy",
+                        "gps-then-gpx-v1",
+                    )
+                )
             if {path for item in group_inputs for path in item.member_paths} != set(
                 group.members
             ):
@@ -259,7 +277,9 @@ class AdaptiveCompressionProducer:
             raise ValueError("embedding Work does not depend on the visual input")
 
         capture_time = _capture_time(metadata)
-        gps = _gps_value(metadata) or _gps_value(gpx)
+        gps = _gps_value(metadata, "gps_coordinates") or _gps_value(
+            gpx, "gpx_coordinates"
+        )
         vector = None if embedding is None else self._embedding_value(embedding)
         return (
             CompressionPoint(
@@ -363,8 +383,8 @@ def _capture_time(record: WorkRecord | None) -> datetime | None:
     )
 
 
-def _gps_value(record: WorkRecord | None) -> tuple[float, float] | None:
-    value = _observation_value(record, "gps_coordinates")
+def _gps_value(record: WorkRecord | None, name: str) -> tuple[float, float] | None:
+    value = _observation_value(record, name)
     if not isinstance(value, Mapping):
         return None
     latitude = value.get("latitude")

@@ -405,9 +405,9 @@ model is downloaded during a Run.
 The `embeddings` extra installs local encoder dependencies in the same environment
 as the MCP Host. New enabled profiles recommend DINOv3 ViT-B/16 at **384px**.
 Existing explicit ChineseCLIP profiles keep their model selection. Prepare the
-pinned local assets using the DINOv3 procedure below before enabling it. The `local-models` extra also installs sensitivity dependencies and
-NudeNet's bundled weights; the pinned NSFW model and processor must already exist
-in the local model cache. Model configuration remains disabled by default. Extras,
+pinned local assets using the DINOv3 procedure below before enabling it. The `local-models` extra installs the fixed sensitivity dependencies below.
+Its transitive NudeNet package contains a 320 weight, which is not the selected
+640 model. Both selected assets must be prepared explicitly at local paths. Model configuration remains disabled by default. Extras,
 weights, configuration, and actual execution each prove different prerequisites.
 There is no automatic model download or remote fallback.
 
@@ -489,32 +489,133 @@ into that release.
 | --- | --- | --- |
 | `metadata` | `assumed_timezone`, `output_timezone` | Both default to Asia/Shanghai; distinguish offset-less camera time from output presentation. Dataset overrides explicitly supplied keys. |
 | `providers` | `amap_api_key_env`, `google_maps_api_key_env` | Names of credential environment variables; defaults below |
-| `sensitivity` | `enabled`, `device`, `nsfw_model_id`, `nsfw_revision` | Disabled unless `enabled=true`; enabled profiles require a 40-character immutable revision; defaults: CPU and Falconsai/nsfw_image_detection |
+| `sensitivity` | `enabled`, `models.freepik`, `models.nudenet640` | Disabled by default; independent fixed profiles and local paths, as below |
 | `embedding` | `enabled`, `model_id`, `revision`, `dimensions`, `device`, `batch_size`, `image_size`, `model_path` | Absent/empty table disables embedding. `enabled=true` without a model selects the fixed DINOv3 384 Core ML profile below. Explicit ChineseCLIP profiles retain their pinned revision/dimensions, CPU and batch 4 defaults. |
 | `geo_network` | `proxy_url`, `ca_bundle`, `google_timeout_seconds`, `amap_timeout_seconds`, `minimum_interval_seconds` | Optional network profile; see [Geo network configuration](#geo-network-configuration) |
 
-Example with both sensitivity detectors explicitly enabled, using an existing
-local NSFW revision (replace the placeholder with its exact 40-character commit):
+### Freepik and NudeNet 640 local sensitivity
+
+Only these selected recipes are released. Freepik requires Apple Silicon MPS,
+FP32 without autocast, official Timm 448px preprocessing, batch 4 (tail batches
+use their actual length). NudeNet 640 uses CPU FP32, batch 1 and the unmodified
+NudeNet 3.4.2 native color, padding and class-agnostic NMS behavior. The adapter
+creates an explicit CPU ORT session because the library constructor ignores its
+providers argument. Both routes enforce two CPU intra-op threads and one inter-op
+thread. No device, model, remote service or automatic download fallback exists.
+The supported dependency stack uses Python 3.11–3.13; actual numerical validation
+and platform evidence are recorded in the sensitivity change's acceptance report.
+
+`local-models` pins Torch 2.7.0, Torchvision 0.22.0, Transformers 4.57.6, Timm
+1.0.20, NumPy 2.2.6, Pillow 12.3.0, safetensors 0.8.0, huggingface-hub 0.36.2,
+NudeNet 3.4.2, onnxruntime 1.22.1 and opencv-python-headless 4.11.0.86.
+Retain compatible existing dependencies using the workflow constraints. This
+stack matches the existing DINOv3 Torch/NumPy/Pillow pins; adding local-models
+does not select or reconfigure embedding. Other platforms are not certified by
+the macOS acceptance, and a package install alone does not establish MPS support.
+
+Prepare retained copies of already verified assets outside source media,
+Datasets, Downloads and evaluation code. Choose an absolute machine-local models
+directory; copy exactly the following files and verify SHA-256 before enabling:
+
+| Model / required file | Content SHA-256 |
+| --- | --- |
+| Freepik snapshot `config.json` | `39f53e86cc4868e0e11396b523c906f376621f54c1025ffc9ee2ee840542a41b` |
+| Freepik snapshot `model.safetensors` | `024a9d4818fae2656403bf626c9f8c9e7789c2da274749fbebb1060d8fdaa7ab` |
+| NudeNet `640m.onnx` | `04fe3d77980780c1f8297dc6d7f942fd5b3abe6942a188f742a85241e4f634eb` |
+
+Freepik revision is `15b85477e4fd2000db76ae9aae0f89a72f95e2e3`.
+The 640 asset was retained from SimonJoz/nudenet mirror revision
+`2b20805bd4ab2a9edbbb99fa862f68411c00286a`; official bytes were not independently
+obtained. Preserve this source limitation. Neither a filename nor the bundled
+320 weight substitutes for the pinned content. Production imports no evaluation
+scripts. Missing assets remain an unprepared prerequisite.
 
 ```toml
 [sensitivity]
 enabled = true
+[sensitivity.models.freepik]
+enabled = true
+profile = "freepik-ordinal448-mps-fp32-v1"
+model_path = "/absolute/local-models/freepik-snapshot"
+device = "mps"
+precision = "float32"
+batch_size = 4
+[sensitivity.models.nudenet640]
+enabled = true
+profile = "nudenet640-native-cpu-fp32-v1"
+model_path = "/absolute/local-models/640m.onnx"
 device = "cpu"
-nsfw_model_id = "Falconsai/nsfw_image_detection"
-nsfw_revision = "<local-40-character-commit>"
+precision = "float32"
+batch_size = 1
 ```
 
-Each selected high-resolution still and sampled video frame receives a separate
-outcome from each detector. NudeNet currently uses CPU or a locally available
-CUDA ONNX provider; an unsupported device (including MPS for NudeNet) is reported
-as backend-unavailable. The NSFW adapter supports the configured local PyTorch
-device. Scores and effective thresholds remain evidence; they do not authorize
-remote processing. Run records backend-unavailable as blocked and can resume
-when the pinned local prerequisites become available. Changing an already
-observed model, profile or backend identity requires a new Run.
+Only enabled and model_path are needed per selected model; the other values
+resolve to the shown fixed recipe and conflicting values are rejected. Omitted
+models are disabled. The total enabled flag defaults to false. The Dataset table
+replaces the user table entirely. Unknown names/keys and invalid types fail new
+execution explicitly. Old `device/nsfw_model_id/nsfw_revision` tables require
+explicit migration; no automatic Falconsai/320 replacement or config rewrite.
 
-Ordinary and high-resolution stills are prepared together for selected sources
-even when both model capabilities are off; valid profiles reuse independently.
+Dataset Open reports the effective selection and config errors without importing
+models. `doctor --json` reports each selected model's dependency/file prerequisites
+and `execution=not_checked`; it performs no inference or download. A prepared
+result still requires a bounded installed Run/Read check. Fresh work verifies
+weights, runtime and actual device at loading. A missing prerequisite blocks with
+`sensitivity_backend_unavailable`; restore the exact asset/backend and resume.
+Resume retains the original selection and paths even after configuration edits.
+Model/profile changes require a successor Run.
+
+The admission estimate is 7 GiB for Freepik and 512 MiB for 640, each including
+model residency and a batch; these are conservative estimates, not measured
+peaks or additive whole-process use. The host-aware budget may grow to the
+selected model demand while retaining 4 GiB of available-memory headroom,
+and remains capped by any explicit budget. Other profiles retain the existing
+4 GiB / half-available-memory default.
+Insufficient capacity fails admission explicitly; it never shrinks the claim or
+changes device. Models are released before their reservation ends. Cache-only
+reuse needs neither that model memory reservation nor optional libraries/weights.
+
+Execution facts have public read paths: `precheck.run` status with
+`include=["diagnostics"]` reports the frozen resource budget and per-model summary;
+`include=["local_execution"]` adds batches through the existing `page` selector.
+`precheck.read` review with `include=["local_execution"]` reads the immutable
+snapshot through `execution_page`. The two paged Run detail kinds are separate;
+Read selects one of local_execution and execution_boundary per call. A shared
+batch is counted once across its Work rows. Requested and actual inference input
+counts, processing/load wall times and current versus reused scope stay distinct.
+A null load time does not prove loading was separable from an adapter call.
+Historical Results without that snapshot explicitly report not_recorded; Read
+never joins mutable Work to manufacture missing execution history.
+
+Unexpected library load exceptions surface as execution failures. Only positively
+identified missing files/dependencies, forbidden fallback configuration or an
+unavailable requested device/provider produce a recoverable backend prerequisite.
+
+Each actual prepared high-resolution still or sampled video frame receives its
+own Source Item Observation with exact input Evidence. Freepik retains all four
+native probabilities and cumulative events; 640 retains every native instance,
+including repeated labels and face/covered labels, in oriented input pixel xyxy.
+No region is inferred from an absent property. A successful no-box detection is
+available with an empty list. Model disagreement and failures remain attributed
+evidence for Plan; no result authorizes remote processing.
+
+Disabling a model excludes its cached outputs from **new** Results and records
+not_checked. Existing Results and caches are retained; re-enabling can reuse them.
+Reading retained V1 scores and thresholds (including 99/33) requires no model
+packages or weights. Historical missing positions/instances/input bindings remain
+unknown and sealed bytes never change.
+
+PreCheck private format 18 and Run snapshot 8 guard this output/configuration
+change. Opening a supported format-17 workspace upgrades only the store version
+marker; no Work outputs or Results are transformed. Older writers reject the
+new version. Before an authorized daily upgrade, finish/cancel old active Runs
+with the old build or verify that the new build can retain their exact recipe;
+legacy sensitivity Runs cannot be converted into Freepik/640 while resuming.
+Use a consistent pre-upgrade Dataset backup and retained wheel for rollback;
+do not downgrade a version marker on state that has received new writes.
+
+Ordinary and high-resolution stills remain prepared together for selected sources
+even when models are disabled; valid preparation profiles reuse independently.
 
 ### DINOv3 384 local embedding
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from test_video import FakeVideoTools
+from test_sensitivity import FakeDetector as FakeSensitivityDetector, PROFILE as SENSITIVITY_PROFILE
 
 import json
 from dataclasses import dataclass, field, replace
@@ -34,14 +35,11 @@ from mediasense.geo import (
 )
 from mediasense.precheck import (
     AccountingStore,
-    Detection,
     EmbeddingProfile,
     PrecheckReadTool,
     PrecheckConfirmationContext,
     PrecheckRunTool,
     ResultStore,
-    SensitivityProfile,
-    SensitivityThreshold,
 )
 from mediasense.precheck._orchestrator import (
     PrecheckExecutionConfig,
@@ -126,20 +124,6 @@ class FakeEncoder:
         return tuple(self.encode_image(path) for path in image_paths)
 
 
-class FakeSensitivityDetector:
-    identity = "fake-local-sensitivity@sha256:one"
-
-    def __init__(self) -> None:
-        self.batch_calls: list[tuple[Path, ...]] = []
-
-    def detect(self, _image_path: Path) -> tuple[Detection, ...]:
-        return (Detection("ordinary", 0.1),)
-
-    def detect_many(
-        self, image_paths: tuple[Path, ...]
-    ) -> tuple[tuple[Detection, ...], ...]:
-        self.batch_calls.append(image_paths)
-        return tuple(self.detect(path) for path in image_paths)
 
 
 @dataclass
@@ -348,13 +332,7 @@ def test_start_then_internal_worker_drives_mixed_source_to_readable_result(
             compression_target=3,
             model_batch_size=2,
             embedding_profile=EmbeddingProfile(name="test-vector-v1", dimensions=4),
-            sensitivity_profiles=(SensitivityProfile(
-                name="test-sensitivity-v1",
-                thresholds=(
-                    SensitivityThreshold("sensitive", 0.8),
-                    SensitivityThreshold("ordinary", 99.0),
-                ),
-            ),),
+            sensitivity_profiles=(SENSITIVITY_PROFILE,),
         ),
         execution_dependencies=PrecheckExecutionDependencies(
             metadata_runner=metadata,
@@ -442,7 +420,7 @@ def test_start_then_internal_worker_drives_mixed_source_to_readable_result(
     assert encoder.batch_calls
     assert detector.batch_calls
     assert all(len(batch) <= 2 for batch in encoder.batch_calls)
-    assert all(len(batch) <= 2 for batch in detector.batch_calls)
+    assert all(len(batch) <= SENSITIVITY_PROFILE.batch_size for batch in detector.batch_calls)
 
 
 @pytest.mark.parametrize(

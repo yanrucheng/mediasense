@@ -94,6 +94,7 @@ def build_minimal_result(
     reverse_geocode_work_by_source: Mapping[Path | str, str] | None = None,
     sensitivity_work_ids: Iterable[str] = (),
     sensitivity_enabled: bool = False,
+    sensitivity_configuration: dict | None = None,
     video_probe_work_ids: Iterable[str] = (),
     video_frame_work_ids: Iterable[str] = (),
     video_key_frame_work_ids: Iterable[str] = (),
@@ -432,7 +433,10 @@ def build_minimal_result(
                 )
             )
         for sensitivity_work in sensitivity_works:
-            if WorkStatus(sensitivity_work["status"]) is WorkStatus.SUCCEEDED:
+            if WorkStatus(sensitivity_work["status"]) is WorkStatus.SUCCEEDED or (
+                WorkStatus(sensitivity_work["status"]) is WorkStatus.TERMINAL_FAILURE
+                and sensitivity_work["output_json"] is not None
+            ):
                 sensitivity_output = json.loads(sensitivity_work["output_json"])
                 for observation in _metadata_result_observations(
                     sensitivity_output, run_id
@@ -462,7 +466,36 @@ def build_minimal_result(
                         ],
                     }
                 )
-        if scope == "source_media" and not sensitivity_works:
+        if scope == "source_media" and sensitivity_configuration is not None:
+            from ._sensitivity_profiles import PROFILES
+
+            observed_models = {
+                o.get("provenance", {}).get("detector_identity")
+                for o in observations
+                if o.get("name") == "content_sensitivity"
+            }
+            for model_name, settings in sensitivity_configuration["models"].items():
+                profile = PROFILES[model_name]
+                if settings["enabled"] and profile.identity in observed_models:
+                    continue
+                observations.append(
+                    {
+                        "name": "content_sensitivity",
+                        "status": "not_checked",
+                        "basis": {
+                            "code": "evidence_not_prepared"
+                            if settings["enabled"]
+                            else "capability_disabled"
+                        },
+                        "provenance": {
+                            "detector_identity": profile.identity,
+                            "profile": profile.name,
+                            "identity_basis": "configuration",
+                            "definitions": profile.definitions,
+                        },
+                    }
+                )
+        elif scope == "source_media" and not sensitivity_works:
             observations.append(
                 {
                     "name": "content_sensitivity",

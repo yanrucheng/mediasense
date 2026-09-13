@@ -65,8 +65,13 @@ Invalid manufacturer YAML is reported in this summary as
 `execution: "not_checked"`, without claiming an effective knowledge identity or
 rule set. It does not block Dataset access or a Run's stored knowledge snapshot.
 New PreCheck work still validates the current files before it starts; a resume
-without a stored execution snapshot has the same requirement. Other invalid
-runtime settings retain their existing configuration errors.
+without a stored execution snapshot has the same requirement. `configuration.local_sensitivity` likewise reports the complete effective
+per-model `configuration` (or null), `error` (message or null),
+`execution=not_checked` and `model_downloads=false`. Invalid or legacy sensitivity
+configuration remains visible without preventing historical Read; a new start
+validates it and requires explicit migration. The [Run contract](../precheck-run/index.md)
+owns the accepted configuration keys and frozen selection. Other invalid runtime
+settings retain their existing configuration errors.
 
 
 The Dataset manifest binds the source locator to observed source and volume

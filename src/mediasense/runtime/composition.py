@@ -129,34 +129,22 @@ class DatasetRuntime:
             )
         )
         from dataclasses import replace
-        if config.manufacturer_knowledge is not None:
-            execution_config = replace(execution_config, metadata_profile=config.metadata_profile())
-        from mediasense.precheck.sensitivity import (
-            NudeNetDetector,
-            TransformersNSFWDetector,
-            NUDENET_BODY_EXPOSURE_PROFILE_V1,
-            NSFW_BINARY_PROFILE_V1,
-        )
 
-        detectors = ()
-        if config.sensitivity is not None:
-            sensitivity = config.sensitivity
-            detectors = (
-                NudeNetDetector(device=sensitivity["device"]),
-                TransformersNSFWDetector(
-                    model_id=sensitivity["nsfw_model_id"],
-                    revision=sensitivity["nsfw_revision"],
-                    device=sensitivity["device"],
-                ),
-            )
+        if config.manufacturer_knowledge is not None:
             execution_config = replace(
-                execution_config,
-                sensitivity_profiles=(
-                    NUDENET_BODY_EXPOSURE_PROFILE_V1,
-                    NSFW_BINARY_PROFILE_V1,
-                ),
-                sensitivity_detector_identities=tuple(d.identity for d in detectors),
+                execution_config, metadata_profile=config.metadata_profile()
             )
+        from mediasense.precheck._sensitivity_models import configured_detectors
+        from mediasense.precheck._sensitivity_profiles import normalize_sensitivity
+
+        sensitivity = config.sensitivity or normalize_sensitivity(None)
+        detectors = configured_detectors(sensitivity)
+        execution_config = replace(
+            execution_config,
+            sensitivity_profiles=tuple(d.profile for d in detectors),
+            sensitivity_detector_identities=tuple(d.identity for d in detectors),
+            sensitivity_configuration=sensitivity,
+        )
         self.precheck_read = PrecheckReadTool(precheck_database)
         self.precheck_run = PrecheckRunTool(
             precheck_database,
@@ -238,15 +226,27 @@ class DatasetRuntime:
             dataset_workspace=self.opened.workspace,
             user_config=self.config.user_config_path,
         )
+        from mediasense.precheck._sensitivity_models import configured_detectors
+
+        detectors = configured_detectors(updated.sensitivity)
         self.precheck_run._execution_config = replace(
             self.precheck_run._execution_config,
             metadata_profile=updated.metadata_profile(),
+            sensitivity_profiles=tuple(d.profile for d in detectors),
+            sensitivity_detector_identities=tuple(d.identity for d in detectors),
+            sensitivity_configuration=updated.sensitivity,
+        )
+        self.precheck_run._orchestrator.dependencies = replace(
+            self.precheck_run._orchestrator.dependencies,
+            sensitivity_detectors=detectors,
         )
         self.config = replace(
             self.config,
             metadata=updated.metadata,
             manufacturer_knowledge=updated.manufacturer_knowledge,
             manufacturer_knowledge_error=updated.manufacturer_knowledge_error,
+            sensitivity=updated.sensitivity,
+            sensitivity_error=None,
         )
 
     def _call_precheck(
@@ -293,7 +293,9 @@ class DatasetRuntime:
             try:
                 self._reload_metadata_configuration()
             except ConfigurationError as error:
-                return {"error": {"code": "configuration_invalid", "message": str(error)}}
+                return {
+                    "error": {"code": "configuration_invalid", "message": str(error)}
+                }
             requested_dataset = request.get("dataset_ref")
             if (
                 requested_dataset is not None
@@ -353,12 +355,18 @@ class DatasetRuntime:
                     try:
                         self._reload_metadata_configuration()
                     except ConfigurationError as error:
-                        return {"error": {"code": "configuration_invalid", "message": str(error)}}
+                        return {
+                            "error": {
+                                "code": "configuration_invalid",
+                                "message": str(error),
+                            }
+                        }
 
                 updated = load_runtime_config(
                     dataset_workspace=self.opened.workspace,
                     user_config=self.config.user_config_path,
                     load_manufacturers=False,
+                    allow_invalid_sensitivity=True,
                 )
                 if updated.geo_network != self.config.geo_network:
                     geo = _geo_tool(self.opened.workspace / "geo", updated)

@@ -30,6 +30,7 @@ class RuntimeConfig:
     sources: tuple[Path, ...]
     embedding: dict[str, Any] | None = None
     sensitivity: dict[str, Any] | None = None
+    sensitivity_error: str | None = None
     geo_network: dict[str, Any] | None = None
     metadata: dict[str, str] = field(
         default_factory=lambda: {
@@ -84,6 +85,12 @@ class RuntimeConfig:
             },
             "geo_network": transport.network_profile,
             "sources": [str(path) for path in self.sources],
+            "local_sensitivity": {
+                "configuration": self.sensitivity,
+                "error": self.sensitivity_error,
+                "execution": "not_checked",
+                "model_downloads": False,
+            },
             "local_embedding": {
                 "state": "configured" if self.embedding else "disabled",
                 "reason": "explicit_local_profile"
@@ -147,6 +154,7 @@ def load_runtime_config(
     user_config: Path | None = None,
     load_manufacturers: bool = True,
     allow_invalid_manufacturers: bool = False,
+    allow_invalid_sensitivity: bool = False,
 ) -> RuntimeConfig:
     values: dict[str, Any] = {
         "amap_api_key_env": "AMAP_API_KEY",
@@ -169,6 +177,16 @@ def load_runtime_config(
             values["metadata"].update(parsed.pop("metadata"))
         values.update(parsed)
         sources.append(path)
+    from mediasense.precheck._sensitivity_profiles import normalize_sensitivity
+
+    sensitivity_error = None
+    try:
+        sensitivity = normalize_sensitivity(values.get("sensitivity"))
+    except ValueError as error:
+        if not allow_invalid_sensitivity:
+            raise ConfigurationError(str(error)) from error
+        sensitivity = None
+        sensitivity_error = str(error)
     knowledge_error = None
     try:
         knowledge = (
@@ -186,7 +204,8 @@ def load_runtime_config(
         google_maps_api_key_env=str(values["google_maps_api_key_env"]),
         sources=tuple(sources),
         embedding=values.get("embedding"),
-        sensitivity=values.get("sensitivity"),
+        sensitivity=sensitivity,
+        sensitivity_error=sensitivity_error,
         geo_network=values.get("geo_network"),
         metadata=values["metadata"],
         manufacturer_knowledge=knowledge,
@@ -299,13 +318,18 @@ def _read_config(path: Path) -> dict[str, object]:
             raise ConfigurationError("embedding.enabled must be a boolean")
         if not enabled:
             result["embedding"] = None
-        elif embedding.get("model_id", "timm/vit_base_patch16_dinov3.lvd1689m") == "timm/vit_base_patch16_dinov3.lvd1689m":
+        elif (
+            embedding.get("model_id", "timm/vit_base_patch16_dinov3.lvd1689m")
+            == "timm/vit_base_patch16_dinov3.lvd1689m"
+        ):
             from .embedding import dinov3_profile
 
             result["embedding"] = dinov3_profile(embedding)
         else:
             if "image_size" in embedding or "model_path" in embedding:
-                raise ConfigurationError("image_size and model_path belong to the DINOv3 profile")
+                raise ConfigurationError(
+                    "image_size and model_path belong to the DINOv3 profile"
+                )
             model_id = embedding.get("model_id")
             revision = embedding.get("revision")
             dimensions = embedding.get("dimensions")
@@ -337,39 +361,7 @@ def _read_config(path: Path) -> dict[str, object]:
                 batch_size=batch_size,
             )
     if "sensitivity" in value:
-        sensitivity = value["sensitivity"]
-        if not isinstance(sensitivity, dict) or set(sensitivity) - {
-            "enabled",
-            "device",
-            "nsfw_model_id",
-            "nsfw_revision",
-        }:
-            raise ConfigurationError("Invalid sensitivity configuration table")
-        enabled = sensitivity.get("enabled", False)
-        device = sensitivity.get("device", "cpu")
-        model_id = sensitivity.get("nsfw_model_id", "Falconsai/nsfw_image_detection")
-        revision = sensitivity.get("nsfw_revision")
-        if type(enabled) is not bool:
-            raise ConfigurationError("sensitivity.enabled must be a boolean")
-        if not isinstance(device, str) or device not in {"cpu", "mps", "cuda"}:
-            raise ConfigurationError("sensitivity.device must be cpu, mps, or cuda")
-        if not isinstance(model_id, str) or not re.fullmatch(
-            r"[\w.-]+/[\w.-]+", model_id
-        ):
-            raise ConfigurationError(
-                "sensitivity.nsfw_model_id must name a model repository"
-            )
-        if (enabled or revision is not None) and (
-            not isinstance(revision, str) or not re.fullmatch(r"[0-9a-f]{40}", revision)
-        ):
-            raise ConfigurationError(
-                "sensitivity.nsfw_revision must be an immutable 40-character commit"
-            )
-        result["sensitivity"] = (
-            dict(device=device, nsfw_model_id=model_id, nsfw_revision=revision)
-            if enabled
-            else None
-        )
+        result["sensitivity"] = value["sensitivity"]
     for key in ("amap_api_key_env", "google_maps_api_key_env"):
         if key in providers:
             item = providers[key]

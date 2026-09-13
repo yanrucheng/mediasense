@@ -103,6 +103,15 @@ async def exercise(
                 args["authority"] = authority
             return await call(session, "mediasense.plan.work", args)
 
+        invalid_create = await plan(
+            {
+                "action": "create",
+                "result_ref": result_ref,
+                "request_id": "request:smoke-create",
+                "organization_preferences": {"": "invalid preference key"},
+            }
+        )
+        assert invalid_create["error"]["code"] == "invalid_request", invalid_create
         created = await plan(
             {
                 "action": "create",
@@ -111,6 +120,19 @@ async def exercise(
             }
         )
         work = created["work_ref"]
+
+        async def reject_null_page_limit():
+            response = await plan(
+                {
+                    "action": "inspect",
+                    "work_ref": work,
+                    "sections": ["content"],
+                    "page": {"collection": "groups", "limit": None},
+                }
+            )
+            assert response["error"]["code"] == "invalid_request", response
+
+        await reject_null_page_limit()
         note_request = {
             "action": "update",
             "work_ref": work,
@@ -204,6 +226,20 @@ async def exercise(
             saved, "request:smoke-candidate", candidate_content=candidate
         )
         baseline = await plan({"action": "inspect", "work_ref": work})
+        await reject_null_page_limit()
+        invalid_preferences = await plan(
+            {
+                "action": "update",
+                "work_ref": work,
+                "base_revision": current["revision"],
+                "request_id": "request:smoke-invalid-preferences",
+                "organization_preferences": {"": "invalid preference key"},
+                "working_notes": "must not save",
+                "candidate_content": None,
+            }
+        )
+        assert invalid_preferences["error"]["code"] == "invalid_request", invalid_preferences
+        assert await plan({"action": "inspect", "work_ref": work}) == baseline
         invalid_candidates = [
             {"plan_ref": "frozen-plan:injected"},
             {"contract": "mediasense.frozen-plan"},
@@ -237,6 +273,7 @@ async def exercise(
             organization_preferences={},
         )
         absent = await plan({"action": "inspect", "work_ref": work})
+        await reject_null_page_limit()
         assert (
             absent["sections"]["content"] is None
             and absent["sections"]["working_notes"] == ""

@@ -4,7 +4,7 @@ title: "Migration Capability Ledger"
 type: eval
 status: active
 created: 2026-08-23
-updated: 2026-09-12
+updated: 2026-09-13
 timezone: "Asia/Shanghai"
 parent: "eval-260823-1918-ai-album-migration-baseline"
 depends-on:
@@ -65,6 +65,52 @@ Implementation status is independent of the difference class:
 | Usage monitoring | Optional log, absent from final production run | all | Intentionally change: relevant cost/operation accounting is part of stage results | Zero external calls for local-only runs; confirmed logical work versus actual provider calls for enabled external producers; plan visual cost; apply operations |
 
 <a id="manufacturer-information-repair"></a>
+
+## 2026-09-13：本地 Freepik / NudeNet 640 源码与隔离交付
+
+用户后续独立复核将本轮整体验收标为暂不通过：Read输入关系未校验、未知加载错误被转为正常阻塞、执行信息未公共交付。三项现已补修；287项定向检查与新核心隔离MCP自检通过，**待用户独立复验**。新wheel SHA-256为`89a44a95394b2cd0034620c33662123d731234a6f31c62a0fc54036f290aec64`；新环境132文件匹配，原两环境各131文件保持。本轮不重跑真实模型；详细反例、公共分页入口、去重与未知历史边界见同一验收记录末尾。
+
+用户明确授权 B 方案开发、D5-disabled 和 handoff 信息/失败边界；当前合约先落实逐模型配置、
+具名概率/累计/区域值及真实 Evidence 归属，再完成生产接入。详细逐项证据见
+[本地敏感性实施验收](../../../openspec/changes/extend-local-sensitivity-observations/acceptance.md#实施验收记录2026-09-13)。
+
+| 边界 | 处置与实际证据 |
+| --- | --- |
+| 本地证据、逐输入状态和溯源 | `preserved`；复用 Observation/Work/Run/Result，旧 V1/99/33 原义和封存字节可在无推理依赖的真实 Host 读取 |
+| 分类器/部位模型及输出 | `intentionally_changed`；新执行采用固定 Freepik 448 MPS FP32 batch 4、640m native CPU FP32 batch 1；四类、累计事件及所有 native 实例完整保存，不生成旧二档判断或标签最大值 |
+| 启停与复用 | `intentionally_changed`；逐模型选择，关闭排除新 Result 中的缓存输出，旧结果/缓存保留；重新启用和核心无模型环境复用无新增 attempt |
+| 固定 VLM 路由 | `intentionally_changed` 保持；Plan 拥有解释/授权，不恢复由分数自动选择远程模型的流程 |
+| 模型移植一致性 | `preserved` 于已选配方：仅5个 development 输入/模型；Freepik 最大概率差0；640共18实例位置/数量/标签相同，最大分数差4.172325134277344e-7。不是与旧模型分类质量相同的声明 |
+| 旧系统质量与吞吐数字 | `not_comparable`；没有逐图真值、留出集运行、全量业务耗时或本轮成本补测；原历史报告和人工反馈不改写 |
+
+安装交付门槛已在隔离环境通过：真实 CLI/MCP→Run→Result→review/expand→Plan create，
+双模型/两种单模型/全关闭/重启用交付8/4/4/0/8条 available；缺固定权重阻塞，恢复原快照；
+无 torch/Transformers/Timm/NudeNet/ORT/NumPy 的核心 Host 可读并复用。
+最终默认检查1336 passed、16 deselected；原有 local_fixture/scale 边界保持。
+
+最终隔离 wheel SHA-256：`6c35c4d05679311b08121e0278d5520a9d52465411214f67180f8e0807bdc373`，
+版本字符串0.10.2；源码基线`615c3359941927515f0c0a8738a3f08122bcad46`及本任务差异见
+`/private/tmp/mediasense-sensitivity-260912/candidate-4/`。构建排除其他线程未提交的 Plan 等改动。
+PreCheck存储18/Run快照8保护新写入；隔离17→18与旧备份回滚验证通过，旧 Result 不转换。
+
+**本任务没有切换日常安装、改实际用户/业务 Dataset 配置或执行真实媒体 Apply。** 后续日常部署
+必须按唯一安装 runbook 核对原未终结 Run 与一致备份。MPS可用性、640镜像来源限制、其他平台、
+全量性能和长稳态仍是明确边界，不由本轮隔离成功推断通过。
+
+## 2026-09-12：Plan 当前基线重新验收与输入补修
+
+本轮从干净的 `615c3359941927515f0c0a8738a3f08122bcad46` 核实本包实现已存在，保留其他任务的并行改动。补齐两处既定 schema 的实现遗漏：显式 `page.limit:null` 不再当作省略；create/update 拒绝空偏好键，非法组合不写入、不读取 PreCheck、不占用请求回执。没有修改合约、SQLite 存储语义、Skill 调查方法或最终确认方式。
+
+| 能力与归属 | 本轮运行与交付证据 |
+| --- | --- |
+| Tool/SQLite：可选说明、偏好、候选生命周期 | 源码与隔离安装专项各 **234 项通过**，包括三字段 52 种组合、零 Read/分析、版本/身份、并发/取消/崩溃/重放及 seal recovery；新增 5 项反例在旧实现失败后修复。全默认 **1292 passed＋4 项沙箱回环失败**，相同代码放行后 **4 passed**，合计选中的1296项全部通过，16项原有 opt-in 排除 |
+| Skill：主动收集、保留范围、完整接受 | 六类独立合成推演；24 条 Plan 和5条 Read请求校验通过，24条 Plan 请求进一步在安装 Tool＋合成 Read 中实际执行成功。只有新 HTML 后全案接受分支 seal；不以局部人物/地点纠正充当最终确认 |
+| Preview/Host：含义与真实交付 | 新合成 Dataset 的 **42次真实 MCP调用**通过，structuredContent单一、content=[]、无elicitation；准备图片字节分页、80×40解码及Chrome DOM加载证据成立。Chrome正常退出未通过，40秒超时及DOM输出独立保留，不冒充完整浏览器runner通过 |
+| 发行与实际安装边界 | 离线 distribution smoke通过，128个package文件匹配快照；新wheel SHA-256 **`f6a8b56645b8f60cdc3734c3887406eb330f122c2585e3e0b40addf7f039db45`**。本轮仅隔离Python3.11.13/core验证，**未切换全局安装**，不能借后文历史升级宣称已交付这两处新补修到日常Host |
+
+迁移分类保持：主动调查与Agent/Human组织判断 `intentionally_changed`；只读媒体、已有Work并发/取消/幂等/恢复 `preserved`；新增说明的实际语义质量、用户注意力和大规模吞吐相较旧流水线仍 `not_comparable`。两处输入缺陷是当前合约符合性修复，不构成已审阅产品语义变更。没有新增AI Album实测或原事件回归，不改写旧Result。
+
+本轮达到源码与隔离wheel的限定可交付状态；构建补丁、约束、失败恢复、实际轨迹及未认证范围统一见[本轮验收](../../../openspec/changes/refine-plan-interaction/acceptance.md#当前基线重新验收与输入校验补修)。所有原始轨迹、合成媒体和数据库位于 `/private/tmp/mediasense-plan-reaccept-6p3o8lhs/`，不入Git。
 
 ## 2026-09-12：Plan 日常环境升级完成
 

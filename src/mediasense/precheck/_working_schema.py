@@ -1,13 +1,13 @@
 """Private SQLite schema for mutable PreCheck working state."""
 
-SCHEMA_VERSION = 17
+SCHEMA_VERSION = 18
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS internal_schema (
     singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
     version INTEGER NOT NULL
 );
-INSERT OR IGNORE INTO internal_schema (singleton, version) VALUES (1, 17);
+INSERT OR IGNORE INTO internal_schema (singleton, version) VALUES (1, 18);
 
 CREATE TABLE IF NOT EXISTS datasets (
     dataset_id TEXT PRIMARY KEY,

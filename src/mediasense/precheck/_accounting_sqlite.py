@@ -55,6 +55,11 @@ class SQLiteAccounting:
             version = connection.execute(
                 "SELECT version FROM internal_schema WHERE singleton = 1"
             ).fetchone()[0]
+            if version == 17:
+                # Version 18 guards named sensitivity Work and v8 Run snapshots.
+                # No retained outputs or sealed Results are transformed.
+                connection.execute("UPDATE internal_schema SET version = 18 WHERE singleton = 1 AND version = 17")
+                version = 18
             if version != SCHEMA_VERSION:
                 raise RuntimeError(
                     "incompatible internal schema version: "

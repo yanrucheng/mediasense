@@ -47,7 +47,7 @@ def test_incompatible_schema_requires_a_fresh_workspace(tmp_path: Path) -> None:
     with sqlite3.connect(database) as connection:
         connection.execute(
             "UPDATE internal_schema SET version = ? WHERE singleton = 1",
-            (SCHEMA_VERSION - 1,),
+            (SCHEMA_VERSION - 2,),
         )
 
     with pytest.raises(RuntimeError, match="fresh MediaSense workspace"):

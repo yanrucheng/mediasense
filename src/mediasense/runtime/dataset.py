@@ -511,13 +511,17 @@ class DatasetOpenTool:
             raise DatasetOpenError(
                 "invalid_request", "workspace must be a non-empty path."
             )
-        load_runtime_config(allow_invalid_manufacturers=True)
+        load_runtime_config(
+            allow_invalid_manufacturers=True, allow_invalid_sensitivity=True
+        )
         opened = self.resolver.open(
             Path(source_root),
             explicit_workspace=None if workspace is None else Path(workspace),
         )
         config = load_runtime_config(
-            dataset_workspace=opened.workspace, allow_invalid_manufacturers=True
+            dataset_workspace=opened.workspace,
+            allow_invalid_manufacturers=True,
+            allow_invalid_sensitivity=True,
         )
         result = opened.to_value()
         result["configuration"] = config.public_value()
@@ -648,6 +652,7 @@ def _is_supported_legacy_manifest(value: object) -> bool:
     version = value.get("format_version")
     stores = value.get("stores")
     return (version, stores) in (
+        (3, {"apply": 2, "geo": 2, "plan": 3, "precheck": 17}),
         (1, {"apply": 2, "geo": 1, "plan": 2, "precheck": 17}),
         (2, {"apply": 2, "plan": 3, "precheck": 17}),
         (3, {"apply": 2, "geo": 1, "plan": 3, "precheck": 17}),
@@ -720,6 +725,11 @@ def _verify_component_stores(workspace: Path, manifest: DatasetManifest) -> None
             )
         actual = int(row[0])
         expected = int(manifest.stores[name])
+        if name == "precheck" and actual == 17 and expected == 18:
+            from mediasense.precheck._accounting_sqlite import SQLiteAccounting
+
+            SQLiteAccounting(database).initialize()
+            actual = 18
         if name == "geo" and actual == 1 and expected == 2:
             from mediasense.capabilities.geo.journal import GeoOperationJournal
 

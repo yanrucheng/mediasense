@@ -242,10 +242,7 @@ class PlanWorkTool:
         result_ref = _require_ref(request["result_ref"], _RESULT_REF, "result_ref")
         request_id = _require_ref(request["request_id"], _REQUEST_ID, "request_id")
         preferences = request.get("organization_preferences", {})
-        if not isinstance(preferences, dict):
-            raise PlanFailure(
-                "invalid_request", "organization_preferences must be an object."
-            )
+        _validate_preferences(preferences)
         digest = _request_digest(request)
         try:
             replay = self.store.replay(request_id, digest)
@@ -354,12 +351,8 @@ class PlanWorkTool:
         )
         request_id = _require_ref(request["request_id"], _REQUEST_ID, "request_id")
         preferences = request.get("organization_preferences")
-        if "organization_preferences" in request and not isinstance(preferences, dict):
-            raise PlanFailure(
-                "invalid_request",
-                "organization_preferences must be an object.",
-                work_ref=work_ref,
-            )
+        if "organization_preferences" in request:
+            _validate_preferences(preferences, work_ref=work_ref)
         digest = _request_digest(request)
         execution = execution or UpdateExecution()
         with execution.operation(work_ref, request_id):
@@ -564,7 +557,7 @@ class PlanWorkTool:
                 work_ref=snapshot.work_ref,
             )
         requested_limit = page_request.get("limit")
-        limit = 100 if requested_limit is None else requested_limit
+        limit = page_request.get("limit", 100)
         if (
             not isinstance(limit, int)
             or isinstance(limit, bool)
@@ -782,6 +775,21 @@ class PlanWorkTool:
             return self.store.snapshot(work_ref)
         except WorkNotFound:
             return None
+
+
+def _validate_preferences(value: Any, *, work_ref: str | None = None) -> None:
+    from mediasense.runtime.resources import contract_validator
+
+    validator = contract_validator("mediasense.plan.work")
+    preferences = validator.evolve(
+        schema=validator.schema["$defs"]["organization_preferences"]
+    )
+    if not preferences.is_valid(value):
+        raise PlanFailure(
+            "invalid_request",
+            "organization_preferences must conform to the Plan Work contract.",
+            work_ref=work_ref,
+        )
 
 
 def _request_digest(request: Mapping[str, Any]) -> str:

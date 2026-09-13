@@ -225,13 +225,7 @@ class UrllibJsonTransport:
                     else "service_transient",
                     retry_after=retry_after,
                 ) from error
-            raise GeoPermanentError(
-                f"provider HTTP {error.code}",
-                request_count=1,
-                failure_code="authentication"
-                if error.code in {401, 403, 407}
-                else "http_permanent",
-            ) from error
+            raise _HttpResponseError(error) from error
         except (OSError, URLError, http.client.HTTPException) as error:
             cause = error.reason if isinstance(error, URLError) else error
             if isinstance(cause, ssl.SSLCertVerificationError):
@@ -279,6 +273,112 @@ class UrllibJsonTransport:
                 failure_code="provider_response_invalid",
             )
         return value
+
+
+class _HttpResponseError(GeoPermanentError):
+    """Bounded response detail for adapter classification, never raw diagnostics."""
+
+    def __init__(self, error: HTTPError) -> None:
+        self.http_status = error.code
+        try:
+            # Error messages/metadata can contain credentials and request URLs.
+            value = json.loads(error.read(65536))
+        except (OSError, UnicodeError, ValueError):
+            value = {}
+        finally:
+            error.close()
+        # Kept only in memory for the provider adapter. No response text is copied
+        # into the exception message, journal, qualifications or public result.
+        self.response = value if isinstance(value, Mapping) else {}
+        super().__init__(
+            f"provider HTTP {error.code}",
+            request_count=1,
+            failure_code="authentication"
+            if error.code in {401, 403, 407}
+            else "provider_http_rejected",
+        )
+
+
+def _google_error_signals(value: object) -> tuple[str | None, tuple[str, ...]]:
+    error = value.get("error") if isinstance(value, Mapping) else None
+    if not isinstance(error, Mapping):
+        return None, ()
+    status = error.get("status")
+    status = (
+        status
+        if status
+        in (
+            "INVALID_ARGUMENT",
+            "FAILED_PRECONDITION",
+            "PERMISSION_DENIED",
+            "UNAUTHENTICATED",
+            "RESOURCE_EXHAUSTED",
+            "INTERNAL",
+            "UNAVAILABLE",
+        )
+        else None
+    )
+    details = error.get("details")
+    reasons = tuple(
+        item["reason"]
+        for item in (details if isinstance(details, list) else ())
+        if isinstance(item, Mapping)
+        and item.get("@type") == "type.googleapis.com/google.rpc.ErrorInfo"
+        and item.get("domain") == "googleapis.com"
+        and item.get("reason")
+        in (
+            "SERVICE_DISABLED",
+            "BILLING_DISABLED",
+            "API_KEY_INVALID",
+            "API_KEY_EXPIRED",
+            "API_KEY_SERVICE_BLOCKED",
+            "API_KEY_HTTP_REFERRER_BLOCKED",
+            "API_KEY_IP_ADDRESS_BLOCKED",
+            "CONSUMER_INVALID",
+            "RATE_LIMIT_EXCEEDED",
+            "QUOTA_EXCEEDED",
+        )
+    )
+    return status, reasons
+
+
+def _google_response_error(
+    status: str | None,
+    reasons: tuple[str, ...],
+    *,
+    fallback: str = "provider_http_rejected",
+    http_status: int | None = None,
+) -> GeoLookupError:
+    if any(
+        reason in {"SERVICE_DISABLED", "BILLING_DISABLED", "CONSUMER_INVALID"}
+        for reason in reasons
+    ):
+        code = "provider_configuration"
+    elif any(reason.startswith("API_KEY_") for reason in reasons) or status in {
+        "PERMISSION_DENIED",
+        "UNAUTHENTICATED",
+    }:
+        code = "authentication"
+    elif "QUOTA_EXCEEDED" in reasons or status == "RESOURCE_EXHAUSTED":
+        code = "provider_quota"
+    elif "RATE_LIMIT_EXCEEDED" in reasons or status in {"INTERNAL", "UNAVAILABLE"}:
+        return GeoTransientError(
+            "Google reported a transient service failure.",
+            request_count=1,
+            safe_to_retry=True,
+            failure_code="service_transient",
+        )
+    elif status == "FAILED_PRECONDITION":
+        code = "provider_configuration"
+    elif status == "INVALID_ARGUMENT":
+        code = "provider_request_invalid"
+    else:
+        code = fallback
+    return GeoPermanentError(
+        f"Google request rejected: {code}; HTTP={http_status or 'not_reported'}; status={status or 'unclassified'}; reasons={','.join(reasons) or 'unclassified'}.",
+        request_count=1,
+        failure_code=code,
+    )
 
 
 @dataclass(slots=True)
@@ -684,11 +784,8 @@ class GoogleMapsReverseGeocoder:
                 GeoOperation.NEARBY_PLACES,
                 coordinate,
                 locale=locale,
-                radius_meters=min(
-                    radius_meters or self.nearby_radius_meters,
-                    self.nearby_radius_meters,
-                ),
-                max_places=min(max_places or self.max_pois, self.max_pois),
+                radius_meters=radius_meters,
+                max_places=max_places,
                 deadline=deadline,
                 cancelled=cancelled,
             )
@@ -725,7 +822,9 @@ class GoogleMapsReverseGeocoder:
                         request_count=1,
                         failure_code="authentication",
                     )
-                if status not in {"OK", "ZERO_RESULTS", "INVALID_REQUEST"}:
+                if status == "INVALID_REQUEST":
+                    raise _google_response_error("INVALID_ARGUMENT", ())
+                if status not in {"OK", "ZERO_RESULTS"}:
                     raise GeoPermanentError(
                         "Google returned an unrecognized response status",
                         request_count=1,
@@ -754,11 +853,22 @@ class GoogleMapsReverseGeocoder:
                     reverse_error,
                 )
             else:
+                requested_radius, requested_places = radius_meters, max_places
+                radius_meters = min(
+                    self.nearby_radius_meters
+                    if radius_meters is None
+                    else radius_meters,
+                    self.nearby_radius_meters,
+                    50000,
+                )
+                max_places = min(
+                    self.max_pois if max_places is None else max_places, self.max_pois
+                )
                 response = self._nearby(
                     converted,
                     language=normalized_language,
-                    radius_meters=radius_meters or self.nearby_radius_meters,
-                    max_places=max_places or self.max_pois,
+                    radius_meters=radius_meters,
+                    max_places=max_places,
                     deadline=deadline,
                     cancelled=cancelled,
                 )
@@ -772,6 +882,8 @@ class GoogleMapsReverseGeocoder:
                 nearby_error = (
                     nearby_error if isinstance(nearby_error, Mapping) else None
                 )
+                if nearby_error is not None:
+                    raise _google_response_error(*_google_error_signals(response))
                 error_message = (
                     _text(nearby_error.get("message"))
                     if nearby_error is not None
@@ -794,14 +906,41 @@ class GoogleMapsReverseGeocoder:
                     error_message,
                 )
         except GeoLookupError as error:
-            return _provider_error_execution(
+            if isinstance(error, _HttpResponseError):
+                error = _google_response_error(
+                    *_google_error_signals(error.response),
+                    fallback=error.failure_code or "provider_http_rejected",
+                    http_status=error.http_status,
+                )
+            execution = _provider_error_execution(
                 self.provider_id,
                 operation,
                 coordinate,
                 converted,
                 error,
             )
-        return _provider_execution(result, operation, max_places=max_places)
+        else:
+            execution = _provider_execution(result, operation, max_places=max_places)
+        if operation is GeoOperation.NEARBY_PLACES and (
+            requested_radius is not None
+            and radius_meters < requested_radius
+            or requested_places is not None
+            and max_places < requested_places
+        ):
+            execution = replace(
+                execution,
+                component=replace(
+                    execution.component,
+                    qualifications=(
+                        *execution.component.qualifications,
+                        {
+                            "code": "provider_bounds_narrowed",
+                            "message": f"Google profile requested radius {radius_meters:g} meters and at most {max_places} places; these bounds do not establish exhaustive coverage.",
+                        },
+                    ),
+                ),
+            )
+        return execution
 
     def _reverse(
         self,
@@ -836,6 +975,11 @@ class GoogleMapsReverseGeocoder:
         deadline: float | None = None,
         cancelled: Callable[[], bool] | None = None,
     ) -> Mapping[str, object]:
+        # Final request boundary also covers lookup() and direct component callers.
+        radius_meters = min(radius_meters, self.nearby_radius_meters, 50000)
+        max_places = min(max_places, self.max_pois)
+        if not 0 < radius_meters <= 50000 or not 1 <= max_places <= 20:
+            raise ValueError("invalid Google nearby request bounds")
         self._limiter.wait(deadline=deadline, cancelled=cancelled)
         return self._transport.post_json(
             self.nearby_endpoint,

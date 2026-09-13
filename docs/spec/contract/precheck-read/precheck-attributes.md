@@ -56,7 +56,7 @@ superseded-by: ""
 | `address_candidate` | formatted_address、components | provider 候选，非确认地点；获取状态服从 Geo 合约 |
 | `nearby_place_candidates` | 非空候选列表 | 保留已取得的名称、地址、坐标、类别、距离等；有限结果不是穷尽声明 |
 | `video_probe` | duration_seconds、源 width/height；已知 frame_count/frame_rate | 对被选中进行视频准备的源项执行；其他源项可为 evidence_not_prepared，不能假造时长 |
-| `content_sensitivity` | detector_identity、profile、labels | 归属于源项，但必须携带实际 input_evidence_ref；只说明该次输入的检测，不推广到未检查帧或其他成员 |
+| `content_sensitivity` | detector_identity、profile 及已声明的具名值；历史 V1 labels | 归属于源项，但必须携带实际 input_evidence_ref；只说明该次输入的检测，不推广到未检查帧或其他成员 |
 | `source_content_verification` | 沿用 Observation 的外层 status；value 内为 profile/value/size_bytes/observed_at/producer | resolve 将它投影成既有 verification 格式；不在 value 重复 status，不升级核验强度 |
 
 一个上游提取器整体失败时，可用 `source_metadata: failed` 说明受影响的已声明 metadata 能力，禁止用空数组暗示已完成。已取得的其他属性仍保留。旧 Result 不具备本期新属性时，读取投影可标记 `not_checked + historical_unrecorded`；新 producer 不得使用该理由省略义务。
@@ -65,9 +65,38 @@ superseded-by: ""
 
 `score` 是 0—1 范围内的检测分数；`threshold` 和 `mild_threshold` 是有限、非负的比较阈值，可以大于 1。它们不是概率，不能限制在同一个数值范围。
 
-本期沿用的两个 V1 profile 保留实际 label、score、threshold、mild_threshold、sensitive 和 mild_sensitive。其比较语义是 `score >= threshold` 和 `score >= mild_threshold`。例如 NSFW profile 的 normal 标签返回 score=0.999、threshold=99、mild_threshold=33，两种判定均为 false；NudeNet 中相应不触发敏感判定的标签也保留这些有效阈值。禁止将阈值截到 1、删除已记录值或改变分类算法来满足 schema。
+历史保留的两个 V1 profile 保留实际 label、score、threshold、mild_threshold、sensitive 和 mild_sensitive。其比较语义是 `score >= threshold` 和 `score >= mild_threshold`。例如 NSFW profile 的 normal 标签返回 score=0.999、threshold=99、mild_threshold=33，两种判定均为 false；NudeNet 中相应不触发敏感判定的标签也保留这些有效阈值。禁止将阈值截到 1、删除已记录值或改变分类算法来满足 schema。
 
 这是对现有 profile 表达能力的保留，不新增一个“禁用标签”字段。以后更换 profile 必须使用相应身份并交代有效语义，不能重用 V1 名称改变已有判定。分类值的保留不证明检测器已在安装版接通。
+
+### 敏感性具名值（2026-09-12 授权采用）
+
+新值保持 `content_sensitivity` Source Item 归属；`detector_identity` 绑定模型内容和语义配方，
+`profile` 指明配方。provenance 保存相同身份、实际 `input_evidence_ref`、模型/权重、
+观察时间、producer、真实执行后端及 `definitions`（declared_properties、taxonomy、labels、meaning）。
+定义随 Result 保存，Read 不导入推理框架或读取模型。模型分歧并列交付，无融合真假值或远程权限。
+
+| 具名值 | 交换值与约束 |
+| --- | --- |
+| classification_distribution | taxonomy、score_semantics=`categorical_probability`、probabilities 对象；键恰为声明的互斥类别，值为有限 [0,1]，和为 1，绝对容差 1e-6 |
+| cumulative_probabilities | 非空事件→有限 [0,1]；basis.cumulative_probabilities 保存 operation=`sum`、source_property=`classification_distribution`、events（事件→非空且去重的类别列表）；事件集合和值逐项一致，容差 1e-6 |
+| region_detections | taxonomy、score_semantics=`model_detection_score`、coordinate_system=`input_evidence_pixels_xyxy`、input_dimensions（正整数 width/height）、instances（label、score、整数 box_xyxy 四元组）；同标签多实例全部保留，成功无框为 [] |
+
+具名值的集合恰与 definitions.declared_properties 相同；分类与区域 taxonomy 必须与定义一致，
+labels 非空且去重。新信息形式要扩展合约，不能当任意 JSON 或伪概率。
+Freepik 必须有四类 neutral/low/medium/high 和累计 at_least_low=low+medium+high、
+at_least_medium=medium+high、high=high，不生成 regions 或旧阈值。
+640 必须保留全部 18 类中实际返回的全部实例（包括 face/covered），不做标签最大值。
+框原点左上、x 向右、y 向下，`0 <= x1 < x2 <= width`、`0 <= y1 < y2 <= height`；
+尺寸与实际 Evidence 一致。native 整数 xywh 仅转换 x+w/y+h，不二次裁框、舍入或 NMS。
+封存同时验证输入属于该 Source Item 的真实 derived_from 链；represents 不证明实际来源。
+
+available/failed 必须绑定真实输入。关闭或未准备时无 value，由配置声明模型/配方和原因，
+不能伪造 observed_at/actual_execution。同主体以 name+detector_identity+input_evidence_ref
+唯一，无输入的逐模型声明亦不得重复。历史无身份声明仍只读保留。
+旧 V1 原值/99/33 不变；没有框、实例数或输入证明时明确 historical 缺口，
+不得将最大值还原为实例或补为空框。旧封存字节始终不改。
+review/expand 保留完整属性和限制；超过既有整项上限时明确失败，不截断实例。
 
 ## Geo 候选的 basis
 

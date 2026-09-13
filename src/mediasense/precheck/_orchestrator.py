@@ -157,6 +157,7 @@ class PrecheckExecutionConfig:
     embedding_encoder_identity: str | None = None
     sensitivity_profiles: tuple[SensitivityProfile, ...] = ()
     sensitivity_detector_identities: tuple[str, ...] = ()
+    sensitivity_configuration: dict | None = None
     reverse_geocode_profile: ReverseGeocodeProfile = field(
         default_factory=ReverseGeocodeProfile
     )
@@ -239,6 +240,7 @@ class PrecheckExecutionConfig:
                 "retry_delay_seconds": self.reverse_geocode_profile.retry_delay_seconds,
                 "routing_policy": self.reverse_geocode_profile.routing_policy,
             },
+            "sensitivity_configuration": self.sensitivity_configuration,
             "sensitivity_profiles": [
                 _sensitivity_profile_value(p) for p in self.sensitivity_profiles
             ],
@@ -247,7 +249,7 @@ class PrecheckExecutionConfig:
             ),
             "source_storage": self.source_storage_hint,
             "source_storage_evidence": self.source_storage_evidence,
-            "version": 7,
+            "version": 8,
             "video": self.video,
             "video_frame_limit": self.video_frame_limit,
         }
@@ -292,6 +294,12 @@ class PrecheckExecutionConfig:
             evidence = f"operator_conservative_override:{storage}:{evidence}"
         budget = resolve_resource_budget(
             source_storage=storage,
+            memory_target_bytes=max(
+                (
+                    4 * 1024**3,
+                    *(getattr(p, "memory_bytes", 0) for p in self.sensitivity_profiles),
+                )
+            ),
             network_enabled=True,
             ceiling=self.resource_budget,
             logical_cpu_count=logical_cpu_count,
@@ -324,7 +332,7 @@ class PrecheckExecutionConfig:
 
     @classmethod
     def from_value(cls, value: Mapping[str, object]) -> PrecheckExecutionConfig:
-        if value.get("version") not in {5, 6, 7}:
+        if value.get("version") not in {5, 6, 7, 8}:
             raise ValueError("unsupported PreCheck execution configuration")
         budget_value = cast(Mapping[str, object], value["resource_budget"])
         capacity_value = cast(Mapping[str, object], budget_value["capacity"])
@@ -333,7 +341,7 @@ class PrecheckExecutionConfig:
             metadata=bool(value["metadata"]),
             metadata_profile=(
                 MetadataProfile.from_value(value["metadata_profile"])
-                if value.get("version") == 7
+                if value.get("version") in {7, 8}
                 else MetadataProfile(knowledge=KnowledgeSnapshot.empty())
             ),
             metadata_batch_size=int(value["metadata_batch_size"]),
@@ -356,11 +364,12 @@ class PrecheckExecutionConfig:
                 cast(Mapping[str, object] | None, value["embedding_profile"])
             ),
             embedding_encoder_identity=value.get("embedding_encoder_identity"),
+            sensitivity_configuration=value.get("sensitivity_configuration"),
             sensitivity_profiles=tuple(
                 _sensitivity_profile_from_value(p)
                 for p in (
                     value.get("sensitivity_profiles", ())
-                    if value.get("version") in {6, 7}
+                    if value.get("version") in {6, 7, 8}
                     else [value["sensitivity_profile"]]
                     if value.get("sensitivity_profile")
                     else ()
@@ -709,6 +718,7 @@ class PrecheckOrchestrator:
             reverse_geocode_work_by_source=geocode.work_by_source(),
             sensitivity_work_ids=[outcome.work.work_id for outcome in sensitivity],
             sensitivity_enabled=bool(config.sensitivity_profiles),
+            sensitivity_configuration=config.sensitivity_configuration,
             video_probe_work_ids=[outcome.work.work_id for outcome in probes.values()],
             video_frame_work_ids=[outcome.work.work_id for outcome in frames],
             video_key_frame_work_ids=[
@@ -725,6 +735,20 @@ class PrecheckOrchestrator:
             ),
             external_policy_status=geocode.status,
             geo_acquisition_policy=acquisition_policy_value(),
+        )
+        from ._local_execution import collect_local_execution
+
+        draft = replace(
+            draft,
+            execution_boundary={
+                **draft.execution_boundary,
+                "local_execution": collect_local_execution(
+                    self.database_path,
+                    accounting_run_id,
+                    config.value(),
+                    work_ids=[outcome.work.work_id for outcome in sensitivity],
+                ),
+            },
         )
         self._checkpoint(run_ref, "publishing", total=1)
         return self.run_control.publish_result(run_ref, draft)
@@ -809,13 +833,16 @@ class PrecheckOrchestrator:
             kwargs["exiftool_version"] = first.exiftool_version
             lanes = min(4, executor.budget.capacity.exiftool_slots)
             for _ in range(1, lanes):
-                producers.put(stack.enter_context(MetadataProducer(self.database_path, **kwargs)))
+                producers.put(
+                    stack.enter_context(MetadataProducer(self.database_path, **kwargs))
+                )
 
             def produce_batch(batch: tuple[AccountedItem, ...]):
                 producer = producers.get()
                 try:
                     return producer.produce_many(
-                        run_id, (item.relative_path for item in batch),
+                        run_id,
+                        (item.relative_path for item in batch),
                         profile=config.metadata_profile,
                     )
                 finally:
@@ -941,7 +968,8 @@ class PrecheckOrchestrator:
             frame_producer = VideoFrameProducer(self.database_path, **frame_kwargs)
         except VideoDecoderUnavailable as error:
             raise _BlockedExecution(
-                "video_decoder_unavailable", str(error),
+                "video_decoder_unavailable",
+                str(error),
                 "Repair the local video decoder dependency in this Host, then resume.",
             ) from error
 
@@ -949,8 +977,13 @@ class PrecheckOrchestrator:
             assert outcome.probe is not None
             try:
                 return frame_producer.produce_many(
-                    run_id, path, outcome.work.work_id,
-                    sample_video_times(outcome.probe.duration_seconds, max_frames=config.video_frame_limit),
+                    run_id,
+                    path,
+                    outcome.work.work_id,
+                    sample_video_times(
+                        outcome.probe.duration_seconds,
+                        max_frames=config.video_frame_limit,
+                    ),
                 )
             except VideoDecodeCancelled as error:
                 raise ResourceAdmissionCancelled(str(error)) from error
@@ -962,7 +995,11 @@ class PrecheckOrchestrator:
                     source_io_slots=1,
                     workspace_io_slots=1,
                     cpu_slots=config.ffmpeg_threads,
-                    memory_bytes=max(128 * 1024 * 1024, outcome.probe.width * outcome.probe.height * 32 + 1920 * 1920 * 12),
+                    memory_bytes=max(
+                        128 * 1024 * 1024,
+                        outcome.probe.width * outcome.probe.height * 32
+                        + 1920 * 1920 * 12,
+                    ),
                     temporary_bytes=32 * 1024 * 1024,
                     decoder_slots=1,
                     encoder_slots=1,
@@ -974,11 +1011,14 @@ class PrecheckOrchestrator:
         )
         try:
             frame_values = tuple(
-                value for _key, values in self._execute(run_ref, executor, frame_calls) for value in values
+                value
+                for _key, values in self._execute(run_ref, executor, frame_calls)
+                for value in values
             )
         except ResourceLimitExceeded as error:
             raise _BlockedExecution(
-                "video_resource_budget_insufficient", str(error),
+                "video_resource_budget_insufficient",
+                str(error),
                 "This Run's effective resource ceiling is frozen. Cancel it and start a successor with a suitable resource configuration or narrower video scope; completed Work remains reusable.",
             ) from error
         frames_by_path: dict[Path, list[VideoFrameOutcome]] = {}
@@ -1027,7 +1067,12 @@ class PrecheckOrchestrator:
     ) -> dict[Path, GPXOutcome]:
         if not config.gpx or not gpx_paths:
             return {}
-        producer = GPXMatchProducer(self.database_path)
+        producer = GPXMatchProducer(
+            self.database_path,
+            memory_admission=lambda size: executor.admission.hold(
+                ResourceClaim(memory_bytes=size)
+            ),
+        )
         eligible = {
             path: outcome
             for path, outcome in metadata.items()
@@ -1163,6 +1208,10 @@ class PrecheckOrchestrator:
         if not config.sensitivity_profiles:
             return ()
         detectors = self.dependencies.sensitivity_detectors
+        if config.sensitivity_configuration is not None:
+            from ._sensitivity_models import configured_detectors
+
+            detectors = configured_detectors(config.sensitivity_configuration)
         if len(detectors) != len(config.sensitivity_profiles) or (
             config.sensitivity_detector_identities
             and not all(
@@ -1196,6 +1245,12 @@ class PrecheckOrchestrator:
                         detector,
                     )
                 )
+            except ResourceLimitExceeded as error:
+                raise _BlockedExecution(
+                    "sensitivity_resource_budget_insufficient",
+                    str(error),
+                    "The Run budget is frozen. Start a successor with sufficient permitted local resources; completed Work remains reusable.",
+                ) from error
             except SensitivityBackendUnavailable as error:
                 raise _BlockedExecution(
                     "sensitivity_backend_unavailable",
@@ -1216,40 +1271,56 @@ class PrecheckOrchestrator:
                 or _rendition_profile(outcome.work) == "high_resolution"
             )
         )
-        producer = SensitivityProducer(self.database_path, detector)
-        assert config.model_batch_size is not None
-        batch_values = self._execute(
-            run_ref,
-            executor,
-            (
-                ScheduledCall(
-                    f"sensitivity-batch:{index}",
-                    ResourceClaim(
-                        source_io_slots=1,
-                        cpu_slots=1,
-                        memory_bytes=min(
-                            config.resource_budget.capacity.memory_bytes,
-                            256 * 1024 * 1024 + len(batch) * 32 * 1024 * 1024,
-                        ),
-                        gpu_memory_bytes=(
-                            config.resource_budget.capacity.gpu_memory_bytes
-                        ),
-                        model_slots=1,
-                    ),
-                    lambda batch=batch: producer.produce_many(
-                        run_id,
-                        tuple(
-                            (_work_subject(outcome.work), outcome.work.work_id)
-                            for outcome in batch
-                        ),
-                        profile=profile,
-                    ),
-                )
-                for index, batch in enumerate(_batched(visual, config.model_batch_size))
-            ),
-        )
-        return tuple(
-            outcome for _key, batch in batch_values for outcome in batch.values()
+        from ._sensitivity_profiles import NamedSensitivityProfile
+
+        if isinstance(profile, NamedSensitivityProfile):
+            from contextlib import ExitStack
+
+            producer = SensitivityProducer(self.database_path, detector)
+            results = []
+            # Lazy admission preserves cache-only reads even on smaller hosts.
+            # The same reservation owns model residency until close completes.
+            with ExitStack() as stack:
+                admitted = False
+
+                def admit():
+                    nonlocal admitted
+                    if not admitted:
+                        stack.enter_context(
+                            executor.admission.hold(
+                                ResourceClaim(
+                                    workspace_io_slots=1,
+                                    cpu_slots=profile.cpu_threads,
+                                    memory_bytes=profile.memory_bytes,
+                                    model_slots=1,
+                                )
+                            )
+                        )
+                        admitted = True
+
+                producer.admit_model = admit
+                try:
+                    for batch in _batched(visual, profile.batch_size):
+                        if not self._running(run_ref):
+                            break
+                        results.extend(
+                            producer.produce_many(
+                                run_id,
+                                tuple(
+                                    (_work_subject(o.work), o.work.work_id)
+                                    for o in batch
+                                ),
+                                profile=profile,
+                            ).values()
+                        )
+                        self._checkpoint(run_ref, "sensitivity")
+                finally:
+                    detector.close()
+            return tuple(results)
+        raise _BlockedExecution(
+            "sensitivity_backend_unavailable",
+            "This Run selected a legacy sensitivity recipe; new production only writes named values.",
+            "Finish this Run with its original build or create a successor with an explicit new configuration.",
         )
 
     def _bundles(
@@ -1723,6 +1794,10 @@ def _backend_identity_matches(expected: str, actual: str) -> bool:
 def _sensitivity_profile_value(profile: SensitivityProfile | None) -> object:
     if profile is None:
         return None
+    from ._sensitivity_profiles import NamedSensitivityProfile
+
+    if isinstance(profile, NamedSensitivityProfile):
+        return profile.value()
     return {
         "mild_ratio": profile.mild_ratio,
         "name": profile.name,
@@ -1735,6 +1810,10 @@ def _sensitivity_profile_from_value(
 ) -> SensitivityProfile | None:
     if value is None:
         return None
+    from ._sensitivity_profiles import NamedSensitivityProfile
+
+    if "definitions" in value:
+        return NamedSensitivityProfile(**value)
     from .sensitivity import SensitivityThreshold
 
     thresholds = cast(Sequence[Mapping[str, object]], value["thresholds"])

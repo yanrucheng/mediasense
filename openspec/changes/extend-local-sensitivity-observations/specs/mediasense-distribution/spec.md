@@ -1,4 +1,4 @@
-> Proposed delta only. No installation or model execution is authorized by this packet. Follow the [planning entry](../../README.md) and the existing installation runbook for later release work.
+> 本轮用户已明确授权并接受本包信息/失败边界；对应语义已采用到 `docs/spec/contract/`。此处保留 change delta，当前合约仍是唯一交换值权威。
 
 ## ADDED Requirements
 

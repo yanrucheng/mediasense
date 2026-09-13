@@ -39,8 +39,12 @@
             "minItems": 1,
             "uniqueItems": true,
             "items": {
-              "const": "execution_boundary"
-            }
+              "enum": [
+                "execution_boundary",
+                "local_execution"
+              ]
+            },
+            "maxItems": 1
           },
           "execution_page": {
             "type": "object",
@@ -88,7 +92,10 @@
               "properties": {
                 "include": {
                   "contains": {
-                    "const": "execution_boundary"
+                    "enum": [
+                      "execution_boundary",
+                      "local_execution"
+                    ]
                   }
                 }
               }
@@ -1630,64 +1637,13 @@
             "then": {
               "properties": {
                 "value": {
-                  "type": "object",
-                  "additionalProperties": false,
-                  "properties": {
-                    "detector_identity": {
-                      "type": "string",
-                      "minLength": 1
+                  "oneOf": [
+                    {
+                      "$ref": "#/$defs/sensitivity_v1_value"
                     },
-                    "profile": {
-                      "type": "string",
-                      "minLength": 1
-                    },
-                    "labels": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "additionalProperties": true,
-                        "properties": {
-                          "label": {
-                            "type": "string",
-                            "minLength": 1
-                          },
-                          "score": {
-                            "type": "number",
-                            "minimum": 0,
-                            "maximum": 1
-                          },
-                          "threshold": {
-                            "type": "number",
-                            "minimum": 0,
-                            "description": "Effective nonnegative cutoff, not a probability. Values above 1 preserve profiles whose labels cannot trigger this comparison."
-                          },
-                          "mild_threshold": {
-                            "type": "number",
-                            "minimum": 0,
-                            "description": "Effective nonnegative mild cutoff, not a probability. Preserve the recorded value, including values above 1."
-                          },
-                          "sensitive": {
-                            "type": "boolean"
-                          },
-                          "mild_sensitive": {
-                            "type": "boolean"
-                          },
-                          "description": {
-                            "type": "string"
-                          }
-                        },
-                        "required": [
-                          "label",
-                          "score"
-                        ]
-                      },
-                      "minItems": 0
+                    {
+                      "$ref": "#/$defs/sensitivity_named_value"
                     }
-                  },
-                  "required": [
-                    "detector_identity",
-                    "profile",
-                    "labels"
                   ]
                 }
               }
@@ -1849,6 +1805,94 @@
                         "boundary",
                         "outlier",
                         "conflict"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "name": {
+                  "const": "content_sensitivity"
+                },
+                "status": {
+                  "const": "available"
+                },
+                "value": {
+                  "not": {
+                    "required": [
+                      "labels"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "name",
+                "status",
+                "value"
+              ]
+            },
+            "then": {
+              "required": [
+                "provenance",
+                "basis",
+                "qualifications"
+              ],
+              "properties": {
+                "provenance": {
+                  "type": "object",
+                  "required": [
+                    "detector_identity",
+                    "profile",
+                    "input_evidence_ref",
+                    "observed_at",
+                    "producer",
+                    "definitions",
+                    "actual_execution"
+                  ],
+                  "properties": {
+                    "definitions": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "declared_properties": {
+                          "type": "array",
+                          "minItems": 1,
+                          "uniqueItems": true,
+                          "items": {
+                            "enum": [
+                              "classification_distribution",
+                              "cumulative_probabilities",
+                              "region_detections"
+                            ]
+                          }
+                        },
+                        "taxonomy": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "labels": {
+                          "type": "array",
+                          "minItems": 1,
+                          "uniqueItems": true,
+                          "items": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        },
+                        "meaning": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "required": [
+                        "declared_properties",
+                        "taxonomy",
+                        "labels",
+                        "meaning"
                       ]
                     }
                   }
@@ -2941,6 +2985,9 @@
               ]
             },
             "minItems": 0
+          },
+          "local_execution": {
+            "$ref": "#/$defs/local_execution"
           }
         },
         "required": [
@@ -3629,6 +3676,770 @@
           "represents",
           "available_expansions"
         ]
+      },
+      "sensitivity_v1_value": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "detector_identity": {
+            "type": "string",
+            "minLength": 1
+          },
+          "profile": {
+            "type": "string",
+            "minLength": 1,
+            "not": {
+              "enum": [
+                "freepik-ordinal448-mps-fp32-v1",
+                "nudenet640-native-cpu-fp32-v1"
+              ]
+            }
+          },
+          "labels": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true,
+              "properties": {
+                "label": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "score": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "threshold": {
+                  "type": "number",
+                  "minimum": 0,
+                  "description": "Effective nonnegative cutoff, not a probability. Values above 1 preserve profiles whose labels cannot trigger this comparison."
+                },
+                "mild_threshold": {
+                  "type": "number",
+                  "minimum": 0,
+                  "description": "Effective nonnegative mild cutoff, not a probability. Preserve the recorded value, including values above 1."
+                },
+                "sensitive": {
+                  "type": "boolean"
+                },
+                "mild_sensitive": {
+                  "type": "boolean"
+                },
+                "description": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "label",
+                "score"
+              ]
+            },
+            "minItems": 0
+          }
+        },
+        "required": [
+          "detector_identity",
+          "profile",
+          "labels"
+        ]
+      },
+      "sensitivity_named_value": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "detector_identity": {
+            "type": "string",
+            "minLength": 1
+          },
+          "profile": {
+            "type": "string",
+            "minLength": 1
+          },
+          "classification_distribution": {
+            "$ref": "#/$defs/classification_distribution"
+          },
+          "cumulative_probabilities": {
+            "type": "object",
+            "minProperties": 1,
+            "additionalProperties": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          },
+          "region_detections": {
+            "$ref": "#/$defs/region_detections"
+          }
+        },
+        "required": [
+          "detector_identity",
+          "profile"
+        ],
+        "anyOf": [
+          {
+            "required": [
+              "classification_distribution"
+            ]
+          },
+          {
+            "required": [
+              "region_detections"
+            ]
+          }
+        ],
+        "dependentRequired": {
+          "cumulative_probabilities": [
+            "classification_distribution"
+          ]
+        }
+      },
+      "classification_distribution": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "taxonomy": {
+            "type": "string",
+            "minLength": 1
+          },
+          "score_semantics": {
+            "const": "categorical_probability"
+          },
+          "probabilities": {
+            "type": "object",
+            "minProperties": 1,
+            "additionalProperties": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          }
+        },
+        "required": [
+          "taxonomy",
+          "score_semantics",
+          "probabilities"
+        ]
+      },
+      "region_detections": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "taxonomy": {
+            "type": "string",
+            "minLength": 1
+          },
+          "score_semantics": {
+            "const": "model_detection_score"
+          },
+          "coordinate_system": {
+            "const": "input_evidence_pixels_xyxy"
+          },
+          "input_dimensions": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "width": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "height": {
+                "type": "integer",
+                "minimum": 1
+              }
+            },
+            "required": [
+              "width",
+              "height"
+            ]
+          },
+          "instances": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "label": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "score": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "box_xyxy": {
+                  "type": "array",
+                  "minItems": 4,
+                  "maxItems": 4,
+                  "items": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                }
+              },
+              "required": [
+                "label",
+                "score",
+                "box_xyxy"
+              ]
+            }
+          }
+        },
+        "required": [
+          "taxonomy",
+          "score_semantics",
+          "coordinate_system",
+          "input_dimensions",
+          "instances"
+        ]
+      },
+      "local_model_execution": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "detector_identity": {
+            "type": "string",
+            "minLength": 1
+          },
+          "profile": {
+            "type": "string",
+            "minLength": 1
+          },
+          "requested_device": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "precision": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "batch_limit": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "memory_estimate_bytes": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "succeeded_work_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "failed_work_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "pending_work_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "unreported_work_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "recorded_current": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "batch_count": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "input_count": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "inference_input_count": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "included_work_count": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "processing_wall_seconds": {
+                "type": "number",
+                "minimum": 0
+              },
+              "load_wall_seconds": {
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "batch_count",
+              "input_count",
+              "inference_input_count",
+              "included_work_count",
+              "processing_wall_seconds",
+              "load_wall_seconds"
+            ]
+          },
+          "recorded_reused": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "batch_count": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "input_count": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "inference_input_count": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "included_work_count": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "processing_wall_seconds": {
+                "type": "number",
+                "minimum": 0
+              },
+              "load_wall_seconds": {
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "batch_count",
+              "input_count",
+              "inference_input_count",
+              "included_work_count",
+              "processing_wall_seconds",
+              "load_wall_seconds"
+            ]
+          }
+        },
+        "required": [
+          "detector_identity",
+          "profile",
+          "requested_device",
+          "precision",
+          "batch_limit",
+          "memory_estimate_bytes",
+          "succeeded_work_count",
+          "failed_work_count",
+          "pending_work_count",
+          "unreported_work_count",
+          "recorded_current",
+          "recorded_reused"
+        ]
+      },
+      "local_model_batch": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "batch_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "detector_identity": {
+            "type": "string",
+            "minLength": 1
+          },
+          "profile": {
+            "type": "string",
+            "minLength": 1
+          },
+          "origin": {
+            "enum": [
+              "current",
+              "reused"
+            ]
+          },
+          "observed_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "input_count": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "inference_input_count": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "included_work_count": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "processing_wall_seconds": {
+            "type": "number",
+            "minimum": 0
+          },
+          "load_wall_seconds": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "actual_device": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "precision": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "measured_memory_bytes": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "batch_id",
+          "detector_identity",
+          "profile",
+          "origin",
+          "observed_at",
+          "input_count",
+          "inference_input_count",
+          "included_work_count",
+          "processing_wall_seconds",
+          "load_wall_seconds",
+          "actual_device",
+          "precision",
+          "measured_memory_bytes"
+        ]
+      },
+      "local_execution_summary": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "status": {
+            "enum": [
+              "recorded",
+              "not_recorded"
+            ]
+          },
+          "resource_budget": {
+            "anyOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "capacity": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "source_io_slots": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "workspace_io_slots": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "cpu_slots": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "process_slots": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "memory_bytes": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "temporary_bytes": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "gpu_memory_bytes": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "model_slots": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "exiftool_slots": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "decoder_slots": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "encoder_slots": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "network_slots": {
+                        "type": "integer",
+                        "minimum": 0
+                      }
+                    },
+                    "required": [
+                      "source_io_slots",
+                      "workspace_io_slots",
+                      "cpu_slots",
+                      "process_slots",
+                      "memory_bytes",
+                      "temporary_bytes",
+                      "gpu_memory_bytes",
+                      "model_slots",
+                      "exiftool_slots",
+                      "decoder_slots",
+                      "encoder_slots",
+                      "network_slots"
+                    ]
+                  },
+                  "max_workers": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "max_pending": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "required": [
+                  "capacity",
+                  "max_workers",
+                  "max_pending"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "models": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/local_model_execution"
+            }
+          }
+        },
+        "required": [
+          "status",
+          "resource_budget",
+          "models"
+        ]
+      },
+      "local_execution": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "status": {
+            "enum": [
+              "recorded",
+              "not_recorded"
+            ]
+          },
+          "resource_budget": {
+            "anyOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "capacity": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "source_io_slots": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "workspace_io_slots": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "cpu_slots": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "process_slots": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "memory_bytes": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "temporary_bytes": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "gpu_memory_bytes": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "model_slots": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "exiftool_slots": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "decoder_slots": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "encoder_slots": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "network_slots": {
+                        "type": "integer",
+                        "minimum": 0
+                      }
+                    },
+                    "required": [
+                      "source_io_slots",
+                      "workspace_io_slots",
+                      "cpu_slots",
+                      "process_slots",
+                      "memory_bytes",
+                      "temporary_bytes",
+                      "gpu_memory_bytes",
+                      "model_slots",
+                      "exiftool_slots",
+                      "decoder_slots",
+                      "encoder_slots",
+                      "network_slots"
+                    ]
+                  },
+                  "max_workers": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "max_pending": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "required": [
+                  "capacity",
+                  "max_workers",
+                  "max_pending"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "models": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/local_model_execution"
+            }
+          },
+          "batches": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/local_model_batch"
+            }
+          },
+          "page": {
+            "$ref": "#/$defs/page"
+          }
+        },
+        "required": [
+          "status",
+          "resource_budget",
+          "models",
+          "batches",
+          "page"
+        ]
       }
     }
   },
@@ -3674,5 +4485,15 @@
       ]
     }
   },
-  "$comment": "Development authority at docs/spec/contract/precheck-read. Runtime release snapshots are synchronized only with milestone-two implementation. No old/new public routing."
+  "$comment": "Development authority at docs/spec/contract/precheck-read. Runtime release snapshots are synchronized only with milestone-two implementation. No old/new public routing.",
+  "x-derived-definitions": {
+    "source": "../precheck-run/precheck-run.tool.json#/outputSchema/$defs",
+    "names": [
+      "local_model_execution",
+      "local_model_batch",
+      "local_execution_summary",
+      "local_execution"
+    ],
+    "purpose": "Generated shared local execution definitions; edit the Run source, synchronize here and verify equality."
+  }
 }

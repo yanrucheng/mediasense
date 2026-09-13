@@ -1,5 +1,48 @@
 # Plan 信息收集与可选工作保存：实现验收
 
+## 当前基线重新验收与输入校验补修
+
+2026-09-12 本轮任务开始时工作区干净，HEAD 为 `615c3359941927515f0c0a8738a3f08122bcad46`。`6acf1f5` 已包含本包实现、Skill、SQLite 增量升级、Preview 与此前四项补修，因此没有重复应用 contract.patch 或重写已完成实现。以下是本次实际执行的新证据；后文历史日常安装记录不代表已安装本次新构建。
+
+### 本次改动
+
+- `plan/work.py`：create/update 的偏好按既有正式 schema 校验，拒绝空偏好键；嵌套 JSON 的开放范围不变。无效偏好在 Read、候选分析和写入之前拒绝，组合请求不改变说明、候选或 revision，失败不占用 request_id。
+- `inspect`：显式 `page.limit:null` 返回 `invalid_request`，仅省略时使用默认 limit；新 Work、有候选和已撤下三种状态一致。没有修改当前 schema 或预期错误码。
+- `test_plan_optional_work.py` 新增 5 项语义反例；原实现上 5 项全部失败，补修后通过。实际 MCP runner 增加相同反例及失败后状态检查。既有 SQLite、Skill、Preview、Host 包装和确认通道不需要再次修改。
+
+### 实际验证
+
+| 验收面 | 本轮结果与范围 |
+| --- | --- |
+| 三字段保存、读取、身份及恢复 | 源码专项 **234 passed，25.99 s**；含 52 组三字段组合、无候选、长文本精确读回、错误组合原子性、零 Read/候选分析、保存候选不解码、同值新 revision、幂等重放、旧 cursor/版本、闭合、seal reservation 恢复，以及线程/跨进程竞争、取消、提交中崩溃和响应丢失 |
+| 默认全集 | 同一隔离源码快照首次 **1292 passed、4 failed、16 deselected，138.69 s**；4 项均在 `socket.bind` 被沙箱阻止。仅放行本机回环后重跑这 4 项，**4 passed，0.18 s**。因此选中的 **1296 项已全部通过**，不是宣称一次运行全绿；16 项为原有 local_fixture/scale 排除 |
+| 安装包专项 | CPython **3.11.13**、core 依赖、pytest 9.1.1；从 checkout 外运行，删除 PYTHONPATH、`-o pythonpath=''`，**234 passed，24.82 s**。实际 import 来自本轮 `install/lib/python3.11/site-packages/mediasense` |
+| 实际 MCP | 新临时合成 Dataset，**42 次 stdio MCP 调用通过**：create、notes-only、默认读取、重启、完整候选、非法候选/偏好拒绝、撤下、字段清空、预览、缺失/错误确认、纯说明更新后的旧版本拒绝、同内容当前版本冻结与重放。所有业务返回仅一份 structuredContent、content=[]，**elicitation=0**；成功冻结的三处 plan_ref 一致 |
+| Preview | 原 Result、原两项 Evidence 选集及 limit=16 的字节分页续读通过，第二页准备 JPEG 完整解码 **80×40**；HTML 包含同一候选身份、决定说明、Source Set、引用和转义后的脚本文字。无候选拒绝最终 Preview。独立 Chrome DOM 观察到 complete=true、naturalWidth=80、naturalHeight=40；浏览器退出超时另记下文 |
+| Agent 工作流 | 独立 Agent 只获得当前 Skill/合约及原始合成场景，未读取旧验收结论。六类场景（文件可读/不可读分支共七条路径）产生中文回复、来源/范围判断与请求；**24 条 Plan、5 条 Read 请求**通过 schema 检查。主 Agent 复核后，24 条 Plan 请求以实际返回的不透明引用绑定，在隔离安装 Tool＋合成 Read 上逐条执行成功；仅完整 HTML 后明确接受的合成分支 seal |
+| 打包与一致性 | 离线 distribution smoke 的安装、CLI/doctor、七 Tool discovery/dispatch、12 个 Skill 文件、卸载通过；**128 个 package 文件**与隔离源码逐字节一致。Ruff、Skill quick_validate 和 diff whitespace 检查通过 |
+
+行为验收中，单张照片左侧人物身份未传播到其他成员；补充文件区分路径、内容和解释；充分信息直接形成候选；未知/未答复不制造答案；实质冲突撤下旧候选；局部纠正不充当全案接受。没有固定调查顺序、必问节点或每轮保存要求。合成视觉与用户接受是明确测试前提，不声称认证了真实媒体语义或真实人类事件。
+
+### 构建身份与复跑
+
+本轮产物根目录：`/private/tmp/mediasense-plan-reaccept-6p3o8lhs/`。从上述 commit 的 `git archive` 导出，仅覆盖本次三个代码/测试文件；`implementation.patch` SHA-256 为 `998ff87ae3df3c697cb9420a0f4bfc51f06ed2dbfbdefd03d4eaf5d3eca89822`。没有纳入过程中其他任务新增的敏感性变更文档。
+
+- wheel：`wheel/mediasense-0.10.2-py3-none-any.whl`；SHA-256 **`f6a8b56645b8f60cdc3734c3887406eb330f122c2585e3e0b40addf7f039db45`**。
+- core 约束从该快照 uv.lock 以 `--locked --offline --no-dev --no-emit-project --no-hashes` 导出；`dependencies.txt` SHA-256 `2ce899b23c7c1d4896f7c0ae7c378de7078f4afc7459b9f9693650feb8b91b11`。未下载或运行模型，未调用地图服务。
+- `build-verification.json`、`default-tests.xml`、`loopback-tests.xml`、`installed-tests.xml`、对应日志保存精确环境和结果。独立推演见 `agent-workflows.md`，原请求见 `agent-workflow-requests.json`，实际重放见 `agent-workflow-replay.json`。
+- MCP 完整轨迹：`mcp-complete/report.json`，HTML：`mcp-complete/preview.html`；候选 identity `sha256:dbb3a7a21abc90b445cf654cf627cb3ec837da22279ce6c5d0d5d0eff4588989`。源 JPEG 前后 SHA-256 同为 `68e5efb8145b31e6ce2d4062a97e3cb23edf37940cf3ba5e3f6fefcd625a991a`。
+
+复跑使用本轮安装的 Python，删除 PYTHONPATH、设置临时 MEDIASENSE_CONFIG_HOME/DATA_HOME，执行快照内 `tests/run_plan_interaction_smoke.py --host <本轮 install/bin/mediasense> --output <新的临时目录> --paged-preview`。安装包专项沿用上表十个 Plan/Frozen Plan 测试文件，并禁用 pytest 的源码 pythonpath。构建、依赖组合和受测入口均与历史 wheel 分开记录；同为 0.10.2 不意味着字节相同。
+
+### 失败记录、限制与交付判断
+
+首次 distribution runner 被沙箱禁止读取 uv 缓存的 `.git` 标记，放行相同离线临时安装后通过，未切换全局工具。可选 `--browser` 的首次 MCP 运行在 Chrome 启动时 SIGABRT，不能作为完整 MCP 成功证据；新目录不带该选项的完整 42 次调用通过。独立 Chrome 两次在 40 秒退出等待上超时，第二次保留的 stdout 已含完整 DOM 和成功图片加载结果。`browser-timeout.json`、`browser-dom.html`、`browser-observation.json` 分别保留超时诊断及可证实的加载；没有把超时改写为浏览器 runner 正常通过。检查时没有本次临时 profile 的残留 Chrome 主进程。
+
+**本轮达到限定范围内的源码和隔离 wheel 可交付状态。** Chrome 自动化退出仍有环境限制，但实际 DOM 图片加载已取得证据。没有切换全局安装、写入业务 Plan/Result、操作真实媒体、执行真实 Apply 或增加外部服务调用；历史日常安装仍停留在它自己的构建。未来切换须按唯一安装 runbook 验证实际依赖与会话。本轮不认证所有未来 Agent 的语义质量、真实人类身份、多 TB/任意大文本吞吐、真实地图/模型质量或其他 OS。原有确认顺序仍为用户看确切 HTML、聊天明确接受、Agent 传递同内容接受、Tool 冻结。
+
+## 历史交付记录
+
 2026-09-12：用户确认此前四项问题均已独立复核闭合，并授权按唯一安装 runbook 执行日常升级。本次机器 CLI、操作项目四个 Skills/lock 和原 MCP 启动链路已完成切换与验证；现有 Agent 会话不声称已重载，需在操作项目中新开会话核对。各轮失败与证据继续保留。
 
 首轮记录认证源码与实际隔离 wheel 的限定路径；不认证日常 Host 已升级，也不把合成聊天当作真实人类事件。当前承诺仍由 `docs/spec/contract/` 维护，`contract.patch` 未重复应用。

@@ -304,6 +304,70 @@ def test_absent_candidate_does_not_bypass_request_shape_checks(tmp_path, fields)
     assert inspect(tool, state, **fields)["error"]["code"] == "invalid_request"
 
 
+@pytest.mark.parametrize("candidate_state", ["new", "present", "withdrawn"])
+def test_explicit_null_page_limit_is_not_an_omitted_limit(tmp_path, candidate_state):
+    tool = _tool(tmp_path)
+    state = _create(tool)
+    if candidate_state != "new":
+        state = _update(tool, state)
+    if candidate_state == "withdrawn":
+        state = update(tool, state, candidate_content=None)
+    before = tool.store.snapshot(state["work_ref"])
+    fields = {"sections": ["content"], "page": {"collection": "groups", "limit": None}}
+    request = {"action": "inspect", "work_ref": state["work_ref"], **fields}
+    input_validator, output_validator = validators()
+    assert not input_validator.is_valid(request)
+    result = inspect(tool, state, **fields)
+    assert result["error"]["code"] == "invalid_request"
+    output_validator.validate(result)
+    assert tool.store.snapshot(state["work_ref"]) == before
+    assert inspect(tool, state, sections=["content"], page={"collection": "groups"})[
+        "outcome"
+    ] == "ok"
+
+
+@pytest.mark.parametrize("action", ["create", "update"])
+def test_invalid_preference_key_rejects_before_read_or_atomic_write(
+    tmp_path, monkeypatch, action
+):
+    tool = _tool(tmp_path)
+    state = _update(tool, _create(tool))
+    before = tool.store.snapshot(state["work_ref"])
+    request = {
+        "action": action,
+        "request_id": "request:invalid-preferences",
+        "organization_preferences": {"": "not permitted by the contract"},
+        **(
+            {"result_ref": state["result_ref"]}
+            if action == "create"
+            else {
+                "work_ref": state["work_ref"],
+                "base_revision": state["revision"],
+                "working_notes": "must not save",
+                "candidate_content": None,
+            }
+        ),
+    }
+    input_validator, output_validator = validators()
+    assert not input_validator.is_valid(request)
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("invalid preferences must not read PreCheck")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(tool.precheck_read, "read", forbidden)
+        result = tool.handle(request)
+    assert result["error"]["code"] == "invalid_request"
+    output_validator.validate(result)
+    assert tool.store.snapshot(state["work_ref"]) == before
+    # Nested JSON remains open; only the preference's own names must be nonempty.
+    preferences = {"nested": {"": [None, True, 2, "背景"]}}
+    request["organization_preferences"] = preferences
+    accepted = tool.handle(request)
+    assert accepted["outcome"] == "ok"
+    assert tool.store.snapshot(accepted["work_ref"]).organization_preferences == preferences
+
+
 @pytest.mark.parametrize(
     "field,value",
     [

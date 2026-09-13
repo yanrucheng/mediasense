@@ -1302,7 +1302,7 @@ def test_precheck_amap_acquires_address_and_poi_with_one_provider_request(
     assert components["nearby_place_candidates"]["value"][0]["name"] == "故宫"
 
 
-def test_precheck_preserves_partial_when_nearby_lookup_fails(
+def test_precheck_preserves_address_but_blocks_on_nearby_quota(
     tmp_path: Path,
 ) -> None:
     database = tmp_path / "workspace" / "working.sqlite3"
@@ -1322,7 +1322,12 @@ def test_precheck_preserves_partial_when_nearby_lookup_fails(
                 }
             ],
         },
-        post_response={"error": {"message": "Places quota exceeded"}},
+        post_response={
+            "error": {
+                "status": "RESOURCE_EXHAUSTED",
+                "message": "Places quota exceeded",
+            }
+        },
     )
     provider = GoogleMapsReverseGeocoder(
         "secret",
@@ -1346,7 +1351,8 @@ def test_precheck_preserves_partial_when_nearby_lookup_fails(
     _authorize(run_tool, public_run_ref)
     completed = producer.produce(public_run_ref, run_id, [metadata.work_id])
 
-    assert completed.status == "completed"
+    # Geo D6: quota is a service prerequisite, not a terminal location gap.
+    assert completed.status == "blocked"
     assert completed.actual_provider_requests == 2
     components = {item["name"]: item for item in completed.outcomes[0].observations}
     assert components["address_candidate"]["status"] == "available"
@@ -1356,7 +1362,7 @@ def test_precheck_preserves_partial_when_nearby_lookup_fails(
     assert components["nearby_place_candidates"]["status"] == "failed"
     assert "value" not in components["nearby_place_candidates"]
     assert any(
-        q["code"] == "nearby_places:google_maps_error"
+        q["code"] == "nearby_places:provider_quota"
         for q in components["nearby_place_candidates"]["qualifications"]
     )
     assert completed.outcomes[0].work.output["result"]["status"] == "partial"
@@ -1383,7 +1389,12 @@ def test_precheck_preserves_cross_provider_provenance_in_result_audit(
                 }
             ],
         },
-        post_response={"error": {"message": "Places quota exceeded"}},
+        post_response={
+            "error": {
+                "status": "RESOURCE_EXHAUSTED",
+                "message": "Places quota exceeded",
+            }
+        },
     )
     amap_transport = FakeTransport(
         get_response={

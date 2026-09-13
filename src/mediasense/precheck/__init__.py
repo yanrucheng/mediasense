@@ -99,7 +99,6 @@ from .sensitivity import (
     Detection,
     NSFW_BINARY_PROFILE_V1,
     NUDENET_BODY_EXPOSURE_PROFILE_V1,
-    NudeNetDetector,
     SensitivityBackendUnavailable,
     SensitivityDetector,
     SensitivityError,
@@ -108,7 +107,6 @@ from .sensitivity import (
     SensitivityProfile,
     SensitivityScore,
     SensitivityThreshold,
-    TransformersNSFWDetector,
     classify_detections,
 )
 from .result import (
@@ -239,7 +237,6 @@ __all__ = [
     "ImageEmbeddingEncoder",
     "NSFW_BINARY_PROFILE_V1",
     "NUDENET_BODY_EXPOSURE_PROFILE_V1",
-    "NudeNetDetector",
     "ORDINARY_RENDITION_PROFILE",
     "ImageRenditionProducer",
     "PrecheckReadBoundary",
@@ -283,7 +280,6 @@ __all__ = [
     "SensitivityScore",
     "SensitivityThreshold",
     "UnsafeWorkspace",
-    "TransformersNSFWDetector",
     "VideoFrameOutcome",
     "VideoFrameProducer",
     "VideoFrameProfile",

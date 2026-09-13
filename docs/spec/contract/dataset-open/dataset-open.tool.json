@@ -203,6 +203,36 @@
                     "$ref": "#/$defs/provider_status"
                   }
                 }
+              },
+              "local_sensitivity": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "configuration",
+                  "error",
+                  "execution",
+                  "model_downloads"
+                ],
+                "properties": {
+                  "configuration": {
+                    "type": [
+                      "object",
+                      "null"
+                    ]
+                  },
+                  "error": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "execution": {
+                    "const": "not_checked"
+                  },
+                  "model_downloads": {
+                    "const": false
+                  }
+                }
               }
             }
           },

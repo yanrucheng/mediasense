@@ -40,6 +40,7 @@ class Diagnostic:
 def diagnose() -> dict[str, object]:
     checks: list[Diagnostic] = []
     sensitivity_configuration = None
+    sensitivity_error = None
     embedding_configuration = None
     checks.append(
         Diagnostic(
@@ -82,7 +83,7 @@ def diagnose() -> dict[str, object]:
         )
     metadata_configuration = None
     try:
-        config = load_runtime_config()
+        config = load_runtime_config(allow_invalid_sensitivity=True)
     except ConfigurationError as error:
         checks.append(Diagnostic("configuration", "error", str(error), True))
         config_sources: list[str] = []
@@ -90,6 +91,13 @@ def diagnose() -> dict[str, object]:
         config_sources = [str(path) for path in config.sources]
         metadata_configuration = config.public_value()["metadata"]
         sensitivity_configuration = config.sensitivity
+        sensitivity_error = config.sensitivity_error
+        if sensitivity_error:
+            checks.append(
+                Diagnostic(
+                    "sensitivity_configuration", "error", sensitivity_error, True
+                )
+            )
         embedding_configuration = config.embedding
         configured_provider = bool(
             os.environ.get(config.amap_api_key_env)
@@ -157,9 +165,11 @@ def diagnose() -> dict[str, object]:
         )
     checks.append(
         Diagnostic(
-            "video_decoder", "ok" if find_spec("av") is not None else "warning",
+            "video_decoder",
+            "ok" if find_spec("av") is not None else "warning",
             "Packaged PyAV decoder is installed; video execution verifies its local FFmpeg libraries."
-            if find_spec("av") is not None else "PyAV is unavailable; repair this Host installation for video preparation.",
+            if find_spec("av") is not None
+            else "PyAV is unavailable; repair this Host installation for video preparation.",
             False,
         )
     )
@@ -193,35 +203,58 @@ def diagnose() -> dict[str, object]:
     )
     from mediasense.precheck.dinov3 import DinoV3CoreMLEncoder, MODEL_ID
 
-    selected_dino = embedding_configuration is not None and embedding_configuration["model_id"] == MODEL_ID
-    dino = DinoV3CoreMLEncoder(
-        model_path=Path(embedding_configuration["model_path"]) if selected_dino else None
-    ).diagnose()
-    checks.append(Diagnostic(
-        "dinov3_384", "error" if selected_dino and dino["state"] == "unavailable" else "ok" if dino["state"] == "prepared" else "warning",
-        "; ".join(dino["issues"]) or "Pinned DINOv3 384 prerequisites verified locally; inference not checked.",
-        selected_dino,
-    ))
-    from mediasense.precheck.sensitivity import (
-        NudeNetDetector,
-        SensitivityBackendUnavailable,
+    selected_dino = (
+        embedding_configuration is not None
+        and embedding_configuration["model_id"] == MODEL_ID
     )
-
-    try:
-        NudeNetDetector._weights()
-        weights_state = "available"
-    except SensitivityBackendUnavailable:
-        weights_state = "unavailable"
+    dino = DinoV3CoreMLEncoder(
+        model_path=Path(embedding_configuration["model_path"])
+        if selected_dino
+        else None
+    ).diagnose()
     checks.append(
         Diagnostic(
-            "sensitivity_weights",
-            "ok" if weights_state == "available" else "warning",
-            "Bundled NudeNet weights: "
-            + weights_state
-            + "; NSFW model/processor are loaded only from the pinned local cache at execution.",
-            False,
+            "dinov3_384",
+            "error"
+            if selected_dino and dino["state"] == "unavailable"
+            else "ok"
+            if dino["state"] == "prepared"
+            else "warning",
+            "; ".join(dino["issues"])
+            or "Pinned DINOv3 384 prerequisites verified locally; inference not checked.",
+            selected_dino,
         )
     )
+    from mediasense.precheck._sensitivity_models import prerequisites
+    from mediasense.precheck._sensitivity_profiles import (
+        PROFILES,
+        normalize_sensitivity,
+    )
+
+    sensitivity = sensitivity_configuration or normalize_sensitivity(None)
+    model_checks = {}
+    for name, settings in sensitivity["models"].items():
+        facts = (
+            prerequisites(PROFILES[name], settings["model_path"])
+            if settings["enabled"]
+            else {"state": "not_checked", "execution": "not_checked"}
+        )
+        model_checks[name] = {
+            "selected": settings["enabled"],
+            "profile": settings,
+            "prerequisites": facts,
+        }
+        checks.append(
+            Diagnostic(
+                "sensitivity_" + name,
+                "error"
+                if settings["enabled"] and facts["state"] == "unavailable"
+                else "ok",
+                "; ".join(facts.get("failures", []))
+                or "Prerequisites only; execution not checked.",
+                settings["enabled"],
+            )
+        )
     return {
         "application_version": application_version(),
         "status": ("error" if any(item.status == "error" for item in checks) else "ok"),
@@ -236,12 +269,17 @@ def diagnose() -> dict[str, object]:
             "dinov3_384": dino,
         },
         "local_sensitivity": {
-            "state": "configured" if sensitivity_configuration else "disabled",
+            "state": "invalid"
+            if sensitivity_error
+            else "configured"
+            if any(x["selected"] for x in model_checks.values())
+            else "disabled",
+            "configuration_error": sensitivity_error,
             "profile": sensitivity_configuration,
             "execution": "not_checked",
             "locality": "local",
             "model_downloads": False,
-            "nudenet_weights": weights_state,
+            "models": model_checks,
         },
         "user_config": str(default_user_config_path()),
     }

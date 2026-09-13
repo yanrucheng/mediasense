@@ -854,16 +854,26 @@ def _validate_contract_values(draft: ResultDraft) -> None:
             raise ResultSealError(
                 "only local Artifact Evidence may retain Artifact or Work references"
             )
+    from ._sensitivity_values import validate_input_links
+
+    try:
+        validate_input_links(
+            {s.ref: {"observations": s.observations} for s in draft.sources},
+            {
+                e.ref: {"observations": e.observations, "access": e.access}
+                for e in draft.evidence
+            },
+            (
+                (r.origin_ref, r.target_ref)
+                for r in draft.relationships
+                if r.relation == "derived_from"
+            ),
+        )
+    except ValueError as error:
+        raise ResultSealError(str(error)) from error
     evidence_refs = {item.ref for item in draft.evidence}
     for subject in (*draft.sources, *draft.evidence):
         for observation in subject.observations:
-            if observation["name"] == "content_sensitivity" and observation[
-                "status"
-            ] in {"available", "failed"}:
-                if observation["provenance"]["input_evidence_ref"] not in evidence_refs:
-                    raise ResultSealError(
-                        "Sensitivity input Evidence is outside this Result"
-                    )
             if (
                 observation["name"] == "video_contact_sheet"
                 and observation["status"] == "available"
@@ -892,6 +902,14 @@ def _validate_contract_values(draft: ResultDraft) -> None:
 def _validate_execution_boundary(boundary: object) -> None:
     if not isinstance(boundary, Mapping):
         raise ResultSealError("Result execution boundary must be an object")
+    if "local_execution" in boundary:
+        from ._local_execution import validate_local_execution, LocalExecutionError
+
+        try:
+            validate_local_execution(boundary["local_execution"])
+        except LocalExecutionError as error:
+            raise ResultSealError(str(error)) from error
+        boundary = {k: v for k, v in boundary.items() if k != "local_execution"}
     if boundary.get("source_read_only") is not True:
         raise ResultSealError("Result cannot claim source-read-only execution")
     if boundary.get("remote_models") is not False:
@@ -1039,6 +1057,9 @@ def _validate_observations(observations: tuple[dict[str, object], ...]) -> None:
         try:
             validator.validate(observation)
             json.dumps(observation, allow_nan=False)
+            from ._sensitivity_values import validate_observation
+
+            validate_observation(observation)
         except (ValidationError, TypeError, ValueError) as error:
             raise ResultSealError(
                 "Invalid public Observation: " + str(getattr(error, "message", error))

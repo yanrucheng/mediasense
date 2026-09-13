@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+from dataclasses import replace
+from mediasense.precheck._sensitivity_profiles import FREEPIK, SensitivityPrediction
+
 import json
 from pathlib import Path
-import sys
-from types import SimpleNamespace
 
 from jsonschema import Draft202012Validator
 from PIL import Image
@@ -11,18 +12,12 @@ import pytest
 
 from mediasense.precheck import (
     AccountingStore,
-    Detection,
     HIGH_RESOLUTION_RENDITION_PROFILE,
     ImageRenditionProducer,
-    NudeNetDetector,
     PrecheckReadTool,
     ResultSealError,
     ResultStore,
     SensitivityProducer,
-    SensitivityError,
-    SensitivityProfile,
-    SensitivityThreshold,
-    TransformersNSFWDetector,
     WorkStatus,
     WorkStore,
 )
@@ -39,42 +34,58 @@ def _closed_run(database: Path, source: Path) -> str:
     return run_id
 
 
-class FakeDetector:
-    def __init__(self, *, identity: str = "fake-detector@sha256:one") -> None:
-        self.identity = identity
-        self.calls: list[Path] = []
-        self.fail = False
+PROFILE = replace(
+    FREEPIK,
+    name="test-sensitivity-v2",
+    model_id="synthetic/sensitivity",
+    definitions={
+        "declared_properties": ["classification_distribution"],
+        "taxonomy": "synthetic",
+        "labels": ["sensitive", "ordinary"],
+        "meaning": "Synthetic exclusive scores",
+    },
+    basis={},
+    memory_bytes=64 * 1024**2,
+)
 
-    def detect(self, image_path: Path) -> tuple[Detection, ...]:
-        self.calls.append(image_path)
-        if self.fail:
-            raise SensitivityError("detector unavailable")
-        return (
-            Detection("sensitive", 0.8),
-            Detection("sensitive", 0.6),
-            Detection("ordinary", 0.2),
+
+class FakeDetector:
+    def __init__(self, *, identity="fake-detector@sha256:one", profile=PROFILE):
+        self.identity, self.profile = identity, profile
+        self.calls, self.batch_calls = [], []
+        self.fail = False
+        self.execution = {"device": "synthetic", "precision": "float32"}
+
+    @property
+    def declaration(self):
+        return self.profile.value()
+
+    def analyze(self, inputs):
+        self.calls.extend(i.path for i in inputs)
+        self.batch_calls.append(tuple(i.path for i in inputs))
+        return tuple(
+            SensitivityPrediction(
+                i.key,
+                i.sha256,
+                None
+                if self.fail
+                else {
+                    "classification_distribution": {
+                        "taxonomy": "synthetic",
+                        "score_semantics": "categorical_probability",
+                        "probabilities": {"sensitive": 0.8, "ordinary": 0.2},
+                    }
+                },
+                "known local input failure" if self.fail else None,
+            )
+            for i in inputs
         )
 
-
-class BatchDetector(FakeDetector):
-    def __init__(self) -> None:
-        super().__init__()
-        self.batch_calls: list[tuple[Path, ...]] = []
-
-    def detect_many(
-        self, image_paths: tuple[Path, ...]
-    ) -> tuple[tuple[Detection, ...], ...]:
-        self.batch_calls.append(image_paths)
-        return tuple(self.detect(path) for path in image_paths)
+    def close(self):
+        pass
 
 
-PROFILE = SensitivityProfile(
-    name="test-sensitivity-v1",
-    thresholds=(
-        SensitivityThreshold("sensitive", 0.7),
-        SensitivityThreshold("ordinary", 99.0),
-    ),
-)
+BatchDetector = FakeDetector
 
 
 def test_sensitivity_uses_rendition_provenance_and_reuses_across_runs(
@@ -103,9 +114,8 @@ def test_sensitivity_uses_rendition_provenance_and_reuses_across_runs(
     assert first.observations[0]["status"] == "available"
     value = first.observations[0]["value"]
     assert isinstance(value, dict)
-    labels = {item["label"]: item for item in value["labels"]}
-    assert labels["sensitive"]["score"] == 0.8
-    assert labels["sensitive"]["sensitive"] is True
+    assert value["classification_distribution"]["probabilities"]["sensitive"] == 0.8
+    assert "labels" not in value
     assert media.read_bytes() == source_before
 
     second_run = _closed_run(database, source)
@@ -160,7 +170,7 @@ def test_sensitivity_many_uses_one_backend_batch_with_per_item_work(
     )
 
 
-def test_detector_or_threshold_change_has_narrow_semantic_invalidation(
+def test_detector_or_semantic_recipe_change_has_narrow_semantic_invalidation(
     tmp_path: Path,
 ) -> None:
     database = tmp_path / "workspace" / "working.sqlite3"
@@ -174,14 +184,10 @@ def test_detector_or_threshold_change_has_narrow_semantic_invalidation(
     first = SensitivityProducer(database, FakeDetector()).produce(
         run_id, Path("photo.jpg"), rendition.work.work_id, profile=PROFILE
     )
-    changed_threshold = SensitivityProfile(
-        name=PROFILE.name,
-        thresholds=(
-            SensitivityThreshold("sensitive", 0.9),
-            SensitivityThreshold("ordinary", 99.0),
-        ),
-    )
-    second = SensitivityProducer(database, FakeDetector()).produce(
+    changed_threshold = replace(PROFILE, adapter_revision="changed-output-v2")
+    second = SensitivityProducer(
+        database, FakeDetector(profile=changed_threshold)
+    ).produce(
         run_id,
         Path("photo.jpg"),
         rendition.work.work_id,
@@ -226,6 +232,14 @@ def test_detector_failure_is_explicit_and_result_observations_remain_readable(
     assert good.work.status is WorkStatus.SUCCEEDED
     assert failed.work.status is WorkStatus.TERMINAL_FAILURE
     assert failed.work.last_failure_code == "sensitivity_detection_failed"
+    assert (
+        failed.work.output["observations"][0]["provenance"]["definitions"]
+        == PROFILE.definitions
+    )
+    assert (
+        failed.work.output["observations"][0]["provenance"]["actual_execution"]
+        == detector.execution
+    )
 
     draft = ResultStore(database).build_minimal(
         run_id,
@@ -281,63 +295,6 @@ def test_detector_failure_is_explicit_and_result_observations_remain_readable(
     )
 
 
-def test_transformers_detector_requires_pinned_local_model_files(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    from contextlib import nullcontext
-
-    calls = []
-    tensor = SimpleNamespace(
-        softmax=lambda **kwargs: tensor, cpu=lambda: tensor, tolist=lambda: [[0.1, 0.9]]
-    )
-
-    class Model:
-        config = SimpleNamespace(id2label={0: "nsfw", 1: "normal"})
-
-        def to(self, device):
-            calls.append(("device", device))
-            return self
-
-        def eval(self):
-            return self
-
-        def __call__(self, **kwargs):
-            return SimpleNamespace(logits=tensor)
-
-    class Processor:
-        def __call__(self, **kwargs):
-            return SimpleNamespace(to=lambda device: {})
-
-    def load_model(*args, **kwargs):
-        calls.append(("model", kwargs))
-        return Model()
-
-    def load_processor(*args, **kwargs):
-        calls.append(("processor", kwargs))
-        return Processor()
-
-    monkeypatch.setitem(
-        sys.modules,
-        "transformers",
-        SimpleNamespace(
-            AutoImageProcessor=SimpleNamespace(from_pretrained=load_processor),
-            AutoModelForImageClassification=SimpleNamespace(from_pretrained=load_model),
-        ),
-    )
-    monkeypatch.setitem(
-        sys.modules, "torch", SimpleNamespace(inference_mode=nullcontext)
-    )
-    image = tmp_path / "input.jpg"
-    Image.new("RGB", (8, 8), "white").save(image)
-    detections = TransformersNSFWDetector(revision="model-commit").detect(image)
-    assert [item.label for item in detections] == ["nsfw", "normal"]
-    assert calls == [
-        ("processor", {"revision": "model-commit", "local_files_only": True}),
-        ("model", {"revision": "model-commit", "local_files_only": True}),
-        ("device", "cpu"),
-    ]
-
-
 def test_seal_rechecks_inline_supporting_work_after_draft_build(
     tmp_path: Path,
 ) -> None:
@@ -367,47 +324,3 @@ def test_seal_rechecks_inline_supporting_work_after_draft_build(
         store.seal(draft)
     assert store.audit().available == ()
     assert store.audit().orphan_paths == ()
-
-
-def test_nudenet_adapter_preserves_all_local_detections(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    class FakeNudeDetector:
-        def __init__(self, **kwargs):
-            assert kwargs == {
-                "model_path": str(tmp_path / "weights.onnx"),
-                "providers": ["CPUExecutionProvider"],
-            }
-
-        def detect(self, image_path: str) -> list[dict[str, object]]:
-            assert image_path.endswith("input.jpg")
-            return [
-                {"class": "FEMALE_BREAST_EXPOSED", "score": 0.8},
-                {"class": "FACE_FEMALE", "score": 0.9},
-            ]
-
-    monkeypatch.setitem(
-        sys.modules,
-        "nudenet",
-        SimpleNamespace(NudeDetector=FakeNudeDetector),
-    )
-    weights = tmp_path / "weights.onnx"
-    weights.write_bytes(b"synthetic local weights")
-    monkeypatch.setattr(NudeNetDetector, "_weights", staticmethod(lambda: weights))
-    monkeypatch.setitem(
-        sys.modules,
-        "onnxruntime",
-        SimpleNamespace(
-            get_available_providers=lambda: ["CPUExecutionProvider"],
-            disable_telemetry_events=lambda: None,
-        ),
-    )
-    image = tmp_path / "input.jpg"
-    Image.new("RGB", (8, 8), "white").save(image)
-
-    detections = NudeNetDetector().detect(image)
-
-    assert [(item.label, item.score) for item in detections] == [
-        ("FEMALE_BREAST_EXPOSED", 0.8),
-        ("FACE_FEMALE", 0.9),
-    ]

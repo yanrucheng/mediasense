@@ -3,9 +3,14 @@
 from __future__ import annotations
 
 from bisect import bisect_left
+from contextlib import AbstractContextManager, nullcontext
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
+from operator import attrgetter
+import sys
+from threading import Lock
 from typing import Any, Mapping, Sequence
 
 import gpxpy
@@ -70,10 +75,57 @@ class GPXOutcome:
 class GPXMatchProducer:
     """Match one validated capture time against explicitly adopted local tracks."""
 
-    def __init__(self, database_path: Path) -> None:
+    def __init__(
+        self,
+        database_path: Path,
+        *,
+        max_cache_bytes: int = 64 * 1024**2,
+        memory_admission: Callable[[int], AbstractContextManager] | None = None,
+    ) -> None:
+        if max_cache_bytes < 0:
+            raise ValueError("GPX preparation cache bound must be nonnegative")
         self.database_path = Path(database_path)
         self.validity = SourceValidityStore(self.database_path)
         self.work = WorkStore(self.database_path)
+        self.max_cache_bytes = max_cache_bytes
+        self._memory_admission = memory_admission
+        self._preparation_lock = Lock()
+        self._prepared_key: tuple | None = None
+        self._prepared_segments: tuple[GPXTrackSegment, ...] = ()
+
+    def memory_estimate(self, proofs: Sequence[SourceContentProof]) -> int:
+        """Conservative admission estimate, not an observed RSS guarantee."""
+        size = sum(proof.size_bytes for proof in proofs)
+        # XML trees, decoded text and point objects can coexist during parsing.
+        return self.max_cache_bytes + 8 * 1024**2 + size * 64
+
+    def _prepare_tracks(self, run_id: str, proofs: Sequence[SourceContentProof]):
+        key = tuple(
+            (
+                p.dataset_id,
+                p.reuse_domain,
+                p.relative_path,
+                p.source_revision,
+                p.algorithm,
+                p.digest,
+                p.size_bytes,
+                p.source_path,
+            )
+            for p in proofs
+        )
+        # One retained set per producer. Concurrent source Work shares a cold
+        # parse; retained state dies with the phase and owns no product authority.
+        with self._preparation_lock:
+            if key == self._prepared_key:
+                return self._prepared_segments, ()
+            self._prepared_key, self._prepared_segments = None, ()
+            segments, failures = parse_gpx_sources(proofs)
+            _verify_proofs(self.validity, run_id, proofs)
+            # I/O failures must be attempted again even if ordinary stat identity
+            # is unchanged (e.g. access restored). Do not memoize partial failures.
+            if not failures and _prepared_size(segments) <= self.max_cache_bytes:
+                self._prepared_key, self._prepared_segments = key, segments
+            return segments, failures
 
     def produce(
         self,
@@ -136,6 +188,23 @@ class GPXMatchProducer:
             return GPXOutcome(record, _work_observations(record.output), True)
         if record.status not in {WorkStatus.READY, WorkStatus.RETRYABLE_FAILURE}:
             return GPXOutcome(record, (), False)
+        # Reusable Work and metadata-only outcomes need no parsing memory. Each
+        # active match claim covers the retained cache plus possible cold parse;
+        # the phase owns the producer lifetime and releases it before other work.
+        admission = (
+            self._memory_admission(self.memory_estimate(proofs))
+            if self._memory_admission is not None
+            else nullcontext()
+        )
+        with admission:
+            return self._execute_match(
+                run_id, record, proofs, target_time, profile, subject, owner
+            )
+
+    def _execute_match(
+        self, run_id, record, proofs, target_time, profile, subject, owner
+    ):
+        spec = record.spec
         leases = self.work.claim_ready_work(
             run_id,
             owner,
@@ -146,7 +215,7 @@ class GPXMatchProducer:
             return GPXOutcome(self.work.get_work(record.work_id), (), False)
         lease = leases[0]
         try:
-            segments, failures = parse_gpx_sources(proofs)
+            segments, failures = self._prepare_tracks(run_id, proofs)
             match = match_gpx_segments(segments, target_time, profile)
             observation = _match_observation(
                 match,
@@ -317,9 +386,10 @@ def match_gpx_segments(
 ) -> GPXMatch | None:
     candidates: list[GPXMatch] = []
     for segment in segments:
-        times = [point.timestamp for point in segment.points]
-        index = bisect_left(times, target_timestamp)
-        if profile.interpolate and 0 < index < len(times):
+        index = bisect_left(
+            segment.points, target_timestamp, key=attrgetter("timestamp")
+        )
+        if profile.interpolate and 0 < index < len(segment.points):
             left = segment.points[index - 1]
             right = segment.points[index]
             left_diff = target_timestamp - left.timestamp
@@ -368,6 +438,26 @@ def match_gpx_segments(
             item.segment_index,
             item.point_times,
         ),
+    )
+
+
+def _prepared_size(segments: Sequence[GPXTrackSegment]) -> int:
+    # Only immutable points/segments are retained, never the XML tree or source
+    # text. Include the Python containers and scalar objects in the cache bound.
+    return sys.getsizeof(segments) + sum(
+        sys.getsizeof(segment)
+        + sys.getsizeof(segment.relative_path)
+        + sys.getsizeof(segment.relative_path.as_posix())
+        + sys.getsizeof(segment.segment_index)
+        + sys.getsizeof(segment.points)
+        + sum(
+            sys.getsizeof(point)
+            + sys.getsizeof(point.timestamp)
+            + sys.getsizeof(point.latitude)
+            + sys.getsizeof(point.longitude)
+            for point in segment.points
+        )
+        for segment in segments
     )
 
 

@@ -614,9 +614,18 @@ class PrecheckRunTool:
         attachment = AccountingStore(self.database_path).get_source_attachment(
             accounting_run_id
         )
-        return self._execution_config.resolve_resources(
-            source_root=attachment.source_root
-        )
+        config = self._execution_config
+        if config.sensitivity_profiles and not config.sensitivity_detector_identities:
+            from dataclasses import replace
+
+            config = replace(
+                config,
+                sensitivity_detector_identities=tuple(
+                    d.identity
+                    for d in self._orchestrator.dependencies.sensitivity_detectors
+                ),
+            )
+        return config.resolve_resources(source_root=attachment.source_root)
 
     def mark_failed(
         self, run_ref: str, *, code: str, message: str
@@ -1074,6 +1083,50 @@ class PrecheckRunTool:
                 response["issues_truncated"] = True
         if "accounting" in include:
             response["accounting"] = self._accounting(record)
+        local_execution = None
+        if "diagnostics" in include or "local_execution" in include:
+            from ._local_execution import collect_local_execution, execution_summary
+
+            local_execution = collect_local_execution(
+                self.database_path,
+                record["accounting_run_id"],
+                record["execution_config"],
+            )
+        if "local_execution" in include:
+            from .read import (
+                _page_request,
+                _paged_response,
+                _sha256_identity,
+                _canonical_json,
+            )
+
+            digest = _sha256_identity(_canonical_json(local_execution).encode())
+            query = _canonical_json(
+                {"include": sorted(include), "order": "observed_at_batch_id"}
+            )
+            try:
+                limit, offset = _page_request(
+                    page,
+                    default=50,
+                    maximum=200,
+                    result_ref=str(record["run_ref"]),
+                    result_digest=digest,
+                    operation="status",
+                    query_key=query,
+                )
+                response["local_execution"] = _paged_response(
+                    execution_summary(local_execution),
+                    collection="batches",
+                    values=local_execution["batches"],
+                    offset=offset,
+                    limit=limit,
+                    result_ref=str(record["run_ref"]),
+                    result_digest=digest,
+                    operation="status",
+                    query_key=query,
+                )
+            except _ReadFailure as error:
+                return _error("status", error.code, str(error))
         if "diagnostics" in include:
             from .read import (
                 _page_request,
@@ -1096,7 +1149,12 @@ class PrecheckRunTool:
             boundary = _execution_summary(facts, str(record["run_ref"]))
             digest = _sha256_identity(
                 _canonical_json(
-                    {"work": work, "issues": issues, "execution_boundary": boundary}
+                    {
+                        "work": work,
+                        "issues": issues,
+                        "execution_boundary": boundary,
+                        "local_execution": execution_summary(local_execution),
+                    }
                 ).encode()
             )
             query_key = _canonical_json(
@@ -1113,7 +1171,11 @@ class PrecheckRunTool:
                     query_key=query_key,
                 )
                 response["diagnostics"] = _paged_response(
-                    {"work": work, "execution_boundary": boundary},
+                    {
+                        "work": work,
+                        "execution_boundary": boundary,
+                        "local_execution": execution_summary(local_execution),
+                    },
                     collection="issues",
                     values=issues,
                     offset=offset,

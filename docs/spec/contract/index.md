@@ -4,7 +4,7 @@ title: "MediaSense 当前合约"
 type: index
 status: active
 created: 2026-09-09
-updated: 2026-09-12
+updated: 2026-09-13
 timezone: "Asia/Shanghai"
 parent: "index-spec"
 depends-on:
@@ -23,6 +23,8 @@ superseded-by: ""
 2026-09-12 用户确认 Plan 信息收集与可选工作保存进入研发。本次 **Plan Work 合约变更已定稿，源码及隔离 wheel/MCP 实现验收已完成**：支持可选工作说明、独立偏好更新、候选保留／整体替换／撤下，以及无候选的正常读取。最终确认保留预览 HTML 后聊天接受的方式。开发从[交接包](../../../openspec/changes/refine-plan-interaction/README.md)开始；[实现验收](../../../openspec/changes/refine-plan-interaction/acceptance.md)记录实际入口证据；日常安装与原注册启动链路已按确切 wheel 升级验证；现有 Agent 会话不能由磁盘或相同版本号推断已重载。
 
 2026-09-12 用户复核收窄首轮验收：正常保存路径证据成立，但发现身份字段注入、非法结构错误分类、Preview 图片交付三处缺口。上述三项已通过用户独立复验；后续发现的 Preview 选定 Evidence 分页缺口也已获用户独立复核通过。2026-09-12 按用户授权完成日常安装升级，保留原 Python、extras、依赖和配置。当前契约承诺不变，详细证据见上述实现验收链接。
+
+2026-09-13 本地敏感性扩展已按用户授权落定：逐模型启停、Freepik 四类/累计概率、NudeNet 640 完整区域实例、实际输入归属、停用缓存排除与无模型历史读取。源码及最终 wheel 的隔离 CLI/MCP 验收通过，见[实施验收记录](../../../openspec/changes/extend-local-sensitivity-observations/acceptance.md#实施验收记录2026-09-13)。本次未切换日常安装；原 Result 字节和 V1 阈值含义不变。 后续用户独立复核发现Read输入关联、未知加载错误分类和公共执行信息三项缺口；现已补修并通过定向及隔离自检，**整体验收待用户独立复验**，不以先前正常路径证据冒充边界已被用户接受。
 
 ## 阅读入口
 

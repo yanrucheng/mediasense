@@ -8,7 +8,8 @@ from PIL import Image
 from mediasense.runtime.host import RuntimeHost
 
 
-def test_production_run_read_plan_without_location(tmp_path: Path) -> None:
+def test_production_run_read_plan_without_location(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("MEDIASENSE_CONFIG_HOME", str(tmp_path / "config"))
     source = tmp_path / "source"
     source.mkdir()
     Image.new("RGB", (80, 40), "purple").save(source / "image.jpg")

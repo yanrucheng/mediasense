@@ -1,4 +1,4 @@
-> Proposed delta only. The new values have not been adopted into the active contract. Read [design](../../design.md) and the [planning-only entry](../../README.md) before implementation.
+> 本轮用户已明确授权并接受本包信息/失败边界；对应语义已采用到 `docs/spec/contract/`。此处保留 change delta，当前合约仍是唯一交换值权威。
 
 ## ADDED Requirements
 

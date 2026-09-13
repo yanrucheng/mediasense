@@ -257,9 +257,7 @@ class SQLiteWorkStore:
         lease_duration: timedelta,
         now: datetime | None = None,
     ) -> WorkLease:
-        return self.renew_leases(
-            (lease,), lease_duration=lease_duration, now=now
-        )[0]
+        return self.renew_leases((lease,), lease_duration=lease_duration, now=now)[0]
 
     def renew_leases(
         self,
@@ -299,7 +297,10 @@ class SQLiteWorkStore:
                 SET lease_expires_at = ?
                 WHERE work_id = ? AND attempt_number = ?
                 """,
-                ((expires_at, lease.work_id, lease.attempt_number) for lease in entries),
+                (
+                    (expires_at, lease.work_id, lease.attempt_number)
+                    for lease in entries
+                ),
             )
         return tuple(
             WorkLease(
@@ -474,12 +475,20 @@ class SQLiteWorkStore:
         retryable: bool,
         retry_delay: timedelta = timedelta(0),
         now: datetime | None = None,
+        output: object | None = None,
     ) -> WorkRecord:
         if not error_code.strip() or not message.strip():
             raise ValueError("failure code and message must be non-empty")
         if retry_delay < timedelta(0):
             raise ValueError("retry_delay cannot be negative")
         observed_at = _utc(now)
+        output_json = None if output is None else _output_json(output)
+        output_digest = (
+            None
+            if output_json is None
+            else "inline-json-sha256-v1:"
+            + hashlib.sha256(output_json.encode("utf-8")).hexdigest()
+        )
         with self._transaction(immediate=True) as connection:
             self._recover_expired(connection, observed_at)
             row = self._require_lease(connection, lease)
@@ -534,6 +543,11 @@ class SQLiteWorkStore:
                     lease.work_id,
                 ),
             )
+            if output_json is not None:
+                connection.execute(
+                    "UPDATE work_records SET output_json = ?, output_digest = ? WHERE work_id = ?",
+                    (output_json, output_digest, lease.work_id),
+                )
             if status is WorkStatus.TERMINAL_FAILURE:
                 self._block_dependents(connection, lease.work_id, observed_at)
             return self._get_work(connection, lease.work_id)

@@ -325,6 +325,26 @@ class ReverseGeocodeProducer:
         )
         if not batch.queries:
             return ReverseGeocodeBatchOutcome("not_applicable", batch, (), 0)
+        from mediasense.capabilities.geo.model import (
+            raise_for_unresolved_request_failure,
+        )
+
+        for record in batch.work:
+            if not isinstance(record.output, Mapping):
+                continue
+            # Historical unclassified rejections remain historical evidence. They
+            # cannot be reused as proof of terminal location failure in a new Run.
+            retained = record.output.get("result", {})
+            if retained.get("status") in {"success", "no_result"}:
+                continue
+            for attempt in retained.get("attempts", ()):
+                if retained.get("component_outcomes", {}).get(
+                    attempt.get("operation")
+                ) in {"success", "no_result"}:
+                    continue
+                raise_for_unresolved_request_failure(
+                    attempt.get("provider", "unknown"), attempt.get("error_code")
+                )
         if any(r.status is WorkStatus.RUNNING for r in batch.work):
             return ReverseGeocodeBatchOutcome("projection_pending", batch, (), 0)
         if any(

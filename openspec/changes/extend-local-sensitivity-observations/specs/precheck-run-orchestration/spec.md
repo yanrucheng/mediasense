@@ -1,4 +1,4 @@
-> Proposed delta only. Development is not authorized. The [change entry](../../README.md) owns the planning status; docs/spec/contract remains the current public authority. Disabled-model behavior below uses the explicitly recorded planning default D5-disabled.
+> 本轮用户已明确授权并接受本包信息/失败边界；对应语义已采用到 `docs/spec/contract/`。此处保留 change delta，当前合约仍是唯一交换值权威。
 
 ## MODIFIED Requirements
 

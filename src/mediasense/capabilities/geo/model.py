@@ -71,6 +71,18 @@ class GeoLookupError(RuntimeError):
         super().__init__(message)
 
 
+def raise_for_unresolved_request_failure(provider: str, error_code: str | None) -> None:
+    """Reject execution defects/undiagnosed rejections, including retained ones."""
+    if error_code in {
+        "provider_request_invalid",
+        "provider_http_rejected",
+        "http_permanent",
+    }:
+        raise RuntimeError(
+            f"Geo provider execution requires diagnosis: {error_code} ({provider})."
+        )
+
+
 @dataclass(frozen=True, slots=True)
 class RetryPolicy:
     max_attempts: int = 3

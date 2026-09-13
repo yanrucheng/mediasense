@@ -153,26 +153,65 @@ PreCheck 对每个 Source Item 投影地址与附近地点两个 Observation。
 | 普通/高清静态图 | 被选中进行视觉准备的源项 | 同时提供独立可复用的普通图和高清图，尽量共享解码；高清不再依赖 embedding 或检测开关；未选中成员不默认生成 |
 | 视频 probe、帧和联系表 | 被选中进行视频准备的源项 | 有限准备包含可用的起始、中间和结尾材料；按实际帧去重，保留请求与已知实际位置、时长、尺寸和失败；不承诺全视频视觉覆盖或任意时刻即时补帧 |
 | 本地 embedding | 显式配置启用；覆盖选中的输入材料 | 保留已验收的安装入口、有效模型身份与复用；不自动下载或回退远程 |
-| 敏感性检测 | 默认关闭；显式启用后检查已准备静态高清图和所选视频帧 | 两类本地检测能力均需接通，分别保留检测器、输入、分数/标签、profile 和失败；不推断远程路由 |
+| 敏感性检测 | 默认关闭；显式启用后检查已准备静态高清图和所选视频帧 | 逐模型选择的本地能力分别保留检测器、真实输入、具名值、profile 和失败；不推断远程路由 |
 | GPX/Geo | 复用已有采用策略及现有 Geo Tool | 默认无外部效果；有请求时按现有冻结批次与授权；每个 in-scope 源项都有两组件状态，未请求不是 no_result |
 
 准备范围不同不等于结果属性可缺而不报。未选中高成本输入可标 `not_checked + evidence_not_prepared`；配置关闭可标 `capability_disabled`；依赖不可用、执行失败、未实现或未接通必须分别处理。用户选择启用而后端不可用时沿用可恢复的 backend-unavailable 状态，禁止静默跳过后宣称完成。
 
-敏感性的安装配置复用现有用户/Dataset `config.toml` 及覆盖规则，只增加一个表：
+### 本地敏感性模型（2026-09-12 授权采用）
+
+用户/Dataset `config.toml` 的 `[sensitivity]` 整表覆盖；不增加 Tool action。
+总表仅允许 `enabled`（布尔，默认 false）与 `models`；models 仅允许 `freepik`、
+`nudenet640`。每项仅允许 `enabled/profile/model_path/device/precision/batch_size`。
+省略模型或 enabled=false 表示关闭。总开关关闭时所有模型关闭。所有键和类型均校验，
+关闭不掩盖非法值；路径若提供须为绝对路径，启用项必须有路径。
+已知配方的 profile/device/precision/batch_size 可省略，解析为以下固定值：
 
 ```toml
 [sensitivity]
 enabled = true
+[sensitivity.models.freepik]
+enabled = true
+profile = "freepik-ordinal448-mps-fp32-v1"
+model_path = "/absolute/local-models/freepik-snapshot"
+device = "mps"
+precision = "float32"
+batch_size = 4
+[sensitivity.models.nudenet640]
+enabled = true
+profile = "nudenet640-native-cpu-fp32-v1"
+model_path = "/absolute/local-models/640m.onnx"
 device = "cpu"
-nsfw_model_id = "Falconsai/nsfw_image_detection"
-nsfw_revision = "<本地已有模型的40位不可变commit>"
+precision = "float32"
+batch_size = 1
 ```
 
-表省略或 `enabled=false` 为关闭，enabled 省略也按 false，不因模型文件存在自动启用。enabled 必须为布尔值；表内仅允许上述四个键，未知键或非法类型按既有配置错误拒绝。启用时 `nsfw_revision` 必须是40位十六进制 commit；nsfw_model_id 默认上述仓库，device 默认 cpu，允许 cpu/mps/cuda，实际后端不支持则明确返回不可用。NudeNet 使用发布包声明的本地依赖和权重，记录真实 package/weights identity；安装必须校验所需本地权重已存在，不允许第三方懒加载暗中下载。标签和阈值沿已存在的 versioned profiles，有效 profile 入 Result；模型/profile 可在受控实现替换中更新，不冻结一种算法为产品边界。
+只发布这两套配方；不支持的值明确拒绝，不下载、不换设备、不回退。
+旧 `device/nsfw_model_id/nsfw_revision` 配置须显式迁移，不自动替换模型。
+配置错误阻止新 start，但不阻止历史 Read 或使用已冻结快照恢复。
+新 Run 冻结全部有效选择、声明及本地资产位置；resume 使用原快照。
+停用模型在新 Result 中为 `not_checked + capability_disabled`，包括已有缓存也不纳入；
+旧 Result/Work 保留，后继重新启用可复用。没有输入时为 `evidence_not_prepared`，不造 Evidence。
 
-沿用 profile 包括保留超出分数范围的有效阈值，例如 normal 的99及温和阈值33。[Read 属性义务](../precheck-read/precheck-attributes.md#敏感性分数与阈值)允许并解释该表达；实现不得删值、截断阈值或临时改判定来通过 schema。
+适配器声明不加载推理库，说明图片条件、输出种类、taxonomy/分数含义、设备、批量及资源估计。
+每次输入为唯一键、本地已定向单帧图片、内容身份和实际尺寸；每键恰有一个具名值结果或
+已知局部失败，返回顺序可变。重复、缺失、错绑或非法输出是执行缺陷，提交前拒绝。
+适配器不接触 Dataset 私有存储或 Plan 策略。
 
-该表不是新的能力注册系统。配置被解析为本次 Run 的有效快照，enabled、本地性及有效 profile 可在安装/Run 诊断中读到；凭据不进入公开返回。修改会使真实依赖失效，已经封存的 Result 不修改。
+Freepik 固定 revision `15b85477e4fd2000db76ae9aae0f89a72f95e2e3`、
+权重 SHA256 `024a9d4818fae2656403bf626c9f8c9e7789c2da274749fbebb1060d8fdaa7ab`，
+官方 Timm 448px bicubic squash、原生 mean/std、MPS FP32，无 autocast，batch 4。
+640m 权重 SHA256 `04fe3d77980780c1f8297dc6d7f942fd5b3abe6942a188f742a85241e4f634eb`，
+NudeNet 3.4.2 native 预处理和 class-agnostic NMS（candidate .2 / score .25 / IoU .45），
+CPU FP32、batch 1；保留镜像来源限制。逐模型批量独立于 embedding。
+
+模型加载到释放始终受已有资源准入负责；需求不截小以适配预算，不足时明确拒绝准入。
+声明估计和实际测量分开；未测为 null，批次时间不冒充逐图实测。
+有效 Work 身份绑定输入、权重/处理器、语义配方、输出及影响结果的实现/运行时，
+不绑定完整模型名单、本地路径或纯调度。有效缓存命中无需推理库/权重。
+需要新执行但缺固定资产/后端时 `sensitivity_backend_unavailable` 阻塞，保留兄弟成果，
+恢复确切前提后沿原快照继续；不发布本次完成 Result。已知单项失败为真实输入上的 failed，
+未知异常和协议错误沿 Host/执行失败暴露，不能变成正常等待或坏源。
 
 Read 只消费已准备材料。本期不新增通用“任意高清/任意视频帧”获取 Tool；需要超出已有准备的内容时，Plan 可以使用已存在的合法能力，或明确请求后继 PreCheck。普通候选不足不自动要求重跑整个阶段。
 
@@ -189,3 +228,25 @@ progress 的终结工作数、范围对账完整、准备义务满足、plan_rea
 Geo 的地点级终结失败与适用服务不可达遵循 [Geo D6](../geo-query/index.md#d6-有限执行目标地域和公开恢复)。后者保留已取得证据并 blocked，不发布本次 Result。status 说明缺失条件；用户处理网络或配置后通过既有 resume 进入缺失组件恢复确认，明确 proceed 才能产生新效果。恢复披露原累计请求/费用和上限、保留组件及实际网络接收边界；旧确认不覆盖新的 Proxy。已持久化响应的本地投影重放不产生新地图请求，未知历史费用保持未知。
 
 恢复调用顺序：blocked 时发送 `resume` 且省略 decision，准备恢复确认；进入 paused 并取得完整 confirmation 后，才发送 `resume + decision=proceed` 触发可信确认。前一步不授予新的外部效果，不能把尚无披露时的 proceed 当作授权。
+
+### 本地模型执行诊断（敏感性验收补修）
+
+`status include=["diagnostics"]` 增加 `diagnostics.local_execution` 汇总；
+`status include=["local_execution"]` 返回相同汇总和 `batches/page`，复用既有 page，默认50/最大200。
+local_execution、diagnostics、confirmation 三种分页详情一次只选一种，可同时读取 accounting。
+游标绑定冻结 Run 配置及规范化执行事实摘要；事实变化时游标失效，不能因心跳失效。
+
+local_execution 包含 status、resource_budget、models；resource_budget 是原 Run 的有效准入
+capacity/max_workers/max_pending，不是实测内存。每模型保存请求的 device/precision/batch_limit、
+memory_estimate_bytes、成功/失败/待完成 Work 数及 unreported_work_count。
+recorded_current/recorded_reused 分别汇总有可证明记录的本次和复用批次；不是整个流程耗时。
+批次保存 batch_id（仅去重依据，不可独立调用）、观察时间、请求 input_count、实际
+inference_input_count、此范围 included_work_count、processing_wall_seconds、load_wall_seconds、
+实际设备/精度及 measured_memory_bytes。不可测为 null。处理墙钟是 analyze 调用区间，不含独立加载，绝非逐图实测。加载耗时为null时，不能推断适配器内部加载与分析可分离。
+
+一次适配器调用产生一个批次身份；多个 Work 保存相同记录时只计一次，内容不一致则拒绝。
+复用批次保留原整个调用的输入数/耗时，并用 included_work_count 标明当前引用了多少项，
+不能将原四张批次的成本改成其中一张的实测值。按批次汇总，不相加 Work 的重复时间。
+旧 Work 没有可证明批次身份或分离计时，计入 unreported_work_count；不得按相同数值猜测分组。
+尚无冻结配置时 status=not_recorded、预算null；旧 Result 缺此快照同样明确未记录。
+唯一机器定义为本 Tool 的 local_* $defs；Read 携带受一致性检查约束的生成片段。

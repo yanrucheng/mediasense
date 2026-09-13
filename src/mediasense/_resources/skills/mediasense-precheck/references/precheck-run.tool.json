@@ -55,7 +55,8 @@
               "enum": [
                 "accounting",
                 "diagnostics",
-                "confirmation"
+                "confirmation",
+                "local_execution"
               ]
             }
           },
@@ -92,7 +93,8 @@
                   "contains": {
                     "enum": [
                       "diagnostics",
-                      "confirmation"
+                      "confirmation",
+                      "local_execution"
                     ]
                   }
                 }
@@ -142,6 +144,52 @@
                     ]
                   }
                 ]
+              }
+            }
+          },
+          {
+            "not": {
+              "required": [
+                "include"
+              ],
+              "properties": {
+                "include": {
+                  "allOf": [
+                    {
+                      "contains": {
+                        "const": "local_execution"
+                      }
+                    },
+                    {
+                      "contains": {
+                        "const": "diagnostics"
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "not": {
+              "required": [
+                "include"
+              ],
+              "properties": {
+                "include": {
+                  "allOf": [
+                    {
+                      "contains": {
+                        "const": "local_execution"
+                      }
+                    },
+                    {
+                      "contains": {
+                        "const": "confirmation"
+                      }
+                    }
+                  ]
+                }
               }
             }
           }
@@ -1034,6 +1082,9 @@
           },
           "execution_boundary": {
             "$ref": "#/$defs/execution_boundary"
+          },
+          "local_execution": {
+            "$ref": "#/$defs/local_execution_summary"
           }
         }
       },
@@ -1697,6 +1748,9 @@
           },
           "allowed_actions": {
             "$ref": "#/$defs/controls"
+          },
+          "local_execution": {
+            "$ref": "#/$defs/local_execution"
           }
         }
       },
@@ -1746,6 +1800,9 @@
           },
           "confirmation": {
             "$ref": "#/$defs/confirmation"
+          },
+          "local_execution": {
+            "$ref": "#/$defs/local_execution"
           }
         },
         "allOf": [
@@ -1824,6 +1881,9 @@
                 "cancel"
               ]
             }
+          },
+          "local_execution": {
+            "$ref": "#/$defs/local_execution"
           }
         }
       },
@@ -1857,6 +1917,9 @@
           },
           "result": {
             "$ref": "#/$defs/result"
+          },
+          "local_execution": {
+            "$ref": "#/$defs/local_execution"
           }
         }
       },
@@ -1890,6 +1953,9 @@
           },
           "reason": {
             "$ref": "#/$defs/reason"
+          },
+          "local_execution": {
+            "$ref": "#/$defs/local_execution"
           }
         }
       },
@@ -1922,6 +1988,9 @@
           },
           "reason": {
             "$ref": "#/$defs/reason"
+          },
+          "local_execution": {
+            "$ref": "#/$defs/local_execution"
           }
         }
       },
@@ -1948,6 +2017,553 @@
             "$ref": "#/$defs/run_ref"
           }
         }
+      },
+      "local_model_execution": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "detector_identity": {
+            "type": "string",
+            "minLength": 1
+          },
+          "profile": {
+            "type": "string",
+            "minLength": 1
+          },
+          "requested_device": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "precision": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "batch_limit": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "memory_estimate_bytes": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "succeeded_work_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "failed_work_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "pending_work_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "unreported_work_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "recorded_current": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "batch_count": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "input_count": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "inference_input_count": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "included_work_count": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "processing_wall_seconds": {
+                "type": "number",
+                "minimum": 0
+              },
+              "load_wall_seconds": {
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "batch_count",
+              "input_count",
+              "inference_input_count",
+              "included_work_count",
+              "processing_wall_seconds",
+              "load_wall_seconds"
+            ]
+          },
+          "recorded_reused": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "batch_count": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "input_count": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "inference_input_count": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "included_work_count": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "processing_wall_seconds": {
+                "type": "number",
+                "minimum": 0
+              },
+              "load_wall_seconds": {
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "batch_count",
+              "input_count",
+              "inference_input_count",
+              "included_work_count",
+              "processing_wall_seconds",
+              "load_wall_seconds"
+            ]
+          }
+        },
+        "required": [
+          "detector_identity",
+          "profile",
+          "requested_device",
+          "precision",
+          "batch_limit",
+          "memory_estimate_bytes",
+          "succeeded_work_count",
+          "failed_work_count",
+          "pending_work_count",
+          "unreported_work_count",
+          "recorded_current",
+          "recorded_reused"
+        ]
+      },
+      "local_model_batch": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "batch_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "detector_identity": {
+            "type": "string",
+            "minLength": 1
+          },
+          "profile": {
+            "type": "string",
+            "minLength": 1
+          },
+          "origin": {
+            "enum": [
+              "current",
+              "reused"
+            ]
+          },
+          "observed_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "input_count": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "inference_input_count": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "included_work_count": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "processing_wall_seconds": {
+            "type": "number",
+            "minimum": 0
+          },
+          "load_wall_seconds": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "actual_device": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "precision": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "measured_memory_bytes": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "batch_id",
+          "detector_identity",
+          "profile",
+          "origin",
+          "observed_at",
+          "input_count",
+          "inference_input_count",
+          "included_work_count",
+          "processing_wall_seconds",
+          "load_wall_seconds",
+          "actual_device",
+          "precision",
+          "measured_memory_bytes"
+        ]
+      },
+      "local_execution_summary": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "status": {
+            "enum": [
+              "recorded",
+              "not_recorded"
+            ]
+          },
+          "resource_budget": {
+            "anyOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "capacity": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "source_io_slots": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "workspace_io_slots": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "cpu_slots": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "process_slots": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "memory_bytes": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "temporary_bytes": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "gpu_memory_bytes": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "model_slots": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "exiftool_slots": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "decoder_slots": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "encoder_slots": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "network_slots": {
+                        "type": "integer",
+                        "minimum": 0
+                      }
+                    },
+                    "required": [
+                      "source_io_slots",
+                      "workspace_io_slots",
+                      "cpu_slots",
+                      "process_slots",
+                      "memory_bytes",
+                      "temporary_bytes",
+                      "gpu_memory_bytes",
+                      "model_slots",
+                      "exiftool_slots",
+                      "decoder_slots",
+                      "encoder_slots",
+                      "network_slots"
+                    ]
+                  },
+                  "max_workers": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "max_pending": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "required": [
+                  "capacity",
+                  "max_workers",
+                  "max_pending"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "models": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/local_model_execution"
+            }
+          }
+        },
+        "required": [
+          "status",
+          "resource_budget",
+          "models"
+        ]
+      },
+      "local_execution": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "status": {
+            "enum": [
+              "recorded",
+              "not_recorded"
+            ]
+          },
+          "resource_budget": {
+            "anyOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "capacity": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "source_io_slots": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "workspace_io_slots": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "cpu_slots": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "process_slots": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "memory_bytes": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "temporary_bytes": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "gpu_memory_bytes": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "model_slots": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "exiftool_slots": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "decoder_slots": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "encoder_slots": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "network_slots": {
+                        "type": "integer",
+                        "minimum": 0
+                      }
+                    },
+                    "required": [
+                      "source_io_slots",
+                      "workspace_io_slots",
+                      "cpu_slots",
+                      "process_slots",
+                      "memory_bytes",
+                      "temporary_bytes",
+                      "gpu_memory_bytes",
+                      "model_slots",
+                      "exiftool_slots",
+                      "decoder_slots",
+                      "encoder_slots",
+                      "network_slots"
+                    ]
+                  },
+                  "max_workers": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "max_pending": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "required": [
+                  "capacity",
+                  "max_workers",
+                  "max_pending"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "models": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/local_model_execution"
+            }
+          },
+          "batches": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/local_model_batch"
+            }
+          },
+          "page": {
+            "$ref": "#/$defs/page"
+          }
+        },
+        "required": [
+          "status",
+          "resource_budget",
+          "models",
+          "batches",
+          "page"
+        ]
       }
     }
   },

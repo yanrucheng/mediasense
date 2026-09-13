@@ -1,0 +1,334 @@
+{
+  "run_ref": "precheck-run:8b5ff902fda54e6292b14d4fa5f0de42",
+  "result_ref": "precheck-result:cbd18bc79b56b2b9d257529f878b7151c399b4815acebe74d1ba328e80a7ae57",
+  "result_file_sha256": "1f9141e72d3fa01b47f8edebc8990d4fc531761bb6801214a9411aede945c638",
+  "run_state": "completed",
+  "run_created_at": "2026-09-12T14:15:51.276502+00:00",
+  "run_updated_at": "2026-09-12T14:44:42.651650+00:00",
+  "source": {
+    "accounted": 6373,
+    "scope_condition": {
+      "auxiliary/unresolved": 2,
+      "auxiliary/usable": 2,
+      "excluded/unresolved": 1873,
+      "excluded/unsupported": 2360,
+      "source_media/invalid": 1,
+      "source_media/usable": 2135
+    },
+    "manifest_media": 2134,
+    "hash_mismatches": [],
+    "additional_media_hash_matched_to_package": [
+      "260501-HK美食之旅/fixtures/raw-sidecar/DJI_20260501183924_0002_D.DNG",
+      "260501-HK美食之旅/fixtures/raw-sidecar/DSC01519.ARW"
+    ],
+    "checksum_manifest_sha256": "f56caa6b1f1dd56e1b02850a5bfc17567d11f5617899db166eb8d670889d67fe"
+  },
+  "work": {
+    "capability_status": {
+      "adaptive-compression-group/succeeded": 156,
+      "bundle-candidate/succeeded": 167,
+      "gpx-location-candidate/succeeded": 2136,
+      "image-embedding/succeeded": 639,
+      "image-rendition/succeeded": 198,
+      "reverse-geocode-observation/succeeded": 168,
+      "source-metadata/succeeded": 2136,
+      "video-contact-sheet/succeeded": 181,
+      "video-frame/succeeded": 543,
+      "video-key-frame-candidate/succeeded": 181,
+      "video-probe/succeeded": 181,
+      "video-probe/terminal_failure": 1
+    },
+    "attempts": 6687,
+    "phases": {
+      "adaptive-compression-group": {
+        "first_attempt": "2026-09-12T14:33:17.817842+00:00",
+        "last_finished": "2026-09-12T14:33:19.628632+00:00",
+        "wall_span_seconds": 1.81079
+      },
+      "bundle-candidate": {
+        "first_attempt": "2026-09-12T14:21:45.388611+00:00",
+        "last_finished": "2026-09-12T14:21:47.173305+00:00",
+        "wall_span_seconds": 1.784694
+      },
+      "gpx-location-candidate": {
+        "first_attempt": "2026-09-12T14:22:15.720047+00:00",
+        "last_finished": "2026-09-12T14:32:03.164305+00:00",
+        "wall_span_seconds": 587.444258
+      },
+      "image-embedding": {
+        "first_attempt": "2026-09-12T14:32:24.366578+00:00",
+        "last_finished": "2026-09-12T14:33:08.465463+00:00",
+        "wall_span_seconds": 44.098885
+      },
+      "image-rendition": {
+        "first_attempt": "2026-09-12T14:21:48.233382+00:00",
+        "last_finished": "2026-09-12T14:21:54.165978+00:00",
+        "wall_span_seconds": 5.932596
+      },
+      "reverse-geocode-observation": {
+        "first_attempt": "2026-09-12T14:43:47.540402+00:00",
+        "last_finished": "2026-09-12T14:43:48.678544+00:00",
+        "wall_span_seconds": 1.138142
+      },
+      "source-metadata": {
+        "first_attempt": "2026-09-12T14:21:29.355914+00:00",
+        "last_finished": "2026-09-12T14:21:45.100382+00:00",
+        "wall_span_seconds": 15.744468
+      },
+      "video-contact-sheet": {
+        "first_attempt": "2026-09-12T14:22:10.097739+00:00",
+        "last_finished": "2026-09-12T14:22:15.639521+00:00",
+        "wall_span_seconds": 5.541782
+      },
+      "video-frame": {
+        "first_attempt": "2026-09-12T14:21:58.504436+00:00",
+        "last_finished": "2026-09-12T14:22:10.051530+00:00",
+        "wall_span_seconds": 11.547094
+      },
+      "video-key-frame-candidate": {
+        "first_attempt": "2026-09-12T14:33:08.495048+00:00",
+        "last_finished": "2026-09-12T14:33:15.953217+00:00",
+        "wall_span_seconds": 7.458169
+      },
+      "video-probe": {
+        "first_attempt": "2026-09-12T14:21:54.536838+00:00",
+        "last_finished": "2026-09-12T14:21:57.369511+00:00",
+        "wall_span_seconds": 2.832673
+      }
+    },
+    "gpx_work_with_track_dependencies": 2034,
+    "embedding_encoder_identity": "dinov3-coreml-384:timm/vit_base_patch16_dinov3.lvd1689m@c6a5fb7d12bbd3cf3b0079253141c3332aaed7da;sha256=d9a982400ef3519f45edf624482ff435f86dc288addc777b850505e6ef8eaac9",
+    "entry_evidence": 156,
+    "embedding_artifacts_verified": 639,
+    "embedding_max_norm_error": 5.355089482961262e-9,
+    "videos_with_prepared_frames": 181,
+    "duplicate_pts_video_paths": [
+      "260501-HK美食之旅/0502/DJI_001-action-sd/DJI_20260502175437_0020_D.MP4",
+      "260501-HK美食之旅/0503/DJI_001-pocket4/DJI_20260503173132_0020_D.MP4",
+      "260501-HK美食之旅/0506/DJI_001-pocket4/DJI_20260506093335_0004_D.MP4"
+    ]
+  },
+  "compression": {
+    "input_points": 167,
+    "embedded_points": 167,
+    "input_member_count": 2136,
+    "replayed_groups": 156,
+    "saved_groups_match": true,
+    "no_embedding_same_prepared_inputs_groups": 167,
+    "correct_gpx_observation_groups": 156,
+    "correct_gpx_changed_group_ids": 0,
+    "correct_gpx_qualifications": {
+      "bundle_members_not_visually_compared": 82,
+      "limited_similarity_evidence": 21
+    },
+    "gpx_available_but_ignored_points": 55,
+    "ignored_gpx_example_paths": [
+      "260501-HK美食之旅/0502/100MSDCF/DSC00298.JPG",
+      "260501-HK美食之旅/0502/100MSDCF/DSC00304.JPG",
+      "260501-HK美食之旅/0502/100MSDCF/DSC00312.JPG"
+    ],
+    "native_gps_points": 89,
+    "profile": {
+      "content_based_boundaries": true,
+      "content_distance_scale": 0.311,
+      "exact_representative_limit": 256,
+      "representative_comparison_budget": 65536,
+      "representative_top_k": 0.5,
+      "spatial_scale_meters": 3000,
+      "target_entries": 200,
+      "temporal_scale_seconds": 86400
+    },
+    "qualifications": {
+      "bundle_members_not_visually_compared": 82,
+      "limited_similarity_evidence": 71
+    },
+    "single_source_groups": 72,
+    "max_group_members": 201,
+    "representative_methods": {
+      "exact-all-pairs-v1": 156
+    },
+    "points_per_group": {
+      "1": 146,
+      "2": 9,
+      "3": 1
+    }
+  },
+  "geo_selection": {
+    "source_coordinate_observations": 1889,
+    "unique_exact_source_coordinates": 1637,
+    "coordinate_producers": {
+      "source-metadata": 102,
+      "gpx-location-candidate": 1787
+    },
+    "zero_coordinate_sources": 19,
+    "units_before_exact_dedup": 188,
+    "unit_sizes": {
+      "1": 85,
+      "2": 18,
+      "3": 8,
+      "4": 6,
+      "5": 4,
+      "6": 9,
+      "7": 2,
+      "8": 2,
+      "9": 2,
+      "10": 3,
+      "11": 3,
+      "12": 2,
+      "13": 1,
+      "14": 2,
+      "16": 2,
+      "17": 2,
+      "19": 5,
+      "22": 1,
+      "23": 1,
+      "24": 1,
+      "25": 2,
+      "29": 2,
+      "30": 4,
+      "31": 3,
+      "32": 1,
+      "33": 2,
+      "34": 1,
+      "35": 1,
+      "36": 1,
+      "39": 1,
+      "42": 1,
+      "43": 2,
+      "45": 1,
+      "50": 1,
+      "61": 1,
+      "64": 1,
+      "71": 1,
+      "82": 1,
+      "88": 2
+    },
+    "logical_queries": 168,
+    "covered_source_items": 1889,
+    "query_coordinate_fingerprint": "49e46e1c0f655df46ef0d67de0bdb8dbe5818d26d7a2c332d9cbe4b2243a1375",
+    "max_shared_diameter_meters": 15,
+    "max_shared_span_seconds": 120
+  },
+  "geo": {
+    "outcome": "partial",
+    "logical_queries": 168,
+    "provider_requests": 332,
+    "billable_units": null,
+    "attempts": {
+      "amap/resolve_place/success": 4,
+      "google_maps/nearby_places/failed": 164,
+      "google_maps/reverse_geocode/no_result": 1,
+      "google_maps/reverse_geocode/success": 163
+    },
+    "errors": {
+      "http_permanent/provider HTTP 400": 164
+    },
+    "request_max_places": 30,
+    "components": {
+      "nearby_places/failed": 164,
+      "nearby_places/success": 4,
+      "reverse_geocode/no_result": 1,
+      "reverse_geocode/success": 167
+    }
+  },
+  "google_payload_probe": {
+    "network_requests": 0,
+    "requested_max_places": 30,
+    "configured_provider_max": 10,
+    "nearby_places_maxResultCount": 30,
+    "resolve_place_maxResultCount": 10
+  },
+  "plan": {
+    "work_ref": "plan-work:dbf8a544-c361-49bb-bcbd-615f0a6f2928",
+    "revision": "work-revision:2afffae0-016d-4635-bad4-104a20ba4989",
+    "state": "open",
+    "candidate_identity": "sha256:6841c4bd5228fe5f23e7aa1bf99378b0e8879fa877c29aa842cb9bd9747fd56a",
+    "groups": 34,
+    "grouped_media": 2133,
+    "other_outcome_counts": [
+      3,
+      4,
+      4233
+    ],
+    "full_partition_verified": true,
+    "sealed_plans": 0,
+    "preview_sha256": "b3ffc2963dab29b34e54f12d4be3ffb7462a3b35431caca3e6da4064e5cf1668",
+    "preview_embedded_images_valid": 86,
+    "preview_matches_exact_candidate": true,
+    "organization_preferences": {}
+  },
+  "live_work_at_audit": {
+    "work_ref": "plan-work:dbf8a544-c361-49bb-bcbd-615f0a6f2928",
+    "state": "open",
+    "revision": "work-revision:3a7557f7-26a3-4444-9054-cf8404d00260",
+    "candidate_identity": null,
+    "updated_at": "2026-09-12 15:54:59"
+  },
+  "trajectory": {
+    "file": "/Users/chengyanru/.codex/sessions/2026/09/12/rollout-2026-09-12T22-09-20-01a095f3-885b-7bb2-a2fd-353b2c870d62.jsonl",
+    "sha256": "599468d5b3551ed5d1ea13988fbb9e551e4af373974d9dbafe7bbe1df094d600",
+    "id": "01a095f3-885b-7bb2-a2fd-353b2c870d62",
+    "first": "2026-09-12T14:09:28.031Z",
+    "last": "2026-09-12T15:11:12.091Z",
+    "mcp_tools": {
+      "mediasense.dataset.open": 1,
+      "mediasense.plan.work": 6,
+      "mediasense.precheck.read": 66,
+      "mediasense.precheck.run": 29
+    },
+    "precheck_reads": {
+      "expand": 1,
+      "resolve": 42,
+      "review": 23
+    },
+    "plan_reads": {
+      "expand": 1,
+      "resolve": 42,
+      "review": 1
+    },
+    "plan_geo_calls": 0,
+    "image_attachments": 15,
+    "entry_images_in_sheets": 156,
+    "direct_image_opens": 7,
+    "distinct_derived_images": 160,
+    "distinct_source_items_viewed": 160,
+    "image_event_lines": [
+      561,
+      562,
+      563,
+      568,
+      569,
+      570,
+      575,
+      576,
+      584,
+      585,
+      586,
+      618,
+      619,
+      620,
+      621
+    ],
+    "plan_model_requests": 45,
+    "plan_usage": {
+      "input_tokens": 6644713,
+      "cached_input_tokens": 6481354,
+      "cache_write_input_tokens": 163224,
+      "output_tokens": 14799,
+      "reasoning_output_tokens": 3018,
+      "total_tokens": 6659512
+    },
+    "from_first_result_review": {
+      "line": 388,
+      "requests": 62,
+      "usage": {
+        "input_tokens": 8101274,
+        "cached_input_tokens": 7921911,
+        "cache_write_input_tokens": 179177,
+        "output_tokens": 17008,
+        "reasoning_output_tokens": 3225,
+        "total_tokens": 8118282
+      }
+    }
+  }
+}

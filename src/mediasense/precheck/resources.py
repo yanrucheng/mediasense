@@ -70,6 +70,7 @@ def resolve_resource_budget(
     *,
     source_storage: str,
     network_enabled: bool = False,
+    memory_target_bytes: int = 4 * 1024**3,
     ceiling: ResourceBudget | None = None,
     logical_cpu_count: int | None = None,
     available_memory_bytes: int | None = None,
@@ -99,7 +100,12 @@ def resolve_resource_budget(
         if available_memory is None
         else max(
             128 * 1024 * 1024,
-            min(4 * 1024 * 1024 * 1024, available_memory // 2),
+            min(
+                memory_target_bytes,
+                available_memory // 2
+                if memory_target_bytes <= 4 * 1024**3
+                else max(0, available_memory - 4 * 1024**3),
+            ),
         )
     )
     memory_workers = max(1, memory_bytes // (128 * 1024 * 1024))
@@ -199,9 +205,7 @@ def detect_source_storage(
     runner = command_runner or _run_probe
     probe_target = str(Path(source_root))
     try:
-        completed = runner(
-            ("/usr/sbin/diskutil", "info", "-plist", probe_target)
-        )
+        completed = runner(("/usr/sbin/diskutil", "info", "-plist", probe_target))
     except (OSError, subprocess.SubprocessError):
         return "unknown", "darwin_diskutil_unavailable"
     if completed.returncode != 0:
@@ -216,9 +220,7 @@ def detect_source_storage(
             return "unknown", "darwin_mount_point_unavailable"
         mount_point = lines[-1].split(maxsplit=5)[-1]
         try:
-            completed = runner(
-                ("/usr/sbin/diskutil", "info", "-plist", mount_point)
-            )
+            completed = runner(("/usr/sbin/diskutil", "info", "-plist", mount_point))
         except (OSError, subprocess.SubprocessError):
             return "unknown", "darwin_diskutil_unavailable"
         if completed.returncode != 0:

@@ -406,6 +406,10 @@ class PrecheckReadTool:
             for view in (*graph.sources.values(), *graph.evidence.values()):
                 _validate_observations(tuple(view.get("observations", ())))
             _validate_execution_boundary(package["execution_boundary"])
+            if graph.result.get("execution_boundary") != package["execution_boundary"]:
+                raise ValueError(
+                    "Result execution evidence disagrees with its sealed boundary"
+                )
             _reconciliation(graph)
             seen_relations = set()
             known_refs = {
@@ -459,6 +463,22 @@ class PrecheckReadTool:
                     raise ValueError("Source relationship targets another kind")
                 if relation == "entry_evidence" and target_ref not in graph.evidence:
                     raise ValueError("Entry relationship targets another kind")
+            from ._sensitivity_values import validate_input_links
+
+            validate_input_links(
+                graph.sources,
+                graph.evidence,
+                (
+                    (
+                        r["origin"],
+                        r["member"]["target"]["ref"]
+                        if isinstance(r["member"]["target"], Mapping)
+                        else r["member"]["target"],
+                    )
+                    for r in graph.relationships
+                    if r["relation"] == "derived_from"
+                ),
+            )
             from ._read_projection import source_lineage
 
             for ref in graph.evidence:
@@ -622,6 +642,48 @@ class PrecheckReadTool:
                 result_digest=result_digest,
                 operation="review",
                 query_key="execution_boundary:durable_attempt_order",
+            )
+        if "local_execution" in request.get("include", ()):
+            from ._local_execution import unrecorded_execution, execution_summary
+
+            local = graph.result.get("execution_boundary", {}).get(
+                "local_execution", unrecorded_execution()
+            )
+            execution_limit, execution_offset = _page_request(
+                request.get("execution_page"),
+                default=50,
+                maximum=200,
+                result_ref=graph.result_ref,
+                result_digest=result_digest,
+                operation="review",
+                query_key="local_execution:observed_at_batch_id",
+            )
+            minimum_page = _paged_response(
+                base,
+                collection="items",
+                values=items,
+                offset=offset,
+                limit=limit,
+                result_ref=graph.result_ref,
+                result_digest=result_digest,
+                operation="review",
+                query_key=query_key,
+                max_items=1,
+                review_faults=True,
+            )
+            base["local_execution"] = _paged_response(
+                execution_summary(local),
+                collection="batches",
+                values=local["batches"],
+                offset=execution_offset,
+                limit=execution_limit,
+                byte_budget=_MAX_RESPONSE_BYTES
+                - _encoded_size(minimum_page)
+                - len('"local_execution":,'),
+                result_ref=graph.result_ref,
+                result_digest=result_digest,
+                operation="review",
+                query_key="local_execution:observed_at_batch_id",
             )
         return _paged_response(
             base,
@@ -1740,7 +1802,9 @@ def _paged_response(
             break
         single = response([fetched[offset]], offset + 1, byte_limited=end > offset + 1)
         required = {
-            key: value for key, value in single.items() if key != "execution_boundary"
+            key: value
+            for key, value in single.items()
+            if key not in {"execution_boundary", "local_execution"}
         }
         if _encoded_size(required) <= budget:
             raise _ReadFailure(

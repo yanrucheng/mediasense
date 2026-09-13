@@ -4,15 +4,12 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from datetime import timedelta
-from importlib.metadata import PackageNotFoundError, version, distribution
-import hashlib
+from datetime import timedelta, datetime, timezone
 import json
 import math
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Protocol
 
-from PIL import Image
 
 from ._artifact_types import ArtifactIntegrity, ArtifactRecord
 from ._work_types import (
@@ -29,12 +26,14 @@ from .artifact import ArtifactStore
 from .work import WorkStore
 
 
-class SensitivityError(RuntimeError):
-    """Base error for local sensitivity analysis."""
-
-
-class SensitivityBackendUnavailable(SensitivityError):
-    """Raised when a configured detector is not locally available."""
+from ._sensitivity_profiles import (
+    SensitivityError,
+    SensitivityBackendUnavailable,
+    NamedSensitivityProfile,
+    SensitivityInput,
+    SensitivityPrediction,
+)
+from ._sensitivity_values import validate_named_value, validate_observation
 
 
 @dataclass(frozen=True, slots=True)
@@ -109,172 +108,20 @@ class _PreparedSensitivity:
 
 
 class SensitivityDetector(Protocol):
+    profile: NamedSensitivityProfile
+    execution: dict | None
+
     @property
     def identity(self) -> str: ...
 
-    def detect(self, image_path: Path) -> Sequence[Detection]: ...
-
-
-class NudeNetDetector:
-    """NudeNet 3.x adapter; package and bundled weights must already be local."""
-
-    def __init__(self, *, device: str = "cpu") -> None:
-        self.device = device
-        self._detector: Any | None = None
-        self._identity: str | None = None
-
     @property
-    def identity(self) -> str:
-        if self._identity is not None:
-            return self._identity
-        try:
-            weights = self._weights()
-            with weights.open("rb") as stream:
-                digest = hashlib.file_digest(stream, "sha256").hexdigest()
-        except (SensitivityBackendUnavailable, OSError):
-            digest = "unavailable"
-        identity = f"nudenet:NudeDetector@nudenet-{_package_version('nudenet')};weights=sha256:{digest};device={self.device};onnxruntime={_package_version('onnxruntime')}"
-        if "unavailable" not in identity:
-            self._identity = identity
-        return identity
+    def declaration(self) -> Mapping[str, object]: ...
 
-    @staticmethod
-    def _weights() -> Path:
-        try:
-            path = Path(distribution("nudenet").locate_file("nudenet/320n.onnx"))
-        except PackageNotFoundError as error:
-            raise SensitivityBackendUnavailable(
-                "NudeNet local package and bundled weights are unavailable"
-            ) from error
-        if not path.is_file():
-            raise SensitivityBackendUnavailable(
-                "NudeNet bundled weights are missing; automatic downloads are disabled"
-            )
-        return path
+    def analyze(
+        self, inputs: Sequence[SensitivityInput]
+    ) -> Sequence[SensitivityPrediction]: ...
 
-    def detect(self, image_path: Path) -> Sequence[Detection]:
-        detector = self._load()
-        raw = detector.detect(str(image_path))
-        if not isinstance(raw, list):
-            raise SensitivityError("NudeNet returned a non-list result")
-        if any(
-            not isinstance(item, Mapping) or "class" not in item or "score" not in item
-            for item in raw
-        ):
-            raise SensitivityError("NudeNet returned a malformed detection")
-        return tuple(
-            Detection(label=str(item["class"]), score=float(item["score"]))
-            for item in raw
-        )
-
-    def _load(self) -> Any:
-        if self._detector is not None:
-            return self._detector
-        try:
-            import onnxruntime
-
-            onnxruntime.disable_telemetry_events()
-            from nudenet import NudeDetector as Detector
-        except ImportError as error:
-            raise SensitivityBackendUnavailable(
-                "NudeNet requires the local-models optional dependencies"
-            ) from error
-        weights = self._weights()
-        provider = {"cpu": "CPUExecutionProvider", "cuda": "CUDAExecutionProvider"}.get(
-            self.device
-        )
-        if provider is None or provider not in onnxruntime.get_available_providers():
-            raise SensitivityBackendUnavailable(
-                f"NudeNet does not support the requested {self.device} backend locally"
-            )
-        try:
-            self._detector = Detector(model_path=str(weights), providers=[provider])
-        except (OSError, ValueError, RuntimeError) as error:
-            raise SensitivityBackendUnavailable(
-                "NudeNet could not load its local weights/backend"
-            ) from error
-        return self._detector
-
-
-class TransformersNSFWDetector:
-    """Pinned Hugging Face image classifier loaded without network access."""
-
-    def __init__(
-        self,
-        *,
-        revision: str,
-        model_id: str = "Falconsai/nsfw_image_detection",
-        device: str = "cpu",
-    ) -> None:
-        if not model_id.strip() or not revision.strip():
-            raise ValueError("model id and pinned revision must be non-empty")
-        self.device = device
-        self.model_id = model_id
-        self.revision = revision
-        self._classifier: Any | None = None
-
-    @property
-    def identity(self) -> str:
-        return (
-            f"transformers-image-classification:{self.model_id}@{self.revision};"
-            f"transformers={_package_version('transformers')};"
-            f"torch={_package_version('torch')};device={self.device}"
-        )
-
-    def detect(self, image_path: Path) -> Sequence[Detection]:
-        return self.detect_many((image_path,))[0]
-
-    def detect_many(self, image_paths: Sequence[Path]) -> Sequence[Sequence[Detection]]:
-        classifier = self._load()
-        images = []
-        try:
-            for image_path in image_paths:
-                with Image.open(image_path) as opened:
-                    images.append(opened.convert("RGB"))
-            import torch
-
-            model, processor = classifier
-            inputs = processor(images=images, return_tensors="pt").to(self.device)
-            with torch.inference_mode():
-                probabilities = model(**inputs).logits.softmax(dim=-1).cpu().tolist()
-            return tuple(
-                tuple(
-                    Detection(
-                        label=str(model.config.id2label[index]), score=float(score)
-                    )
-                    for index, score in enumerate(scores)
-                )
-                for scores in probabilities
-            )
-        finally:
-            for image in images:
-                image.close()
-
-    def _load(self) -> Any:
-        if self._classifier is not None:
-            return self._classifier
-        try:
-            from transformers import AutoImageProcessor, AutoModelForImageClassification
-
-            processor = AutoImageProcessor.from_pretrained(
-                self.model_id, revision=self.revision, local_files_only=True
-            )
-            model = AutoModelForImageClassification.from_pretrained(
-                self.model_id, revision=self.revision, local_files_only=True
-            )
-            model.to(self.device).eval()
-        except (
-            ImportError,
-            OSError,
-            ValueError,
-            RuntimeError,
-            AssertionError,
-        ) as error:
-            raise SensitivityBackendUnavailable(
-                "The pinned NSFW model, processor, or requested local backend is unavailable; downloads are disabled"
-            ) from error
-        self._classifier = (model, processor)
-        return self._classifier
+    def close(self) -> None: ...
 
 
 NSFW_BINARY_PROFILE_V1 = SensitivityProfile(
@@ -322,6 +169,7 @@ class SensitivityProducer:
         self.detector = detector
         self.work = WorkStore(self.database_path)
         self.artifacts = ArtifactStore(self.database_path)
+        self.admit_model = None
 
     def produce(
         self,
@@ -329,7 +177,7 @@ class SensitivityProducer:
         relative_path: Path,
         input_work_id: str,
         *,
-        profile: SensitivityProfile,
+        profile: NamedSensitivityProfile,
         owner: str = "builtin-content-sensitivity",
     ) -> SensitivityOutcome:
         return self.produce_many(
@@ -344,9 +192,17 @@ class SensitivityProducer:
         run_id: str,
         inputs: Sequence[tuple[Path, str]],
         *,
-        profile: SensitivityProfile,
+        profile: NamedSensitivityProfile,
         owner: str = "builtin-content-sensitivity",
     ) -> dict[str, SensitivityOutcome]:
+        if not isinstance(profile, NamedSensitivityProfile):
+            raise ValueError(
+                "V1 sensitivity is read-only; new work requires a declared named-value profile"
+            )
+        if self.detector.profile.identity != profile.identity:
+            raise SensitivityError(
+                "Detector declaration does not match the frozen profile"
+            )
         normalized = tuple(
             (_validated_relative_path(path), work_id) for path, work_id in inputs
         )
@@ -368,7 +224,20 @@ class SensitivityProducer:
             else:
                 ready.append(prepared)
         if ready:
-            outcomes.update(self._produce_prepared(tuple(ready), profile))
+            try:
+                outcomes.update(self._produce_named(tuple(ready), profile))
+            except Exception:
+                # A dead execution owner must not leave claimed work pretending
+                # to run, or turn a protocol defect into a bad-source observation.
+                for item in ready:
+                    if (
+                        self.work.get_work(item.record.work_id).status
+                        is WorkStatus.RUNNING
+                    ):
+                        self.work.invalidate_work(
+                            item.record.work_id, "sensitivity_execution_failed"
+                        )
+                raise
         return outcomes
 
     def _prepare(
@@ -377,7 +246,7 @@ class SensitivityProducer:
         relative_path: Path,
         input_work_id: str,
         *,
-        profile: SensitivityProfile,
+        profile: NamedSensitivityProfile,
         owner: str,
     ) -> _PreparedSensitivity | SensitivityOutcome:
         relative_path = _validated_relative_path(relative_path)
@@ -388,26 +257,16 @@ class SensitivityProducer:
             input_work_id,
             relative_path,
         )
-        threshold_value = json.dumps(
-            [
-                {
-                    "description": item.description,
-                    "label": item.label,
-                    "threshold": item.threshold,
-                }
-                for item in profile.thresholds
-            ],
-            ensure_ascii=False,
-            separators=(",", ":"),
-            sort_keys=True,
-        )
         spec = WorkSpec(
             capability="content-sensitivity",
-            producer_identity="builtin-local-content-sensitivity-v1",
+            producer_identity="builtin-local-content-sensitivity-v2",
             dependencies=(
                 upstream_dependency(input_work),
                 WorkDependency(
                     DependencyKind.MODEL, "detector_identity", self.detector.identity
+                ),
+                WorkDependency(
+                    DependencyKind.PARAMETER, "profile_identity", profile.identity
                 ),
                 WorkDependency(
                     DependencyKind.PARAMETER,
@@ -415,21 +274,16 @@ class SensitivityProducer:
                     relative_path.as_posix(),
                 ),
                 WorkDependency(DependencyKind.PARAMETER, "profile_name", profile.name),
-                WorkDependency(
-                    DependencyKind.PARAMETER,
-                    "thresholds",
-                    threshold_value,
-                ),
-                WorkDependency(
-                    DependencyKind.PARAMETER,
-                    "mild_ratio",
-                    format(profile.mild_ratio, ".17g"),
-                ),
             ),
         )
         record = self.work.ensure_work(run_id, spec)
         if record.status is WorkStatus.SUCCEEDED:
-            return SensitivityOutcome(record, _observations(record.output), True)
+            observations = _observations(record.output)
+            if isinstance(profile, NamedSensitivityProfile):
+                if len(observations) != 1:
+                    raise SensitivityError("Committed sensitivity output is incomplete")
+                validate_observation(observations[0])
+            return SensitivityOutcome(record, observations, True)
         if record.status not in {WorkStatus.READY, WorkStatus.RETRYABLE_FAILURE}:
             return SensitivityOutcome(record, (), False)
         leases = self.work.claim_ready_work(
@@ -450,100 +304,217 @@ class SensitivityProducer:
             leases[0],
         )
 
-    def _produce_prepared(
-        self,
-        prepared: tuple[_PreparedSensitivity, ...],
-        profile: SensitivityProfile,
-    ) -> dict[str, SensitivityOutcome]:
+    def _produce_named(self, prepared, profile):
+        from copy import deepcopy
+        import time
+
+        inputs = []
+        for item in prepared:
+            output = item.input_work.output
+            # Dimensions are established by preparation, never from source metadata.
+            dimensions = output["value"]
+            if "width" not in dimensions:
+                raise SensitivityError("Prepared visual Work has no dimension proof")
+            inputs.append(
+                SensitivityInput(
+                    item.input_work_id,
+                    item.input_artifact.path,
+                    item.input_artifact.digest,
+                    dimensions["width"],
+                    dimensions["height"],
+                )
+            )
+        expected_identity = self.detector.identity
+        expected_profile_identity = profile.identity
+        from uuid import uuid4
+
+        batch_id = "sensitivity-batch:" + uuid4().hex
+        load_seconds = None
         try:
-            detect_many = getattr(self.detector, "detect_many", None)
-            if callable(detect_many):
-                raw_detections = tuple(
-                    detect_many(tuple(item.input_artifact.path for item in prepared))
+            if self.admit_model is not None:
+                self.admit_model()
+            load = getattr(self.detector, "load", None)
+            if callable(load):
+                loaded = load()
+                load_seconds = (
+                    self.detector.execution.get("load_seconds")
+                    if loaded is True
+                    else 0.0
+                    if loaded is False
+                    else None
                 )
-            else:
-                raw_detections = tuple(
-                    self.detector.detect(item.input_artifact.path) for item in prepared
-                )
-            if len(raw_detections) != len(prepared):
-                raise SensitivityError(
-                    "sensitivity batch output count does not match input"
-                )
+            started = time.monotonic()
+            predictions = tuple(self.detector.analyze(tuple(inputs)))
         except SensitivityBackendUnavailable:
             for item in prepared:
                 self.work.invalidate_work(
                     item.record.work_id, "sensitivity_backend_unavailable"
                 )
             raise
-        except (SensitivityError, OSError, ValueError) as error:
-            if len(prepared) > 1:
-                midpoint = len(prepared) // 2
-                return {
-                    **self._produce_prepared(prepared[:midpoint], profile),
-                    **self._produce_prepared(prepared[midpoint:], profile),
-                }
-            item = prepared[0]
-            return {item.input_work_id: self._fail_prepared(item, error)}
-
-        outcomes: dict[str, SensitivityOutcome] = {}
-        for item, detections in zip(prepared, raw_detections, strict=True):
-            outcomes[item.input_work_id] = self._complete_prepared(
-                item, detections, profile
+        elapsed = time.monotonic() - started
+        observed = datetime.now(timezone.utc).isoformat()
+        if (
+            self.detector.identity != expected_identity
+            or profile.identity != expected_profile_identity
+        ):
+            raise SensitivityError(
+                "Adapter mutated its frozen semantic declaration during execution"
+            )
+        by_key = {p.key: p for p in predictions}
+        if len(by_key) != len(predictions) or set(by_key) != {i.key for i in inputs}:
+            raise SensitivityError(
+                "Sensitivity batch has missing, duplicate or unassignable outputs"
+            )
+        # Validate the whole batch before committing any attributable success.
+        for inp in inputs:
+            prediction = by_key[inp.key]
+            if prediction.sha256 != inp.sha256 or (
+                (prediction.values is None) == (prediction.failure is None)
+            ):
+                raise SensitivityError(
+                    "Sensitivity output identity or outcome is ambiguous"
+                )
+            if prediction.values is not None:
+                if set(prediction.values) != set(
+                    profile.definitions["declared_properties"]
+                ):
+                    raise SensitivityError("Adapter returned undeclared properties")
+                validate_named_value(
+                    {
+                        "detector_identity": self.detector.identity,
+                        "profile": profile.name,
+                        **prediction.values,
+                    },
+                    profile.definitions,
+                    profile.basis,
+                    {"width": inp.width, "height": inp.height},
+                )
+        outcomes = {}
+        actual = self.detector.execution or {}
+        inference_count = getattr(self.detector, "batch_execution", {}).get(
+            "inference_input_count"
+        )
+        if inference_count is not None and (
+            type(inference_count) is not int or not 0 <= inference_count <= len(inputs)
+        ):
+            raise SensitivityError("Invalid actual inference batch size")
+        execution = {
+            "schema_version": 1,
+            "batch": {
+                "batch_id": batch_id,
+                "accounting_run_id": prepared[0].lease.run_id,
+                "observed_at": observed,
+                "input_count": len(inputs),
+                "inference_input_count": inference_count,
+                "processing_wall_seconds": elapsed,
+                "load_wall_seconds": load_seconds,
+                "actual_device": actual.get("device"),
+                "precision": actual.get("precision"),
+                "measured_memory_bytes": actual.get("measured_memory_bytes"),
+            },
+        }
+        for item in prepared:
+            prediction = by_key[item.input_work_id]
+            if prediction.failure is not None:
+                outcomes[item.input_work_id] = self._fail_prepared(
+                    item, SensitivityError(prediction.failure), execution
+                )
+                continue
+            self.artifacts.require_available(item.input_artifact.artifact_id)
+            observation = {
+                "name": "content_sensitivity",
+                "status": "available",
+                "value": {
+                    "detector_identity": self.detector.identity,
+                    "profile": profile.name,
+                    **prediction.values,
+                },
+                "basis": deepcopy(profile.basis),
+                "provenance": {
+                    "detector_identity": self.detector.identity,
+                    "profile": profile.name,
+                    "model_id": profile.model_id,
+                    "revision": profile.revision,
+                    "files_sha256": profile.files,
+                    "producer": profile.adapter_revision,
+                    "observed_at": observed,
+                    "input_work_id": item.input_work_id,
+                    "input_sha256": item.input_artifact.digest,
+                    "relative_path": item.relative_path.as_posix(),
+                    "definitions": deepcopy(profile.definitions),
+                    "actual_execution": deepcopy(self.detector.execution),
+                },
+                "qualifications": [
+                    {
+                        "code": "model_observation_limits",
+                        "effect": "limits_interpretation",
+                        "message": "Model evidence applies only to this input; no calibration, complete detection, represented-member coverage or remote authorization is implied.",
+                    }
+                ],
+            }
+            completed = self.work.succeed_work(
+                item.lease,
+                {
+                    "observations": [observation],
+                    "subject": {"relative_path": item.relative_path.as_posix()},
+                    "execution": deepcopy(execution),
+                },
+            )
+            outcomes[item.input_work_id] = SensitivityOutcome(
+                completed, (observation,), False
             )
         return outcomes
-
-    def _complete_prepared(
-        self,
-        prepared: _PreparedSensitivity,
-        detections: Sequence[Detection],
-        profile: SensitivityProfile,
-    ) -> SensitivityOutcome:
-        try:
-            scores = classify_detections(detections, profile)
-            self.artifacts.require_available(prepared.input_artifact.artifact_id)
-            observations = (
-                {
-                    "name": "content_sensitivity",
-                    "status": "available",
-                    "value": {
-                        "detector_identity": self.detector.identity,
-                        "labels": [_score_value(score) for score in scores],
-                        "profile": profile.name,
-                    },
-                    "provenance": {
-                        "detector_identity": self.detector.identity,
-                        "input_work_id": prepared.input_work.work_id,
-                        "profile": profile.name,
-                        "relative_path": prepared.relative_path.as_posix(),
-                    },
-                },
-            )
-            completed = self.work.succeed_work(
-                prepared.lease,
-                {
-                    "observations": list(observations),
-                    "subject": {"relative_path": prepared.relative_path.as_posix()},
-                },
-            )
-            return SensitivityOutcome(completed, observations, False)
-        except (SensitivityError, OSError, ValueError) as error:
-            return self._fail_prepared(prepared, error)
 
     def _fail_prepared(
         self,
         prepared: _PreparedSensitivity,
         error: BaseException,
+        execution: dict,
     ) -> SensitivityOutcome:
+        from copy import deepcopy
+
+        profile = self.detector.profile
+        observation = {
+            "name": "content_sensitivity",
+            "status": "failed",
+            "basis": {"code": "sensitivity_detection_failed", "message": str(error)},
+            "provenance": {
+                "detector_identity": self.detector.identity,
+                "profile": profile.name,
+                "model_id": profile.model_id,
+                "revision": profile.revision,
+                "files_sha256": profile.files,
+                "definitions": deepcopy(profile.definitions),
+                "observed_at": datetime.now(timezone.utc).isoformat(),
+                "producer": profile.adapter_revision,
+                "input_work_id": prepared.input_work_id,
+                "input_sha256": prepared.input_artifact.digest,
+                "relative_path": prepared.relative_path.as_posix(),
+                "actual_execution": deepcopy(self.detector.execution),
+            },
+            "qualifications": [
+                {
+                    "code": "sensitivity_unavailable",
+                    "effect": "limits_interpretation",
+                    "message": str(error) or type(error).__name__,
+                }
+            ],
+        }
         try:
             failed = self.work.fail_work(
                 prepared.lease,
                 error_code="sensitivity_detection_failed",
                 message=str(error) or type(error).__name__,
                 retryable=False,
+                output={
+                    "observations": [observation],
+                    "subject": {"relative_path": prepared.relative_path.as_posix()},
+                    "execution": deepcopy(execution),
+                },
             )
         except LeaseLost:
             failed = self.work.get_work(prepared.record.work_id)
-        return SensitivityOutcome(failed, (), False)
+        return SensitivityOutcome(failed, (observation,), False)
 
 
 def classify_detections(
@@ -572,18 +543,6 @@ def classify_detections(
             )
         )
     return tuple(classified)
-
-
-def _score_value(score: SensitivityScore) -> dict[str, object]:
-    return {
-        "description": score.description,
-        "label": score.label,
-        "mild_sensitive": score.mild_sensitive,
-        "mild_threshold": score.mild_threshold,
-        "score": score.score,
-        "sensitive": score.sensitive,
-        "threshold": score.threshold,
-    }
 
 
 def _observations(output: object | None) -> tuple[dict[str, object], ...]:
@@ -636,18 +595,10 @@ def _validated_relative_path(path: Path) -> Path:
     return path
 
 
-def _package_version(package: str) -> str:
-    try:
-        return version(package)
-    except PackageNotFoundError:
-        return "unavailable"
-
-
 __all__ = [
     "Detection",
     "NSFW_BINARY_PROFILE_V1",
     "NUDENET_BODY_EXPOSURE_PROFILE_V1",
-    "NudeNetDetector",
     "SensitivityBackendUnavailable",
     "SensitivityDetector",
     "SensitivityError",
@@ -656,6 +607,5 @@ __all__ = [
     "SensitivityProfile",
     "SensitivityScore",
     "SensitivityThreshold",
-    "TransformersNSFWDetector",
     "classify_detections",
 ]

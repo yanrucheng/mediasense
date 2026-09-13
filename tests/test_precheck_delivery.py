@@ -233,20 +233,21 @@ def test_sensitivity_rejects_invalid_configuration(tmp_path, body):
 def test_sensitivity_configuration_is_explicit_and_dataset_replaces_user(tmp_path):
     config = tmp_path / "config.toml"
     config.write_text('[sensitivity]\nnsfw_revision="' + "a" * 40 + '"\n')
-    assert load_runtime_config(user_config=config).sensitivity is None
-    config.write_text(config.read_text() + "enabled=true\n")
+    with pytest.raises(ConfigurationError, match="explicit migration"):
+        load_runtime_config(user_config=config)
+    retained = load_runtime_config(user_config=config, allow_invalid_sensitivity=True)
+    assert retained.sensitivity is None and retained.sensitivity_error
+    config.write_text('[sensitivity]\nenabled=true\n[sensitivity.models.freepik]\nenabled=true\nmodel_path="/local/freepik"\n')
     enabled = load_runtime_config(user_config=config).sensitivity
-    assert (
-        enabled["device"] == "cpu"
-        and enabled["nsfw_model_id"] == "Falconsai/nsfw_image_detection"
-    )
+    assert enabled["models"]["freepik"]["device"] == "mps"
+    assert enabled["models"]["freepik"]["batch_size"] == 4
+    assert not enabled["models"]["nudenet640"]["enabled"]
     workspace = tmp_path / "dataset"
     workspace.mkdir()
     (workspace / "config.toml").write_text("[sensitivity]\nenabled=false\n")
-    assert (
-        load_runtime_config(user_config=config, dataset_workspace=workspace).sensitivity
-        is None
-    )
+    disabled = load_runtime_config(user_config=config, dataset_workspace=workspace).sensitivity
+    assert not any(item["enabled"] for item in disabled["models"].values())
+    assert disabled["models"]["freepik"]["model_path"] is None
 
 
 def test_all_release_schema_snapshots_match_the_single_contract_home():
