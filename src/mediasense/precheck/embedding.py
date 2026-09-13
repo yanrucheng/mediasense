@@ -190,6 +190,7 @@ class EmbeddingProducer:
         self.encoder = encoder
         self.work = WorkStore(self.database_path)
         self.artifacts = ArtifactStore(self.database_path)
+        self._backend_checked = False
 
     def produce(
         self,
@@ -214,6 +215,12 @@ class EmbeddingProducer:
         profile: EmbeddingProfile,
         owner: str = "builtin-image-embedding",
     ) -> dict[str, EmbeddingOutcome]:
+        from ._sqlite_scope import connection_scope
+
+        with connection_scope(self.database_path):
+            return self._produce_many(run_id, input_work_ids, profile=profile, owner=owner)
+
+    def _produce_many(self, run_id, input_work_ids, *, profile, owner):
         work_ids = tuple(input_work_ids)
         if len(set(work_ids)) != len(work_ids):
             raise ValueError("embedding batch inputs must be unique")
@@ -274,6 +281,11 @@ class EmbeddingProducer:
             record = self.work.ensure_work(run_id, spec)
         if record.status not in {WorkStatus.READY, WorkStatus.RETRYABLE_FAILURE}:
             return EmbeddingOutcome(record, None, False)
+        if not self._backend_checked:
+            check_available = getattr(self.encoder, "check_available", None)
+            if callable(check_available):
+                check_available()
+            self._backend_checked = True
         leases = self.work.claim_ready_work(
             run_id,
             owner,
@@ -310,6 +322,10 @@ class EmbeddingProducer:
                 raise InvalidEmbedding(
                     "embedding batch output count does not match input"
                 )
+        except EmbeddingBackendUnavailable as error:
+            for item in prepared:
+                self.work.fail_work(item.lease, error_code="embedding_backend_unavailable", message=str(error), retryable=True)
+            raise
         except Exception as error:
             if not isinstance(error, (EmbeddingError, OSError, ValueError)):
                 for item in prepared:

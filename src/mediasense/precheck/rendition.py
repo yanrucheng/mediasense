@@ -29,6 +29,8 @@ from .artifact import ArtifactStore
 from .source_validity import SourceValidityStore
 from .work import WorkStore
 
+PRODUCER_IDENTITY = "builtin-image-rendition-v1"
+
 
 @dataclass(frozen=True, slots=True)
 class RenditionProfile:
@@ -81,6 +83,12 @@ class ImageRenditionProducer:
         profiles: tuple[RenditionProfile, ...],
     ) -> tuple[RenditionOutcome, ...]:
         """Keep independent Work while sharing one lazily decoded source per call."""
+        from ._sqlite_scope import connection_scope
+
+        with connection_scope(self.database_path):
+            return self._produce_profiles(run_id, relative_path, profiles=profiles)
+
+    def _produce_profiles(self, run_id, relative_path, *, profiles):
         decoded = None
         identity = None
 
@@ -120,7 +128,7 @@ class ImageRenditionProducer:
         proof = self.validity.prove(run_id, relative_path)
         spec = WorkSpec(
             capability="image-rendition",
-            producer_identity="builtin-image-rendition-v1",
+            producer_identity=PRODUCER_IDENTITY,
             dependencies=(
                 source_revision_dependency(
                     proof.dataset_id, proof.relative_path, proof.source_revision

@@ -30,7 +30,7 @@ def valid_candidate() -> dict[str, Any]:
             exchange["request"]["action"] == "update"
             and exchange["response"]["outcome"] == "ok"
         ):
-            return deepcopy(exchange["request"]["candidate_content"])
+            return deepcopy(exchange["request"]["organization_content"])
     raise AssertionError("missing successful Plan update in Mock")
 
 

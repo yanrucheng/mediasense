@@ -23,6 +23,7 @@ class ResultSourceItem:
     basis: object | None = None
     observations: tuple[dict[str, object], ...] = ()
     qualifications: tuple[dict[str, object], ...] = ()
+    accounting: dict | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -62,6 +63,8 @@ class ResultDraft:
     qualifications: tuple[dict[str, object], ...]
     execution_boundary: dict[str, object]
     supporting_work_ids: tuple[str, ...] = ()
+    preparation: dict | None = None
+    input_bindings: dict | None = None
 
 
 @dataclass(frozen=True, slots=True)

@@ -45,27 +45,30 @@ class ResultStore(SQLiteResultStore):
         external_policy_status: str | None = None,
         geo_acquisition_policy: Mapping[str, object] | None = None,
     ) -> ResultDraft:
-        return build_minimal_result(
-            self.database_path,
-            self.artifacts,
-            run_id,
-            rendition_work_ids,
-            compression_work_ids=compression_work_ids,
-            contact_sheet_work_ids=contact_sheet_work_ids,
-            gpx_work_ids=gpx_work_ids,
-            metadata_work_ids=metadata_work_ids,
-            reverse_geocode_work_by_source=reverse_geocode_work_by_source,
-            sensitivity_work_ids=sensitivity_work_ids,
-            sensitivity_enabled=sensitivity_enabled,
-            sensitivity_configuration=sensitivity_configuration,
-            video_probe_work_ids=video_probe_work_ids,
-            video_frame_work_ids=video_frame_work_ids,
-            video_key_frame_work_ids=video_key_frame_work_ids,
-            dataset_name=dataset_name,
-            dataset_context=dataset_context,
-            external_policy_status=external_policy_status,
-            geo_acquisition_policy=geo_acquisition_policy,
-        )
+        from ._sqlite_scope import connection_scope
+
+        with connection_scope(self.database_path):
+            return build_minimal_result(
+                self.database_path,
+                self.artifacts,
+                run_id,
+                rendition_work_ids,
+                compression_work_ids=compression_work_ids,
+                contact_sheet_work_ids=contact_sheet_work_ids,
+                gpx_work_ids=gpx_work_ids,
+                metadata_work_ids=metadata_work_ids,
+                reverse_geocode_work_by_source=reverse_geocode_work_by_source,
+                sensitivity_work_ids=sensitivity_work_ids,
+                sensitivity_enabled=sensitivity_enabled,
+                sensitivity_configuration=sensitivity_configuration,
+                video_probe_work_ids=video_probe_work_ids,
+                video_frame_work_ids=video_frame_work_ids,
+                video_key_frame_work_ids=video_key_frame_work_ids,
+                dataset_name=dataset_name,
+                dataset_context=dataset_context,
+                external_policy_status=external_policy_status,
+                geo_acquisition_policy=geo_acquisition_policy,
+            )
 
     def compare(self, left_result_ref: str, right_result_ref: str) -> dict[str, object]:
         """Compare sealed public projections without exposing internal Work."""

@@ -232,7 +232,7 @@ def test_cancellation_at_commit_gate_rolls_back_without_a_receipt(
     monkeypatch.setattr(tool.store, "update", cancel_at_gate)
     request = update_request(created)
     if notes_only:
-        request.pop("candidate_content")
+        request.pop("organization_content")
         request["working_notes"] = "before cancellation"
     result = tool.handle(request, execution=execution)
     assert result["error"]["code"] == "operation_failed"
@@ -248,7 +248,7 @@ def test_commit_winning_cancellation_remains_replayable(
     created = _create(tool)
     request = update_request(created, organization_preferences={})
     if notes_only:
-        request.pop("candidate_content")
+        request.pop("organization_content")
         request["working_notes"] = "committed notes"
     phases = []
     execution = UpdateExecution(observe=lambda event: phases.append(event["phase"]))
@@ -265,7 +265,7 @@ def test_commit_winning_cancellation_remains_replayable(
     snapshot = tool.store.snapshot(created["work_ref"])
     assert snapshot.revision == result["revision"]
     assert snapshot.organization_preferences == {}
-    assert snapshot.candidate == request.get("candidate_content")
+    assert snapshot.candidate == request.get("organization_content")
     if notes_only:
         assert snapshot.working_notes == "committed notes"
     assert tool.handle(request) == result
@@ -281,7 +281,7 @@ def test_failure_inside_commit_rolls_back_and_does_not_hold_ownership(
     before = tool.store.snapshot(created["work_ref"])
     request = update_request(created, organization_preferences={})
     if notes_only:
-        request.pop("candidate_content")
+        request.pop("organization_content")
         request["working_notes"] = "rollback notes"
 
     def fail(*_args):

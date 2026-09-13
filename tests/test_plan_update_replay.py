@@ -13,6 +13,12 @@ from test_plan_update_mcp import GatedReader, update_request
 from test_plan_work import _confirmation, _create, _seal_request, _tool
 
 
+def _receipt(response):
+    # Delivery is a fresh observation; only the committed business receipt is
+    # replay-stable. Revision/state and all side-effect assertions remain exact.
+    return {key: value for key, value in response.items() if key != "view"}
+
+
 @pytest.mark.parametrize("retry", ["identical", "different_payload", "different_id"])
 @pytest.mark.parametrize("seal_after_commit", [False, True])
 def test_owner_commit_between_replay_lookup_and_state_check(
@@ -69,9 +75,9 @@ def test_owner_commit_between_replay_lookup_and_state_check(
             reader.release.set()
             committed.set()
 
-    assert owner.handle(request) == original
+    assert _receipt(owner.handle(request)) == _receipt(original)
     if retry == "identical":
-        assert retried == original
+        assert _receipt(retried) == _receipt(original)
     else:
         assert retried["error"]["code"] == (
             "idempotency_conflict"

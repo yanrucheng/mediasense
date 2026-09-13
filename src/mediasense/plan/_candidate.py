@@ -62,13 +62,55 @@ class CandidateValidationError(ValueError):
     """Raised when candidate structure prevents safe analysis."""
 
 
+class _PlanResultResolver(ResultResolver):
+    """Plan validates reference custody separately from image availability."""
+
+    def _call(self, request):
+        try:
+            return super()._call(request)
+        except ResultAccessError as error:
+            # The shared resolver's legacy adapter wraps reader exceptions.
+            # A programming failure is not an ordinary Plan validation issue.
+            if error.__cause__ is not None:
+                raise error.__cause__
+            raise
+
+    def inspect(self, kind, ref):
+        try:
+            return super().inspect(kind, ref)
+        except ResultAccessError:
+            if kind != "evidence":
+                raise
+            # Only the public selected-item evidence_unavailable result proves
+            # that this reference exists but its local bytes cannot be delivered.
+            # Unknown refs, Result failures and unexpected exceptions still fail.
+            response = self._call(
+                {
+                    "action": "review",
+                    "result_ref": self.result_ref,
+                    "evidence_refs": [ref],
+                    "page": {"limit": 1},
+                }
+            )
+            items = response.get("items", [])
+            if (
+                len(items) == 1
+                and items[0].get("evidence_ref") == ref
+                and items[0].get("error", {}).get("code") == "evidence_unavailable"
+                and response["page"]["next_cursor"] is None
+            ):
+                # This limited view supplies no image origin or attributes.
+                return {"kind": "evidence", "ref": ref}
+            raise
+
+
 def materialize_candidate(
     candidate_content: Mapping[str, Any], *, plan_ref: str
 ) -> dict[str, Any]:
     if {"contract", "plan_ref", "seal"} & candidate_content.keys():
         raise CandidateValidationError("Candidate contains Tool-owned sealing fields")
     content = {
-        **deepcopy(dict(candidate_content)),
+        **{k: deepcopy(v) for k, v in candidate_content.items() if k != "kind"},
         "contract": "mediasense.frozen-plan",
         "plan_ref": plan_ref,
     }
@@ -105,7 +147,8 @@ def analyze_candidate(
     sealed_content = {}
     if not issues:
         sealed_content = materialize_candidate(candidate_content, plan_ref=plan_ref)
-        issues.extend(_schema_issues(sealed_content, schema_validator))
+        if candidate_content.get("kind") == "candidate":
+            issues.extend(_schema_issues(sealed_content, schema_validator))
     if candidate_content.get("result_ref") != result_ref:
         issues.append(
             ValidationIssue(
@@ -138,7 +181,7 @@ def analyze_candidate(
             issues=tuple(issues),
         )
 
-    resolver = ResultResolver(result_ref, reader)
+    resolver = _PlanResultResolver(result_ref, reader)
     try:
         stage("scope")
         scope = resolver.resolve(candidate_content["scope"])
@@ -174,7 +217,7 @@ def analyze_candidate(
                 )
             for evidence_ref in checked(note.get("evidence_refs", [])):
                 resolver.verify_evidence(evidence_ref)
-    except (CandidateValidationError, ResultAccessError, KeyError) as exc:
+    except (CandidateValidationError, ResultAccessError) as exc:
         issues.append(ValidationIssue("result_resolution_failed", str(exc)))
         scope = frozenset()
         groups = ()
@@ -183,7 +226,14 @@ def analyze_candidate(
 
     if scope:
         stage("partition")
-        _validate_partition(scope, groups, outcomes, issues, checkpoint=check)
+        _validate_partition(
+            scope,
+            groups,
+            outcomes,
+            issues,
+            checkpoint=check,
+            require_complete=candidate_content["kind"] == "candidate",
+        )
         stage("destinations")
         _validate_destinations(
             candidate_content,
@@ -196,7 +246,7 @@ def analyze_candidate(
         issues.append(ValidationIssue("empty_scope", "Plan scope must be nonempty."))
 
     identity: str | None = None
-    if not issues:
+    if not issues and candidate_content["kind"] == "candidate":
         stage("identity")
         try:
             identity = content_identity(sealed_content)
@@ -227,7 +277,7 @@ def _candidate_validator() -> Draft202012Validator:
         {
             "$schema": inputs["$schema"],
             "$defs": inputs["$defs"],
-            "$ref": "#/$defs/candidate_content",
+            "$ref": "#/$defs/organization_content",
         },
         registry=registry,
     )
@@ -264,12 +314,19 @@ def _validate_partition(
     issues: list[ValidationIssue],
     *,
     checkpoint: Callable[[], None] = lambda: None,
+    require_complete: bool = True,
 ) -> None:
     assigned: set[str] = set()
     for label, collections in (("group", groups), ("outcome", outcomes)):
         for index, members in enumerate(collections):
             checkpoint()
             member_set = set(members)
+            if not member_set:
+                issues.append(
+                    ValidationIssue(
+                        "empty_membership", f"{label} {index} has no members."
+                    )
+                )
             overlap = assigned & member_set
             if overlap:
                 issues.append(
@@ -288,7 +345,7 @@ def _validate_partition(
                 )
             assigned.update(member_set)
     missing = scope - assigned
-    if missing:
+    if missing and require_complete:
         issues.append(
             ValidationIssue(
                 "incomplete_scope",

@@ -25,6 +25,8 @@ from .accounting import AccountingStore
 from .discovery import SourceScope, association_key
 from .work import WorkStore
 
+PRODUCER_IDENTITY = "builtin-filename-temporal-bundle-v1"
+
 
 _DEFAULT_REPRESENTATIVE_EXTENSIONS = (
     ".jpg",
@@ -179,7 +181,7 @@ class BundleCandidateProducer:
             )
             spec = WorkSpec(
                 capability="bundle-candidate",
-                producer_identity="builtin-filename-temporal-bundle-v1",
+                producer_identity=PRODUCER_IDENTITY,
                 dependencies=tuple(dependencies),
             )
             record = self.work.ensure_work(run_id, spec)

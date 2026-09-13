@@ -4,7 +4,7 @@ title: "MediaSense PreCheck Compression Boundary"
 type: design
 status: active
 created: 2026-08-26
-updated: 2026-09-10
+updated: 2026-09-13
 timezone: "Asia/Shanghai"
 parent: "design-260825-2235-mediasense-information-architecture"
 depends-on:
@@ -26,6 +26,8 @@ tags: ["mediasense", "precheck", "compression", "handoff-boundary"]
 2026-09-09 的确认收敛为两层：**模型采用“对象＋关系＋属性”，阅读采用“代表自身信息＋压缩关系”。** `attributes` 是概念用语，不要求重命名现有 `observations`，也不另建属性注册表、文件或服务。
 
 本页不定义数据库结构或处理流水线。后文保留的历史压力测试说明模型的适用范围，不认证当前安装版、真实数据质量或某个具体算法。
+
+2026-09-13 用户确认的[基础概念模型](../../model/model-260913-1408-precheck-basics.md)负责阶段、Run、Result、Profile 之间的关系与实例变化规则，存放在独立的稳定模型目录。本页继续负责 Result 内部对象、属性和关系；对外接口改造另由后续合约讨论确定。
 
 ## 为什么需要这个模型
 

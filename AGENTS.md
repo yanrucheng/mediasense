@@ -4,11 +4,12 @@
 
 Before architecture, contract, Skill, Tool, or migration work:
 
-1. Read `docs/design/design-260823-1918-mediasense-foundation.md`.
-2. Before creating or reviewing a shared module, provider adapter, stage-neutral Tool, capability Skill, artifact, registry, or service, read `docs/design/design-260830-1527-reusable-capability-architecture.md`.
-3. Before PreCheck model, evidence, or handoff work, read `docs/design/design-260825-2235-mediasense-information-architecture/design-260825-2235D-precheck-compression-boundary.md`. Before changing a public Tool, read `docs/spec/contract/index.md` and the relevant active contract.
-4. For legacy comparison, read `docs/eval/eval-260823-1918-ai-album-migration-baseline/index.md` and its linked modules.
-5. Before using the Hong Kong fixture, read `eval/fixtures/ai-album-hk-representative-v1.yaml`, then the package's own `README.md` and `docs/RESEARCH-AND-HANDOFF.zh-CN.md`. Run the package verifier before trusting its contents.
+1. Read the [basic model index](docs/model/index.md) and the accepted models relevant to the task; PreCheck work starts with its [basic concept model](docs/model/model-260913-1408-precheck-basics.md).
+2. Read `docs/design/design-260823-1918-mediasense-foundation.md`.
+3. Before creating or reviewing a shared module, provider adapter, stage-neutral Tool, capability Skill, artifact, registry, or service, read `docs/design/design-260830-1527-reusable-capability-architecture.md`.
+4. Before PreCheck model, evidence, or handoff work, read `docs/design/design-260825-2235-mediasense-information-architecture/design-260825-2235D-precheck-compression-boundary.md`. Before changing a public Tool, read `docs/spec/contract/index.md` and the relevant active contract.
+5. For legacy comparison, read `docs/eval/eval-260823-1918-ai-album-migration-baseline/index.md` and its linked modules.
+6. Before using the Hong Kong fixture, read `eval/fixtures/ai-album-hk-representative-v1.yaml`, then the package's own `README.md` and `docs/RESEARCH-AND-HANDOFF.zh-CN.md`. Run the package verifier before trusting its contents.
 
 For installation, local upgrades, readiness verification, rollback, or changes to
 those paths, use the single [installation and upgrade runbook](readme/installation.md).
@@ -24,6 +25,7 @@ It explains authoring and verification; the linked active contract owns field se
 ## Authority and boundaries
 
 - This repository is authoritative for MediaSense product intent, contracts, Skills, Tools, and migration judgments.
+- Core code and conceptual designs must remain business-agnostic. Concrete application categories must not become dedicated entities, contract fields, execution branches, or cache rules. Core design examples use generic inputs, subsets, and processing settings; user content and Agent interpretation retain their actual meaning and provenance as data.
 - `/Users/chengyanru/repos/personal/photo/ai_album` is historical implementation evidence, not a MediaSense runtime dependency or design authority.
 - External fixtures are evidence assets. They are not source code, product specifications, or ground truth for corrected MediaSense behavior.
 - Original media is the factual source. Indexes, thumbnails, embeddings, clusters, plans, and output trees are derived artifacts with distinct lifecycles.

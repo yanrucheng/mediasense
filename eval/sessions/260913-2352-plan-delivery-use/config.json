@@ -1,0 +1,172 @@
+{
+  "cases": [
+    {
+      "id": "review-loop",
+      "user_request": "请帮我整理这两天的照片。我以后会按参加的活动找回来，保留原文件名。现在先确定 6 月 20 日的书展和河边散步，其他素材我还要想一想。先让我看看目前的规划，我们看完再改。",
+      "dataset_name": "六月周末活动（合成评测）",
+      "items": [
+        {
+          "id": "o1",
+          "path": "0620/IMG_101.JPG",
+          "time": "2026-06-20T10:00:00+08:00",
+          "card": [
+            "CITY BOOK FAIR",
+            "Admission: June 20, 2026",
+            "Books and exhibition booths."
+          ]
+        },
+        {
+          "id": "o2",
+          "path": "0620/IMG_102.JPG",
+          "time": "2026-06-20T10:01:00+08:00",
+          "card": [
+            "CITY BOOK FAIR",
+            "Book exhibition tables."
+          ]
+        },
+        {
+          "id": "o3",
+          "path": "0620/IMG_103.JPG",
+          "time": "2026-06-20T10:02:00+08:00",
+          "card": [
+            "CITY BOOK FAIR",
+            "Books, shelves and an event poster."
+          ]
+        },
+        {
+          "id": "o4",
+          "path": "0620/IMG_151.JPG",
+          "time": "2026-06-20T16:00:00+08:00",
+          "card": [
+            "RIVERSIDE WALK",
+            "River, walking path and a bridge."
+          ]
+        },
+        {
+          "id": "o5",
+          "path": "0620/IMG_152.JPG",
+          "time": "2026-06-20T16:01:00+08:00",
+          "card": [
+            "RIVERSIDE WALK",
+            "The same river path."
+          ]
+        },
+        {
+          "id": "o6",
+          "path": "day2/IMG_0200.jpg",
+          "time": "2026-06-21T10:00:00+08:00",
+          "card": [
+            "NORTH BANK CULTURE CENTRE",
+            "A hall with art on the walls.",
+            "No class sign visible."
+          ]
+        },
+        {
+          "id": "o7",
+          "path": "day2/IMG_0201.jpg",
+          "time": "2026-06-21T10:04:00+08:00",
+          "card": [
+            "Hands shaping a small clay bowl.",
+            "Several people at a long work table.",
+            "Activity title not readable."
+          ]
+        },
+        {
+          "id": "o8",
+          "path": "day2/IMG_0202.jpg",
+          "time": "2026-06-21T10:06:00+08:00",
+          "card": [
+            "A small clay bowl and tools.",
+            "Same work table as IMG_0201."
+          ]
+        },
+        {
+          "id": "o9",
+          "path": "day2/IMG_0210.jpg",
+          "time": "2026-06-21T18:10:00+08:00",
+          "card": [
+            "River footpath at dusk.",
+            "The same footbridge as the June 20 walk."
+          ]
+        },
+        {
+          "id": "o10",
+          "path": "day2/IMG_0211.jpg",
+          "time": "2026-06-21T18:12:00+08:00",
+          "card": [
+            "Lamp reflections by the footbridge.",
+            "No distinct event signage."
+          ]
+        },
+        {
+          "id": "o11",
+          "path": "loose/IMG_0300.jpg",
+          "time": null,
+          "card": [
+            "Printed event ticket on a table.",
+            "Date and activity title partly obscured."
+          ]
+        },
+        {
+          "id": "o12",
+          "path": "loose/IMG_0301.jpg",
+          "time": null,
+          "card": [
+            "A close crop of a handwritten note.",
+            "Its connection to the weekend is unknown."
+          ]
+        }
+      ],
+      "representations": [
+        {
+          "source": "o1",
+          "members": [
+            "o1",
+            "o2",
+            "o3"
+          ],
+          "basis": "A short capture sequence at the book exhibition, consistent with the selected image."
+        },
+        {
+          "source": "o4",
+          "members": [
+            "o4",
+            "o5"
+          ],
+          "basis": "Adjacent captures of the river path."
+        },
+        {
+          "source": "o6",
+          "members": [
+            "o6",
+            "o7",
+            "o8"
+          ],
+          "basis": "Four-to-six-minute sequence at the same centre; one activity is not established."
+        },
+        {
+          "source": "o9",
+          "members": [
+            "o9",
+            "o10"
+          ],
+          "basis": "Same short source sequence near the footbridge."
+        },
+        {
+          "source": "o11",
+          "members": [
+            "o11"
+          ],
+          "basis": "Single-source ticket image; context unresolved."
+        },
+        {
+          "source": "o12",
+          "members": [
+            "o12"
+          ],
+          "basis": "Single-source note image; context unresolved."
+        }
+      ]
+    }
+  ]
+}

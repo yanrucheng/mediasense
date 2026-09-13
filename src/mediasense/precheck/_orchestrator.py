@@ -165,6 +165,7 @@ class PrecheckExecutionConfig:
     source_storage_evidence: str = "unresolved"
     resource_budget: ResourceBudget | None = None
     dataset_name: str | None = None
+    preparation: dict | None = None
 
     def __post_init__(self) -> None:
         if self.gpx and not self.metadata:
@@ -212,6 +213,7 @@ class PrecheckExecutionConfig:
             "bundles": self.bundles,
             "compression_target": self.compression_target,
             "dataset_name": self.dataset_name,
+            "preparation": self.preparation,
             "directed_evidence_paths": [
                 path.as_posix() for path in self.directed_evidence_paths
             ],
@@ -249,7 +251,7 @@ class PrecheckExecutionConfig:
             ),
             "source_storage": self.source_storage_hint,
             "source_storage_evidence": self.source_storage_evidence,
-            "version": 8,
+            "version": 9,
             "video": self.video,
             "video_frame_limit": self.video_frame_limit,
         }
@@ -332,7 +334,7 @@ class PrecheckExecutionConfig:
 
     @classmethod
     def from_value(cls, value: Mapping[str, object]) -> PrecheckExecutionConfig:
-        if value.get("version") not in {5, 6, 7, 8}:
+        if value.get("version") not in {5, 6, 7, 8, 9}:
             raise ValueError("unsupported PreCheck execution configuration")
         budget_value = cast(Mapping[str, object], value["resource_budget"])
         capacity_value = cast(Mapping[str, object], budget_value["capacity"])
@@ -341,7 +343,7 @@ class PrecheckExecutionConfig:
             metadata=bool(value["metadata"]),
             metadata_profile=(
                 MetadataProfile.from_value(value["metadata_profile"])
-                if value.get("version") in {7, 8}
+                if value.get("version") in {7, 8, 9}
                 else MetadataProfile(knowledge=KnowledgeSnapshot.empty())
             ),
             metadata_batch_size=int(value["metadata_batch_size"]),
@@ -369,7 +371,7 @@ class PrecheckExecutionConfig:
                 _sensitivity_profile_from_value(p)
                 for p in (
                     value.get("sensitivity_profiles", ())
-                    if value.get("version") in {6, 7, 8}
+                    if value.get("version") in {6, 7, 8, 9}
                     else [value["sensitivity_profile"]]
                     if value.get("sensitivity_profile")
                     else ()
@@ -413,6 +415,7 @@ class PrecheckExecutionConfig:
             dataset_name=(
                 None if value["dataset_name"] is None else str(value["dataset_name"])
             ),
+            preparation=value.get("preparation"),
         )
 
 
@@ -432,6 +435,7 @@ class PrecheckExecutionDependencies:
     embedding_encoder: ImageEmbeddingEncoder | None = None
     sensitivity_detectors: tuple[SensitivityDetector, ...] = ()
     geo_tool: GeoQueryTool | None = None
+    preparation_recipes: dict | None = None
 
 
 class PrecheckOrchestrator:
@@ -455,6 +459,12 @@ class PrecheckOrchestrator:
     ) -> dict[str, object]:
         if not self._running(run_ref):
             return self.run_control.sync_accounting(run_ref)
+        if config.preparation is not None:
+            from ._preparation import preparation_configuration_value, preparation_configuration_identity, resolved_preparation_recipes
+
+            current = preparation_configuration_value(config.value(), resolved_preparation_recipes(config, self.dependencies))
+            if preparation_configuration_identity(current) != config.preparation["profile"]["configuration_identity"]:
+                raise _BlockedExecution("preparation_recipe_changed", "Installed preparation recipes differ from this Run's frozen requirements.", "Restore the original recipes and resume, or start a new ordinary Run with current requirements.")
         accounting = AccountingStore(self.database_path)
         attachment = accounting.get_source_attachment(accounting_run_id)
         config = config.resolve_resources(source_root=attachment.source_root)
@@ -463,11 +473,17 @@ class PrecheckOrchestrator:
         assert config.ffmpeg_threads is not None
         assert config.model_batch_size is not None
         self._checkpoint(run_ref, "accounting", total="unknown")
-        accounting.process_run(
-            accounting_run_id,
-            should_continue=lambda: self._running(run_ref),
-            force_rescan=self.run_control.scope_selection_submitted(run_ref),
-        )
+        snapshot = config.preparation.get("input") if config.preparation else None
+        if snapshot is None:
+            accounting.process_run(
+                accounting_run_id,
+                should_continue=lambda: self._running(run_ref),
+                force_rescan=self.run_control.scope_selection_submitted(run_ref),
+            )
+        else:
+            from ._snapshot import process_snapshot
+
+            process_snapshot(accounting, accounting_run_id, snapshot, lambda: self._running(run_ref))
         status = self.run_control.sync_accounting(run_ref)
         if status["state"] != "running":
             return status
@@ -475,7 +491,8 @@ class PrecheckOrchestrator:
             return self.run_control.sync_accounting(run_ref)
 
         self._checkpoint(run_ref, "scope_review", total=1)
-        status = self.run_control.require_scope_selection(run_ref, accounting_run_id)
+        status = (self.run_control.require_scope_selection(run_ref, accounting_run_id)
+                  if snapshot is None else self.run_control.sync_accounting(run_ref))
         if status["state"] != "running":
             return status
         if not self._finish_phase(run_ref, "scope_review"):
@@ -488,20 +505,17 @@ class PrecheckOrchestrator:
                 if item.scope == "source_media"
                 and item.kind in _MEDIA_KINDS
                 and item.source_revision is not None
+                and item.condition in {"usable", "unresolved"}
             )
 
-        media_count = accounting.count_run_items(
-            accounting_run_id,
-            scope="source_media",
-            kinds=_MEDIA_KINDS,
-            require_source_revision=True,
-        )
+        media_count = sum(1 for _item in media_items())
         gpx_paths = tuple(
             item.relative_path
             for item in accounting.iter_run_items(accounting_run_id)
             if item.scope == "auxiliary"
             and item.kind == "gpx"
             and item.source_revision is not None
+            and item.condition in {"usable", "unresolved"}
         )
         executor = BoundedWorkExecutor(config.resource_budget)
 
@@ -750,6 +764,13 @@ class PrecheckOrchestrator:
                 ),
             },
         )
+        from ._snapshot import seal_preparation, snapshot_events
+
+        # Revalidate before publication as well as before producer demands.
+        if snapshot is not None:
+            for _event, _proof in snapshot_events(accounting, accounting_run_id, snapshot):
+                pass
+        draft = seal_preparation(draft, config.preparation)
         self._checkpoint(run_ref, "publishing", total=1)
         return self.run_control.publish_result(run_ref, draft)
 
@@ -1092,7 +1113,14 @@ class PrecheckOrchestrator:
                 for path, outcome in eligible.items()
             ),
         )
-        return {Path(key.removeprefix("gpx:")): value for key, value in outcomes}
+        try:
+            return {Path(key.removeprefix("gpx:")): value for key, value in outcomes}
+        except ResourceLimitExceeded as error:
+            raise _BlockedExecution(
+                "gpx_resource_budget_insufficient",
+                f"GPX matching exceeds this Run's frozen resource budget: {error}",
+                "This Run's effective resource ceiling is frozen. Cancel it and start a successor with sufficient resources for GPX matching; completed Work remains reusable.",
+            ) from error
 
     def _embeddings(
         self,
@@ -1122,16 +1150,6 @@ class PrecheckOrchestrator:
                 "The encoder differs from this Run's retained configuration.",
                 "Restore the retained encoder, or cancel and start a new Run.",
             )
-        check_available = getattr(encoder, "check_available", None)
-        if callable(check_available):
-            try:
-                check_available()
-            except EmbeddingBackendUnavailable as error:
-                raise _BlockedExecution(
-                    "embedding_backend_unavailable",
-                    str(error),
-                    "Install the configured local dependencies/model and resume this Run.",
-                ) from error
         visual = tuple(
             outcome
             for outcome in (*renditions, *frames)
@@ -1406,16 +1424,25 @@ class PrecheckOrchestrator:
             inputs.append(
                 self._compression_input(path, visual, metadata, gpx, embeddings)
             )
-        if config.compression_target is None or not inputs:
+        if not inputs:
             return (), tuple(sorted(visual_by_path))
-        outcomes = AdaptiveCompressionProducer(self.database_path).produce(
-            run_id,
-            inputs,
-            profile=AdaptiveCompressionProfile(
-                target_entries=config.compression_target,
-                content_based_boundaries=config.embedding_profile is not None,
-            ),
-        )
+        from ._preparation import override_path_partitions, compression_parameters
+
+        partition_for = override_path_partitions(config.preparation)
+        parameters = ([config.preparation["profile"]["compression"],
+                       *(override["compression"] for override in config.preparation["profile"]["overrides"])]
+                      if config.preparation else [compression_parameters(config.compression_target)])
+        partitions = [[] for _ in parameters]
+        for item in inputs:
+            partition = partition_for.get(item.relative_path, 0)
+            if any(partition_for.get(path, 0) != partition for path in item.member_paths):
+                raise ValueError("Compression input crosses frozen profile partitions")
+            partitions[partition].append(item)
+        producer = AdaptiveCompressionProducer(self.database_path)
+        outcomes = tuple(outcome for members, parameter in zip(partitions, parameters, strict=True)
+                         if members and parameter is not None
+                         for outcome in producer.produce(run_id, members, profile=AdaptiveCompressionProfile(
+                             **parameter, content_based_boundaries=config.embedding_profile is not None)))
         representatives = tuple(
             outcome.group.representative_path
             for outcome in outcomes
@@ -1527,6 +1554,8 @@ class PrecheckOrchestrator:
         for outcome in executor.iter_run(guarded_calls()):
             if outcome.error is None:
                 yield outcome.key, cast(_T, outcome.value)
+            elif isinstance(outcome.error, EmbeddingBackendUnavailable):
+                raise _BlockedExecution("embedding_backend_unavailable", str(outcome.error), "Restore the configured local backend and resume this Run.") from outcome.error
             elif not isinstance(outcome.error, ResourceAdmissionCancelled):
                 raise outcome.error
 
@@ -1554,8 +1583,12 @@ def _initial_evidence_media(
 ) -> tuple[tuple[AccountedItem, ...], tuple[str, ...]]:
     """Select the bounded initial visual frontier without reducing accounting."""
 
-    requested = set(config.directed_evidence_paths)
+    from ._preparation import override_path_partitions
+
+    override_paths = override_path_partitions(config.preparation)
+    requested = set(config.directed_evidence_paths) | set(override_paths)
     demanded = set(requested)
+    expanded_bundle_ids = set()
     evidence_limit = min(
         2_000,
         max(128, (config.compression_target or 200) * 4),
@@ -1571,6 +1604,12 @@ def _initial_evidence_media(
                 "Bundle candidate Work did not complete successfully.",
                 "Resume the Run after retrying or resolving failed bundle Work.",
             )
+        if any(path in override_paths for path in candidate.members):
+            # Directed members must be compared as themselves. A touched bundle
+            # is expanded to all actual members, including a boundary remainder.
+            requested.update(candidate.members)
+            demanded.update(candidate.members)
+            expanded_bundle_ids.add(outcome.work.work_id)
         score = int(candidate.candidate_id.rsplit(":", 1)[-1], 16)
         entry = (
             -score,
@@ -1616,7 +1655,7 @@ def _initial_evidence_media(
             f"Directed evidence paths are not eligible Source Items: {paths}",
             "Start a fresh Run with paths from the current Dataset accounting.",
         )
-    return tuple(selected), tuple(entry[2] for entry in selected_entries)
+    return tuple(selected), tuple(entry[2] for entry in selected_entries if entry[2] not in expanded_bundle_ids)
 
 
 def _bundle_representative(record: WorkRecord) -> Path:

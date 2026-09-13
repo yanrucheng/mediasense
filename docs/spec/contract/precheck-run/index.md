@@ -4,7 +4,7 @@ title: "MediaSense PreCheck Run Tool Contract"
 type: spec
 status: active
 created: 2026-08-27
-updated: 2026-09-12
+updated: 2026-09-14
 timezone: "Asia/Shanghai"
 parent: "index-contract"
 depends-on:
@@ -141,6 +141,24 @@ PreCheck 对每个 Source Item 投影地址与附近地点两个 Observation。
 组件状态、消费者校验和合法历史投影。覆盖是否完整与是否 plan_ready 保持独立。
 
 ## 本期准备深度与配置
+
+### 普通 Run 与完整 Processing Profile
+
+按已确认的[基础模型](../../../model/model-260913-1408-precheck-basics.md)，改要求创建新的普通 Run，恢复继续原 Run；Profile 是配置值。`start` 可附 `source_set` 和 `profile`，正反例见 [composition.mock.json](composition.mock.json)。本次实现与隔离验收单独记录在[验收包](../../../../openspec/changes/simplify-precheck-run-composition/acceptance.md)，不借用此前发布的验收。
+
+`source_set` 必须带 `prior_result_ref`，并恰好选择该 Result 的全部 `accounts_for` 成员 S。辅助、排除和异常条目的角色保持；新发现文件不加入 S。省略它则普通发现和范围确认继续适用。`prior_result_ref` 仅为关联和引用上下文，不继承旧参数或范围。
+
+省略 `profile` 固定当前 Dataset 默认值；提供时必须完整声明 `configuration_identity`、`compression`、`overrides`。每个非 null compression 必须提供 `target_entries`、`temporal_scale_seconds`、`spatial_scale_meters`、`content_distance_scale`；四者分别控制数量后备、时间尺度（秒）、空间尺度（米）、余弦距离尺度。距离尺度为正数，数量为正整数；较小内容距离使内容区分更严格。null 跳过该分区最终自适应压缩。不得给 override 补默认值或合并旧 Profile。
+
+非空 overrides 必须有显式 S；每项 source_set 选择 S 中非空、可处理的 source_media，彼此不交叠，即便参数相同也不能交叠。数组位置用于回读，不是优先级。各 T 使用其完整参数，剩余 source_media 使用 base 参数，最终压缩不跨分区。旧代表跨界时先按真实成员展开；代表自身属性不能成为其他成员的事实。初始准备预算仍由冻结的基础准备配置决定，override 成员成为定向准备需求。准备缺失的必要输入、保留有效计算和未受影响的工作；范围外分组可随真实依赖改变，Read 保留实际成员和依据。内容比较关闭而 override 改变内容阈值时返回 `configuration_invalid`，不启用模型或假装生效。
+
+`configuration_identity` 是固定非公开准备语义的 SHA-256 内容身份，不是实体、查找句柄、缓存键或授权。规范值为 `{"kind":"precheck-preparation","values":...}`；JSON 使用 UTF-8、对象键排序、数组原顺序、不转义非 ASCII、紧凑分隔符，拒绝非有限数字。values 恰含 metadata、gpx、image_renditions、video、bundles、visual_selection、embedding、sensitivity、geo、compression_recipe。分别绑定完整有效 MetadataProfile（含知识/上下文）、各启用策略和安装配方、视频帧数、基础初选配方/目标/显式定向输入、有效模型语义与不可变身份、排序的检测器及停用策略、现有 Geo 查询/路由/重试语义、压缩及代表选择配方和固定比较设置。影响输出的实现修订进入配方；模型身份缺失明确失败，读取有效缓存不加载模型。
+
+公开压缩参数和 overrides 不进入此投影；基础初选 target 仍进入 visual_selection。Run 身份、Dataset 名称、产物和模型路径、存储提示、批量、线程、资源调度、凭证及旧确认不进入投影。运行选项若影响含义，必须进入其所属配方。新请求在任何 worker/producer 效果前比较当前投影，失配返回 `configuration_changed`，绝不回取旧配置合并执行。恢复保留原配置；先查幂等绑定，已接受的原请求在默认值变化后仍返回原 Run，内容不同为 `idempotency_conflict`。
+
+紧凑 `{source_set, profile}` 请求部分最多 262144 UTF-8 字节，超限为 `invalid_request`。形状不完整为 `invalid_request`；空/交叠/非媒体 override 或不完整外部 S 为 `invalid_source_set`；Result 外引用为 `reference_not_in_result`。非法请求不创建新 Run。worker 对显式原输入校验源 attachment 和观测版本：检测到变化为终态 `source_snapshot_changed`，源不可用为有明确恢复前提的等待。匹配强度如实保留，未知历史不伪造。
+
+Result 封存完整 Profile、配置投影、精确 override 成员和直接输入绑定；它们属于 Result 留存数据，不依赖可变 Run/Work 或可驱逐 producer 缓存。同次发布重试只有一个 Result；新 request_id 创建新的普通 Run/Result。旧 Result 字节、材料留存及引用保持，读取语义见 [Read](../precheck-read/index.md#准备回读与直接来源对应)。
 
 厂商知识和 metadata 时区按[厂商知识契约](../manufacturer-knowledge/index.md)读取。新 Run 固定完整知识和上下文到现有 execution_config；恢复使用原快照，新 start 重读当前文件，幂等重放不重新解释。`configuration_invalid` 表示新工作采用的配置无效，不创建本次执行；它不同于条件不匹配、缺判断信息或某属性的规则冲突。控制请求沿用当前 schema，不把整份知识重复放进每次 Run 请求。
 

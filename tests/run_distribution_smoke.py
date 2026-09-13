@@ -30,6 +30,7 @@ EXPECTED_SKILL_FILES = {
     "mediasense-apply/agents/openai.yaml",
     "mediasense-plan/SKILL.md",
     "mediasense-plan/agents/openai.yaml",
+    "mediasense-plan/references/default-organization-profile.md",
     "mediasense-plan/references/organization-profiles.md",
     "mediasense-precheck/SKILL.md",
     "mediasense-precheck/agents/openai.yaml",
@@ -391,6 +392,11 @@ def _verify_wheel(wheel: Path, expected_version: str) -> None:
     runbook_name = "mediasense/_resources/skills/mediasense/references/installation.md"
     if expected_package.get(runbook_name) != canonical_runbook:
         raise AssertionError("packaged runbook is not synchronized with readme/installation.md")
+    profile_name = "mediasense/_resources/skills/mediasense-plan/references/default-organization-profile.md"
+    if expected_package.get(profile_name) != (
+        repository / "docs/spec/contract/default-organization-profile/index.md"
+    ).read_bytes():
+        raise AssertionError("packaged default organization Profile is not synchronized")
     contract_sources = {
         path.name: path
         for path in (repository / "docs/spec/contract").rglob("*.json")

@@ -26,6 +26,8 @@ superseded-by: ""
 
 2026-09-13 本地敏感性扩展已按用户授权落定：逐模型启停、Freepik 四类/累计概率、NudeNet 640 完整区域实例、实际输入归属、停用缓存排除与无模型历史读取。源码及最终 wheel 的隔离 CLI/MCP 验收通过，见[实施验收记录](../../../openspec/changes/extend-local-sensitivity-observations/acceptance.md#实施验收记录2026-09-13)。本次未切换日常安装；原 Result 字节和 V1 阈值含义不变。 后续用户独立复核发现Read输入关联、未知加载错误分类和公共执行信息三项缺口；现已补修并通过定向及隔离自检，**整体验收待用户独立复验**，不以先前正常路径证据冒充边界已被用户接受。
 
+2026-09-13 第 6 包按已定案设计进入实现：Plan Work 当前接口统一保存 draft/candidate，普通 Tool 自动交付持续页面，并严格绑定 Work/revision 的最终确认。现行机器定义、Skill 与发布资源同步；源码、隔离安装和浏览器验证见[本包实施记录](../../../openspec/changes/review-plan-preview-delivery/acceptance.md)。日常安装未切换，Human 页面审阅和较弱 Agent 效果不由自动化检查代替。
+
 ## 阅读入口
 
 | 当前合约 | 用途 | 本轮变化 |
@@ -35,7 +37,7 @@ superseded-by: ""
 | [PreCheck Run](precheck-run/index.md) | 启动、控制和观察准备过程 | 控制接口沿用；补齐本期准备深度与生产接通要求 |
 | [Geo Query](geo-query/index.md) | 有界、受授权的地理候选获取 | 输入和效果语义沿用；明确采集策略与证据投影的责任 |
 | [Dataset Open](dataset-open/index.md) | 打开明确的 Dataset | 迁入稳定位置，语义沿用 |
-| [Plan Work](plan-work/index.md) | 保存规划工作、维护和冻结 Plan | 可选工作说明、字段独立更新和空候选读取已实现；独立复核及日常升级验证通过，已有 Agent 会话加载待确认 |
+| [Plan Work](plan-work/index.md) | 保存草案/候选、交付持续页面、按版本确认并冻结 | 第 6 包当前接口已同步；验证范围见本包实施记录，未切换日常安装 |
 | [Frozen Plan](frozen-plan/index.md) | 冻结后的组织意图 | 迁入稳定位置，Source Set 含义沿用 |
 | [组织 Profile](default-organization-profile/index.md) | 默认组织和命名策略 | 迁入稳定位置；明确翻译属于 Plan 判断 |
 | [Apply](apply/index.md) | 已冻结计划的执行合约 | 仅迁入稳定位置，本轮不作全量审计 |

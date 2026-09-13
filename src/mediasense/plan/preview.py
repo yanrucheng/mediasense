@@ -25,7 +25,7 @@ class PreviewError(RuntimeError):
 
 @dataclass(frozen=True, slots=True)
 class PreviewSample:
-    source_item_ref: str
+    source_item_ref: str | None
     label: str
     uri: str | None
     evidence_ref: str | None = None
@@ -50,7 +50,7 @@ class PreviewDocument:
     work_ref: str
     result_ref: str
     revision: str
-    candidate_content_identity: str
+    candidate_content_identity: str | None
     logical_root: str
     directories: tuple[PreviewDirectory, ...]
     other_outcomes: tuple[PreviewOutcome, ...]
@@ -72,7 +72,10 @@ class PlanPreviewRenderer:
             snapshot, analysis = self.tool.snapshot_for_preview(work_ref, revision)
         except (PlanFailure, RevisionConflict) as exc:
             raise PreviewError(str(exc)) from exc
-        assert analysis.content_identity is not None
+        if analysis is None:
+            raise PreviewError(
+                "Use the continuous Work view for an absent organization"
+            )
         directories: list[PreviewDirectory] = []
         evidence_cache: dict[str, Mapping[str, Any]] = {}
         for group, members, representatives in zip(
@@ -180,7 +183,7 @@ class PlanPreviewRenderer:
     <h1>{escape(document.logical_root)}</h1>
     <div class="binding">Work: {escape(document.work_ref)}</div>
     <div class="binding">Revision: {escape(document.revision)}</div>
-    <div class="binding">Candidate: {escape(document.candidate_content_identity)}</div>
+    <div class="binding">Candidate: {escape(document.candidate_content_identity or "Draft")}</div>
     <div class="summary"><span><strong>{len(document.directories)}</strong>目录</span><span><strong>{organized_count}</strong>已组织媒体</span><span><strong>{outcome_count}</strong>其他结果</span></div>
   </header>
   <article><h2>最终目录结构</h2><pre>{escape(tree)}</pre></article>
@@ -309,6 +312,35 @@ class PlanPreviewRenderer:
             for evidence_ref in refs:
                 evidence = evidence_cache.get(evidence_ref, {})
                 if "error" in evidence:
+                    provenance = self._read(
+                        {
+                            "action": "expand",
+                            "result_ref": analysis.sealed_content["result_ref"],
+                            "evidence_refs": [evidence_ref],
+                            "include": ["provenance"],
+                        }
+                    )["items"][0]["included"]["provenance"]
+                    origins = tuple(
+                        item["target"]["ref"]
+                        for item in provenance
+                        if item["target"]["kind"] == "source_item"
+                    )
+                    if origins and not set(origins) <= group_members:
+                        continue
+                    label = ", ".join(
+                        _source_label(ref, analysis.source_views.get(ref, {}))
+                        for ref in origins
+                    )
+                    samples.append(
+                        PreviewSample(
+                            origins[0] if origins else None,
+                            label or "证据不可读；实际来源保留在 Result 中",
+                            None,
+                            evidence_ref,
+                        )
+                    )
+                    if len(samples) == 2:
+                        break
                     continue
                 origins = tuple(
                     item["source_item_ref"] for item in evidence.get("source_items", [])
@@ -318,7 +350,10 @@ class PlanPreviewRenderer:
                 if not origins or not set(origins) <= group_members:
                     continue
                 uri = _default_asset_resolver(evidence_ref, evidence)
-                if uri is None:
+                if (
+                    uri is None
+                    and evidence.get("access", {}).get("kind") != "local_artifact"
+                ):
                     continue
                 label = ", ".join(
                     _source_label(origin, analysis.source_views.get(origin, {}))
@@ -426,7 +461,7 @@ def _tree_text(document: PreviewDocument) -> str:
     lines = [document.logical_root + "/"]
 
     def visit(node: dict[str, Any], prefix: tuple[str, ...], indent: str) -> None:
-        names = sorted(node)
+        names = list(node)
         for index, name in enumerate(names):
             last = index == len(names) - 1
             path = (*prefix, name)

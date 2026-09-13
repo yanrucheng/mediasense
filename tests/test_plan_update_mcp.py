@@ -82,7 +82,7 @@ def update_request(created, **values):
         "action": "update",
         "work_ref": created["work_ref"],
         "base_revision": created["revision"],
-        "candidate_content": valid_candidate(),
+        "organization_content": valid_candidate(),
         "request_id": "request:update-mcp",
         **values,
     }
@@ -410,6 +410,8 @@ def test_mcp_full_plan_schema_is_self_contained_and_seal_uses_client_context(tmp
                         "request_id": "request:self-contained-seal",
                     },
                     "authority": {
+                        "work_ref": created["work_ref"],
+                        "reviewed_revision": current["revision"],
                         "principal_ref": "human:test",
                         "confirmed_content_identity": identity,
                         "confirmed_at": "2026-09-12T10:00:00Z",
@@ -450,14 +452,14 @@ def test_mcp_rejects_invalid_candidate_atomically_and_preserves_plan_identity(
                 session,
                 update_request(
                     state,
-                    candidate_content=candidate,
+                    organization_content=candidate,
                     working_notes="must not save",
                     organization_preferences={},
                     request_id="request:invalid-entry",
                 ),
             )
             assert response.content == []
-            assert response.structured_content["error"]["code"] == "candidate_invalid"
+            assert response.structured_content["error"]["code"] == "organization_invalid"
             assert tool.store.snapshot(state["work_ref"]) == before
             inspected = (
                 await call_update(
@@ -477,6 +479,8 @@ def test_mcp_rejects_invalid_candidate_atomically_and_preserves_plan_identity(
                         "request_id": "request:after-invalid-seal",
                     },
                     "authority": {
+                        "work_ref": state["work_ref"],
+                        "reviewed_revision": state["revision"],
                         "principal_ref": "human:test",
                         "confirmed_content_identity": identity,
                         "confirmed_at": "2026-09-12T10:00:00Z",

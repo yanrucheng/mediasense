@@ -211,20 +211,8 @@ class UrllibJsonTransport:
             with opener(request, timeout=timeout) as response:  # noqa: S310
                 value = json.loads(response.read())
         except HTTPError as error:
-            retry_after = None
-            raw_delay = error.headers.get("Retry-After") if error.headers else None
-            if raw_delay and raw_delay.isdecimal():
-                retry_after = min(float(raw_delay), 86400)
             if error.code in {408, 425, 429} or error.code >= 500:
-                raise GeoTransientError(
-                    f"provider HTTP {error.code}",
-                    request_count=1,
-                    safe_to_retry=True,
-                    failure_code="rate_limited"
-                    if error.code == 429
-                    else "service_transient",
-                    retry_after=retry_after,
-                ) from error
+                raise _HttpTransientResponseError(error) from error
             raise _HttpResponseError(error) from error
         except (OSError, URLError, http.client.HTTPException) as error:
             cause = error.reason if isinstance(error, URLError) else error
@@ -280,23 +268,48 @@ class _HttpResponseError(GeoPermanentError):
 
     def __init__(self, error: HTTPError) -> None:
         self.http_status = error.code
-        try:
-            # Error messages/metadata can contain credentials and request URLs.
-            value = json.loads(error.read(65536))
-        except (OSError, UnicodeError, ValueError):
-            value = {}
-        finally:
-            error.close()
-        # Kept only in memory for the provider adapter. No response text is copied
-        # into the exception message, journal, qualifications or public result.
-        self.response = value if isinstance(value, Mapping) else {}
+        self.response = _read_http_error_response(error)
         super().__init__(
             f"provider HTTP {error.code}",
             request_count=1,
             failure_code="authentication"
             if error.code in {401, 403, 407}
             else "provider_http_rejected",
+            retry_after=_http_retry_after(error),
         )
+
+
+class _HttpTransientResponseError(GeoTransientError):
+    """HTTP retry fallback retaining detail for a more specific adapter verdict."""
+
+    def __init__(self, error: HTTPError) -> None:
+        self.http_status = error.code
+        retry_after = _http_retry_after(error)
+        self.response = _read_http_error_response(error)
+        super().__init__(
+            f"provider HTTP {error.code}",
+            request_count=1,
+            safe_to_retry=True,
+            failure_code="rate_limited" if error.code == 429 else "service_transient",
+            retry_after=retry_after,
+        )
+
+
+def _http_retry_after(error: HTTPError) -> float | None:
+    raw_delay = error.headers.get("Retry-After") if error.headers else None
+    return min(float(raw_delay), 86400) if raw_delay and raw_delay.isdecimal() else None
+
+
+def _read_http_error_response(error: HTTPError) -> Mapping[str, object]:
+    try:
+        # The adapter may refine HTTP fallbacks, including 429/5xx. Raw message,
+        # metadata and URLs stay in memory and never enter retained diagnostics.
+        value = json.loads(error.read(65536))
+    except (OSError, UnicodeError, ValueError):
+        value = {}
+    finally:
+        error.close()
+    return value if isinstance(value, Mapping) else {}
 
 
 def _google_error_signals(value: object) -> tuple[str | None, tuple[str, ...]]:
@@ -348,6 +361,7 @@ def _google_response_error(
     *,
     fallback: str = "provider_http_rejected",
     http_status: int | None = None,
+    retry_after: float | None = None,
 ) -> GeoLookupError:
     if any(
         reason in {"SERVICE_DISABLED", "BILLING_DISABLED", "CONSUMER_INVALID"}
@@ -359,25 +373,28 @@ def _google_response_error(
         "UNAUTHENTICATED",
     }:
         code = "authentication"
-    elif "QUOTA_EXCEEDED" in reasons or status == "RESOURCE_EXHAUSTED":
+    elif "QUOTA_EXCEEDED" in reasons:
         code = "provider_quota"
-    elif "RATE_LIMIT_EXCEEDED" in reasons or status in {"INTERNAL", "UNAVAILABLE"}:
-        return GeoTransientError(
-            "Google reported a transient service failure.",
-            request_count=1,
-            safe_to_retry=True,
-            failure_code="service_transient",
-        )
+    elif "RATE_LIMIT_EXCEEDED" in reasons:
+        code = "rate_limited"
+    elif status == "RESOURCE_EXHAUSTED":
+        code = "rate_limited" if http_status == 429 else "provider_quota"
+    elif status in {"INTERNAL", "UNAVAILABLE"}:
+        code = "service_transient"
     elif status == "FAILED_PRECONDITION":
         code = "provider_configuration"
     elif status == "INVALID_ARGUMENT":
         code = "provider_request_invalid"
     else:
         code = fallback
-    return GeoPermanentError(
+    transient = code in {"rate_limited", "service_transient"}
+    error_type = GeoTransientError if transient else GeoPermanentError
+    return error_type(
         f"Google request rejected: {code}; HTTP={http_status or 'not_reported'}; status={status or 'unclassified'}; reasons={','.join(reasons) or 'unclassified'}.",
         request_count=1,
         failure_code=code,
+        safe_to_retry=transient,
+        retry_after=retry_after if transient else None,
     )
 
 
@@ -906,11 +923,12 @@ class GoogleMapsReverseGeocoder:
                     error_message,
                 )
         except GeoLookupError as error:
-            if isinstance(error, _HttpResponseError):
+            if isinstance(error, (_HttpResponseError, _HttpTransientResponseError)):
                 error = _google_response_error(
                     *_google_error_signals(error.response),
                     fallback=error.failure_code or "provider_http_rejected",
                     http_status=error.http_status,
+                    retry_after=error.retry_after,
                 )
             execution = _provider_error_execution(
                 self.provider_id,

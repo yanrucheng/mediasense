@@ -12,7 +12,7 @@ import sqlite3
 from typing import Any, Iterator
 
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 
 class PlanStoreError(RuntimeError):
@@ -53,6 +53,7 @@ class WorkSnapshot:
     plan_ref: str
     published_path: str | None
     working_notes: str
+    scope_summary: dict[str, int] | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -150,6 +151,7 @@ class SQLitePlanStore:
         response: dict[str, Any],
         before_write: Callable[[], None] | None = None,
         replace_candidate: bool = True,
+        scope_summary: dict[str, int] | None = None,
         working_notes: str | None = None,
     ) -> dict[str, Any]:
         with self._transaction() as connection:
@@ -181,6 +183,7 @@ class SQLitePlanStore:
                 SET revision = ?, organization_preferences_json = ?,
                     candidate_json = CASE WHEN ? THEN ? ELSE candidate_json END,
                     candidate_identity = CASE WHEN ? THEN ? ELSE candidate_identity END,
+                    scope_summary_json = CASE WHEN ? THEN ? ELSE scope_summary_json END,
                     working_notes = COALESCE(?, working_notes), updated_at = CURRENT_TIMESTAMP
                 WHERE work_ref = ?
                 """,
@@ -191,6 +194,8 @@ class SQLitePlanStore:
                     candidate_json,
                     replace_candidate,
                     candidate_identity,
+                    replace_candidate,
+                    None if scope_summary is None else _json(scope_summary),
                     working_notes,
                     work_ref,
                 ),
@@ -339,7 +344,7 @@ class SQLitePlanStore:
                     singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
                     version INTEGER NOT NULL
                 );
-                INSERT OR IGNORE INTO internal_schema(singleton, version) VALUES (1, 3);
+                INSERT OR IGNORE INTO internal_schema(singleton, version) VALUES (1, 4);
 
                 CREATE TABLE IF NOT EXISTS plan_works (
                     work_ref TEXT PRIMARY KEY,
@@ -350,6 +355,7 @@ class SQLitePlanStore:
                     working_notes TEXT NOT NULL DEFAULT '',
                     candidate_json TEXT,
                     candidate_identity TEXT,
+                    scope_summary_json TEXT,
                     plan_ref TEXT NOT NULL UNIQUE,
                     published_path TEXT,
                     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -388,15 +394,45 @@ class SQLitePlanStore:
             version = connection.execute(
                 "SELECT version FROM internal_schema WHERE singleton = 1"
             ).fetchone()[0]
-            if version != SCHEMA_VERSION:
+            if version not in {3, SCHEMA_VERSION}:
                 raise RuntimeError(f"unsupported Plan schema version: {version}")
         # Additive extension retains v3 Works, receipts, keys and reservations.
         # Serialize discovery + ALTER across concurrent openers.
         with self._transaction() as connection:
+            version = connection.execute(
+                "SELECT version FROM internal_schema WHERE singleton = 1"
+            ).fetchone()[0]
+            if version == 3:
+                if connection.execute(
+                    "SELECT 1 FROM plan_seal_reservations LIMIT 1"
+                ).fetchone():
+                    raise RuntimeError(
+                        "Recover pending v3 seals with the previous build before upgrading Plan storage"
+                    )
+                backup = self.database_path.with_suffix(".v3-backup.sqlite3")
+                if not backup.exists():
+                    with backup.open("xb") as stream:
+                        stream.write(connection.serialize())
+                for row in connection.execute(
+                    "SELECT work_ref, candidate_json FROM plan_works WHERE candidate_json IS NOT NULL"
+                ).fetchall():
+                    content = json.loads(row["candidate_json"])
+                    content["kind"] = "candidate"
+                    connection.execute(
+                        "UPDATE plan_works SET candidate_json = ? WHERE work_ref = ?",
+                        (_json(content), row["work_ref"]),
+                    )
+                connection.execute(
+                    "UPDATE internal_schema SET version = 4 WHERE singleton = 1"
+                )
             columns = {
                 row["name"]
                 for row in connection.execute("PRAGMA table_info(plan_works)")
             }
+            if "scope_summary_json" not in columns:
+                connection.execute(
+                    "ALTER TABLE plan_works ADD COLUMN scope_summary_json TEXT"
+                )
             if "working_notes" not in columns:
                 connection.execute(
                     "ALTER TABLE plan_works ADD COLUMN working_notes TEXT NOT NULL DEFAULT ''"
@@ -430,7 +466,7 @@ class SQLitePlanStore:
             if include_candidate
             else (
                 "work_ref, result_ref, state, revision, organization_preferences_json, "
-                "working_notes, NULL AS candidate_json, candidate_identity, plan_ref, published_path"
+                "working_notes, scope_summary_json, NULL AS candidate_json, candidate_identity, plan_ref, published_path"
             )
         )
         row = connection.execute(
@@ -487,6 +523,9 @@ def _snapshot(row: sqlite3.Row) -> WorkSnapshot:
         plan_ref=row["plan_ref"],
         published_path=row["published_path"],
         working_notes=row["working_notes"],
+        scope_summary=None
+        if row["scope_summary_json"] is None
+        else json.loads(row["scope_summary_json"]),
     )
 
 

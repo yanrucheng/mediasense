@@ -38,6 +38,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     doctor_parser.add_argument("--json", action="store_true")
 
+    view_parser = subcommands.add_parser(
+        "views", help="Inspect or stop this installation's local read-only page host."
+    )
+    view_parser.add_argument("view_action", choices=["status", "stop"])
+    view_parser.add_argument("--json", action="store_true")
+
     dataset_parser = subcommands.add_parser("dataset", help="Open Dataset state.")
     dataset_commands = dataset_parser.add_subparsers(
         dest="dataset_command", required=True
@@ -185,6 +191,16 @@ def run(argv: Sequence[str] | None = None) -> int:
             human=json.dumps(value, ensure_ascii=False, indent=2),
         )
         return 0 if value.get("outcome") == "ok" else 2
+    if args.command == "views":
+        from .runtime.plan_views import control
+
+        value = control(args.view_action)
+        _emit(
+            value,
+            json_output=args.json,
+            human=json.dumps(value, ensure_ascii=False, indent=2),
+        )
+        return 0
     if args.command == "mcp":
         run_stdio()
         return 0

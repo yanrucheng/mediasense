@@ -84,7 +84,7 @@ def test_processes_serialize_and_dead_owner_does_not_leave_a_busy_lock(
         assert first[2].wait(10)
         following = dict(request)
         if notes_waiter:
-            following.pop("candidate_content")
+            following.pop("organization_content")
             following.update(
                 working_notes="waiting notes", request_id="request:waiting-notes"
             )
@@ -112,9 +112,9 @@ def test_processes_serialize_and_dead_owner_does_not_leave_a_busy_lock(
             first_result = first[1].recv()
             assert first_result["outcome"] == "ok"
             if not notes_waiter:
-                assert first_result == result
+                assert receipt(first_result) == receipt(result)
         if not notes_waiter or owner_exits:
-            assert tool.handle(following) == result
+            assert receipt(tool.handle(following)) == receipt(result)
         assert update_count(tool) == 1
     finally:
         cleanup(children)
@@ -129,7 +129,7 @@ def test_process_crash_leaves_an_atomic_recoverable_outcome(
     created = _create(tool)
     request = update_request(created, organization_preferences={})
     if notes_only:
-        request.pop("candidate_content")
+        request.pop("organization_content")
         request["working_notes"] = "process notes"
     before = tool.store.snapshot(created["work_ref"])
     child = launch(get_context("spawn"), tool, request, crash=crash)
@@ -146,7 +146,7 @@ def test_process_crash_leaves_an_atomic_recoverable_outcome(
         else:
             assert after.revision != before.revision
             assert after.organization_preferences == {}
-            assert after.candidate == request.get("candidate_content")
+            assert after.candidate == request.get("organization_content")
             if notes_only:
                 assert after.working_notes == "process notes"
             assert update_count(tool) == 1
@@ -157,3 +157,7 @@ def test_process_crash_leaves_an_atomic_recoverable_outcome(
             assert recovered["revision"] == after.revision
     finally:
         cleanup([child])
+
+
+def receipt(value):
+    return {k: v for k, v in value.items() if k != "view"}

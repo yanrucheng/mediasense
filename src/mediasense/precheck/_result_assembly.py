@@ -135,7 +135,7 @@ def build_minimal_result(
             raise ResultSealError("source accounting must close before assembly")
         rows = connection.execute(
             """
-            SELECT relative_path, kind, scope, condition, basis_json
+            SELECT *
             FROM run_items WHERE run_id = ? ORDER BY relative_path
             """,
             (run_id,),
@@ -635,6 +635,10 @@ def build_minimal_result(
                 basis="; ".join(json.loads(row["basis_json"])),
                 observations=tuple(observations),
                 qualifications=tuple(qualifications),
+                accounting={key: row[key] for key in (
+                    "kind", "source_revision", "size_bytes", "mtime_ns", "device_id",
+                    "inode", "mode", "fingerprint_algorithm", "fingerprint",
+                )},
             )
         )
         if geocode_work is not None and any(

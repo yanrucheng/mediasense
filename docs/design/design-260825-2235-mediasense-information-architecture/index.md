@@ -4,7 +4,7 @@ title: "MediaSense Information Architecture"
 type: design
 status: active
 created: 2026-08-25
-updated: 2026-09-09
+updated: 2026-09-13
 timezone: "Asia/Shanghai"
 parent: "index-design"
 depends-on:
@@ -44,6 +44,7 @@ The conceptual model is active after Human review. The formal [PreCheck Read Con
 - This module is authoritative for the new stage-neutral MediaSense information vocabulary and necessary business relations.
 - [Stage ownership](design-260825-2235B-stage-ownership.md) is authoritative for which stage produces, consumes, validates, or seals each concept.
 - [PreCheck compression boundary](design-260825-2235D-precheck-compression-boundary.md) is authoritative for PreCheck's accepted compression purpose, minimal handoff concepts and relationships, eight invariants, runtime/storage separation, and three-producer pressure-test judgment.
+- [PreCheck basic concept model](../../model/model-260913-1408-precheck-basics.md) in the stable model directory owns the accepted stage, Run, Result and Profile relations and instance-change rules. Read it before this module's detailed information model; Result internals remain owned by the compression model.
 - [PreCheck Read Contract](../../spec/contract/precheck-read/) is authoritative for the Tool name, machine-readable request and response schemas, stable relationship vocabulary, access outcomes, and Plan development Mock.
 - [Frozen Plan Contract](../../spec/contract/frozen-plan/) is authoritative for the immutable Human-confirmed organization handed to Apply.
 - [Apply Contract](../../spec/contract/apply/) is authoritative for the Run, Receipt, authorization, execution, recovery, and verification boundary.

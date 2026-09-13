@@ -41,10 +41,10 @@
             "items": {
               "enum": [
                 "execution_boundary",
-                "local_execution"
+                "local_execution",
+                "preparation"
               ]
-            },
-            "maxItems": 1
+            }
           },
           "execution_page": {
             "type": "object",
@@ -97,6 +97,29 @@
                       "local_execution"
                     ]
                   }
+                }
+              }
+            }
+          },
+          {
+            "not": {
+              "required": [
+                "include"
+              ],
+              "properties": {
+                "include": {
+                  "allOf": [
+                    {
+                      "contains": {
+                        "const": "execution_boundary"
+                      }
+                    },
+                    {
+                      "contains": {
+                        "const": "local_execution"
+                      }
+                    }
+                  ]
                 }
               }
             }
@@ -298,6 +321,9 @@
               }
             },
             "required": []
+          },
+          "target_result_ref": {
+            "$ref": "#/$defs/result_ref"
           }
         },
         "required": [
@@ -368,6 +394,9 @@
           },
           {
             "$ref": "#/$defs/geo_set"
+          },
+          {
+            "$ref": "#/$defs/profile_scope_set"
           }
         ]
       },
@@ -532,6 +561,23 @@
           "coordinate",
           "selection_rule"
         ]
+      },
+      "profile_scope_set": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "index"
+        ],
+        "properties": {
+          "kind": {
+            "const": "profile_scope"
+          },
+          "index": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
       }
     }
   },
@@ -2237,6 +2283,9 @@
           },
           {
             "$ref": "#/$defs/geo_set"
+          },
+          {
+            "$ref": "#/$defs/profile_scope_set"
           }
         ]
       },
@@ -2645,6 +2694,9 @@
             "items": {
               "$ref": "#/$defs/qualification"
             }
+          },
+          "correspondence": {
+            "$ref": "#/$defs/correspondence"
           }
         }
       },
@@ -2988,6 +3040,9 @@
           },
           "local_execution": {
             "$ref": "#/$defs/local_execution"
+          },
+          "preparation": {
+            "$ref": "#/$defs/preparation"
           }
         },
         "required": [
@@ -3040,6 +3095,9 @@
               },
               "membership_identity": {
                 "$ref": "#/$defs/identity"
+              },
+              "target_result_ref": {
+                "$ref": "#/$defs/result_ref"
               }
             },
             "required": [
@@ -3062,6 +3120,43 @@
           "resolution",
           "members",
           "page"
+        ],
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "resolution": {
+                  "required": [
+                    "target_result_ref"
+                  ]
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "members": {
+                  "items": {
+                    "required": [
+                      "correspondence"
+                    ]
+                  }
+                }
+              }
+            },
+            "else": {
+              "properties": {
+                "members": {
+                  "items": {
+                    "not": {
+                      "required": [
+                        "correspondence"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
         ]
       },
       "outcome_counts": {
@@ -4439,6 +4534,188 @@
           "models",
           "batches",
           "page"
+        ]
+      },
+      "profile_scope_set": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "index"
+        ],
+        "properties": {
+          "kind": {
+            "const": "profile_scope"
+          },
+          "index": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "compression_parameters": {
+        "oneOf": [
+          {
+            "type": "null"
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "target_entries",
+              "temporal_scale_seconds",
+              "spatial_scale_meters",
+              "content_distance_scale"
+            ],
+            "properties": {
+              "target_entries": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "temporal_scale_seconds": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "spatial_scale_meters": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "content_distance_scale": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              }
+            }
+          }
+        ]
+      },
+      "processing_profile": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "configuration_identity",
+          "compression",
+          "overrides"
+        ],
+        "properties": {
+          "configuration_identity": {
+            "$ref": "#/$defs/identity"
+          },
+          "compression": {
+            "$ref": "#/$defs/compression_parameters"
+          },
+          "overrides": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "source_set",
+                "compression"
+              ],
+              "properties": {
+                "source_set": {
+                  "$ref": "#/$defs/source_set"
+                },
+                "compression": {
+                  "$ref": "#/$defs/compression_parameters"
+                }
+              }
+            }
+          }
+        }
+      },
+      "preparation": {
+        "oneOf": [
+          {
+            "type": "null"
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "source_set",
+              "profile"
+            ],
+            "properties": {
+              "source_set": {
+                "$ref": "#/$defs/source_set"
+              },
+              "profile": {
+                "$ref": "#/$defs/processing_profile"
+              }
+            }
+          }
+        ]
+      },
+      "correspondence": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "status",
+              "source_item_ref",
+              "basis"
+            ],
+            "properties": {
+              "status": {
+                "const": "matched"
+              },
+              "source_item_ref": {
+                "$ref": "#/$defs/opaque_ref"
+              },
+              "basis": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "code",
+                  "verification_profile"
+                ],
+                "properties": {
+                  "code": {
+                    "const": "recorded_input_binding"
+                  },
+                  "verification_profile": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              },
+              "qualifications": {
+                "$ref": "#/$defs/qualifications"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "status",
+              "basis"
+            ],
+            "properties": {
+              "status": {
+                "const": "unproven"
+              },
+              "basis": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "code"
+                ],
+                "properties": {
+                  "code": {
+                    "enum": [
+                      "input_binding_unrecorded",
+                      "not_direct_successor",
+                      "verification_unavailable",
+                      "verification_not_supported"
+                    ]
+                  }
+                }
+              }
+            }
+          }
         ]
       }
     }

@@ -321,12 +321,17 @@ def test_eviction_and_oversized_results_fall_back_to_validation(tmp_path, monkey
     expected = reader.read(request_for(first))
     reader.read(request_for(second))
     assert reader.read(request_for(first)) == expected
-    assert validations == [first.result_ref, second.result_ref, first.result_ref]
+    # A direct correspondence read retains at most two verified Results.
+    assert validations == [first.result_ref, second.result_ref]
+    third = store.seal(replace(draft, dataset_name="third"))
+    reader.read(request_for(third))
+    reader.read(request_for(second))
+    assert validations == [first.result_ref, second.result_ref, third.result_ref, second.result_ref]
     monkeypatch.setattr(reading, "_MAX_CACHED_RESULT_BYTES", 0)
     reader.read(request_for(first))
     assert reader._cached_result is None
     assert reader.read(request_for(first)) == expected
-    assert len(validations) == 4
+    assert len(validations) == 6
 
 
 def test_completed_status_and_read_share_validation(tmp_path, monkeypatch):

@@ -60,6 +60,11 @@ class SQLiteAccounting:
                 # No retained outputs or sealed Results are transformed.
                 connection.execute("UPDATE internal_schema SET version = 18 WHERE singleton = 1 AND version = 17")
                 version = 18
+            if version == 18:
+                # v9 snapshots and Result-owned input bindings require new writers.
+                # Historical Runs/Results and producer outputs stay byte-for-byte.
+                connection.execute("UPDATE internal_schema SET version = 19 WHERE singleton = 1 AND version = 18")
+                version = 19
             if version != SCHEMA_VERSION:
                 raise RuntimeError(
                     "incompatible internal schema version: "
@@ -114,6 +119,11 @@ class SQLiteAccounting:
                 SELECT run_id
                 FROM working_runs
                 WHERE dataset_id = ? AND status IN ('running', 'paused', 'blocked')
+                  AND NOT EXISTS (
+                    SELECT 1 FROM precheck_runs
+                    WHERE accounting_run_id = working_runs.run_id
+                      AND state IN ('completed', 'failed', 'cancelled')
+                  )
                 ORDER BY started_at DESC
                 LIMIT 1
                 """,
@@ -721,7 +731,7 @@ class SQLiteAccounting:
             for row in rows
         )
 
-    def finish_run(self, run_id: str, scan_generation: int) -> None:
+    def finish_run(self, run_id: str, scan_generation: int, *, reconcile_absence: bool = True) -> None:
         with self.connect() as connection:
             run = connection.execute(
                 "SELECT dataset_id FROM working_runs WHERE run_id = ?", (run_id,)
@@ -742,7 +752,7 @@ class SQLiteAccounting:
                 """
                 SELECT relative_path, revision
                     FROM source_state
-                    WHERE dataset_id = ? AND present = 1
+                    WHERE dataset_id = ? AND present = 1 AND ?
                       AND NOT EXISTS (
                           SELECT 1 FROM run_items
                           WHERE run_id = ?
@@ -751,7 +761,7 @@ class SQLiteAccounting:
                       )
                 ORDER BY relative_path
                 """,
-                (run["dataset_id"], run_id, scan_generation),
+                (run["dataset_id"], reconcile_absence, run_id, scan_generation),
             ).fetchall()
             for row in missing:
                 connection.execute(
@@ -774,7 +784,7 @@ class SQLiteAccounting:
                 """
                 UPDATE source_state
                     SET present = 0, last_observed_run_id = ?
-                    WHERE dataset_id = ? AND present = 1
+                    WHERE dataset_id = ? AND present = 1 AND ?
                       AND NOT EXISTS (
                           SELECT 1 FROM run_items
                           WHERE run_id = ?
@@ -782,7 +792,7 @@ class SQLiteAccounting:
                             AND last_seen_generation = ?
                       )
                 """,
-                (run_id, run["dataset_id"], run_id, scan_generation),
+                (run_id, run["dataset_id"], reconcile_absence, run_id, scan_generation),
             )
             affected_paths = {
                 str(row["relative_path"])
@@ -1305,9 +1315,8 @@ def _can_reuse_current_observation(
         and previous["reuse_domain"] == reuse_domain
         and _row_stat_identity(previous) == fingerprint_stat_identity(fingerprint)
         and previous["kind"] == item.kind
-        and previous["scope"] == item.scope
-        and previous["condition"] == item.condition
-        and tuple(json.loads(previous["basis_json"])) == item.basis
+        # Scope, processing condition and selection basis describe this Run's
+        # accounting. They are not a revision of the observed source bytes.
     )
 
 

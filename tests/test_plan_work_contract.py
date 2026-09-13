@@ -110,14 +110,15 @@ def _assert_request_id_consistency(exchanges: list[dict]) -> None:
 
 def _assert_confirmation(exchange: dict) -> None:
     try:
-        context = exchange["context"]["human_confirmation"]
+        context = exchange.get("context", {}).get("human_confirmation") or exchange["trusted_context"]
+        context = {**context, "confirmed_content_identity": context.get("confirmed_content_identity", context.get("content_identity"))}
     except KeyError as error:
         raise ValueError("confirmation required") from error
     request = exchange["request"]
     response = exchange["response"]
-    if context["content_identity"] != request["candidate_content_identity"]:
+    if context["confirmed_content_identity"] != request["candidate_content_identity"]:
         raise ValueError("confirmation identity mismatch")
-    if response["content_identity"] != context["content_identity"]:
+    if response["content_identity"] != context["confirmed_content_identity"]:
         raise ValueError("sealed identity mismatch")
 
 
@@ -226,7 +227,7 @@ def test_preference_object_replaces_and_empty_object_clears_snapshot() -> None:
 def test_update_requires_at_least_one_mutable_field() -> None:
     validator, _ = _validators()
     update = deepcopy(_exchanges("update")[0]["request"])
-    update.pop("candidate_content")
+    update.pop("organization_content")
     with pytest.raises(ValidationError):
         validator.validate(update)
 
@@ -237,13 +238,13 @@ def test_update_requires_at_least_one_mutable_field() -> None:
         {"working_notes": "One material decision remains unresolved."},
         {"working_notes": ""},
         {"organization_preferences": {}},
-        {"candidate_content": None},
+        {"organization_content": None},
     ],
 )
 def test_update_accepts_independent_work_fields_and_explicit_clears(fields) -> None:
     validator, _ = _validators()
     update = deepcopy(_exchanges("update")[0]["request"])
-    update.pop("candidate_content")
+    update.pop("organization_content")
     update.update(fields)
     validator.validate(update)
     update.pop("base_revision")
@@ -254,7 +255,10 @@ def test_update_accepts_independent_work_fields_and_explicit_clears(fields) -> N
 def test_interaction_mock_requests_and_responses_conform() -> None:
     input_validator, output_validator = _validators()
     for exchange in _interaction_mock()["exchanges"]:
-        input_validator.validate(exchange["request"])
+        if exchange.get("request_shape_valid", True):
+            input_validator.validate(exchange["request"])
+        else:
+            assert not input_validator.is_valid(exchange["request"])
         response = exchange["response"]
         output_validator.validate(response)
         if response["action"] == "inspect" and response["outcome"] == "ok":
@@ -280,9 +284,9 @@ def test_interaction_invalid_requests_are_rejected(case) -> None:
 def test_absent_candidate_cannot_claim_a_sealable_identity(contradiction) -> None:
     _, validator = _validators()
     example = (
-        "no-candidate-page"
+        "inspect_absent"
         if contradiction == "identity"
-        else "empty-default-inspect"
+        else "inspect_absent"
     )
     response = deepcopy(
         next(
@@ -301,7 +305,7 @@ def test_absent_candidate_cannot_claim_a_sealable_identity(contradiction) -> Non
 def test_update_candidate_reuses_frozen_plan_path_rules() -> None:
     validator, _ = _validators()
     update = deepcopy(_exchanges("update")[0]["request"])
-    update["candidate_content"]["logical_root"] = "bad/root"
+    update["organization_content"]["logical_root"] = "bad/root"
     with pytest.raises(ValidationError):
         validator.validate(update)
     update = deepcopy(_exchanges("update")[0]["request"])
@@ -328,14 +332,15 @@ def test_stale_revision_is_a_conflict_not_an_overwrite() -> None:
 
 
 def test_update_materializes_the_exact_sealable_content() -> None:
-    candidate = deepcopy(_exchanges("update")[0]["request"]["candidate_content"])
+    candidate = deepcopy(_exchanges("update")[0]["request"]["organization_content"])
     inspected = _exchanges("inspect")[0]["response"]["sections"]["content"]["value"]
     expected = {
         "contract": "mediasense.frozen-plan",
         "plan_ref": "frozen-plan:hk-review-slice-reference-001",
         **candidate,
     }
-    assert inspected == expected
+    assert inspected == candidate
+    assert _exchanges("inspect")[0]["response"]["reserved_plan_ref"] == expected["plan_ref"]
 
 
 def test_inspect_without_revision_returns_an_exact_revision() -> None:
@@ -389,7 +394,8 @@ def test_page_from_another_revision_is_detectably_invalid() -> None:
 
 def test_candidate_identity_covers_reserved_plan_ref_and_complete_content() -> None:
     inspect = _exchanges("inspect")[0]["response"]
-    content = inspect["sections"]["content"]["value"]
+    content = {k: v for k,v in inspect["sections"]["content"]["value"].items() if k != "kind"}
+    content.update(contract="mediasense.frozen-plan", plan_ref=inspect["reserved_plan_ref"])
     assert content["plan_ref"] == "frozen-plan:hk-review-slice-reference-001"
     assert _content_identity(content) == inspect["candidate_content_identity"]
 
@@ -408,11 +414,11 @@ def test_seal_binds_trusted_context_to_exact_candidate() -> None:
     context = exchange["context"]["human_confirmation"]
     response = exchange["response"]
     assert (
-        context["content_identity"] == exchange["request"]["candidate_content_identity"]
+        context["confirmed_content_identity"] == exchange["request"]["candidate_content_identity"]
     )
-    assert response["content_identity"] == context["content_identity"]
+    assert response["content_identity"] == context["confirmed_content_identity"]
     assert response["frozen_plan"]["seal"]["final_confirmation"] == {
-        "confirmed_content_identity": context["content_identity"],
+        "confirmed_content_identity": context["confirmed_content_identity"],
         "confirmed_at": "2026-08-27T11:38:00+08:00",
         "confirmed_by": context["principal_ref"],
     }
@@ -420,7 +426,7 @@ def test_seal_binds_trusted_context_to_exact_candidate() -> None:
 
 def test_seal_rejects_confirmation_for_another_identity() -> None:
     exchange = deepcopy(_exchanges("seal")[0])
-    exchange["context"]["human_confirmation"]["content_identity"] = "sha256:" + "0" * 64
+    exchange["context"]["human_confirmation"]["confirmed_content_identity"] = "sha256:" + "0" * 64
     with pytest.raises(ValueError, match="confirmation identity mismatch"):
         _assert_confirmation(exchange)
 

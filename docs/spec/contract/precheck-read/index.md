@@ -4,7 +4,7 @@ title: "MediaSense PreCheck Read Contract"
 type: spec
 status: active
 created: 2026-08-26
-updated: 2026-09-13
+updated: 2026-09-14
 timezone: "Asia/Shanghai"
 parent: "index-contract"
 depends-on:
@@ -293,6 +293,20 @@ resolve 的 explicit、accounts_for、represents、union、difference、geo_coor
 - 页面消费者验证不重复游标、有实际推进、最终数量及 membership_identity。不得只信 total、某个 complete 标志或样本页。
 
 ## 分页与失败
+
+### 准备回读与直接来源对应
+
+`review include=["preparation"]` 增加 preparation，完整返回 `{source_set, profile}`：source_set 为当前 Result 的 accounts_for；Profile 语义归 [Run](../precheck-run/index.md#普通-run-与完整-processing-profile)。每个 override 的 source_set 为 `{"kind":"profile_scope","index":i}`，选择当前 Result 封存的该位置全部精确成员，不递归读取自身或重新压缩。未知位置和未记录准备数据的 Result 返回 `invalid_source_set`。此位置无独立身份或生命周期；大量成员通过普通 resolve 分页读取。
+
+历史 Result 未封存准备数据时 preparation=null，并在 result.qualifications 标明 `processing_profile_unrecorded`；不得从可变 Run/Work 或当前默认值补造。完整规范化 preparation 本身必须适合 524288 字节封套；不截断参数。preparation 可与 execution_boundary 或 local_execution 同读，后两者仍互斥；execution_page 只服务被选中的执行审计。
+
+`resolve` 可附 `target_result_ref`，目标必须同 Dataset 可见；resolution 回显目标引用，每个原成员必有 correspondence。原 source_set_identity、membership_identity 和排序仍属于原 Result 的完整成员。游标额外绑定两个 Result 的封存摘要，连同表达式、limit 和位置一起校验；不能跨目标复用。
+
+直接后继从原 Result 的显式完整输入快照产生，且封存唯一逐来源输入绑定和未变版本验证时，返回 `status=matched`、目标 `source_item_ref`、`basis.code=recorded_input_binding`、`basis.verification_profile` 及必要 qualifications。根/定位/内容验证只能支持这条已声明绑定，不能单凭相同路径、摘要或 inode 创建对应；同字节不同文件、同 inode 不同名称仍各自对应。
+
+无法证明时返回 `status=unproven` 和 basis.code，不带目标引用。原因分别为 `input_binding_unrecorded`（历史缺记录）、`not_direct_successor`（独立或间接 Run）、`verification_unavailable`、`verification_not_supported`。矛盾、重复或 Result 外的封存绑定是 `result_inconsistent`，不得降格为 unproven。matched 不证明观测/分组相同，也不把普通变化检测说成密码学字节等同。
+
+Plan 通过现有 Work inspect 读取旧偏好/说明，通过对应核对来源，再创建绑定新 Result 的普通 Work。需要时读取新 Evidence，再保存有依据的新组织；不得重绑旧 Work、复制 Result-local 引用或转移旧 Human 确认。[合成交换示例](../precheck-run/composition.mock.json)与本次[实现验收](../../../../openspec/changes/simplify-precheck-run-composition/acceptance.md)分别证明形状和真实行为。
 
 现有 page 机制继续使用，无读取会话：review 默认25/最大100；显式 Evidence 选择最多16；expand成员与geo默认50/最大200；resolve默认250/最大1000。limit 是请求上限，不保证恰好返回那么多，也不是 Agent 永久阅读预算。
 

@@ -28,7 +28,7 @@ def _prepared_tool(tmp_path):
             "action": "update",
             "work_ref": created["work_ref"],
             "base_revision": created["revision"],
-            "candidate_content": valid_candidate(),
+            "organization_content": valid_candidate(),
             "request_id": "request:update-preview",
         }
     )
@@ -90,7 +90,7 @@ def test_old_revision_cannot_be_rendered_after_update(tmp_path) -> None:
             "action": "update",
             "work_ref": created["work_ref"],
             "base_revision": updated["revision"],
-            "candidate_content": candidate,
+            "organization_content": candidate,
             "request_id": "request:update-preview-again",
         }
     )
@@ -177,7 +177,7 @@ def test_preview_uses_only_read_contract_and_asset_resolver(tmp_path) -> None:
             "action": "update",
             "work_ref": created["work_ref"],
             "base_revision": created["revision"],
-            "candidate_content": valid_candidate(),
+            "organization_content": valid_candidate(),
             "request_id": "request:zero-egress-update",
         }
     )
@@ -208,7 +208,7 @@ def test_decision_notes_render_exact_scope_refs_and_escaped_text(tmp_path):
             "work_ref": created["work_ref"],
             "base_revision": updated["revision"],
             "request_id": "request:notes-preview",
-            "candidate_content": candidate,
+            "organization_content": candidate,
         }
     )
     renderer = PlanPreviewRenderer(tool, asset_resolver=lambda ref, view: None)
@@ -254,7 +254,8 @@ def test_default_preview_uses_real_prepared_evidence_with_relative_source_locato
             "work_ref": created["work_ref"],
             "base_revision": created["revision"],
             "request_id": "request:real-preview-update",
-            "candidate_content": {
+            "organization_content": {
+                "kind": "candidate",
                 "result_ref": result,
                 "scope": scope,
                 "logical_root": "Media",
@@ -271,8 +272,35 @@ def test_default_preview_uses_real_prepared_evidence_with_relative_source_locato
     )
     reviewed = tool.precheck_read.read({"action": "review", "result_ref": result})
     card = reviewed["items"][0]
+    # A valid Result-local reference remains valid when its image disappears.
+    # Exercise both note evidence and a relation-origin group after reopening.
+    organization = deepcopy(tool.store.snapshot(created["work_ref"]).candidate)
+    organization["decision_notes"] = [
+        {
+            "summary": "Source-bound explanation",
+            "applies_to": scope,
+            "evidence_refs": [card["evidence_ref"]],
+        }
+    ]
+    updated = tool.handle(
+        {
+            "action": "update",
+            "work_ref": created["work_ref"],
+            "base_revision": updated["revision"],
+            "request_id": "request:with-note-evidence",
+            "organization_content": organization,
+        }
+    )
+    assert updated["outcome"] == "ok"
     artifact = Path(card["access"]["locator"]["value"])
     assert artifact.is_file()
+    from mediasense.plan.view import PlanView
+
+    member_page = PlanView(tool, created["work_ref"]).page(
+        updated["revision"], "group:0"
+    )
+    assert member_page["items"][0]["name"] == "original.jpg"
+    assert member_page["items"][0]["observations"]
     if artifact_state == "missing":
         artifact.unlink()
     elif artifact_state == "corrupt":
@@ -295,6 +323,20 @@ def test_default_preview_uses_real_prepared_evidence_with_relative_source_locato
     else:
         assert sample.uri is None
         assert "Preview unavailable" in html
+        from mediasense.plan.view import PlanView
+        from test_plan_work import _confirmation, _seal_request
+
+        reopened = PlanWorkTool(tool.plan_store, tool.precheck_read)
+        projection = PlanView(reopened, created["work_ref"])
+        assert (
+            projection.overview(updated["revision"])["scope_summary"]["unassigned"] == 0
+        )
+        identity = reopened.store.snapshot(created["work_ref"]).candidate_identity
+        sealed = reopened.handle(
+            _seal_request(created, updated, identity),
+            confirmation=_confirmation(identity, updated),
+        )
+        assert sealed["outcome"] == "ok", sealed
     assert (source / "original.jpg").read_bytes() == original
 
 
@@ -399,7 +441,8 @@ def test_preview_follows_byte_limited_review_to_image_on_second_page(
             "work_ref": created["work_ref"],
             "base_revision": created["revision"],
             "request_id": "request:paged-candidate",
-            "candidate_content": {
+            "organization_content": {
+                "kind": "candidate",
                 "result_ref": sealed.result_ref,
                 "scope": scope,
                 "logical_root": "Media",

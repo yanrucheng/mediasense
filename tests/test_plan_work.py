@@ -76,14 +76,16 @@ def _update(
             "action": "update",
             "work_ref": created["work_ref"],
             "base_revision": created["revision"],
-            "candidate_content": candidate or valid_candidate(),
+            "organization_content": candidate or valid_candidate(),
             "request_id": request_id,
         }
     )
 
 
-def _confirmation(content_identity: str) -> ConfirmationContext:
+def _confirmation(content_identity: str, state=None) -> ConfirmationContext:
     return ConfirmationContext(
+        work_ref=(state or {}).get("work_ref", "plan-work:test-1"),
+        reviewed_revision=(state or {}).get("revision", "work-revision:test-2"),
         principal_ref="user:test-reviewer",
         confirmed_content_identity=content_identity,
         confirmed_at=datetime(2026, 8, 29, 1, 0, tzinfo=timezone.utc),
@@ -198,8 +200,8 @@ def test_update_and_inspect_materialize_sealable_content(tmp_path) -> None:
     output_validator.validate(inspected)
     assert inspected["sections"]["validation"] == {"seal_ready": True, "issues": []}
     assert (
-        inspected["sections"]["content"]["value"]["contract"]
-        == "mediasense.frozen-plan"
+        inspected["sections"]["content"]["value"]["kind"]
+        == "candidate"
     )
     assert inspected["candidate_content_identity"].startswith("sha256:")
 
@@ -236,7 +238,7 @@ def test_all_inspect_shapes_use_only_persisted_validated_revision(tmp_path) -> N
     content = responses[2]["sections"]["content"]
     assert content["mode"] == "complete"
     assert content["value"]["groups"] == valid_candidate()["groups"]
-    assert responses[0]["sections"] == {"overview": {"state": "open"}}
+    assert responses[0]["sections"]["overview"]["state"] == "open"
     assert responses[1]["sections"] == {"preferences": {"maximum_depth": 3}}
     assert responses[3]["sections"]["validation"] == {
         "seal_ready": True,
@@ -248,6 +250,7 @@ def test_all_inspect_shapes_use_only_persisted_validated_revision(tmp_path) -> N
         "working_notes",
         "content",
         "validation",
+        "view",
     }
     assert responses[4]["sections"]["content"] == content
 
@@ -299,7 +302,7 @@ def test_update_is_atomic_and_revision_checked(tmp_path) -> None:
             "action": "update",
             "work_ref": created["work_ref"],
             "base_revision": created["revision"],
-            "candidate_content": valid_candidate(),
+            "organization_content": valid_candidate(),
             "request_id": "request:update-stale",
         }
     )
@@ -324,7 +327,7 @@ def test_update_preference_omission_preserves_and_object_replaces(tmp_path) -> N
         "action": "update",
         "work_ref": created["work_ref"],
         "base_revision": updated["revision"],
-        "candidate_content": valid_candidate(),
+        "organization_content": valid_candidate(),
         "organization_preferences": {},
         "request_id": "request:update-2",
     }
@@ -391,7 +394,7 @@ def test_invalid_candidate_changes_nothing(tmp_path) -> None:
     candidate = deepcopy(valid_candidate())
     candidate["groups"][1]["members"] = candidate["groups"][0]["members"]
     rejected = _update(tool, created, candidate=candidate)
-    assert rejected["error"]["code"] == "candidate_invalid"
+    assert rejected["error"]["code"] == "organization_invalid"
     inspected = tool.handle(
         {
             "action": "inspect",
@@ -509,7 +512,7 @@ def test_schema_invalid_candidate_is_never_stored_or_reported_seal_ready(
     evidence_refs = candidate["decision_notes"][0]["evidence_refs"]
     evidence_refs.append(evidence_refs[0])
     rejected = _update(tool, created, candidate=candidate)
-    assert rejected["error"]["code"] == "candidate_invalid"
+    assert rejected["error"]["code"] == "organization_invalid"
 
     inspected = tool.handle(
         {
@@ -579,7 +582,7 @@ def test_mock_driven_preview_revision_and_seal_workflow(tmp_path) -> None:
             "action": "update",
             "work_ref": created["work_ref"],
             "base_revision": first["revision"],
-            "candidate_content": revised_candidate,
+            "organization_content": revised_candidate,
             "request_id": "request:update-after-preview",
         }
     )
@@ -592,7 +595,7 @@ def test_mock_driven_preview_revision_and_seal_workflow(tmp_path) -> None:
     request = _seal_request(created, second, second_preview.candidate_content_identity)
     sealed = tool.handle(
         request,
-        confirmation=_confirmation(second_preview.candidate_content_identity),
+        confirmation=_confirmation(second_preview.candidate_content_identity, second),
     )
     assert sealed["outcome"] == "ok"
     assert sealed["frozen_plan"]["sealed_content"]["logical_root"] == (
@@ -734,7 +737,7 @@ def test_second_seal_request_for_same_work_is_refused_while_reserved(
             "action": "update",
             "work_ref": created["work_ref"],
             "base_revision": updated["revision"],
-            "candidate_content": valid_candidate(),
+            "organization_content": valid_candidate(),
             "request_id": "request:update-while-seal-pending",
         }
     )

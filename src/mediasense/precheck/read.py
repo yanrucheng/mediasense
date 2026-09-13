@@ -108,6 +108,9 @@ class _ResultGraph:
                 for value in _sequence(package["relationships"], "relationships")
             )
             self.sources = _unique_views(source_records, "Source")
+            self.source_records = {record["view"]["ref"]: record for record in source_records}
+            self.preparation = package.get("preparation")
+            self.input_bindings = package.get("input_bindings")
             self.evidence = _unique_views(evidence_records, "Evidence")
         except (KeyError, TypeError) as error:
             raise _ReadFailure(
@@ -192,6 +195,7 @@ class PrecheckReadTool:
         self._verify_schema()
         self._cache_lock = Lock()
         self._cached_result = None
+        self._cached_secondary = None
 
     def read(self, request: dict[str, object]) -> dict[str, object]:
         result_ref = request.get("result_ref")
@@ -312,8 +316,13 @@ class PrecheckReadTool:
                     _READ_PROJECTION_REVISION,
                     _sha256_identity(_canonical_json(schema).encode()),
                 )
-                cached = self._cached_result
-                candidate = cached is not None and cached[0] == key
+                previous = self._cached_result
+                cached = previous
+                if cached is None or cached[0] != key:
+                    secondary = self._cached_secondary
+                    if secondary is not None and secondary[0] == key:
+                        cached = secondary
+                candidate = cached is not None and cached[0] == key and row["size_bytes"] <= _MAX_CACHED_RESULT_BYTES
                 encoded, identity = read_sealed_bytes(
                     self.workspace,
                     row["relative_path"],
@@ -325,6 +334,7 @@ class PrecheckReadTool:
                     graph = cached[2]
                 else:
                     self._cached_result = None
+                    self._cached_secondary = None
                     cached = None
                     graph = self._validate_package(encoded, result_ref, artifact_rows)
                 # Do not publish a verification for a registration/proof snapshot
@@ -345,7 +355,9 @@ class PrecheckReadTool:
                     self._cached_result = None
                     return graph, str(row["digest"])
                 if row["size_bytes"] <= _MAX_CACHED_RESULT_BYTES:
-                    self._cached_result = (key, identity, graph)
+                    self._cached_result = (key, identity, graph, row["size_bytes"])
+                    if previous is not None and previous[0] != key:
+                        self._cached_secondary = (previous if previous[3] + row["size_bytes"] <= _MAX_CACHED_RESULT_BYTES else None)
                 else:
                     self._cached_result = None
                 return graph, str(row["digest"])
@@ -390,6 +402,12 @@ class PrecheckReadTool:
 
         try:
             graph = _ResultGraph(package)
+            from ._preparation import validate_retained_preparation
+
+            try:
+                validate_retained_preparation(graph.preparation, graph.input_bindings, graph.sources, graph.accounts, graph.source_records)
+            except (ValueError, KeyError, TypeError) as error:
+                raise _ReadFailure("result_inconsistent", "Sealed preparation or input bindings contradict the Result.") from error
             if graph.result.get("integrity") != "valid":
                 raise ValueError("Result was not validly sealed")
             if graph.result_ref != result_ref or graph.result.get(
@@ -581,6 +599,15 @@ class PrecheckReadTool:
             "result": _effective_result_view(graph),
             "accounting": reconciliation,
         }
+        if "preparation" in request.get("include", ()):
+            from ._preparation import preparation_readback
+
+            base["preparation"] = preparation_readback(graph.result_ref, graph.preparation)
+            if graph.preparation is None:
+                base["result"].setdefault("qualifications", []).append({
+                    "code": "processing_profile_unrecorded", "effect": "limits_interpretation",
+                    "message": "This historical Result did not seal its preparation configuration.",
+                })
         if "execution_boundary" in request.get("include", ()):
             boundary = graph.result.get("execution_boundary", {})
             audit = boundary.get("audit", {})
@@ -934,27 +961,37 @@ class PrecheckReadTool:
         request: Mapping[str, object],
     ) -> dict[str, object]:
         _require_keys(
-            request, {"dataset_ref", "result_ref", "action", "source_set", "page"}
+            request, {"dataset_ref", "result_ref", "action", "source_set", "page", "target_result_ref"}
         )
         source_set = request.get("source_set")
         if not isinstance(source_set, Mapping):
             raise _ReadFailure("invalid_source_set", "source_set must be an object.")
         canonical_source_set = _canonical_json(source_set)
         source_set_identity = _sha256_identity(canonical_source_set.encode("utf-8"))
-        refs = tuple(sorted(_resolve_source_set(graph, source_set)))
-        membership_payload = _canonical_json(
-            {
-                "result_ref": graph.result_ref,
-                "source_set": json.loads(canonical_source_set),
-                "members": refs,
-            }
-        ).encode("utf-8")
-        membership_identity = _sha256_identity(membership_payload)
+        cached = getattr(graph, "resolved_selection", None)
+        if cached is None or cached[0] != canonical_source_set:
+            refs = tuple(sorted(_resolve_source_set(graph, source_set)))
+            membership_identity = _sha256_identity(_canonical_json({
+                "result_ref": graph.result_ref, "source_set": source_set, "members": refs,
+            }).encode("utf-8"))
+            graph.resolved_selection = (canonical_source_set, refs, membership_identity)
+        else:
+            _, refs, membership_identity = cached
+        correspondence, target_digest = None, None
+        if "target_result_ref" in request:
+            target, target_digest = self._load(request["target_result_ref"])
+            if target.result["dataset_ref"] != request["dataset_ref"]:
+                raise _ReadFailure("result_not_found", "Target Result is not in this Dataset.")
+            from ._preparation import correspondence_for
+
+            correspondence = correspondence_for(graph, result_digest, target)
         query_key = _query_key(
             "resolve",
             {
                 "source_set_identity": source_set_identity,
                 "membership_identity": membership_identity,
+                "target_result_ref": request.get("target_result_ref"),
+                "target_result_digest": target_digest,
             },
         )
         limit, offset = _page_request(
@@ -966,13 +1003,17 @@ class PrecheckReadTool:
             operation="resolve",
             query_key=query_key,
         )
-        values = [_resolved_member(graph, ref) for ref in refs]
+        from ._read_projection import ResolvedMembers
+
+        values = ResolvedMembers(graph, refs, correspondence)
         base: dict[str, object] = {
             "resolution": {
                 "source_set_identity": source_set_identity,
                 "membership_identity": membership_identity,
             },
         }
+        if "target_result_ref" in request:
+            base["resolution"]["target_result_ref"] = request["target_result_ref"]
         return _paged_response(
             base,
             collection="members",
@@ -1499,6 +1540,12 @@ def _resolve_source_set(
     if depth > 64:
         raise _ReadFailure("invalid_source_set", "source_set nesting is too deep.")
     kind = source_set.get("kind")
+    if kind == "profile_scope":
+        _require_exact_keys(source_set, {"kind", "index"}, "source_set")
+        index = source_set.get("index")
+        if graph.preparation is None or type(index) is not int or not 0 <= index < len(graph.preparation["scopes"]):
+            raise _ReadFailure("invalid_source_set", "This Result has no such frozen profile scope.")
+        return set(graph.preparation["scopes"][index])
     if kind == "explicit":
         _require_exact_keys(source_set, {"kind", "source_item_refs"}, "source_set")
         refs = _ref_list(

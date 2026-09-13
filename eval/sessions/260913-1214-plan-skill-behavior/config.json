@@ -1,0 +1,401 @@
+{
+  "description": "Synthetic media and supplementary facts for independent Plan Skill execution. Names and source contents are invented; this is not a Hong Kong replay or a visual recognition benchmark.",
+  "cases": [
+    {
+      "id": "journey-a",
+      "user_request": "帮我整理这次六月的短途美食旅行素材，我以后主要凭餐厅和参加过的活动找回来。保留原文件名。",
+      "dataset_name": "六月美食旅行",
+      "items": [
+        {
+          "id": "a1",
+          "path": "trip/0611/camera/IMG_0140.JPG",
+          "time": "2026-06-11T12:10:00+08:00",
+          "card": [
+            "LAUREL KITCHEN",
+            "Menu / June 11 / lunch",
+            "A table with soup and bread."
+          ]
+        },
+        {
+          "id": "a2",
+          "path": "trip/0611/camera/IMG_0141.JPG",
+          "time": "2026-06-11T12:10:20+08:00",
+          "card": [
+            "LAUREL KITCHEN",
+            "Same table setting and menu."
+          ]
+        },
+        {
+          "id": "a3",
+          "path": "trip/0611/camera/IMG_0180.JPG",
+          "time": "2026-06-11T19:30:00+08:00",
+          "card": [
+            "Rice, roast meat and vegetables.",
+            "No readable venue sign or menu."
+          ]
+        },
+        {
+          "id": "a4",
+          "path": "trip/0611/camera/IMG_0181.JPG",
+          "time": "2026-06-11T19:31:00+08:00",
+          "card": [
+            "The same roast-meat table.",
+            "No readable venue sign."
+          ]
+        },
+        {
+          "id": "a5",
+          "path": "trip/0612/camera/IMG_0200.JPG",
+          "time": "2026-06-12T17:00:00+08:00",
+          "card": [
+            "Three glasses and small snacks.",
+            "A seated person speaks to several tables.",
+            "No readable venue sign."
+          ]
+        },
+        {
+          "id": "a6",
+          "path": "trip/0612/camera/IMG_0201.JPG",
+          "time": "2026-06-12T17:08:00+08:00",
+          "card": [
+            "Wine glasses and a tasting card.",
+            "No readable venue name."
+          ]
+        },
+        {
+          "id": "a7",
+          "path": "trip/0612/camera/IMG_0230.JPG",
+          "time": "2026-06-12T19:15:00+08:00",
+          "card": [
+            "RIVER STEAK",
+            "Dinner / June 12",
+            "Menu: beef OR fish; chocolate dessert."
+          ]
+        },
+        {
+          "id": "a8",
+          "path": "trip/0612/camera/IMG_0231.JPG",
+          "time": "2026-06-12T19:20:00+08:00",
+          "card": [
+            "A steak plate at the RIVER STEAK table.",
+            "No fish plate visible."
+          ]
+        }
+      ],
+      "representations": [
+        {
+          "source": "a1",
+          "members": [
+            "a1",
+            "a2"
+          ],
+          "basis": "Same source directory, 20-second capture sequence; only the selected frame was visually read."
+        },
+        {
+          "source": "a3",
+          "members": [
+            "a3",
+            "a4"
+          ],
+          "basis": "Same directory and one-minute capture sequence; full-member semantic equality is not established."
+        },
+        {
+          "source": "a5",
+          "members": [
+            "a5",
+            "a6"
+          ],
+          "basis": "Same directory and consecutive capture interval; activity identity is not observed."
+        },
+        {
+          "source": "a7",
+          "members": [
+            "a7",
+            "a8"
+          ],
+          "basis": "Same directory and dinner-table context; menu choices do not establish everything consumed."
+        }
+      ]
+    },
+    {
+      "id": "journey-b",
+      "copy_items_from": "journey-a",
+      "user_request": "帮我整理这次六月的短途美食旅行素材，我以后主要凭餐厅和参加过的活动找回来。保留原文件名。",
+      "dataset_name": "六月美食旅行"
+    },
+    {
+      "id": "outing",
+      "user_request": "这是6月20日去书展和河边散步的照片，想按当天活动找回来。书展里不需要再按展位细分，文件名保持原样。",
+      "dataset_name": "周末出游",
+      "items": [
+        {
+          "id": "o1",
+          "path": "0620/IMG_101.JPG",
+          "time": "2026-06-20T10:00:00+08:00",
+          "card": [
+            "CITY BOOK FAIR",
+            "Admission: June 20, 2026",
+            "Books and exhibition booths."
+          ]
+        },
+        {
+          "id": "o2",
+          "path": "0620/IMG_102.JPG",
+          "time": "2026-06-20T10:01:00+08:00",
+          "card": [
+            "CITY BOOK FAIR",
+            "Book exhibition tables."
+          ]
+        },
+        {
+          "id": "o3",
+          "path": "0620/IMG_103.JPG",
+          "time": "2026-06-20T10:02:00+08:00",
+          "card": [
+            "CITY BOOK FAIR",
+            "Books, shelves and an event poster."
+          ]
+        },
+        {
+          "id": "o4",
+          "path": "0620/IMG_151.JPG",
+          "time": "2026-06-20T16:00:00+08:00",
+          "card": [
+            "RIVERSIDE WALK",
+            "River, walking path and a bridge."
+          ]
+        },
+        {
+          "id": "o5",
+          "path": "0620/IMG_152.JPG",
+          "time": "2026-06-20T16:01:00+08:00",
+          "card": [
+            "RIVERSIDE WALK",
+            "The same river path."
+          ]
+        }
+      ],
+      "representations": [
+        {
+          "source": "o1",
+          "members": [
+            "o1",
+            "o2",
+            "o3"
+          ],
+          "basis": "A short capture sequence at the book exhibition, consistent with the selected image."
+        },
+        {
+          "source": "o4",
+          "members": [
+            "o4",
+            "o5"
+          ],
+          "basis": "Adjacent captures of the river path."
+        }
+      ]
+    },
+    {
+      "id": "collection",
+      "user_request": "请整理这个混合目录。trip 是6月14—15日那次旅行的素材，loose 是另外拷进来的，来源我记不清。旅行里希望能按活动找回照片、视频和相关资料，原文件名保持不变。",
+      "dataset_name": "旅行与待核素材",
+      "items": [
+        {
+          "id": "c1",
+          "path": "trip/0614/action/CLIP_20260614202000.MP4",
+          "condition": "invalid",
+          "time": "2026-06-14T20:20:00+08:00",
+          "readability": "Container cannot be decoded; missing moov atom. No content frame is available."
+        },
+        {
+          "id": "c2",
+          "path": "trip/0614/action/CLIP_20260614202000.patched.MP4",
+          "time": "2026-06-14T20:20:00+08:00",
+          "card": [
+            "ORCHARD ROOM",
+            "Dinner table, bread and plates.",
+            "Sample from patched video; full restoration unverified."
+          ]
+        },
+        {
+          "id": "c3",
+          "path": "trip/0614/action/CLIP_20260614202000.remux.MP4",
+          "time": "2026-06-14T20:20:00+08:00",
+          "card": [
+            "ORCHARD ROOM",
+            "Dinner table, bread and plates.",
+            "Sample from remux video; full restoration unverified."
+          ]
+        },
+        {
+          "id": "c4",
+          "path": "trip/0614/pocket/CLIP_20260614202012.MP4",
+          "time": "2026-06-14T20:20:12+08:00",
+          "card": [
+            "ORCHARD ROOM",
+            "Dinner table photographed by a second camera.",
+            "Bread and main plates visible in this sample."
+          ]
+        },
+        {
+          "id": "c5",
+          "path": "trip/0615/pocket/CLIP_0140.MP4",
+          "time": "2026-06-15T14:00:00+08:00",
+          "card": [
+            "A readable video sample obscured by fabric.",
+            "The event or location cannot be seen."
+          ]
+        },
+        {
+          "id": "c6",
+          "path": "trip/recovered/CLIP_0019.MP4",
+          "condition": "invalid",
+          "readability": "Unreadable container; no recovered frame or trustworthy date within the trip."
+        },
+        {
+          "id": "c7",
+          "path": "loose/card-rescue/CLIP_0001.MP4",
+          "condition": "invalid",
+          "readability": "Unreadable container; no event, date, stem-family or source-camera context retained."
+        },
+        {
+          "id": "c8",
+          "path": "loose/PIC_1234.JPG",
+          "card": [
+            "An isolated close-up of a plain wall.",
+            "No person, place, event or date cue visible."
+          ]
+        },
+        {
+          "id": "c9",
+          "path": "trip/a-files/GPX/route-june14.gpx",
+          "condition": "unresolved",
+          "content": "<?xml version='1.0'?><gpx version='1.1' creator='synthetic-fixture'><trk><name>June trip</name><trkseg><trkpt lat='22.3' lon='114.1'><time>2026-06-14T12:00:00Z</time></trkpt></trkseg></trk></gpx>",
+          "observation": "Track file supplied with the trip. Whole-track validity and media time matching are not certified."
+        },
+        {
+          "id": "c10",
+          "path": "trip/a-files/GPX/route-june15.gpx",
+          "condition": "unresolved",
+          "content": "<?xml version='1.0'?><gpx version='1.1' creator='synthetic-fixture'><trk><name>June trip</name></trk></gpx>",
+          "observation": "Track file supplied with the trip. Whole-track validity and media time matching are not certified."
+        },
+        {
+          "id": "c11",
+          "path": "trip/fixtures/.albumignore",
+          "condition": "usable",
+          "content": "",
+          "observation": "Traversal-control marker for its original parent directory. No independent event content."
+        },
+        {
+          "id": "c12",
+          "path": "trip/a-files/.albumignore",
+          "condition": "usable",
+          "content": "",
+          "observation": "Traversal-control marker for its original parent directory. No independent event content."
+        }
+      ],
+      "representations": [
+        {
+          "source": "c4",
+          "members": [
+            "c1",
+            "c2",
+            "c3",
+            "c4"
+          ],
+          "basis": "The first three paths share a directory and stem; the selected second-camera source is 12 seconds later. Prepared compression, not verified repair lineage or semantic equality.",
+          "limitations": [
+            "bundle_members_not_visually_compared",
+            "unavailable_bundle_representative_replaced",
+            "repair_equivalence_unverified"
+          ]
+        },
+        {
+          "source": "c5",
+          "members": [
+            "c5"
+          ],
+          "basis": "Single-source video sample; occluded frame limits interpretation."
+        },
+        {
+          "source": "c8",
+          "members": [
+            "c8"
+          ],
+          "basis": "Single-source still; no contextual membership established."
+        }
+      ]
+    },
+    {
+      "id": "community",
+      "user_request": "帮我整理这次去北岸文化中心的素材，后面想按我参加的具体活动找，原文件名保留。也留好别人发来的相关记录。",
+      "dataset_name": "文化中心的一天",
+      "items": [
+        {
+          "id": "n1",
+          "path": "0622/main/IMG_010.JPG",
+          "time": "2026-06-22T10:00:00+08:00",
+          "card": [
+            "NORTHBANK CULTURAL CENTRE",
+            "Print Exhibition / June 22",
+            "Framed prints on gallery walls."
+          ]
+        },
+        {
+          "id": "n2",
+          "path": "0622/main/IMG_011.JPG",
+          "time": "2026-06-22T10:01:00+08:00",
+          "card": [
+            "NORTHBANK CULTURAL CENTRE",
+            "Print Exhibition",
+            "Visitors viewing framed artwork."
+          ]
+        },
+        {
+          "id": "n3",
+          "path": "0622/main/IMG_012.JPG",
+          "time": "2026-06-22T10:03:00+08:00",
+          "card": [
+            "NORTHBANK CULTURAL CENTRE",
+            "Participants work at tables with ink and tools.",
+            "An instructor demonstrates; no readable event title."
+          ]
+        },
+        {
+          "id": "n4",
+          "path": "0622/main/IMG_013.JPG",
+          "time": "2026-06-22T10:04:00+08:00",
+          "card": [
+            "Participants use rollers and carving tools.",
+            "One person guides a table group.",
+            "No readable event title."
+          ]
+        },
+        {
+          "id": "n5",
+          "path": "0622/support/shared-route.gpx",
+          "condition": "unresolved",
+          "content": "<?xml version='1.0'?><gpx version='1.1' creator='synthetic'><trk><name>Shared route</name></trk></gpx>",
+          "observation": "A friend shared this track in a message. No retained association to this outing or date; whole-track validity is unverified."
+        }
+      ],
+      "representations": [
+        {
+          "source": "n1",
+          "members": [
+            "n1",
+            "n2",
+            "n3",
+            "n4"
+          ],
+          "basis": "A single compressed reading entry from the same source directory and a four-minute interval; every member has an independent prepared image. No proof of one activity.",
+          "limitations": [
+            "bundle_members_not_visually_compared",
+            "activity_identity_unverified"
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -384,7 +384,7 @@ class PrecheckRunTool:
     def current_state(self, run_ref: str) -> str:
         """Return the durable state used by cooperative workers."""
 
-        return str(self._store.get(run_ref)["state"])
+        return self._store.current_state(run_ref)
 
     def mark_blocked(
         self,
@@ -480,7 +480,7 @@ class PrecheckRunTool:
         if not isinstance(worker, dict) or worker.get("token") != worker_token:
             return self._status_record(record)
         accounting_run_id = record["accounting_run_id"]
-        configuration = record["execution_config"]
+        configuration = self._store.execution_configuration(run_ref)
         if not isinstance(accounting_run_id, str) or not isinstance(
             configuration, dict
         ):
@@ -500,12 +500,16 @@ class PrecheckRunTool:
             daemon=True,
         )
         heartbeat.start()
+        from ._snapshot import SourceSnapshotChanged
+
         try:
             try:
                 config = PrecheckExecutionConfig.from_value(configuration)
                 result = self._orchestrator.advance(
                     run_ref, str(accounting_run_id), config
                 )
+            except SourceSnapshotChanged as error:
+                result = self.mark_failed(run_ref, code="source_snapshot_changed", message=str(error))
             except _BlockedExecution as error:
                 result = self.mark_blocked(
                     run_ref,
@@ -736,8 +740,15 @@ class PrecheckRunTool:
                 "idempotency_conflict",
                 "request_id was already used with different start inputs",
             )
+        except ValueError:
+            return _error("start", "invalid_request", "Start inputs must be finite canonical JSON.")
         if replay is not None:
             return _start_response(replay)
+
+        try:
+            frozen_config = self.validated_start_configuration(request)
+        except _ReadFailure as error:
+            return _error("start", error.code, str(error))
 
         prior_result_ref = request.get("prior_result_ref")
         if prior_result_ref is None:
@@ -772,6 +783,7 @@ class PrecheckRunTool:
                 prior_result_ref=(
                     None if prior_result_ref is None else str(prior_result_ref)
                 ),
+                execution_config=frozen_config.value(),
             )
         except RunIdempotencyConflict:
             return _error(
@@ -802,6 +814,31 @@ class PrecheckRunTool:
                 allowed_actions=[],
             )
         return _start_response(record)
+
+    def validated_start_configuration(self, request):
+        """Effect-free validation, also used before Host accounting admission."""
+        from dataclasses import replace
+        from ._preparation import freeze_preparation, resolved_preparation_recipes
+
+        graph, digest = None, None
+        if request.get("prior_result_ref") is not None:
+            graph, digest = self._reader._load(request["prior_result_ref"])
+            if graph.result["dataset_ref"] != request["dataset_ref"]:
+                raise _ReadFailure("result_not_found", "Prior Result is not in this Dataset.")
+        config = self._execution_config
+        deps = self._orchestrator.dependencies
+        if config.embedding_profile is not None and config.embedding_encoder_identity is None and deps.embedding_encoder is not None:
+            config = replace(config, embedding_encoder_identity=deps.embedding_encoder.identity)
+        if config.sensitivity_profiles and not config.sensitivity_detector_identities:
+            config = replace(config, sensitivity_detector_identities=tuple(d.identity for d in deps.sensitivity_detectors))
+        accounting_run = self._store.unfinished_accounting_run(dataset_id_from_ref(request["dataset_ref"]))
+        root = None if accounting_run is None else AccountingStore(self.database_path).get_source_attachment(accounting_run).source_root
+        config = config.resolve_resources(source_root=root)
+        # Canonical preparation uses the same effective numeric/value types as
+        # durable recovery, including profiles authored with integer literals.
+        config = PrecheckExecutionConfig.from_value(config.value())
+        preparation = freeze_preparation(request, config.value(), resolved_preparation_recipes(config, deps), graph, digest)
+        return replace(config, preparation=preparation)
 
     def _status(
         self,

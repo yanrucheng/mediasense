@@ -39,6 +39,7 @@ from mediasense.precheck import (
 )
 from mediasense.precheck.read import bind_precheck_read
 from mediasense.precheck._orchestrator import PrecheckExecutionConfig
+from mediasense.precheck._preparation import installed_preparation_recipes
 
 from mediasense.precheck.source_attachment import (
     SourceAttachmentError,
@@ -154,14 +155,18 @@ class DatasetRuntime:
                 geo_tool=self.geo_query,
                 embedding_encoder=encoder,
                 sensitivity_detectors=detectors,
+                preparation_recipes=installed_preparation_recipes(),
             ),
         )
         bound_read = bind_precheck_read(self.precheck_read, opened.manifest.dataset_ref)
         frozen_plan = schema_path("frozen-plan.schema.json")
+        from .plan_views import deliver
+
         self.plan_work = PlanWorkTool(
             workspace / "plan",
             bound_read,
             frozen_plan_schema=frozen_plan,
+            view_delivery=lambda receipt: deliver(opened, receipt),
         )
         self.apply_run = ApplyRunTool(
             workspace / "apply",
@@ -192,11 +197,23 @@ class DatasetRuntime:
         elif name == "mediasense.precheck.read":
             response = self.precheck_read.read(payload)
         elif name == "mediasense.plan.work":
-            response = self.plan_work.handle(
-                payload,
-                confirmation=_confirmation(context, ConfirmationContext),
-                execution=plan_update_execution,
-            )
+            from mediasense.plan.view import ViewDeliveryFailure
+
+            try:
+                response = self.plan_work.handle(
+                    payload,
+                    confirmation=_confirmation(context, ConfirmationContext),
+                    execution=plan_update_execution,
+                )
+            except ViewDeliveryFailure as error:
+                _LOGGER.exception("Plan view failed after authoritative operation")
+                response = {
+                    "outcome": "error",
+                    "action": payload["action"],
+                    "error": {"code": "operation_failed", "message": str(error)},
+                }
+                if payload["action"] != "inspect":
+                    response["committed_receipt"] = error.receipt
         elif name == "mediasense.geo.query":
             response = self.geo_query.handle(
                 payload,
@@ -220,6 +237,7 @@ class DatasetRuntime:
         return dict(response)
 
     def _reload_metadata_configuration(self) -> None:
+        """Resolve current preparation defaults before a new request is accepted."""
         from .config import load_runtime_config
 
         updated = load_runtime_config(
@@ -229,16 +247,30 @@ class DatasetRuntime:
         from mediasense.precheck._sensitivity_models import configured_detectors
 
         detectors = configured_detectors(updated.sensitivity)
+        from .embedding import make_encoder
+
+        encoder = None if updated.embedding is None else make_encoder(updated.embedding)
         self.precheck_run._execution_config = replace(
             self.precheck_run._execution_config,
             metadata_profile=updated.metadata_profile(),
             sensitivity_profiles=tuple(d.profile for d in detectors),
             sensitivity_detector_identities=tuple(d.identity for d in detectors),
             sensitivity_configuration=updated.sensitivity,
+            embedding_profile=None if updated.embedding is None else EmbeddingProfile(
+                name=updated.embedding["model_id"] + "@" + updated.embedding["revision"],
+                dimensions=updated.embedding["dimensions"], normalization="unit_length",
+            ),
+            embedding_encoder_identity=None if encoder is None else encoder.identity,
+            model_batch_size=None if updated.embedding is None else updated.embedding["batch_size"],
         )
+        if updated.geo_network != self.config.geo_network:
+            self.geo_query = _geo_tool(self.opened.workspace / "geo", updated)
         self.precheck_run._orchestrator.dependencies = replace(
             self.precheck_run._orchestrator.dependencies,
             sensitivity_detectors=detectors,
+            embedding_encoder=encoder,
+            preparation_recipes=installed_preparation_recipes(),
+            geo_tool=self.geo_query,
         )
         self.config = replace(
             self.config,
@@ -247,6 +279,8 @@ class DatasetRuntime:
             manufacturer_knowledge_error=updated.manufacturer_knowledge_error,
             sensitivity=updated.sensitivity,
             sensitivity_error=None,
+            embedding=updated.embedding,
+            geo_network=updated.geo_network,
         )
 
     def _call_precheck(
@@ -261,6 +295,8 @@ class DatasetRuntime:
                 replay = self.precheck_run._store.replay_start(request)
             except RunIdempotencyConflict:
                 return self.precheck_run.run(request)
+            except ValueError:
+                return {"error": {"code": "invalid_request", "message": "Start inputs must be finite canonical JSON."}}
             if replay is not None:
                 return {"run_ref": replay["run_ref"]}
             prior = request.get("prior_result_ref")
@@ -296,6 +332,12 @@ class DatasetRuntime:
                 return {
                     "error": {"code": "configuration_invalid", "message": str(error)}
                 }
+            from mediasense.precheck.read import _ReadFailure
+
+            try:
+                self.precheck_run.validated_start_configuration(request)
+            except _ReadFailure as error:
+                return {"error": {"code": error.code, "message": str(error)}}
             requested_dataset = request.get("dataset_ref")
             if (
                 requested_dataset is not None
@@ -635,7 +677,13 @@ def _confirmation(value: Mapping[str, Any], confirmation_type: type[Any]) -> Any
     required = {"principal_ref", "confirmed_content_identity", "confirmed_at"}
     if not required <= set(value):
         return None
+    binding = {}
+    if confirmation_type is ConfirmationContext:
+        binding = {
+            key: str(value.get(key, "")) for key in ("work_ref", "reviewed_revision")
+        }
     return confirmation_type(
+        **binding,
         principal_ref=str(value["principal_ref"]),
         confirmed_content_identity=str(value["confirmed_content_identity"]),
         confirmed_at=_datetime(value["confirmed_at"]),

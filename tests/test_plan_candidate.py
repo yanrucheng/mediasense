@@ -99,6 +99,7 @@ def test_schema_rejection_always_prevents_seal_ready_identity() -> None:
 
 def test_file_destination_cannot_also_be_a_logical_directory() -> None:
     candidate = {
+        "kind": "candidate",
         "result_ref": RESULT_REF,
         "scope": {
             "kind": "explicit",

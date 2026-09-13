@@ -1,0 +1,7 @@
+{
+  "active_contract_path": "docs/spec/contract/plan-work/plan-work.tool.json",
+  "active_contract_sha256": "63676aa36966bea23024ae2538ef4830cc2ce8e42b0af8554c28dbd5a37478e1",
+  "frozen_schema_path": "docs/spec/contract/frozen-plan/frozen-plan.schema.json",
+  "frozen_schema_sha256": "480476dab9f240cd4805a63a1225f3a5efcfec4b154c8b3c8610a0f8a67de660",
+  "purpose": "Review baseline only; no active contract files have been overwritten."
+}

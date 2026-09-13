@@ -42,7 +42,7 @@ def test_field_omission_replacement_and_clear_matrix(tmp_path, present, modes):
     candidate["decision_notes"][0]["summary"] = "Human supplied scoped correction"
     fields = {}
     for name, mode, values in zip(
-        ("working_notes", "organization_preferences", "candidate_content"),
+        ("working_notes", "organization_preferences", "organization_content"),
         modes,
         (("", "新说明\n\x00 e\u0301"), ({}, {"new": 2}), (None, candidate)),
         strict=True,
@@ -57,7 +57,7 @@ def test_field_omission_replacement_and_clear_matrix(tmp_path, present, modes):
     assert after.organization_preferences == fields.get(
         "organization_preferences", before.organization_preferences
     )
-    assert after.candidate == fields.get("candidate_content", before.candidate)
+    assert after.candidate == fields.get("organization_content", before.candidate)
     assert after.plan_ref == before.plan_ref
     if modes[2] == 0:
         assert after.candidate_identity == before.candidate_identity
@@ -77,9 +77,9 @@ def test_field_omission_replacement_and_clear_matrix(tmp_path, present, modes):
         ({"working_notes": None}, "invalid_request"),
         ({"working_notes": {}}, "invalid_request"),
         ({"organization_preferences": None}, "invalid_request"),
-        ({"candidate_content": []}, "invalid_request"),
+        ({"organization_content": []}, "invalid_request"),
         ({"unknown": True}, "invalid_request"),
-        ({"candidate_content": {}}, "candidate_invalid"),
+        ({"organization_content": {}}, "organization_invalid"),
     ],
 )
 def test_invalid_update_changes_no_field(tmp_path, fields, code):
@@ -102,9 +102,9 @@ def test_semantically_invalid_combination_is_atomic(tmp_path):
         state,
         working_notes="must not save",
         organization_preferences={},
-        candidate_content=candidate,
+        organization_content=candidate,
     )
-    assert result["error"]["code"] == "candidate_invalid"
+    assert result["error"]["code"] == "organization_invalid"
     assert tool.store.snapshot(state["work_ref"]) == before
 
 
@@ -124,13 +124,14 @@ def test_notes_restart_exact_text_replay_and_same_value_revision(tmp_path):
         "working_notes",
         "content",
         "validation",
+        "view",
     ]
     assert (
         observed["sections"]["validation"]["issues"][0]["code"] == "candidate_missing"
     )
     assert update(restarted, state, working_notes=notes) == result
     assert (
-        update(restarted, state, working_notes=notes, candidate_content=None)["error"][
+        update(restarted, state, working_notes=notes, organization_content=None)["error"][
             "code"
         ]
         == "idempotency_conflict"
@@ -161,7 +162,7 @@ def test_light_updates_do_not_read_analyze_or_decode_saved_candidate(
     for fields in (
         {"working_notes": "notes"},
         {"organization_preferences": {}},
-        {"candidate_content": None},
+        {"organization_content": None},
     ):
         state = update(tool, state, **fields)
         assert state["outcome"] == "ok"
@@ -171,7 +172,7 @@ def test_light_updates_do_not_read_analyze_or_decode_saved_candidate(
             ).fetchone()
         assert saved == (
             (None, None)
-            if "candidate_content" in fields
+            if "organization_content" in fields
             else ("not-json:must-not-load", identity)
         )
 
@@ -184,7 +185,7 @@ def test_no_candidate_pagination_validates_cursor_and_shape(tmp_path):
     )
     cursor = first["sections"]["content"]["page"]["next_cursor"]
     old_revision = state["revision"]
-    state = update(tool, state, candidate_content=None)
+    state = update(tool, state, organization_content=None)
     for collection in ("groups", "other_outcomes", "decision_notes"):
         result = inspect(
             tool,
@@ -211,18 +212,18 @@ def test_no_candidate_pagination_validates_cursor_and_shape(tmp_path):
             inspect(tool, state, sections=["content"], page=page)["error"]["code"]
             == "invalid_request"
         )
-    with pytest.raises(PreviewError, match="no candidate"):
+    with pytest.raises(PreviewError, match="absent organization"):
         PlanPreviewRenderer(tool).build(state["work_ref"], state["revision"])
     identity = "sha256:" + "0" * 64
     assert (
         tool.handle(
-            _seal_request(state, state, identity), confirmation=_confirmation(identity)
+            _seal_request(state, state, identity), confirmation=_confirmation(identity, state)
         )["error"]["code"]
-        == "candidate_invalid"
+        == "organization_invalid"
     )
 
 
-def test_notes_revision_requires_refresh_but_not_new_content_acceptance(tmp_path):
+def test_notes_revision_requires_new_revision_acceptance(tmp_path):
     tool = _tool(tmp_path)
     state = _update(tool, _create(tool))
     identity = inspect(tool, state)["candidate_content_identity"]
@@ -234,7 +235,9 @@ def test_notes_revision_requires_refresh_but_not_new_content_acceptance(tmp_path
     )
     request["revision"] = newer["revision"]
     assert tool.handle(request)["error"]["code"] == "confirmation_required"
-    result = tool.handle(request, confirmation=_confirmation(identity))
+    rejected = tool.handle(request, confirmation=_confirmation(identity))
+    assert rejected["error"]["code"] == "confirmation_binding_mismatch"
+    result = tool.handle(request, confirmation=_confirmation(identity, newer))
     assert result["outcome"] == "ok"
     assert "working_notes" not in result["frozen_plan"]["sealed_content"]
     assert (
@@ -311,7 +314,7 @@ def test_explicit_null_page_limit_is_not_an_omitted_limit(tmp_path, candidate_st
     if candidate_state != "new":
         state = _update(tool, state)
     if candidate_state == "withdrawn":
-        state = update(tool, state, candidate_content=None)
+        state = update(tool, state, organization_content=None)
     before = tool.store.snapshot(state["work_ref"])
     fields = {"sections": ["content"], "page": {"collection": "groups", "limit": None}}
     request = {"action": "inspect", "work_ref": state["work_ref"], **fields}
@@ -344,7 +347,7 @@ def test_invalid_preference_key_rejects_before_read_or_atomic_write(
                 "work_ref": state["work_ref"],
                 "base_revision": state["revision"],
                 "working_notes": "must not save",
-                "candidate_content": None,
+                "organization_content": None,
             }
         ),
     }
@@ -397,10 +400,10 @@ def test_candidate_structure_rejected_before_read_or_combined_write(
     response = update(
         tool,
         state,
-        candidate_content=candidate,
+        organization_content=candidate,
         working_notes="must not save",
         organization_preferences={},
     )
-    assert response["error"]["code"] == "candidate_invalid"
+    assert response["error"]["code"] == "organization_invalid"
     assert tool.store.snapshot(state["work_ref"]) == before
     assert not list(tool.frozen_dir.glob("*.json"))

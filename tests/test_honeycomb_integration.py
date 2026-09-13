@@ -60,9 +60,34 @@ def test_skills_install_requires_and_uses_only_explicit_target(
     assert (target / runbook).read_bytes() == (
         ROOT / "readme/installation.md"
     ).read_bytes()
+    profile = Path("mediasense-plan/references/default-organization-profile.md")
+    assert (target / profile).read_bytes() == (
+        ROOT / "docs/spec/contract/default-organization-profile/index.md"
+    ).read_bytes()
     assert not (home / ".codex").exists()
     assert not (home / ".agents").exists()
     assert list(dataset_workspace.iterdir()) == []
+
+
+def test_default_profile_snapshot_is_portable_and_matches_authority() -> None:
+    skill = PACKAGED_SKILL_ROOT / "mediasense-plan"
+    snapshot = skill / "references/default-organization-profile.md"
+    assert snapshot.read_bytes() == (
+        ROOT / "docs/spec/contract/default-organization-profile/index.md"
+    ).read_bytes()
+    # Follow local reading links from the entry and every bundled reference.
+    # A repository-only link cannot supply policy to an installed Agent.
+    linked = set()
+    for document in [skill / "SKILL.md", *sorted((skill / "references").glob("*.md"))]:
+        for target in re.findall(r"\]\(([^)]+)\)", document.read_text()):
+            target = target.split("#", maxsplit=1)[0]
+            if not target or "://" in target:
+                continue
+            resolved = (document.parent / target).resolve()
+            assert resolved.is_relative_to(skill.resolve())
+            assert resolved.is_file()
+            linked.add(resolved)
+    assert snapshot.resolve() in linked
 
 
 def test_entry_skill_owns_bootstrap_and_stage_local_prerequisites() -> None:

@@ -26,8 +26,42 @@
           },
           "prior_result_ref": {
             "$ref": "#/$defs/result_ref"
+          },
+          "source_set": {
+            "$ref": "#/$defs/source_set"
+          },
+          "profile": {
+            "$ref": "#/$defs/processing_profile"
           }
-        }
+        },
+        "dependentRequired": {
+          "source_set": [
+            "prior_result_ref"
+          ]
+        },
+        "allOf": [
+          {
+            "if": {
+              "required": [
+                "profile"
+              ],
+              "properties": {
+                "profile": {
+                  "properties": {
+                    "overrides": {
+                      "minItems": 1
+                    }
+                  }
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "source_set"
+              ]
+            }
+          }
+        ]
       },
       {
         "type": "object",
@@ -328,6 +362,281 @@
             "items": {
               "type": "string",
               "minLength": 1
+            }
+          }
+        }
+      },
+      "opaque_ref": {
+        "type": "string",
+        "minLength": 1
+      },
+      "source_set": {
+        "oneOf": [
+          {
+            "$ref": "#/$defs/explicit_set"
+          },
+          {
+            "$ref": "#/$defs/accounts_for_set"
+          },
+          {
+            "$ref": "#/$defs/represents_set"
+          },
+          {
+            "$ref": "#/$defs/union_set"
+          },
+          {
+            "$ref": "#/$defs/difference_set"
+          },
+          {
+            "$ref": "#/$defs/geo_set"
+          },
+          {
+            "$ref": "#/$defs/profile_scope_set"
+          }
+        ]
+      },
+      "explicit_set": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "source_item_refs"
+        ],
+        "properties": {
+          "kind": {
+            "const": "explicit"
+          },
+          "source_item_refs": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "$ref": "#/$defs/opaque_ref"
+            }
+          }
+        }
+      },
+      "accounts_for_set": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "origin",
+          "relation",
+          "direction"
+        ],
+        "properties": {
+          "kind": {
+            "const": "precheck_relation"
+          },
+          "origin": {
+            "$ref": "#/$defs/opaque_ref"
+          },
+          "relation": {
+            "const": "accounts_for"
+          },
+          "direction": {
+            "const": "outbound"
+          }
+        }
+      },
+      "represents_set": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "origin",
+          "relation",
+          "direction"
+        ],
+        "properties": {
+          "kind": {
+            "const": "precheck_relation"
+          },
+          "origin": {
+            "$ref": "#/$defs/opaque_ref"
+          },
+          "relation": {
+            "const": "represents"
+          },
+          "direction": {
+            "const": "outbound"
+          }
+        }
+      },
+      "union_set": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "sets"
+        ],
+        "properties": {
+          "kind": {
+            "const": "union"
+          },
+          "sets": {
+            "type": "array",
+            "minItems": 2,
+            "items": {
+              "$ref": "#/$defs/source_set"
+            }
+          }
+        }
+      },
+      "difference_set": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "base",
+          "subtract"
+        ],
+        "properties": {
+          "kind": {
+            "const": "difference"
+          },
+          "base": {
+            "$ref": "#/$defs/source_set"
+          },
+          "subtract": {
+            "$ref": "#/$defs/source_set"
+          }
+        }
+      },
+      "geo_set": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "geo_coordinate"
+          },
+          "coordinate": {
+            "$ref": "#/$defs/coordinate"
+          },
+          "selection_rule": {
+            "const": "gpx_over_gps_exact_normalized_v1"
+          }
+        },
+        "required": [
+          "kind",
+          "coordinate",
+          "selection_rule"
+        ]
+      },
+      "coordinate": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "latitude",
+          "longitude",
+          "datum"
+        ],
+        "properties": {
+          "latitude": {
+            "type": "number",
+            "minimum": -90,
+            "maximum": 90
+          },
+          "longitude": {
+            "type": "number",
+            "minimum": -180,
+            "maximum": 180
+          },
+          "datum": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "profile_scope_set": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "index"
+        ],
+        "properties": {
+          "kind": {
+            "const": "profile_scope"
+          },
+          "index": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "identity": {
+        "type": "string",
+        "pattern": "^sha256:[0-9a-f]{64}$"
+      },
+      "compression_parameters": {
+        "oneOf": [
+          {
+            "type": "null"
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "target_entries",
+              "temporal_scale_seconds",
+              "spatial_scale_meters",
+              "content_distance_scale"
+            ],
+            "properties": {
+              "target_entries": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "temporal_scale_seconds": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "spatial_scale_meters": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "content_distance_scale": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              }
+            }
+          }
+        ]
+      },
+      "processing_profile": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "configuration_identity",
+          "compression",
+          "overrides"
+        ],
+        "properties": {
+          "configuration_identity": {
+            "$ref": "#/$defs/identity"
+          },
+          "compression": {
+            "$ref": "#/$defs/compression_parameters"
+          },
+          "overrides": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "source_set",
+                "compression"
+              ],
+              "properties": {
+                "source_set": {
+                  "$ref": "#/$defs/source_set"
+                },
+                "compression": {
+                  "$ref": "#/$defs/compression_parameters"
+                }
+              }
             }
           }
         }

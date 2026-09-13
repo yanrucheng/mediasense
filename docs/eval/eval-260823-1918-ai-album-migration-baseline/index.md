@@ -4,7 +4,7 @@ title: "AI Album Migration Baseline"
 type: eval
 status: active
 created: 2026-08-23
-updated: 2026-09-12
+updated: 2026-09-13
 timezone: "Asia/Shanghai"
 parent: "index-eval"
 depends-on:
@@ -46,6 +46,10 @@ The observed system has two distinct compression layers:
 This distinction explains both what should be migrated and why simply wrapping the legacy pipeline in an Agent would not solve the cost or quality problem.
 
 ## Modules
+
+2026-09-13 运行验收 1—3 项的独立复核补修、新 wheel 持久位置及安装验证范围已补入下方 capability ledger；日常安装未切换。
+
+同日第 4、5 包已补齐默认 Profile 的实际 Skill 交付，并完成隔离 wheel 与 7 位独立 Agent 的代表性行为自验；证据及日常安装尚未切换的边界见 capability ledger 与[验证报告](../../../eval/sessions/260913-1214-plan-skill-behavior/report.md)。
 
 - [Legacy system and HK run](eval-260823-1918A-legacy-system.md) records the observed pipeline, quantitative funnel, inferred model use, and failure modes.
 - [Migration capability ledger](eval-260823-1918B-capability-ledger.md) assigns legacy capabilities to MediaSense stages and separates delivery evidence from remaining production/consumer gates, including the manufacturer-rule audit, its three acceptance repairs and daily 0.10.2 delivery, the separately verified 2026-09-11 EXIF/video throughput recovery, and the 2026-09-12 Plan optional-work implementation with isolated wheel/MCP acceptance, followed by the explicitly authorized daily CLI/Skills/launcher upgrade with Python/extras/dependencies preserved (existing Agent-session loading still pending). The later current-baseline reacceptance adds two input-validation repairs and 42-call isolated MCP evidence; that new build has not replaced the daily installation.

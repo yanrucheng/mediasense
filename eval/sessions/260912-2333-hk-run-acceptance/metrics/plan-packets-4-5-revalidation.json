@@ -1,0 +1,146 @@
+{
+  "reviewed_at": "2026-09-13T13:58:25.311714+08:00",
+  "packets": [
+    "review-plan-information-sufficiency",
+    "review-plan-exception-dispositions"
+  ],
+  "verdict": "source_and_exact_isolated_delivery_accepted; recorded_scenario_outcomes_conform; not_a_blind_or_weaker_model_reliability_certification",
+  "source_commit": "0794d3c9182793b7b25c1cac77793e3c97e42092",
+  "release": "/Users/chengyanru/repos/personal/mediasense/.local/acceptance-releases/260913-1214-plan-skill/candidate-02",
+  "wheel_sha256": "249398c2150fbf129a946c9822b174dab150bc57eff1efedc1386d8dfcd2b7ef",
+  "skill_sha256": "16f15bb281460d05bdd61bb6b7ba1e3360757e1b1356c06a69d7a816d1842950",
+  "profile_sha256": "5f561a600a397e4ce96b3a57abf10ae3f2bc5c8c08b53f2bbc4bd50349523189",
+  "source_integrity": {
+    "baseline_regular_files_verified": 792,
+    "selected_overlays_verified": 8,
+    "git_symlinks_materialized_as_directories": 5,
+    "materialized_referent_contents_match": true,
+    "production_resources_match_checkout_snapshot_wheel_installation": true,
+    "final_behavior_recipe_matches_retained_identity": true,
+    "public_contract_diff": []
+  },
+  "installed_tests": {
+    "independently_rerun": true,
+    "python": "3.11.13",
+    "extras": "core",
+    "import_from_site_packages_verified": true,
+    "pythonpath_cleared": true,
+    "pytest_source_injection_disabled": true,
+    "passed": 169,
+    "failures": 0,
+    "errors": 0,
+    "reported_seconds": 10.83,
+    "junit_seconds": 10.832,
+    "evidence": "../outputs/plan-packets-4-5-revalidation/installed-tests.xml"
+  },
+  "distribution": {
+    "independently_rerun": true,
+    "status": "passed",
+    "offline": true,
+    "constraints_sha256": "d0d370c7da39ff7704bda1c3ce82220bbfc1ca2fdebce267637ad175b4ae0019",
+    "daily_installation_switched": false,
+    "initial_attempt": "sandbox denied existing uv cache access; no product failure",
+    "retry": "same bounded isolated installation with sandbox escalation",
+    "evidence": "../outputs/plan-packets-4-5-revalidation/distribution-smoke.log"
+  },
+  "producer_full_suite": {
+    "independently_rerun": false,
+    "recorded_passed": 1377,
+    "recorded_deselected": 16,
+    "scope": "first source candidate; final production difference is Skill completion-effects guidance"
+  },
+  "behavior": {
+    "new_agent_runs_by_reviewer": 0,
+    "retained_agent_sessions_verified": 7,
+    "first_version_then_upgrade": 4,
+    "final_version_fresh_agents": 3,
+    "model": "gpt-6-astra",
+    "effort": "low",
+    "complete_skill_and_profile_reads_verified": true,
+    "session_prefix_hashes_verified": true,
+    "fork_turns_none_verified": true,
+    "spawn_payloads_at_rest": "encrypted; exact instruction neutrality was not independently certified",
+    "business_calls": 63,
+    "read_calls": 27,
+    "plan_calls": 36,
+    "discovery_calls": 18,
+    "image_views": 35,
+    "final_partitions_verified": 7,
+    "all_synthetic_sources_and_results_unchanged": true,
+    "forbidden_calls_in_retained_mcp_traces": 0,
+    "semantic_outcomes_reviewed": [
+      "material_unknowns_preserved_and_investigated",
+      "sufficient_outing_evidence_without_extra_questions",
+      "user_cannot_remember_supported_coarse_candidate",
+      "later_correction_replaces_affected_candidate_scope",
+      "related_damaged_versions_kept_together_with_qualifications",
+      "readable_unresolved_and_damaged_context_fallbacks_distinguished",
+      "auxiliary_tracks_distinguished_from_control_markers",
+      "non_food_activity_and_unrelated_shared_track_transfer"
+    ],
+    "producer_metrics": "../../260913-1214-plan-skill-behavior/metrics/combined.json",
+    "producer_metrics_sha256": "9b83bc572d6069afd230f47ffd8c2098a5ff1b01fef18817c26b0dfbf1c56ba2"
+  },
+  "parent_session": {
+    "path": "/Users/chengyanru/.codex/sessions/2026/09/13/rollout-2026-09-13T11-32-24-01a098d2-c21d-7a81-a37a-6907ec1b5368.jsonl",
+    "snapshot_lines": 770,
+    "snapshot_sha256": "6ef623dcac2ceaf7b6e0c756745e7000f97e154dbe423d652adf8895f87fb019",
+    "development_authorization_line": 52,
+    "spawn_calls": [
+      {
+        "line": 303,
+        "task_name": "plan_case_a",
+        "fork_turns": "none",
+        "message_body_at_rest": "encrypted"
+      },
+      {
+        "line": 309,
+        "task_name": "plan_case_b",
+        "fork_turns": "none",
+        "message_body_at_rest": "encrypted"
+      },
+      {
+        "line": 315,
+        "task_name": "plan_case_outing",
+        "fork_turns": "none",
+        "message_body_at_rest": "encrypted"
+      },
+      {
+        "line": 321,
+        "task_name": "plan_case_collection",
+        "fork_turns": "none",
+        "message_body_at_rest": "encrypted"
+      },
+      {
+        "line": 500,
+        "task_name": "plan_final_journey",
+        "fork_turns": "none",
+        "message_body_at_rest": "encrypted"
+      },
+      {
+        "line": 509,
+        "task_name": "plan_final_collection",
+        "fork_turns": "none",
+        "message_body_at_rest": "encrypted"
+      },
+      {
+        "line": 577,
+        "task_name": "plan_final_transfer",
+        "fork_turns": "none",
+        "message_body_at_rest": "encrypted"
+      }
+    ]
+  },
+  "daily_packaged_skill": {
+    "path": "/Users/chengyanru/.local/share/uv/tools/mediasense/lib/python3.13/site-packages/mediasense/_resources/skills/mediasense-plan/SKILL.md",
+    "sha256": "adac003173e98b31b015f5e134c0b49936b30c8c6e56e1bd9827101d012d69b9",
+    "matches_candidate": false
+  },
+  "original_hk_result_sha256": "1f9141e72d3fa01b47f8edebc8990d4fc531761bb6801214a9411aede945c638",
+  "limits": [
+    "Strict blind-test neutrality could not be fully audited because task and inter-agent message bodies are encrypted in retained JSONL. Visible requests, commands, resource reads, images and candidates were inspected.",
+    "No weaker-model, real-media recognition, large-collection efficiency, old/new causal or statistical evaluation.",
+    "No daily installation switch, live Hong Kong Plan remake, Human final acceptance, seal, Apply or packet 6 HTML-delivery acceptance."
+  ],
+  "local_evidence": "../outputs/plan-packets-4-5-revalidation/"
+}

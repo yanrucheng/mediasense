@@ -45,12 +45,12 @@ def test_schemas_compile_and_match_packaged_authority():
             return [
                 branch
                 for branch in schema["oneOf"]
-                if branch["properties"]["action"]["const"] != "status"
+                if branch["properties"]["action"]["const"] not in {"start", "status"}
             ]
 
         assert controls(tool["inputSchema"]) == controls(historical)
-        # status adds an explicit local-execution view; old transcripts below
-        # must remain valid without rewriting the historical packet.
+        # start accepts complete preparation values; status adds local execution.
+        # Old transcripts remain valid without rewriting the historical packet.
         assert tool == load(
             ROOT / f"src/mediasense/_resources/contracts/precheck-{kind}.tool.json"
         )

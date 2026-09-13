@@ -44,20 +44,7 @@ Event memory is the single mature default Profile. Before selection it is a chal
 
 ## Active event-memory Profile
 
-The default organization roles are:
-
-```text
-event
-└── date plus a meaningful place, activity, or daily theme when useful
-    └── ordered scenes or activities when the chapter remains heterogeneous
-```
-
-- Keep a simple, coherent event shallow.
-- Preserve chronology through dates, ordering, and trustworthy time boundaries. Adding place, activity, theme, or scene semantics does not discard time.
-- For a complex event, use date as a common chapter anchor and add the strongest trustworthy recall cue. Do not use only morning, afternoon, or evening as final semantics when prepared visual Evidence supports meaningful scenes.
-- Split a large or visibly heterogeneous chapter into scene groups when doing so avoids broad rescanning. Item count alone does not force a split, but a group is not final merely because every member is accounted for.
-- Default to at most three semantic levels below the logical root, omit one-child layers, keep related media together, preserve source basenames, and keep auxiliary, damaged, and unresolved material visible.
-- Do not split by device or media format by default, and do not invent people, relationships, places, activities, or names unsupported by Evidence or Human confirmation.
+Before applying event memory, read the [default organization Profile](references/default-organization-profile.md), including its related-media, auxiliary, unresolved and damaged-item rules. This is the offline release snapshot of the single authority at `docs/spec/contract/default-organization-profile/index.md`; do not independently author the copy. Its tree illustrates available roles, not mandatory folders. Apply the rules to the evidence and the Human's retrieval purpose; do not invent unsupported people, relationships, places, activities or names.
 
 Use representative future-find questions to test the structure: where would the Human enter if they remember the event plus a day, place, companion, meal, or activity; how would they narrow the search; and would they still need to rescan a material part of the event? A Candidate that claims event memory but primarily organizes by another axis has drifted. Re-evaluate or switch explicitly rather than silently producing a time, person, place, or project Profile under the event-memory label.
 
@@ -79,7 +66,9 @@ in judgment are separate steps.
 
 Use `expand` selectively on representative, boundary, outlier, conflict, unassigned prepared Evidence, or member observations that can change chapter boundaries, scene groups, names, exceptions, or Profile fit. Evidence roles describe review functions inside a compression claim; they are not semantic truth. Inspect enough actual visual Evidence to support the semantic distinctions used in the Candidate. Use `resolve` for exact membership only after the semantic decision requires it; exact resolution proves no retrieval value.
 
-Stop expanding when additional Evidence cannot materially change the active Profile, future retrieval paths, important grouping or naming, exception treatment, questions for the Human, or the decision to reopen PreCheck. Do not substitute a fixed image count.
+Choose further investigation by the decisions still at stake, not just by uncertainty in an individual fact. A plausible generic label can hide a missing retrieval cue: on a food trip, identifying a meal or distinguishing a hotel activity from dinner may matter more than identifying every dish. A venue visible in a menu or sign with matching context can already be sufficient; an unreadable venue name is not evidence that the Human cannot supply it. Time adjacency and a shared representative do not establish one activity.
+
+Stop when the available support is sufficient for the proposed level of organization and further information is unlikely to change a material decision. Consider prepared detail, Human knowledge and authorized investigation without prescribing their order. If a useful distinction remains unsupported, investigate it or propose a supported coarser placement with its retrieval limitation visible. Merely avoiding a guessed name does not establish sufficiency; neither does a large count of inspected images. Do not substitute a fixed image count, confidence threshold or question quota.
 
 Preserve failure meanings:
 
@@ -93,10 +82,11 @@ Reopen PreCheck when Result integrity, accounting or preparation obligations nee
 
 ## Profile conformance checkpoint
 
-Before submitting a complete `candidate_content` through `update`, establish and make inspectable when material:
+Before submitting a complete `organization_content` with `kind: "candidate"` through `update`, establish and make inspectable when material:
 
 - why the active Profile fits and which primary and secondary retrieval axes the Candidate uses;
 - which Evidence supports the proposed chapters, scenes, names, and exceptions, including material counterevidence;
+- which missing information could still change an important retrieval path or decision, and how the Candidate resolves or explicitly preserves that uncertainty;
 - whether the Candidate follows the active Profile's defaults and why every departure is justified;
 - which statements are Agent judgment, which are Human preferences, and which high-impact semantics still need confirmation; and
 - how representative future-find questions traverse the proposed structure without avoidable broad rescanning.
@@ -110,6 +100,18 @@ The Agent owns information sufficiency for the proposed organization. Choose whe
 Before submitting a complete Candidate, show a directional Preview whenever Profile fit, the primary organization axis, high-impact names, or large heterogeneous groups remain material. It may be incomplete, compare only live alternatives, show questions and unsupported paths, and use representative visuals or find-questions. It is not a Candidate identity and must not be presented as sealable.
 
 When the Human accepts a user-visible direction, preserve that scope precisely. Confirmation of one event, person, restaurant, or group does not silently confirm unrelated media or the complete Candidate.
+
+A supported coarser Candidate may be offered for review without claiming the Human has already accepted its lost detail. No reply is not acceptance. Later requests for finer detail may extend the retrieval goal; distinguish them from information the earlier goal already needed. A later factual correction can supersede an earlier Human account without implying that the Agent could have known it in advance. A photographed menu establishes its listed choices, not everything ordered or the contents of every represented member.
+
+## Place exceptions using their context
+
+Interpret scope, condition, content readability, contextual association and execution feasibility separately. Follow the selected Profile's nearest trustworthy placement; do not filter all group memberships to `usable` and send the remainder to one fallback. A damaged file can belong with related media, and a readable file can still lack a trustworthy finer group.
+
+For an unreadable original with readable related versions, inspect the retained relationship basis and available source context. A shared stem, source directory, capture sequence or Human account may support co-location without proving byte identity, repair completeness or identical content. A representative from another source supplies only its own observed content. Preserve the qualifications; do not invent fine classification or discard a version to make the group simpler.
+
+Judge auxiliary material by how it serves the collection. An in-scope track can be kept with the trip's auxiliary files while its validity remains unresolved. A traversal-control marker has a different purpose and may reasonably remain in its original location. Retaining current organization is a valid outcome; review its fit with the active Profile and make material departures clear, rather than requiring an exceptional justification for every retained item. Apply owns current filesystem verification and cannot change the logical disposition to compensate for a failed move.
+
+Keep material exception explanations in existing `decision_notes` or other-outcome reasons, with their exact Source Sets: what is placed where, the supporting context, what remains unknown and any consequence for later finding. A damaged item in a normal group still needs its damage visible. A combined exception count does not explain different treatments of unreadable media, readable unresolved media, tracks and control files.
 
 ## Place evidence starts with the Result
 
@@ -128,33 +130,55 @@ by Plan. Do not mutate the immutable Result or create a second PreCheck lifecycl
 Human-supplied place meaning remains Human input, never provider or PreCheck
 observation.
 
-## Optional work saving
+## Save and review the evolving Work
 
-Discussion may finish before `create` or a complete Candidate submission. When continuation benefits from saving work, use the existing Work's `working_notes` for the current understanding, material basis and source, affected scope, and unresolved consequences. Do not record every conversation turn or private reasoning. Complete-Candidate checkpoints do not block earlier notes or preference saves.
+When a supported local preparation change is material, read the old Result's
+preparation and send a complete ordinary PreCheck start request with its explicit
+input Source Set and chosen overrides. The Processing Profile is a configuration
+value, distinct from this stage's Organization Profile. Other declared parameters
+remain unchanged; group membership may change. Preserve the old Result and Work.
 
-`update` requires `work_ref`, `base_revision`, `request_id` and at least one mutable field. Omission preserves; a string replaces notes (`""` clears), an object replaces preferences (`{}` clears), a complete object replaces Candidate, and `candidate_content: null` withdraws it. Choose explicitly whether a material conflict requires replacing or withdrawing the Candidate; a contrary note does not change it. Partial Candidates are rejected. Combined writes are atomic; a rejected Candidate saves none of the supplied changes. Notes/preferences/withdrawal perform no PreCheck Read, model or Geo calls.
+To continue on the new Result, inspect the old Work's notes, preferences and
+organization, then use PreCheck resolve with target_result_ref to verify the
+relevant source correspondence. Only matched recorded input bindings justify
+carrying source-specific scope; unproven correspondence cannot be guessed from
+equal paths, bytes or copied references. Even matched sources do not prove equal
+observations or representative groups. Inspect current covering Evidence where
+it matters, create a new ordinary Work bound to the new Result, and retain only
+justified notes, preferences and organization. Never rebind the old Work or
+transfer its Human confirmation. Review and confirm the new exact Candidate.
 
-Default `inspect` returns overview, preferences, working_notes, content and validation; select sections when only notes are needed. No Candidate is a readable Work with null content, no identity and `candidate_missing`. Retry a lost response with the same request; a changed request needs a new ID. A stale revision requires rereading and deciding again. A new same-value save still changes revision; notes/preferences never change a retained Candidate identity or enter Frozen Plan.
+Establish or restore a Work when discussion begins from a usable Result. Share the Tool-returned current page from the beginning, including notes-only discussion. Before claiming that planning content changed or requesting review of a change, save the relevant current organization, explanation or unresolved implications. Do not record every chat turn or private reasoning.
+
+`organization_content` holds one organization: omit to preserve, provide an object to replace, or `null` to clear. Use `kind: "draft"` for partially decided organization and `kind: "candidate"` only after the complete-Candidate checkpoint. Reuse scope, groups, other_outcomes and decision_notes. Keep only directories with explicit resolvable members in the tree; unsupported directory ideas belong in working_notes. Unassigned scope is computed and shown as unassigned. Never invent retention, exclusions or a fallback group just to complete a draft. A fully assigned draft remains a draft until explicitly submitted as a candidate.
+
+`update` also accepts working_notes (string replacement, `""` clears) and organization_preferences (object replacement, `{}` clears). All supplied changes commit together using work_ref, base_revision and request_id. Rejected organization saves none of them. Notes and preferences remain discussion context; transfer necessary final rationale into decision_notes.
+
+Every successful save returns `view` with current_uri and revision_uri, or explicit delivery limitations. Use these entries; do not write HTML, start a temporary server, build mosaics or maintain separate presentation business data. The tool owns rendering, images and actual member pagination. Page visits, refresh, pagination and re-rendering do not save a revision.
+
+Default inspect includes overview, preferences, working_notes, content, validation and view. An absent organization or draft is a normal saved state, even though validation says candidate_missing or draft_not_candidate. If display fails, state that the planning revision was saved and the page is unavailable. Use state-only inspect without view to recover authority; use inspect with view or identical request replay to restore delivery. Unexpected operation_failed may carry committed_receipt. Do not repeat the semantic write after a known commit. Replay retains its original business receipt but observes current delivery anew; superseded means its old revision is no longer current.
 
 ## Build, preview, and freeze
 
 After the conformance checkpoint passes, submit one complete coherent Candidate through `update`. Every scoped Source Item must resolve to exactly one logical group or explicit other outcome. Keep exclusions, damaged items, auxiliary material, and unresolved media visible. Store material Agent rationale and Profile departures in decision notes, not `organization_preferences`.
 
-Generate the final Preview for the exact returned revision and `candidate_content_identity`. Present the final tree, expanded counts, representative visuals, every other accounted outcome, material Result Evidence and qualifications, and bounded member detail where needed. Include important `decision_notes`, their applicable Source Sets, existing Evidence references and residual uncertainty. Transfer the shortest necessary final explanation and source category from supplementary inputs into these notes; working notes do not automatically enter final review. Without a Candidate, a directional display cannot be labeled a final, sealable Preview. Demonstrate representative future-find paths rather than showing only structural completeness.
+Use the Tool-returned `view.revision_uri` for the exact returned revision and `candidate_content_identity`. Present the final tree, expanded counts, representative visuals, every other accounted outcome, material Result Evidence and qualifications, and bounded member detail where needed. Include important `decision_notes`, their applicable Source Sets, existing Evidence references and residual uncertainty. Transfer the shortest necessary final explanation and source category from supplementary inputs into these notes; working notes do not automatically enter final review. Without a Candidate, a directional display cannot be labeled a final, sealable Preview. Demonstrate representative future-find paths rather than showing only structural completeness.
 
 Before requesting confirmation, distinguish four claims:
 
 - **accounting complete:** every scoped item has one explicit outcome;
-- **evidence sufficient:** material rivals and counterevidence can no longer change the decision;
+- **evidence sufficient:** available evidence supports the proposed granularity; known material gaps and conflicts are resolved or explicitly handled by supported coarse or unresolved dispositions;
 - **organization effective:** representative retrieval questions work without avoidable broad rescanning; and
 - **Human confirmed:** the Human reviewed and accepted this exact final Candidate, not merely a Profile direction or earlier Preview.
 
 The first three claims support requesting review of a complete, `seal_ready` Candidate. Show the HTML for that exact Candidate, then obtain explicit acceptance in chat; that actual acceptance establishes the fourth claim. A local factual correction, directional acceptance, saved note saying “confirmed”, or Tool validation is not whole-Plan acceptance. Use the existing local client transport authority to convey that acceptance; do not add an MCP confirmation popup or ask the Human to recite a digest. The local client context is trusted, but a content match is not independent proof of a real Human event: the Agent must preserve the actual acceptance scope and validity.
 
-After a notes-only edit, reread the current revision. Still-valid acceptance of identical content can be carried forward without another semantic confirmation. If organization or important decision notes change, show the new Candidate and obtain acceptance of it; never reuse acceptance of the old HTML. User withdrawal or correction overrides earlier acceptance even if the digest remains unchanged.
+Any new saved revision invalidates earlier acceptance, including notes-only, preference-only and same-value writes. Withdrawal followed by restoration of identical content also requires new acceptance. Refresh, member pagination, re-rendering and identical request replay do not invalidate it. When the Human withdraws acceptance, stop sealing and save the appropriate draft or withdrawal promptly.
+
+After explicit acceptance, pass the actual trusted local-client context with principal_ref, work_ref, reviewed_revision, confirmed_content_identity and confirmed_at, and seal that exact revision directly. Do not first save a redundant “confirmed” note: that would create a new revision requiring review again. A matching digest alone cannot carry acceptance across revisions.
 
 Call `seal` with the exact `work_ref`, revision, candidate identity, and a new idempotent request ID. Explain that sealing is not Apply authorization and causes no source-media change. Preserve distinctions among stale revision, identity mismatch, missing confirmation, access denial, invalid candidate, and operation failure; never bypass Tool safety checks.
 
 ## Completion
 
-Report the bound Result, coverage limitation, final Plan identity, material unresolved uncertainty, Profile departures, preview and confirmation status, Geo or model egress and cost actually incurred, and whether upstream reopen remains necessary. When comparing with AI Album, classify material differences as `preserved`, `intentionally_changed`, `regression`, or `not_comparable`; a changed directory tree alone is not a regression.
+Report the bound Result, coverage limitation, final Plan identity, material unresolved uncertainty, Profile departures, preview and confirmation status, Geo or model egress and cost actually incurred, and whether upstream reopen remains necessary. Distinguish additional Geo/provider calls from the Agent's own model use: no extra provider call does not establish zero model processing, data egress or cost. Report unmeasured effects or charges as unknown. When comparing with AI Album, classify material differences as `preserved`, `intentionally_changed`, `regression`, or `not_comparable`; a changed directory tree alone is not a regression.

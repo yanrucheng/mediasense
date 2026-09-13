@@ -28,7 +28,6 @@ from mediasense.precheck.read import (
 from ._candidate import (
     CandidateAnalysis,
     analyze_candidate,
-    materialize_candidate,
 )
 from ._publication import FrozenPlanPublisher, PublicationConflict
 from ._update_execution import (
@@ -59,6 +58,7 @@ _DEFAULT_SECTIONS = (
     "working_notes",
     "content",
     "validation",
+    "view",
 )
 _SECTIONS = _DEFAULT_SECTIONS
 _COLLECTIONS = ("groups", "other_outcomes", "decision_notes")
@@ -69,6 +69,8 @@ class ConfirmationContext:
     principal_ref: str
     confirmed_content_identity: str
     confirmed_at: datetime
+    work_ref: str = ""
+    reviewed_revision: str = ""
 
 
 class PlanFailure(RuntimeError):
@@ -98,8 +100,10 @@ class PlanWorkTool:
         *,
         id_factory: Callable[[str], str] | None = None,
         frozen_plan_schema: Path | None = None,
+        view_delivery: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
     ) -> None:
         precheck_boundary = require_precheck_read_boundary(precheck_read)
+        self.view_delivery = view_delivery
         self.plan_store = Path(plan_store)
         self.store = SQLitePlanStore(self.plan_store / "work-v3.sqlite3")
         self.frozen_dir = self.plan_store / "frozen"
@@ -114,7 +118,37 @@ class PlanWorkTool:
         )
         self._cursor_signing_key = self.store.cursor_signing_key()
 
-    def handle(
+    def handle(self, request, *, confirmation=None, execution=None):
+        receipt = self._handle(request, confirmation=confirmation, execution=execution)
+        if receipt.get("outcome") != "ok":
+            return receipt
+        if (
+            receipt["action"] == "inspect"
+            and "view" not in receipt["returned_sections"]
+        ):
+            return receipt
+        from .view import unavailable_view, ViewDeliveryFailure
+
+        try:
+            view = (
+                self.view_delivery(receipt)
+                if self.view_delivery is not None
+                else unavailable_view(
+                    receipt,
+                    "view_service_unavailable",
+                    "No view transport is attached to this Tool instance.",
+                )
+            )
+        except Exception as error:
+            raise ViewDeliveryFailure(receipt) from error
+        response = deepcopy(receipt)
+        if receipt["action"] == "inspect":
+            response["sections"]["view"] = view
+        else:
+            response["view"] = view
+        return response
+
+    def _handle(
         self,
         request: Mapping[str, Any],
         *,
@@ -204,19 +238,14 @@ class PlanWorkTool:
 
     def snapshot_for_preview(
         self, work_ref: str, revision: str
-    ) -> tuple[WorkSnapshot, CandidateAnalysis]:
+    ) -> tuple[WorkSnapshot, CandidateAnalysis | None]:
         _require_ref(work_ref, _WORK_REF, "work_ref")
         _require_ref(revision, _REVISION, "revision")
         snapshot = self.store.snapshot(work_ref)
         if snapshot.revision != revision:
             raise RevisionConflict(snapshot.revision)
         if snapshot.candidate is None:
-            raise PlanFailure(
-                "candidate_invalid",
-                "The Working State has no candidate content.",
-                work_ref=work_ref,
-                revision=revision,
-            )
+            return snapshot, None
         analysis = analyze_candidate(
             snapshot.candidate,
             result_ref=snapshot.result_ref,
@@ -224,9 +253,9 @@ class PlanWorkTool:
             reader=self.precheck_read,
             schema_validator=self._frozen_content_validator,
         )
-        if not analysis.seal_ready:
+        if analysis.issues:
             raise PlanFailure(
-                "candidate_invalid",
+                "organization_invalid",
                 analysis.issues[0].message,
                 work_ref=work_ref,
                 revision=revision,
@@ -330,14 +359,14 @@ class PlanWorkTool:
                 "action",
                 "work_ref",
                 "base_revision",
-                "candidate_content",
+                "organization_content",
                 "request_id",
                 "organization_preferences",
                 "working_notes",
             },
         )
         if (
-            not {"candidate_content", "organization_preferences", "working_notes"}
+            not {"organization_content", "organization_preferences", "working_notes"}
             & request.keys()
         ):
             raise PlanFailure(
@@ -362,11 +391,11 @@ class PlanWorkTool:
             if replay is not None:
                 execution.report("replayed")
                 return replay
-            candidate = request.get("candidate_content")
+            candidate = request.get("organization_content")
             if candidate is not None and not isinstance(candidate, Mapping):
                 raise PlanFailure(
                     "invalid_request",
-                    "candidate_content must be an object or null.",
+                    "organization_content must be an object or null.",
                     work_ref=work_ref,
                 )
             with update_ownership(self.store.database_path, work_ref, execution):
@@ -391,12 +420,12 @@ class PlanWorkTool:
                         progress=execution.report,
                     )
                     execution.checkpoint()
-                    if not analysis.seal_ready or analysis.content_identity is None:
+                    if analysis.issues:
                         message = "; ".join(
                             issue.message for issue in analysis.issues[:3]
                         )
                         raise PlanFailure(
-                            "candidate_invalid",
+                            "organization_invalid",
                             message or "Candidate is invalid.",
                             work_ref=work_ref,
                             revision=snapshot.revision,
@@ -420,7 +449,10 @@ class PlanWorkTool:
                     revision=revision,
                     candidate=None if candidate is None else dict(candidate),
                     candidate_identity=candidate_identity,
-                    replace_candidate="candidate_content" in request,
+                    replace_candidate="organization_content" in request,
+                    scope_summary=None
+                    if candidate is None
+                    else _scope_summary(analysis),
                     working_notes=request.get("working_notes"),
                     organization_preferences=preferences,
                     response=result,
@@ -492,7 +524,13 @@ class PlanWorkTool:
         values: dict[str, Any] = {}
         if "overview" in sections:
             returned.append("overview")
-            values["overview"] = {"state": snapshot.state}
+            values["overview"] = {
+                "state": snapshot.state,
+                "organization_kind": "none"
+                if snapshot.candidate is None
+                else snapshot.candidate["kind"],
+                "scope_summary": self.scope_summary(snapshot),
+            }
         if "preferences" in sections:
             returned.append("preferences")
             values["preferences"] = snapshot.organization_preferences
@@ -509,17 +547,22 @@ class PlanWorkTool:
                     "seal_ready": False,
                     "issues": [
                         {
-                            "code": "candidate_missing",
+                            "code": "candidate_missing"
+                            if snapshot.candidate is None
+                            else "draft_not_candidate",
                             "severity": "error",
-                            "message": "The Working State has no candidate content.",
+                            "message": "A complete candidate has not been submitted.",
                         }
                     ],
                 }
             else:
                 values["validation"] = {"seal_ready": True, "issues": []}
+        if "view" in sections:
+            returned.append("view")
         result: dict[str, Any] = {
             "outcome": "ok",
             "action": "inspect",
+            "reserved_plan_ref": snapshot.plan_ref,
             "work_ref": work_ref,
             "result_ref": snapshot.result_ref,
             "revision": snapshot.revision,
@@ -530,6 +573,15 @@ class PlanWorkTool:
         if snapshot.candidate_identity is not None:
             result["candidate_content_identity"] = snapshot.candidate_identity
         return result
+
+    def scope_summary(self, snapshot):
+        if snapshot.candidate is None:
+            return None
+        if snapshot.scope_summary is not None:
+            return snapshot.scope_summary
+        # Legacy candidates are lazily checked through the same Result boundary.
+        _, analysis = self.snapshot_for_preview(snapshot.work_ref, snapshot.revision)
+        return _scope_summary(analysis)
 
     def _content_section(
         self,
@@ -542,9 +594,7 @@ class PlanWorkTool:
                 if snapshot.candidate is None
                 else {
                     "mode": "complete",
-                    "value": materialize_candidate(
-                        snapshot.candidate, plan_ref=snapshot.plan_ref
-                    ),
+                    "value": deepcopy(snapshot.candidate),
                 }
             )
         allowed = {"collection", "limit", "cursor"}
@@ -580,9 +630,7 @@ class PlanWorkTool:
             )
         if snapshot.candidate is None:
             return None
-        sealed_content = materialize_candidate(
-            snapshot.candidate, plan_ref=snapshot.plan_ref
-        )
+        sealed_content = snapshot.candidate
         items = sealed_content.get(collection, [])
         page_items = items[offset : offset + limit]
         complete = offset + len(page_items) >= len(items)
@@ -602,7 +650,7 @@ class PlanWorkTool:
             )
         header = {
             key: sealed_content[key]
-            for key in ("contract", "plan_ref", "result_ref", "scope", "logical_root")
+            for key in ("kind", "result_ref", "scope", "logical_root")
         }
         return {
             "mode": "page",
@@ -689,9 +737,19 @@ class PlanWorkTool:
             raise WorkClosed(work_ref)
         if snapshot.revision != revision:
             raise RevisionConflict(snapshot.revision)
+        if (
+            confirmation.work_ref != work_ref
+            or confirmation.reviewed_revision != revision
+        ):
+            raise PlanFailure(
+                "confirmation_binding_mismatch",
+                "Human acceptance belongs to another Work or saved revision.",
+                work_ref=work_ref,
+                revision=revision,
+            )
         if snapshot.candidate is None or snapshot.candidate_identity is None:
             raise PlanFailure(
-                "candidate_invalid",
+                "organization_invalid",
                 "The Working State has no sealable candidate.",
                 work_ref=work_ref,
                 revision=revision,
@@ -714,7 +772,7 @@ class PlanWorkTool:
         if not analysis.seal_ready or analysis.content_identity != requested_identity:
             message = "; ".join(issue.message for issue in analysis.issues[:3])
             raise PlanFailure(
-                "candidate_invalid",
+                "organization_invalid",
                 message or "Candidate failed seal validation.",
                 work_ref=work_ref,
                 revision=revision,
@@ -794,13 +852,18 @@ def _validate_preferences(value: Any, *, work_ref: str | None = None) -> None:
 
 def _request_digest(request: Mapping[str, Any]) -> str:
     data = json.dumps(
-        request, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+        {"interface": "plan-work-4", "request": request},
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
     )
     return "sha256:" + hashlib.sha256(data.encode("utf-8")).hexdigest()
 
 
 def _confirmation_digest(confirmation: ConfirmationContext) -> str:
     value = {
+        "work_ref": confirmation.work_ref,
+        "reviewed_revision": confirmation.reviewed_revision,
         "principal_ref": confirmation.principal_ref,
         "confirmed_content_identity": confirmation.confirmed_content_identity,
         "confirmed_at": _format_datetime(confirmation.confirmed_at),
@@ -815,6 +878,8 @@ def _seal_request_digest(
         {
             "request": dict(request),
             "trusted_confirmation": {
+                "work_ref": confirmation.work_ref,
+                "reviewed_revision": confirmation.reviewed_revision,
                 "principal_ref": confirmation.principal_ref,
                 "confirmed_content_identity": confirmation.confirmed_content_identity,
                 "confirmed_at": _format_datetime(confirmation.confirmed_at),
@@ -1003,3 +1068,14 @@ def _base64_encode(value: bytes) -> str:
 def _base64_decode(value: str) -> bytes:
     padded = value + "=" * (-len(value) % 4)
     return base64.b64decode(padded, altchars=b"-_", validate=True)
+
+
+def _scope_summary(analysis):
+    organized = sum(map(len, analysis.group_members))
+    outcomes = sum(map(len, analysis.outcome_members))
+    return {
+        "scope": len(analysis.scope_members),
+        "organized": organized,
+        "other_outcomes": outcomes,
+        "unassigned": len(analysis.scope_members) - organized - outcomes,
+    }

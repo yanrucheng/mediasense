@@ -122,7 +122,8 @@ def test_public_precheck_plan_apply_prepare_handoff_has_no_hidden_protocol(
             "work_ref": created["work_ref"],
             "base_revision": created["revision"],
             "request_id": "request:e2e-plan-update",
-            "candidate_content": {
+            "organization_content": {
+                "kind": "candidate",
                 "result_ref": result.result_ref,
                 "scope": all_sources,
                 "logical_root": "Media",
@@ -156,6 +157,8 @@ def test_public_precheck_plan_apply_prepare_handoff_has_no_hidden_protocol(
             "request_id": "request:e2e-plan-seal",
         },
         confirmation=ConfirmationContext(
+            work_ref=created["work_ref"],
+            reviewed_revision=updated["revision"],
             principal_ref="human:e2e",
             confirmed_content_identity=candidate_identity,
             confirmed_at=datetime(2026, 8, 30, 16, 0, tzinfo=timezone.utc),

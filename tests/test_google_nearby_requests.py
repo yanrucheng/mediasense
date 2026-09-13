@@ -13,7 +13,9 @@ from mediasense.runtime.config import RuntimeConfig
 from mediasense.capabilities.geo.tool import _parse_request
 
 
-def assembled(tmp_path, monkeypatch, *, error=None, reverse_error=None):
+def assembled(
+    tmp_path, monkeypatch, *, error=None, reverse_error=None, retry_after=None
+):
     calls = []
 
     def open_request(request, timeout):
@@ -25,7 +27,7 @@ def assembled(tmp_path, monkeypatch, *, error=None, reverse_error=None):
                 request.full_url,
                 code,
                 "rejected",
-                {},
+                {"Retry-After": str(retry_after)} if retry_after is not None else {},
                 BytesIO(json.dumps(payload).encode()),
             )
         value = (
@@ -80,6 +82,48 @@ def assembled(tmp_path, monkeypatch, *, error=None, reverse_error=None):
         tool.capability.proposed_envelope(request),
     )
     return tool, public, authorization, calls
+
+
+@pytest.mark.parametrize("http_status", [400, 429, 503])
+@pytest.mark.parametrize(
+    "reason,expected_requests", [("QUOTA_EXCEEDED", 2), ("RATE_LIMIT_EXCEEDED", 4)]
+)
+def test_structured_quota_and_rate_limit_override_http_fallback(
+    tmp_path, monkeypatch, http_status, reason, expected_requests
+):
+    payload = {
+        "error": {
+            "status": "RESOURCE_EXHAUSTED",
+            "message": "private credential must not escape",
+            "details": [
+                {
+                    "@type": "type.googleapis.com/google.rpc.ErrorInfo",
+                    "domain": "googleapis.com",
+                    "reason": reason,
+                }
+            ],
+        }
+    }
+    tool, request, authority, calls = assembled(
+        tmp_path, monkeypatch, error=(http_status, payload), retry_after=2
+    )
+    waits = []
+    monkeypatch.setattr(
+        tool.capability, "_wait", lambda delay, *_: waits.append(delay) or True
+    )
+    result = tool.handle(request, authorization=authority)
+    assert result["outcome"] == "blocked"
+    assert result["effects"]["provider_requests"] == len(calls) == expected_requests
+    assert result["effects"]["billable_units"] is None
+    assert result["components"][0]["status"] == "success"
+    assert all(c["status"] == "not_requested" for c in result["components"][2:])
+    assert result["attempts"][-1]["error_code"] == (
+        "provider_quota" if reason == "QUOTA_EXCEEDED" else "rate_limited"
+    )
+    assert waits == ([] if reason == "QUOTA_EXCEEDED" else [2, 3])
+    assert "private credential" not in json.dumps(result)
+    assert tool.handle(request) == result
+    assert len(calls) == expected_requests
 
 
 def test_production_split_applies_google_profile_bounds_and_replays(

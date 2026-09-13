@@ -1,0 +1,931 @@
+{
+  "release": "/Users/chengyanru/repos/personal/mediasense/.local/acceptance-releases/260913-1214-plan-skill/candidate-02",
+  "wheel": "/Users/chengyanru/repos/personal/mediasense/.local/acceptance-releases/260913-1214-plan-skill/candidate-02/wheel/mediasense-0.10.2-py3-none-any.whl",
+  "wheel_sha256": "249398c2150fbf129a946c9822b174dab150bc57eff1efedc1386d8dfcd2b7ef",
+  "source_commit": "0794d3c9182793b7b25c1cac77793e3c97e42092",
+  "skill_sha256": "16f15bb281460d05bdd61bb6b7ba1e3360757e1b1356c06a69d7a816d1842950",
+  "profile_sha256": "5f561a600a397e4ce96b3a57abf10ae3f2bc5c8c08b53f2bbc4bd50349523189",
+  "config_sha256": "76fb821c7b1e138a58dc166fc437eeb431decf508980e29d54ca8d4d736b138e",
+  "runner_sha256": "477aeaf62b4b62b2ee186835158e66a9d2aa85d6ff480c91785f4d0385715774",
+  "agent_sessions": [
+    {
+      "agent": "/root/plan_case_a",
+      "path": "/Users/chengyanru/.codex/sessions/2026/09/13/rollout-2026-09-13T12-47-20-01a09917-5c40-7c62-9d29-3a1f207e079e.jsonl",
+      "snapshot_lines": 203,
+      "snapshot_sha256": "33b2dd24186355e03a501bebeb14d7c7c2461f60d02cf1296318a9184eb0f67b",
+      "models": [
+        {
+          "model": "gpt-6-astra",
+          "effort": "low"
+        }
+      ],
+      "complete_resource_reads": [
+        {
+          "line": 15,
+          "resource": "first",
+          "sha256": "5e9676c99bf35fce3ac29b9070d69de648ecc68edcf7b832e6731512549d6e64"
+        },
+        {
+          "line": 20,
+          "resource": "profile",
+          "sha256": "5f561a600a397e4ce96b3a57abf10ae3f2bc5c8c08b53f2bbc4bd50349523189"
+        },
+        {
+          "line": 183,
+          "resource": "final",
+          "sha256": "16f15bb281460d05bdd61bb6b7ba1e3360757e1b1356c06a69d7a816d1842950"
+        },
+        {
+          "line": 183,
+          "resource": "profile",
+          "sha256": "5f561a600a397e4ce96b3a57abf10ae3f2bc5c8c08b53f2bbc4bd50349523189"
+        }
+      ],
+      "image_views": [
+        {
+          "line": 45,
+          "path": "file:///private/tmp/mediasense-plan-behavior-260913-1214/journey-a/dataset/precheck/_artifacts/sha256/e3/e3a376c8875beaed7360ba98e65c6ef740a1dc6703f0dcf04f75484411e68485.jpg"
+        },
+        {
+          "line": 46,
+          "path": "file:///private/tmp/mediasense-plan-behavior-260913-1214/journey-a/dataset/precheck/_artifacts/sha256/2c/2c8c8faffdec7d202305c5e29627cf6a13d3995b65f2437b8f92e4ed402c0738.jpg"
+        },
+        {
+          "line": 47,
+          "path": "file:///private/tmp/mediasense-plan-behavior-260913-1214/journey-a/dataset/precheck/_artifacts/sha256/d6/d680bf085f0fd8a783235c00e397c7d3ca65a2456980038b045403231a60daaf.jpg"
+        },
+        {
+          "line": 48,
+          "path": "file:///private/tmp/mediasense-plan-behavior-260913-1214/journey-a/dataset/precheck/_artifacts/sha256/3a/3aff8730f034a3150c3819520cb1e28a7d8e8c19720df7f03724af33d69226a8.jpg"
+        },
+        {
+          "line": 58,
+          "path": "file:///private/tmp/mediasense-plan-behavior-260913-1214/journey-a/dataset/precheck/_artifacts/sha256/c0/c0634b2d6cea3b554fb2de3aa77fda455ccd6672863b307e46c64458c49e888c.jpg"
+        },
+        {
+          "line": 59,
+          "path": "file:///private/tmp/mediasense-plan-behavior-260913-1214/journey-a/dataset/precheck/_artifacts/sha256/ee/ee72e7c86e5cdb4b71990d21425b1b27ff93756851d4423632fb9901ff0c4316.jpg"
+        },
+        {
+          "line": 60,
+          "path": "file:///private/tmp/mediasense-plan-behavior-260913-1214/journey-a/dataset/precheck/_artifacts/sha256/c1/c126f7438713804681753a3f7edd619f5776f23e5ccdaed1383659d1d7cc99c3.jpg"
+        },
+        {
+          "line": 61,
+          "path": "file:///private/tmp/mediasense-plan-behavior-260913-1214/journey-a/dataset/precheck/_artifacts/sha256/68/68bdd9f9e9ad46d67f10acd3a81302a4579f19acf4c2b939fba62559ea1d8638.jpg"
+        }
+      ]
+    },
+    {
+      "agent": "/root/plan_case_b",
+      "path": "/Users/chengyanru/.codex/sessions/2026/09/13/rollout-2026-09-13T12-47-37-01a09917-9ff3-76d1-85df-693fc2b99f67.jsonl",
+      "snapshot_lines": 144,
+      "snapshot_sha256": "3fa17a025c15c5c35e20daffdb8f3c3a3a69fa47f95a6a6096503e05afb9ca86",
+      "models": [
+        {
+          "model": "gpt-6-astra",
+          "effort": "low"
+        }
+      ],
+      "complete_resource_reads": [
+        {
+          "line": 15,
+          "resource": "first",
+          "sha256": "5e9676c99bf35fce3ac29b9070d69de648ecc68edcf7b832e6731512549d6e64"
+        },
+        {
+          "line": 20,
+          "resource": "profile",
+          "sha256": "5f561a600a397e4ce96b3a57abf10ae3f2bc5c8c08b53f2bbc4bd50349523189"
+        },
+        {
+          "line": 122,
+          "resource": "final",
+          "sha256": "16f15bb281460d05bdd61bb6b7ba1e3360757e1b1356c06a69d7a816d1842950"
+        },
+        {
+          "line": 129,
+          "resource": "profile",
+          "sha256": "5f561a600a397e4ce96b3a57abf10ae3f2bc5c8c08b53f2bbc4bd50349523189"
+        }
+      ],
+      "image_views": [
+        {
+          "line": 36,
+          "path": "file:///private/tmp/mediasense-plan-behavior-260913-1214/journey-b/dataset/precheck/_artifacts/sha256/e3/e3a376c8875beaed7360ba98e65c6ef740a1dc6703f0dcf04f75484411e68485.jpg"
+        },
+        {
+          "line": 37,
+          "path": "file:///private/tmp/mediasense-plan-behavior-260913-1214/journey-b/dataset/precheck/_artifacts/sha256/2c/2c8c8faffdec7d202305c5e29627cf6a13d3995b65f2437b8f92e4ed402c0738.jpg"
+        },
+        {
+          "line": 38,
+          "path": "file:///private/tmp/mediasense-plan-behavior-260913-1214/journey-b/dataset/precheck/_artifacts/sha256/d6/d680bf085f0fd8a783235c00e397c7d3ca65a2456980038b045403231a60daaf.jpg"
+        },
+        {
+          "line": 39,
+          "path": "file:///private/tmp/mediasense-plan-behavior-260913-1214/journey-b/dataset/precheck/_artifacts/sha256/3a/3aff8730f034a3150c3819520cb1e28a7d8e8c19720df7f03724af33d69226a8.jpg"
+        },
+        {
+          "line": 49,
+          "path": "file:///private/tmp/mediasense-plan-behavior-260913-1214/journey-b/dataset/precheck/_artifacts/sha256/c0/c0634b2d6cea3b554fb2de3aa77fda455ccd6672863b307e46c64458c49e888c.jpg"
+        },
+        {
+          "line": 50,
+          "path": "file:///private/tmp/mediasense-plan-behavior-260913-1214/journey-b/dataset/precheck/_artifacts/sha256/68/68bdd9f9e9ad46d67f10acd3a81302a4579f19acf4c2b939fba62559ea1d8638.jpg"
+        },
+        {
+          "line": 51,
+          "path": "file:///private/tmp/mediasense-plan-behavior-260913-1214/journey-b/dataset/precheck/_artifacts/sha256/c1/c126f7438713804681753a3f7edd619f5776f23e5ccdaed1383659d1d7cc99c3.jpg"
+        },
+        {
+          "line": 52,
+          "path": "file:///private/tmp/mediasense-plan-behavior-260913-1214/journey-b/dataset/precheck/_artifacts/sha256/ee/ee72e7c86e5cdb4b71990d21425b1b27ff93756851d4423632fb9901ff0c4316.jpg"
+        }
+      ]
+    },
+    {
+      "agent": "/root/plan_case_outing",
+      "path": "/Users/chengyanru/.codex/sessions/2026/09/13/rollout-2026-09-13T12-47-52-01a09917-da2f-7ef3-b437-7627b2c71082.jsonl",
+      "snapshot_lines": 116,
+      "snapshot_sha256": "cdc95934ace8ab9ba1c88662ca5d82b4f0caa5469e36dc96e1280edfb05e9d31",
+      "models": [
+        {
+          "model": "gpt-6-astra",
+          "effort": "low"
+        }
+      ],
+      "complete_resource_reads": [
+        {
+          "line": 13,
+          "resource": "first",
+          "sha256": "5e9676c99bf35fce3ac29b9070d69de648ecc68edcf7b832e6731512549d6e64"
+        },
+        {
+          "line": 22,
+          "resource": "profile",
+          "sha256": "5f561a600a397e4ce96b3a57abf10ae3f2bc5c8c08b53f2bbc4bd50349523189"
+        },
+        {
+          "line": 94,
+          "resource": "final",
+          "sha256": "16f15bb281460d05bdd61bb6b7ba1e3360757e1b1356c06a69d7a816d1842950"
+        },
+        {
+          "line": 94,
+          "resource": "profile",
+          "sha256": "5f561a600a397e4ce96b3a57abf10ae3f2bc5c8c08b53f2bbc4bd50349523189"
+        }
+      ],
+      "image_views": [
+        {
+          "line": 42,
+          "path": "file:///private/tmp/mediasense-plan-behavior-260913-1214/outing/dataset/precheck/_artifacts/sha256/fb/fb0d94fab54d9d3ea9aa9536bab5c0c13100dc9809e57c94fd5735774b8e56b9.jpg"
+        },
+        {
+          "line": 43,
+          "path": "file:///private/tmp/mediasense-plan-behavior-260913-1214/outing/dataset/precheck/_artifacts/sha256/02/02a11f75308e21f010d7b2ccdb7a092d4338dab3bbd527e788c89982eeb7336c.jpg"
+        },
+        {
+          "line": 51,
+          "path": "file:///private/tmp/mediasense-plan-behavior-260913-1214/outing/dataset/precheck/_artifacts/sha256/70/7086df0b8dc3b1bc558fcabeedaf50022d21aa2eee7898dd1241c69af406700a.jpg"
+        },
+        {
+          "line": 52,
+          "path": "file:///private/tmp/mediasense-plan-behavior-260913-1214/outing/dataset/precheck/_artifacts/sha256/97/979fe768c484b2d17a45e7162d6169ed032e8ab4b8f8ad11121134ea6d82f271.jpg"
+        },
+        {
+          "line": 53,
+          "path": "file:///private/tmp/mediasense-plan-behavior-260913-1214/outing/dataset/precheck/_artifacts/sha256/97/9799b52bf10b9e4845740e9332dfcc720bc5295d96a079a1bb556846f945cc10.jpg"
+        }
+      ]
+    },
+    {
+      "agent": "/root/plan_case_collection",
+      "path": "/Users/chengyanru/.codex/sessions/2026/09/13/rollout-2026-09-13T12-48-06-01a09918-0fc5-72e3-b044-f89752efcad2.jsonl",
+      "snapshot_lines": 127,
+      "snapshot_sha256": "384f648a7bee0f23a916c6a1731c6f60a49b74dfa0863b0bafa65745cb2d8b3c",
+      "models": [
+        {
+          "model": "gpt-6-astra",
+          "effort": "low"
+        }
+      ],
+      "complete_resource_reads": [
+        {
+          "line": 13,
+          "resource": "first",
+          "sha256": "5e9676c99bf35fce3ac29b9070d69de648ecc68edcf7b832e6731512549d6e64"
+        },
+        {
+          "line": 22,
+          "resource": "profile",
+          "sha256": "5f561a600a397e4ce96b3a57abf10ae3f2bc5c8c08b53f2bbc4bd50349523189"
+        },
+        {
+          "line": 105,
+          "resource": "final",
+          "sha256": "16f15bb281460d05bdd61bb6b7ba1e3360757e1b1356c06a69d7a816d1842950"
+        },
+        {
+          "line": 105,
+          "resource": "profile",
+          "sha256": "5f561a600a397e4ce96b3a57abf10ae3f2bc5c8c08b53f2bbc4bd50349523189"
+        }
+      ],
+      "image_views": [
+        {
+          "line": 39,
+          "path": "file:///private/tmp/mediasense-plan-behavior-260913-1214/collection/dataset/precheck/_artifacts/sha256/4f/4fbce37a655ec15f9eef3f244fcc27d404b08c9842f24d035db8d685994d0ee6.jpg"
+        }
+      ]
+    },
+    {
+      "agent": "/root/plan_final_journey",
+      "path": "/Users/chengyanru/.codex/sessions/2026/09/13/rollout-2026-09-13T12-57-26-01a09920-9d24-7ec2-94d2-4cfd4c44b175.jsonl",
+      "snapshot_lines": 187,
+      "snapshot_sha256": "077cf460a86fbb2096459c9dd078cff908adc140640753917697dc6282cfa366",
+      "models": [
+        {
+          "model": "gpt-6-astra",
+          "effort": "low"
+        }
+      ],
+      "complete_resource_reads": [
+        {
+          "line": 18,
+          "resource": "final",
+          "sha256": "16f15bb281460d05bdd61bb6b7ba1e3360757e1b1356c06a69d7a816d1842950"
+        },
+        {
+          "line": 27,
+          "resource": "profile",
+          "sha256": "5f561a600a397e4ce96b3a57abf10ae3f2bc5c8c08b53f2bbc4bd50349523189"
+        }
+      ],
+      "image_views": [
+        {
+          "line": 45,
+          "path": "file:///private/tmp/mediasense-plan-behavior-260913-final/journey-a/dataset/precheck/_artifacts/sha256/e3/e3a376c8875beaed7360ba98e65c6ef740a1dc6703f0dcf04f75484411e68485.jpg"
+        },
+        {
+          "line": 46,
+          "path": "file:///private/tmp/mediasense-plan-behavior-260913-final/journey-a/dataset/precheck/_artifacts/sha256/2c/2c8c8faffdec7d202305c5e29627cf6a13d3995b65f2437b8f92e4ed402c0738.jpg"
+        },
+        {
+          "line": 47,
+          "path": "file:///private/tmp/mediasense-plan-behavior-260913-final/journey-a/dataset/precheck/_artifacts/sha256/d6/d680bf085f0fd8a783235c00e397c7d3ca65a2456980038b045403231a60daaf.jpg"
+        },
+        {
+          "line": 48,
+          "path": "file:///private/tmp/mediasense-plan-behavior-260913-final/journey-a/dataset/precheck/_artifacts/sha256/3a/3aff8730f034a3150c3819520cb1e28a7d8e8c19720df7f03724af33d69226a8.jpg"
+        },
+        {
+          "line": 60,
+          "path": "file:///private/tmp/mediasense-plan-behavior-260913-final/journey-a/dataset/precheck/_artifacts/sha256/68/68bdd9f9e9ad46d67f10acd3a81302a4579f19acf4c2b939fba62559ea1d8638.jpg"
+        },
+        {
+          "line": 61,
+          "path": "file:///private/tmp/mediasense-plan-behavior-260913-final/journey-a/dataset/precheck/_artifacts/sha256/ee/ee72e7c86e5cdb4b71990d21425b1b27ff93756851d4423632fb9901ff0c4316.jpg"
+        },
+        {
+          "line": 62,
+          "path": "file:///private/tmp/mediasense-plan-behavior-260913-final/journey-a/dataset/precheck/_artifacts/sha256/c1/c126f7438713804681753a3f7edd619f5776f23e5ccdaed1383659d1d7cc99c3.jpg"
+        },
+        {
+          "line": 63,
+          "path": "file:///private/tmp/mediasense-plan-behavior-260913-final/journey-a/dataset/precheck/_artifacts/sha256/c0/c0634b2d6cea3b554fb2de3aa77fda455ccd6672863b307e46c64458c49e888c.jpg"
+        }
+      ]
+    },
+    {
+      "agent": "/root/plan_final_collection",
+      "path": "/Users/chengyanru/.codex/sessions/2026/09/13/rollout-2026-09-13T12-57-41-01a09920-d7d2-7fc1-a3c6-555010da1ce7.jsonl",
+      "snapshot_lines": 109,
+      "snapshot_sha256": "d962312454d8ed7c1791619b817356718193704abc3fbe84939a9f73a4157f36",
+      "models": [
+        {
+          "model": "gpt-6-astra",
+          "effort": "low"
+        }
+      ],
+      "complete_resource_reads": [
+        {
+          "line": 18,
+          "resource": "final",
+          "sha256": "16f15bb281460d05bdd61bb6b7ba1e3360757e1b1356c06a69d7a816d1842950"
+        },
+        {
+          "line": 23,
+          "resource": "profile",
+          "sha256": "5f561a600a397e4ce96b3a57abf10ae3f2bc5c8c08b53f2bbc4bd50349523189"
+        }
+      ],
+      "image_views": [
+        {
+          "line": 50,
+          "path": "file:///private/tmp/mediasense-plan-behavior-260913-final/collection/dataset/precheck/_artifacts/sha256/4f/4fbce37a655ec15f9eef3f244fcc27d404b08c9842f24d035db8d685994d0ee6.jpg"
+        }
+      ]
+    },
+    {
+      "agent": "/root/plan_final_transfer",
+      "path": "/Users/chengyanru/.codex/sessions/2026/09/13/rollout-2026-09-13T13-00-59-01a09923-de94-7dc0-ad1f-89ebab79bacd.jsonl",
+      "snapshot_lines": 109,
+      "snapshot_sha256": "3d42dcb231051eee91b87a42c6923d979f4fdb035559e11fcdb8e2e1e13a8df4",
+      "models": [
+        {
+          "model": "gpt-6-astra",
+          "effort": "low"
+        }
+      ],
+      "complete_resource_reads": [
+        {
+          "line": 18,
+          "resource": "final",
+          "sha256": "16f15bb281460d05bdd61bb6b7ba1e3360757e1b1356c06a69d7a816d1842950"
+        },
+        {
+          "line": 28,
+          "resource": "profile",
+          "sha256": "5f561a600a397e4ce96b3a57abf10ae3f2bc5c8c08b53f2bbc4bd50349523189"
+        }
+      ],
+      "image_views": [
+        {
+          "line": 55,
+          "path": "file:///private/tmp/mediasense-plan-behavior-260913-transfer/community/dataset/precheck/_artifacts/sha256/e7/e7f2324e2ff83973a7cd64b21b74a49b80937be3d27428f7ce8a5f106238ec71.jpg"
+        },
+        {
+          "line": 56,
+          "path": "file:///private/tmp/mediasense-plan-behavior-260913-transfer/community/dataset/precheck/_artifacts/sha256/b5/b5f13b17082af90bf5629016f3059122636230e38e3bfa46eb470e083d98ff2f.jpg"
+        },
+        {
+          "line": 57,
+          "path": "file:///private/tmp/mediasense-plan-behavior-260913-transfer/community/dataset/precheck/_artifacts/sha256/67/6708591cea403b9bb83e9f36c7cacadb74e9183724e25cb5dc8e19806dd9ad38.jpg"
+        },
+        {
+          "line": 58,
+          "path": "file:///private/tmp/mediasense-plan-behavior-260913-transfer/community/dataset/precheck/_artifacts/sha256/4b/4bed8b9774172a3667f0275d29eb58f135ad54d8f89cb5705f45128c91b50c61.jpg"
+        }
+      ]
+    }
+  ],
+  "cases": [
+    {
+      "case": "collection",
+      "root": "/private/tmp/mediasense-plan-behavior-260913-1214/collection",
+      "calls": {
+        "discovery:list": 3,
+        "mediasense.plan.work:create": 1,
+        "mediasense.plan.work:inspect": 2,
+        "mediasense.plan.work:update": 1,
+        "mediasense.precheck.read:expand": 2,
+        "mediasense.precheck.read:resolve": 1,
+        "mediasense.precheck.read:review": 2
+      },
+      "errors": [],
+      "candidate_identities": [
+        "sha256:f9a3bc5e016fb386507931d1f931e7aae64609f43145690c18ee63134e047701"
+      ],
+      "work_ref": "plan-work:d5ef5bc9-f74c-48d6-b49e-73584f561632",
+      "revision": "work-revision:a5d85f47-3a1e-4992-ae6f-37689c01aae1",
+      "validation": {
+        "seal_ready": true,
+        "issues": []
+      },
+      "groups": [
+        {
+          "path": [
+            "260614-两日旅行",
+            "0614-ORCHARD ROOM晚餐"
+          ],
+          "members": [
+            "c4",
+            "c2",
+            "c1",
+            "c3"
+          ]
+        },
+        {
+          "path": [
+            "260614-两日旅行",
+            "0615-活动未明"
+          ],
+          "members": [
+            "c5"
+          ]
+        },
+        {
+          "path": [
+            "260614-两日旅行",
+            "a-files",
+            "GPX"
+          ],
+          "members": [
+            "c9",
+            "c10"
+          ]
+        },
+        {
+          "path": [
+            "260614-两日旅行",
+            "d-damaged-info"
+          ],
+          "members": [
+            "c6"
+          ]
+        },
+        {
+          "path": [
+            "Uncategorized"
+          ],
+          "members": [
+            "c8"
+          ]
+        },
+        {
+          "path": [
+            "d-damaged-info"
+          ],
+          "members": [
+            "c7"
+          ]
+        }
+      ],
+      "other_outcomes": [
+        {
+          "outcome": "retain_current_organization",
+          "members": [
+            "c11",
+            "c12"
+          ],
+          "reason": "原父目录遍历控制标记，留原处保留控制语义；均计入完整范围。"
+        }
+      ],
+      "decision_note_count": 8,
+      "trace_sha256": "457927d63ed270749ec968fcde8b05206dd504b39cd19c46fcc13cb5f4e345bc",
+      "skill_sha256": "16f15bb281460d05bdd61bb6b7ba1e3360757e1b1356c06a69d7a816d1842950",
+      "profile_sha256": "5f561a600a397e4ce96b3a57abf10ae3f2bc5c8c08b53f2bbc4bd50349523189",
+      "source_unchanged": true,
+      "result_unchanged": true,
+      "report": "/private/tmp/mediasense-plan-behavior-260913-1214/collection/agent/result.md",
+      "forbidden_calls": 0
+    },
+    {
+      "case": "journey-a",
+      "root": "/private/tmp/mediasense-plan-behavior-260913-1214/journey-a",
+      "calls": {
+        "discovery:list": 3,
+        "mediasense.plan.work:create": 1,
+        "mediasense.plan.work:inspect": 4,
+        "mediasense.plan.work:update": 4,
+        "mediasense.precheck.read:expand": 1,
+        "mediasense.precheck.read:resolve": 1,
+        "mediasense.precheck.read:review": 2
+      },
+      "errors": [],
+      "candidate_identities": [
+        "sha256:7d3aacb97f61dd36cee431354da94d5f5db49c7579812dd119a7732d1fdf193b",
+        "sha256:99bf2ea7ffb94e03bafd106c14c01dbcd4a92c40d10bbd783d3fb5867ce34284",
+        "sha256:f6de8a49c673da7f32a43a02ea4aac9a680c51daa7bc186889f18ed67de0710b"
+      ],
+      "work_ref": "plan-work:7e5c76b0-c5db-4852-8f43-91f2b9dc400c",
+      "revision": "work-revision:eca51706-a10e-4fc3-952c-39a00663feb1",
+      "validation": {
+        "seal_ready": true,
+        "issues": []
+      },
+      "groups": [
+        {
+          "path": [
+            "260611-六月短途美食之旅",
+            "0611-餐厅寻味",
+            "1-LAUREL KITCHEN 午餐"
+          ],
+          "members": [
+            "a1",
+            "a2"
+          ]
+        },
+        {
+          "path": [
+            "260611-六月短途美食之旅",
+            "0611-餐厅寻味",
+            "2-榕记烧味晚餐"
+          ],
+          "members": [
+            "a3",
+            "a4"
+          ]
+        },
+        {
+          "path": [
+            "260611-六月短途美食之旅",
+            "0612-品酒与晚餐",
+            "1-青湾酒店住客品酒班"
+          ],
+          "members": [
+            "a5",
+            "a6"
+          ]
+        },
+        {
+          "path": [
+            "260611-六月短途美食之旅",
+            "0612-品酒与晚餐",
+            "2-RIVER STEAK 晚餐"
+          ],
+          "members": [
+            "a7",
+            "a8"
+          ]
+        }
+      ],
+      "other_outcomes": [],
+      "decision_note_count": 6,
+      "trace_sha256": "eb38071903742f65f998df0660c1f7fd0305113ad25a1296f47ff456751b694f",
+      "skill_sha256": "16f15bb281460d05bdd61bb6b7ba1e3360757e1b1356c06a69d7a816d1842950",
+      "profile_sha256": "5f561a600a397e4ce96b3a57abf10ae3f2bc5c8c08b53f2bbc4bd50349523189",
+      "source_unchanged": true,
+      "result_unchanged": true,
+      "report": "/private/tmp/mediasense-plan-behavior-260913-1214/journey-a/agent/result.md",
+      "forbidden_calls": 0
+    },
+    {
+      "case": "journey-b",
+      "root": "/private/tmp/mediasense-plan-behavior-260913-1214/journey-b",
+      "calls": {
+        "discovery:list": 3,
+        "mediasense.plan.work:create": 1,
+        "mediasense.plan.work:inspect": 2,
+        "mediasense.plan.work:update": 2,
+        "mediasense.precheck.read:resolve": 1,
+        "mediasense.precheck.read:review": 2
+      },
+      "errors": [],
+      "candidate_identities": [
+        "sha256:1523ccff808abcc28d6d33670a4dd136a6481230db21c2cb806d428b87cd1c9c"
+      ],
+      "work_ref": "plan-work:b51b62c8-1ca1-4dd2-9da6-15a2bcc7825d",
+      "revision": "work-revision:97fa5cef-ea4c-444a-b12e-452f2ca8bb1c",
+      "validation": {
+        "seal_ready": true,
+        "issues": []
+      },
+      "groups": [
+        {
+          "path": [
+            "260611-六月美食短途旅行",
+            "0611-午餐与烧肉饭",
+            "1-LAUREL KITCHEN 午餐"
+          ],
+          "members": [
+            "a1",
+            "a2"
+          ]
+        },
+        {
+          "path": [
+            "260611-六月美食短途旅行",
+            "0611-午餐与烧肉饭",
+            "2-烧肉饭晚餐（店名未定）"
+          ],
+          "members": [
+            "a3",
+            "a4"
+          ]
+        },
+        {
+          "path": [
+            "260611-六月美食短途旅行",
+            "0612-品鉴与晚餐",
+            "1-酒与点心品鉴（场所未定）"
+          ],
+          "members": [
+            "a5",
+            "a6"
+          ]
+        },
+        {
+          "path": [
+            "260611-六月美食短途旅行",
+            "0612-品鉴与晚餐",
+            "2-RIVER STEAK 晚餐"
+          ],
+          "members": [
+            "a7",
+            "a8"
+          ]
+        }
+      ],
+      "other_outcomes": [],
+      "decision_note_count": 5,
+      "trace_sha256": "764103ef6b7e119f3788f849da1c095985581f56ef0bc79d05e38c9128ba2732",
+      "skill_sha256": "16f15bb281460d05bdd61bb6b7ba1e3360757e1b1356c06a69d7a816d1842950",
+      "profile_sha256": "5f561a600a397e4ce96b3a57abf10ae3f2bc5c8c08b53f2bbc4bd50349523189",
+      "source_unchanged": true,
+      "result_unchanged": true,
+      "report": "/private/tmp/mediasense-plan-behavior-260913-1214/journey-b/agent/result.md",
+      "forbidden_calls": 0
+    },
+    {
+      "case": "outing",
+      "root": "/private/tmp/mediasense-plan-behavior-260913-1214/outing",
+      "calls": {
+        "discovery:list": 3,
+        "mediasense.plan.work:create": 1,
+        "mediasense.plan.work:inspect": 3,
+        "mediasense.plan.work:update": 2,
+        "mediasense.precheck.read:resolve": 1,
+        "mediasense.precheck.read:review": 2
+      },
+      "errors": [],
+      "candidate_identities": [
+        "sha256:d449638ee6b5e2d5152a28fc1b3c43f1b3f38ff0a65b36eddb8eace38a27f6e5",
+        "sha256:f462de1147c356d076f53293cf883f322456ce8e1546d9a6972ed106502faeea"
+      ],
+      "work_ref": "plan-work:082ff5d9-5f7e-4787-821f-2794212cd37e",
+      "revision": "work-revision:ffe23855-1643-4560-a3c2-ef9a6804d931",
+      "validation": {
+        "seal_ready": true,
+        "issues": []
+      },
+      "groups": [
+        {
+          "path": [
+            "260620-书展"
+          ],
+          "members": [
+            "o2",
+            "o3",
+            "o1"
+          ]
+        },
+        {
+          "path": [
+            "260620-河边散步"
+          ],
+          "members": [
+            "o5",
+            "o4"
+          ]
+        }
+      ],
+      "other_outcomes": [],
+      "decision_note_count": 4,
+      "trace_sha256": "e4da8b9fb0972801ab82d296e5852f269e9ebb4e444cbd5afb27fd151beae4f7",
+      "skill_sha256": "16f15bb281460d05bdd61bb6b7ba1e3360757e1b1356c06a69d7a816d1842950",
+      "profile_sha256": "5f561a600a397e4ce96b3a57abf10ae3f2bc5c8c08b53f2bbc4bd50349523189",
+      "source_unchanged": true,
+      "result_unchanged": true,
+      "report": "/private/tmp/mediasense-plan-behavior-260913-1214/outing/agent/result.md",
+      "forbidden_calls": 0
+    },
+    {
+      "case": "collection",
+      "root": "/private/tmp/mediasense-plan-behavior-260913-final/collection",
+      "calls": {
+        "discovery:list": 2,
+        "mediasense.plan.work:create": 1,
+        "mediasense.plan.work:inspect": 1,
+        "mediasense.plan.work:update": 1,
+        "mediasense.precheck.read:expand": 2,
+        "mediasense.precheck.read:resolve": 1,
+        "mediasense.precheck.read:review": 2
+      },
+      "errors": [],
+      "candidate_identities": [
+        "sha256:eb7fba5dc9e58769c1bf1b864a0301b242adaab4ffadbbf1d9159697e6980e84"
+      ],
+      "work_ref": "plan-work:80d9e1b8-2e3c-4c7a-8307-6ea97be52ef1",
+      "revision": "work-revision:90d83cf8-c343-40c7-b66c-0eb4ff05b863",
+      "validation": {
+        "seal_ready": true,
+        "issues": []
+      },
+      "groups": [
+        {
+          "path": [
+            "260614-旅行",
+            "0614-ORCHARD ROOM晚餐"
+          ],
+          "members": [
+            "c4",
+            "c3",
+            "c2",
+            "c1"
+          ]
+        },
+        {
+          "path": [
+            "260614-旅行",
+            "0615-活动待辨"
+          ],
+          "members": [
+            "c5"
+          ]
+        },
+        {
+          "path": [
+            "260614-旅行",
+            "a-files",
+            "GPX"
+          ],
+          "members": [
+            "c10",
+            "c9"
+          ]
+        },
+        {
+          "path": [
+            "260614-旅行",
+            "d-damaged-info"
+          ],
+          "members": [
+            "c6"
+          ]
+        },
+        {
+          "path": [
+            "Uncategorized"
+          ],
+          "members": [
+            "c8"
+          ]
+        },
+        {
+          "path": [
+            "d-damaged-info"
+          ],
+          "members": [
+            "c7"
+          ]
+        }
+      ],
+      "other_outcomes": [
+        {
+          "outcome": "retain_current_organization",
+          "members": [
+            "c12",
+            "c11"
+          ],
+          "reason": "遍历控制标记依赖各自原父目录，保留 trip/a-files/.albumignore 与 trip/fixtures/.albumignore 原位置。"
+        }
+      ],
+      "decision_note_count": 9,
+      "trace_sha256": "7ec9bdfe982b6ecd35164377151c332544c031d3371d5ee6aa4d95a89540e393",
+      "skill_sha256": "16f15bb281460d05bdd61bb6b7ba1e3360757e1b1356c06a69d7a816d1842950",
+      "profile_sha256": "5f561a600a397e4ce96b3a57abf10ae3f2bc5c8c08b53f2bbc4bd50349523189",
+      "source_unchanged": true,
+      "result_unchanged": true,
+      "report": "/private/tmp/mediasense-plan-behavior-260913-final/collection/agent/result.md",
+      "forbidden_calls": 0
+    },
+    {
+      "case": "journey-a",
+      "root": "/private/tmp/mediasense-plan-behavior-260913-final/journey-a",
+      "calls": {
+        "discovery:list": 2,
+        "mediasense.plan.work:create": 1,
+        "mediasense.plan.work:inspect": 2,
+        "mediasense.plan.work:update": 3,
+        "mediasense.precheck.read:resolve": 1,
+        "mediasense.precheck.read:review": 2
+      },
+      "errors": [],
+      "candidate_identities": [
+        "sha256:ee58e458df66b9e60617e795b40abb0e0fd4071d76af77b6558949e4536f86bf",
+        "sha256:b08ca84bb87624bf0de0b7b47aba64a70d35d9b680e6f65042094d5ad11f98e4"
+      ],
+      "work_ref": "plan-work:315ecaf6-56ce-447a-97af-03aa0b5d5a25",
+      "revision": "work-revision:cac6246b-cecb-44cc-afa4-1b451dd83e38",
+      "validation": {
+        "seal_ready": true,
+        "issues": []
+      },
+      "groups": [
+        {
+          "path": [
+            "260611-六月短途美食旅行",
+            "0611-餐厅寻味",
+            "1-LAUREL KITCHEN午餐"
+          ],
+          "members": [
+            "a1",
+            "a2"
+          ]
+        },
+        {
+          "path": [
+            "260611-六月短途美食旅行",
+            "0611-餐厅寻味",
+            "2-榕记烧味晚餐"
+          ],
+          "members": [
+            "a3",
+            "a4"
+          ]
+        },
+        {
+          "path": [
+            "260611-六月短途美食旅行",
+            "0612-品鉴与晚餐",
+            "1-青湾酒店免费品酒班"
+          ],
+          "members": [
+            "a5",
+            "a6"
+          ]
+        },
+        {
+          "path": [
+            "260611-六月短途美食旅行",
+            "0612-品鉴与晚餐",
+            "2-RIVER STEAK晚餐"
+          ],
+          "members": [
+            "a7",
+            "a8"
+          ]
+        }
+      ],
+      "other_outcomes": [],
+      "decision_note_count": 5,
+      "trace_sha256": "8def0e63a9e5c2251dd592d0f5fb31f9416cfb9f25bf6722cc59ff35e28a4b89",
+      "skill_sha256": "16f15bb281460d05bdd61bb6b7ba1e3360757e1b1356c06a69d7a816d1842950",
+      "profile_sha256": "5f561a600a397e4ce96b3a57abf10ae3f2bc5c8c08b53f2bbc4bd50349523189",
+      "source_unchanged": true,
+      "result_unchanged": true,
+      "report": "/private/tmp/mediasense-plan-behavior-260913-final/journey-a/agent/result.md",
+      "forbidden_calls": 0
+    },
+    {
+      "case": "community",
+      "root": "/private/tmp/mediasense-plan-behavior-260913-transfer/community",
+      "calls": {
+        "discovery:list": 2,
+        "mediasense.plan.work:create": 1,
+        "mediasense.plan.work:inspect": 1,
+        "mediasense.plan.work:update": 1,
+        "mediasense.precheck.read:expand": 1,
+        "mediasense.precheck.read:resolve": 1,
+        "mediasense.precheck.read:review": 2
+      },
+      "errors": [],
+      "candidate_identities": [
+        "sha256:de113971252499e073ee46192574b82dd7f5f8893781abdc518eaead0bb6ea85"
+      ],
+      "work_ref": "plan-work:8b8a8639-6135-4cb4-ab84-1eb12e98b3f9",
+      "revision": "work-revision:f9d4dbc2-19df-42bc-9c35-10b0d116acc4",
+      "validation": {
+        "seal_ready": true,
+        "issues": []
+      },
+      "groups": [
+        {
+          "path": [
+            "260622-北岸文化中心",
+            "版画展"
+          ],
+          "members": [
+            "n1",
+            "n2"
+          ]
+        },
+        {
+          "path": [
+            "260622-北岸文化中心",
+            "版画体验课"
+          ],
+          "members": [
+            "n3",
+            "n4"
+          ]
+        },
+        {
+          "path": [
+            "a-files",
+            "朋友分享-南城徒步-五月日期不详"
+          ],
+          "members": [
+            "n5"
+          ]
+        }
+      ],
+      "other_outcomes": [],
+      "decision_note_count": 4,
+      "trace_sha256": "11ee7d1691242401054e2f718f10665055654458c52239f9ed5c89f4a631ffd0",
+      "skill_sha256": "16f15bb281460d05bdd61bb6b7ba1e3360757e1b1356c06a69d7a816d1842950",
+      "profile_sha256": "5f561a600a397e4ce96b3a57abf10ae3f2bc5c8c08b53f2bbc4bd50349523189",
+      "source_unchanged": true,
+      "result_unchanged": true,
+      "report": "/private/tmp/mediasense-plan-behavior-260913-transfer/community/agent/result.md",
+      "forbidden_calls": 0
+    }
+  ],
+  "daily_installation_switched": false,
+  "extra_geo_provider_calls": 0,
+  "agent_model_use": "occurred; token/egress/cost not independently measured",
+  "limits": "Synthetic independent execution and actual installed MCP receipts; no population success rate, causal improvement, real media recognition or human confirmation claim."
+}

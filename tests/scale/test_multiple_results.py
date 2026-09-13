@@ -62,6 +62,7 @@ def test_five_hundred_to_three_to_two_hundred_sealed_results(
             tool.run(
                 {
                     "action": "resume",
+                    "dataset_ref": "dataset:scale-500",
                     "run_ref": run_ref,
                     "decision": {
                         "kind": "source_scope",
@@ -74,20 +75,22 @@ def test_five_hundred_to_three_to_two_hundred_sealed_results(
                 }
             )
             tool.advance(run_ref)
-        status = tool.run({"action": "status", "run_ref": started["run_ref"]})
+        status = tool.run({"action": "status", "dataset_ref": "dataset:scale-500", "run_ref": started["run_ref"]})
         assert status["state"] == "completed"
-        result_ref = str(status["published_result"]["result_ref"])
+        result_ref = str(status["result"]["ref"])
         result_refs.append(result_ref)
         rendition_ids.append(
             {
                 work.work_id
                 for work in WorkStore(database).list_run_work(accounting_run_id)
                 if work.spec.capability == "image-rendition"
+                and any(d.key == "profile_name" and d.value == "ordinary" for d in work.spec.dependencies)
             }
         )
         page = reader.read(
             {
-                "operation": "review",
+                "action": "review",
+                "dataset_ref": "dataset:scale-500",
                 "page": {"limit": 1},
                 "result_ref": result_ref,
             }

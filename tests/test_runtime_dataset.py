@@ -303,8 +303,8 @@ def test_open_migrates_supported_v1_manifest_without_touching_private_stores(
     assert migrated["stores"] == {
         "apply": 2,
         "geo": 2,
-        "plan": 3,
-        "precheck": 18,
+        "plan": 4,
+        "precheck": 19,
     }
     assert historical.read_bytes() == historical_before
 

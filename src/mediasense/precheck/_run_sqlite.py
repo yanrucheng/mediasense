@@ -67,6 +67,7 @@ class SQLiteRunStore:
         *,
         dataset_ref: str,
         prior_result_ref: str | None,
+        execution_config: dict[str, object] | None = None,
     ) -> tuple[dict[str, object], bool]:
         request_json = _json(request)
         request_id = str(request["request_id"])
@@ -90,8 +91,9 @@ class SQLiteRunStore:
                 """
                 INSERT INTO precheck_runs (
                     run_ref, request_id, request_json, dataset_ref,
-                    prior_result_ref, state, progress_json, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, 'running', ?, ?, ?)
+                    prior_result_ref, state, progress_json, created_at, updated_at,
+                    execution_config_json
+                ) VALUES (?, ?, ?, ?, ?, 'running', ?, ?, ?, ?)
                 """,
                 (
                     run_ref,
@@ -102,8 +104,12 @@ class SQLiteRunStore:
                     _json(_unknown_progress()),
                     observed_at,
                     observed_at,
+                    None if execution_config is None else _json({**execution_config, "preparation": None}),
                 ),
             )
+            if execution_config is not None and execution_config.get("preparation") is not None:
+                connection.execute("INSERT INTO precheck_run_preparation (run_ref, value_json) VALUES (?, ?)",
+                                   (run_ref, _json(execution_config["preparation"])))
             row = connection.execute(
                 "SELECT * FROM precheck_runs WHERE run_ref = ?", (run_ref,)
             ).fetchone()
@@ -131,6 +137,23 @@ class SQLiteRunStore:
                 "SELECT 1 FROM datasets WHERE dataset_id = ?", (dataset_id,)
             ).fetchone()
         return row is not None
+
+    def execution_configuration(self, run_ref):
+        """Read the full frozen input once when an execution owner starts."""
+        with self._connect() as connection:
+            row = self._require(connection, run_ref)
+            config = _optional_json(row["execution_config_json"])
+            preparation = connection.execute("SELECT value_json FROM precheck_run_preparation WHERE run_ref = ?", (run_ref,)).fetchone()
+        if config is not None and preparation is not None:
+            config["preparation"] = json.loads(preparation["value_json"])
+        return config
+
+    def current_state(self, run_ref):
+        with self._connect() as connection:
+            row = connection.execute("SELECT state FROM precheck_runs WHERE run_ref = ?", (run_ref,)).fetchone()
+        if row is None:
+            raise KeyError(run_ref)
+        return str(row["state"])
 
     def bind_accounting_run(
         self, run_ref: str, accounting_run_id: str
@@ -493,6 +516,11 @@ class SQLiteRunStore:
                 SELECT run_id FROM working_runs
                 WHERE dataset_id = ?
                   AND status IN ('running', 'paused', 'blocked')
+                  AND NOT EXISTS (
+                    SELECT 1 FROM precheck_runs
+                    WHERE accounting_run_id = working_runs.run_id
+                      AND state IN ('completed', 'failed', 'cancelled')
+                  )
                 ORDER BY started_at DESC
                 LIMIT 1
                 """,
@@ -1000,6 +1028,8 @@ class SQLiteRunStore:
                 return observed
             if observed["state"] in {"completed", "cancelled"}:
                 raise RunStateConflict(observed)
+            if observed["accounting_run_id"] is not None:
+                connection.execute("UPDATE working_runs SET status = 'paused', updated_at = ? WHERE run_id = ? AND status IN ('running', 'blocked')", (self.now(), observed["accounting_run_id"]))
             return self._update_state(connection, run_ref, "failed", reason=reason)
 
     def set_progress(
@@ -1244,7 +1274,7 @@ def record_work_scope_change(
     from .run import _PHASE_NAMES, _PHASE_CAPABILITIES
 
     for row in connection.execute(
-        "SELECT * FROM precheck_runs WHERE accounting_run_id = ? AND state IN ('running', 'paused', 'blocked')",
+        "SELECT run_ref, execution_checkpoint, updated_at FROM precheck_runs WHERE accounting_run_id = ? AND state IN ('running', 'paused', 'blocked')",
         (run_id,),
     ).fetchall():
         checkpoint = _execution_checkpoint(

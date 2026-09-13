@@ -15,6 +15,16 @@ tags: ["migration", "capability", "parity"]
 
 # Migration Capability Ledger
 
+## 2026-09-13 运行验收 1—3 项：独立复核补修与持久产物
+
+用户确认压缩消费 GPX 的代码验收通过；指出 Google HTTP 429 的明确配额原因被通用重试覆盖，以及 GPX 资源不足被归为通用 execution_failed。两处现按既有合约补修：adapter 对明确 quota/rate 原因优先分类并保留 Retry-After；GPX stage adapter 对 ResourceLimitExceeded 给出 `gpx_resource_budget_insufficient` 和冻结预算下的后继 Run 恢复说明。未知实现异常仍暴露，不改公开合约或原压缩/匹配语义。
+
+源码基点 `0794d3c9182793b7b25c1cac77793e3c97e42092` 加留存 source.diff；新 wheel SHA-256 为 `9e813bda30fa4b7cc33517d582aefd7547f48e7836a8a78ed7a0f9df31df9f9f`。CPython 3.11.13，core 依赖加 pytest，无模型 extras；使用当前开发环境的固定依赖约束，所有安装均离线、仅写隔离 venv。源码与安装包回归各 **166 passed**，包一致性和 CLI/MCP smoke 通过。
+
+确切 wheel、源码目录/归档、diff、逐文件摘要、约束、隔离 venv 和日志持久保留于仓库 `.local/acceptance-releases/260913-1107-google-gpx-r2/`，不入 Git、不是临时目录。原 `55db4708…` wheel 所在 `/tmp` 已丢失，旧记录不再作为当前安装证据。本轮不重做原全量性能或香港压缩测量，也未升级日常 CLI/Skills、改变其 manager/lock/session 或修改业务 Dataset/Result；没有日常安装的回滚/切换动作。第 1、2 项待用户独立复验，第 3 项代码通过与共同安装包验收分开。
+
+详细证据及复核命令保存在现有 [Google Packet](../../../openspec/changes/review-google-nearby-failures/README.md)、[GPX 成本 Packet](../../../openspec/changes/review-gpx-matching-cost/README.md)、[压缩 GPX Packet](../../../openspec/changes/review-compression-gpx-evidence/README.md)，共同产物入口见[持久校验清单](../../../.local/acceptance-releases/260913-1107-google-gpx-r2/SHA256SUMS)。此处记录本次自验的范围，不扩大其他能力的安装认证。
+
 ## Purpose
 
 This ledger is the authoritative place to decide whether each material AI Album capability is preserved, intentionally changed, regressed, or not comparable in MediaSense. It prevents both accidental feature loss and blind reproduction of known legacy defects.
@@ -65,6 +75,16 @@ Implementation status is independent of the difference class:
 | Usage monitoring | Optional log, absent from final production run | all | Intentionally change: relevant cost/operation accounting is part of stage results | Zero external calls for local-only runs; confirmed logical work versus actual provider calls for enabled external producers; plan visual cost; apply operations |
 
 <a id="manufacturer-information-repair"></a>
+
+## 2026-09-13：Plan 信息充分性与例外规则交付
+
+用户确认第 4、5 包沿用当前 contract 并授权开发。已将默认组织 Profile 原文作为 Plan Skill 的离线发布副本，建立权威／源码／安装／wheel 字节一致性检查，并在既有 Skill 中补清信息缺口、粗表达、后续更正、异常上下文及效果报告的判断指导。默认 Profile、公开 Tool/schema、Work 与 Frozen Plan 含义均未变化。
+
+[本次验证报告](../../../eval/sessions/260913-1214-plan-skill-behavior/report.md)与[精简证据](../../../eval/sessions/260913-1214-plan-skill-behavior/metrics/combined.json)记录 7 位无父上下文的独立 Agent：实际读取安装的 Skill／完整 Profile，通过 63 次 Read／Plan 业务调用和 18 次 discovery，覆盖主动发现重要未知、信息充分直接推进、用户不记得、后续更正、修复相关坏片、不同上下文兜底、GPX／控制标记和非餐饮迁移。源与合成 Result 字节不变，无 seal／Apply／额外 Geo/provider。初版报告出现的“无模型调用或费用”过宽表述保留为失败证据，最终指导及有关报告／候选已修正。
+
+源码默认测试 1377 passed／16 deselected；最终安装版相关 169 项及离线 wheel 分发检查通过。最终 wheel SHA-256 为 `249398c2150fbf129a946c9822b174dab150bc57eff1efedc1386d8dfcd2b7ef`，稳定保留在 `.local/acceptance-releases/260913-1214-plan-skill/candidate-02/`，含确切 source 导出、依赖、venv 和评测配方。基线 `0794d3c` 加明确本包改动，不包含共享工作区第 1—3 包在途差异。
+
+Agent 组织判断与用户共同解释继续沿用 `intentionally_changed`；现有规则的发布缺口已在本构建与隔离实际使用中补齐。这里未重跑 AI Album、未作模型因果或统计比较；真实识别质量、成本、规模效率和原香港业务新 Plan 的质量仍未认证。日常 Python3.13.5＋embeddings 安装及原操作项目未切换，本次实际验证为 Python3.11.13 core；不把隔离交付扩大为日常升级。详细恢复／发布边界见报告，源码与行为自验待用户独立复验。
 
 ## 2026-09-13：本地 Freepik / NudeNet 640 源码与隔离交付
 

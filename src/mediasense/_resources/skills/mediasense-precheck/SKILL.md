@@ -315,9 +315,10 @@ honest next step that can change it:
 - while still deciding whether PreCheck can hand off, inspect relevant
   Result-local Evidence through `mediasense.precheck.read`; once Plan is active,
   ordinary Result-local expansion remains Plan-owned;
-- diagnose and propose a supported profile or parameter revision;
-- state that the current public Run contract has no directed-evidence selector;
-  do not translate the internal orchestration seam into an invented Tool field; or
+- read `review include=["preparation"]` and use its complete `source_set` and
+  Processing Profile to propose an ordinary new Run with explicit local overrides;
+  each override selects a nonempty, disjoint processable Source Set and declares
+  all four compression parameters, or null to bypass final compression; or
 - retain an explicit partial or blocked Result when more work is unavailable or
   not worth its cost.
 
@@ -331,6 +332,23 @@ action. `cancel` applies only to a mutable Run when the Tool says it is allowed;
 do not try to cancel an already published Result. Continuing from a completed
 Result starts a successor by supplying that Result's exact `result_ref` as the
 new start request's `prior_result_ref`; it is not `resume`.
+
+When retaining the same collection, copy the complete preparation readback into
+the new start, including configuration_identity, base compression and all intended
+overrides. Use exact Source Sets for the selected sources; profile_scope positions
+belong to the Result being read and resolve its frozen members. Omitted fields
+mean current defaults, never inheritance from prior_result_ref. A configuration
+guard mismatch needs an intentional current-default Run or restoration of the
+intended preparation configuration; never remove the guard merely to force a
+local request through. Historical preparation=null means the old settings were
+not recorded, not that current defaults reproduce them.
+
+Local overrides keep the other declared parameters unchanged. Their groups can
+change through actual dependencies; inspect the new members and basis when that
+matters. Valid work is reusable, missing demanded inputs may need local work,
+and existing model/provider authorization still applies. Source revision refusal
+requires a fresh current-input Run; an unavailable attachment may be restored and
+the same Run resumed. Neither path edits the old Result.
 
 ## Hand off to Plan
 

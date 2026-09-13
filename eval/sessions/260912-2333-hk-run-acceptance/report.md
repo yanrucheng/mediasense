@@ -16,13 +16,13 @@ baseline_ref: "260908-1148-hk-trajectory-audit"
 
 用户于 2026-09-13 要求将问题分别交给后续 Agent 讨论定案。本轮已创建以下 OpenSpec 问题包；包内仅记录事实、影响、证据边界与未决问题，没有预定设计或实施任务。本报告此前的建议不作为这些包的已确认方案。
 
-| 编号 | 独立交接包 | 当前阶段 |
+| 编号 | 独立交接包 | 记录阶段（最新以各包为准） |
 | --- | --- | --- |
-| 1 | [Google 附近地点请求失败与 PreCheck 交付状态](../../../openspec/changes/review-google-nearby-failures/README.md) | 事实已记录，待讨论 |
-| 2 | [GPX 匹配重复工作与本地处理耗时](../../../openspec/changes/review-gpx-matching-cost/README.md) | 事实已记录，待讨论 |
-| 3 | [视觉压缩未消费已有 GPX 坐标](../../../openspec/changes/review-compression-gpx-evidence/README.md) | 事实已记录，待讨论 |
-| 4 | [Plan 初版的信息收集与过早提交最终确认](../../../openspec/changes/review-plan-information-sufficiency/README.md) | 事实已记录，待讨论 |
-| 5 | [Plan 对损坏、未决与辅助素材的处置依据](../../../openspec/changes/review-plan-exception-dispositions/README.md) | 事实已记录，待讨论 |
+| 1 | [Google 附近地点请求失败与 PreCheck 交付状态](../../../openspec/changes/review-google-nearby-failures/README.md) | 二次补修及确切隔离包独立复验通过；日常未升级 |
+| 2 | [GPX 匹配重复工作与本地处理耗时](../../../openspec/changes/review-gpx-matching-cost/README.md) | 资源反馈补修及确切隔离包独立复验通过；日常未升级 |
+| 3 | [视觉压缩未消费已有 GPX 坐标](../../../openspec/changes/review-compression-gpx-evidence/README.md) | 代码与确切隔离包独立复验通过；日常未升级 |
+| 4 | [Plan 初版的信息收集与过早提交最终确认](../../../openspec/changes/review-plan-information-sufficiency/README.md) | Skill 与确切隔离交付独立复验通过；行为结论限于已测场景，日常未升级 |
+| 5 | [Plan 对损坏、未决与辅助素材的处置依据](../../../openspec/changes/review-plan-exception-dispositions/README.md) | 默认规则交付与确切隔离包独立复验通过；行为结论限于已测场景，日常未升级 |
 | 6 | [Plan HTML 人工确认页面的正式交付与内容来源](../../../openspec/changes/review-plan-preview-delivery/README.md) | 事实已记录，待讨论 |
 
 
@@ -143,3 +143,97 @@ rtk proxy .venv/bin/ruff check eval/sessions/260912-2333-hk-run-acceptance/run.p
 页面采用通用的目录、成员、例外、决定说明、证据与限制表达。若菜名调查影响最终计划，内容先进入现有Candidate说明，再由通用组件展示其确切范围与证据；临时调查材料不靠专门“菜品模块”进入最终确认页。按照 yanru-guidelines 与 agent-skill-tool-boundary，优先接通现有Plan Tool和renderer，避免新增第二份Plan权威或要求Agent承担重复的页面工程。
 
 本项是新增的 **P1 产品交付缺口**。本次仅完成现状核实和责任界定，没有修改当前四动作合约、生产实现或原会话HTML。
+
+
+**2026-09-13 第 4、5 包独立复核：第一轮讨论依据通过，尚非修复验收。**
+
+本轮按用户给出的 surface `7B978889-A337-432A-B709-D83292FF6618` 重新定位实际会话。读取当前 cmux 对象、终端和对应进程打开的会话文件，确认对象位于 MediaSense 仓库。未向原会话发送消息或命令，未改变其焦点、任务或业务状态。
+
+被验收会话为 `01a096f7-aaf8-7481-91ba-2fef40b3ced0`，文件为 `/Users/chengyanru/.codex/sessions/2026/09/13/rollout-2026-09-13T02-53-28-01a096f7-aaf8-7481-91ba-2fef40b3ced0.jsonl`。本次读取 180 行，SHA-256 为 `5a5352f6ed85e40d26d6f37ff83bce296b34ec0af64a0ad89203477c10b65d11`；首轮任务从 02:57 至 03:13（Asia/Shanghai）。它只有一条任务用户消息，明确要求先讨论且不实施；尚无对其最后建议的用户答复。记录中的文件变更仅为两个问题包 README，与“第一轮讨论中”的声明一致。
+
+验收对象的文件身份为：
+
+| 对象 | SHA-256 |
+| --- | --- |
+| 第4包 README | `00a352b3533dd33d703360e35a09d8a4729e7f50ba6dfc835f71f3a0df5c4f78` |
+| 第5包 README | `cbae7a316d207c7a5035d55ded1e0e4076c31c869dd2e5ea9cd1fb5a179e3cca` |
+
+本次独立核对了原始运行前859行摘要、实际Skill读取回执、代表材料的真实来源、精确成员与条件、GPX和控制标记的公开读取结果、用户补充和更正的先后，以及相关合约。29条本地文件链接通过检查。主要判断成立：
+
+- **第4包属于已有职责的落实问题。** 原运行第514行读取的Skill与当前权威内容逐字相同，SHA-256为 `adac003173e98b31b015f5e134c0b49936b30c8c6e56e1bd9827101d012d69b9`，不能归因为新版指导未读。餐厅身份和活动关系可能改变检索与分组，应按其影响判断调查充分性；首版、用户推动后的修订与最终接受需分别评价。没有将后来的菜名研究偏好倒算成事前已知要求，也没有把用户起初对品酒与晚餐的说法当成Agent本应预知的错误。
+- **第5包按现有Profile判断，无需先新增异常策略。** `invalid`、`unresolved`和`usable`不能独立决定逻辑归属；Apply合约明确允许容器无效但可安全作为字节搬移的情况。共同代表实际覆盖4项，画面来自另一台Pocket相机，原代表不可用后替换以及未逐项比较的限定均真实存在。包内没有将共同代表关系误当成内容等价证明。
+- **默认细则向运行Skill的交付缺口确实存在。** 当时和当前Skill只概括相关素材、异常可见和Profile偏离，未交付 `a-files/`、`Uncategorized/`、`d-damaged-info/` 及其具体适用规则；唯一随包Profile参考是默认不适用时的替代方向。这个缺口可以直接复核，但不是已证明的唯一行为原因。
+- **GPX与范围控制标记的用途区分合理。** 两份GPX为auxiliary/unresolved，已有available来源验证观察，但附带“普通变化检测，不是精确完整字节证明”的限制。两个 `.albumignore` 为auxiliary/usable，来源验证未检查。包内没有把它们仅按auxiliary标签统一移动，也没有把available观察冒充Apply已通过。
+- **没有虚报完成。** 两包明确保持方案未定案；本轮仅文档复核，不存在新Skill交付、真实Agent行为改善、安装升级或业务Plan修复证据。记录的fixture verifier清单匹配、整体大小超限失败，也未被写成整包通过。本轮复核消费原始公开回执和既有验证记录，没有再次运行模型、地图、媒体处理或Apply。
+
+没有发现阻止继续讨论的事实或职责错误。该结论不等于对某个具体新目录、菜名默认深度或实施方案作出Human确认。以下仍属于后续闭合条件：
+
+1. 已有Profile细则需真正交付到所使用的Skill或其明确阅读入口，并验证实际安装内容；仅把说明留在问题包中不能算第5包已解决。
+2. 第4包需要针对可得证据、用户检索目的和重要未知进行真实行为验证，包括关键缺口时调查、充分时直接推进、未知时诚实处置，以及更正后的改版。只检查文字出现或继续增加Skill段落不足以证明改善。
+3. 具体菜名的默认研究深度可以继续讨论，不应成为执行已确定的主动调查职责和异常处置规则的前提，也不应从本次案例固化为所有数据集的必问步骤。
+4. 普通合约允许留原位的 `other_outcome`，不要求每次都证明某种特殊原因；在已采用默认Profile的上下文中，本次需要评价的是具体处置是否有适用依据、偏离是否清楚，而不是新增“所有保留都必须证明异常”的通用门槛。
+
+本次复核时仓库HEAD为 `0794d3c9182793b7b25c1cac77793e3c97e42092`，存在与1—3包相关的其他工作区修改。只在本验收报告记录复核，不改写4、5包作者的提议或把其状态提升为已实施。
+
+
+**2026-09-13 第 1—3 包再次独立验收：源码与确切隔离安装包通过。**
+
+本轮根据用户给出的 surface `C5F5E542-A1F8-4CD6-8995-A47E9174C281` 核对实际会话、补修代码、持久产物和既有合约。实际工作会话为 `01a096f7-4af9-7842-a8a5-6692f5b18287`；读取时共909行，SHA-256为 `6d42359ca698a5cbe824fcb73b52ee990201c862d24b058b9ae05b037d251288`。第657行保留此前独立复核的两个遗漏与旧产物丢失反馈，第906行为二次交付。未向原会话发送消息或改变其状态。
+
+本轮验收绑定新 wheel `9e813bda30fa4b7cc33517d582aefd7547f48e7836a8a78ed7a0f9df31df9f9f`，不是恢复旧 `55db4708…` 的字节身份。持久目录为 [.local/acceptance-releases/260913-1107-google-gpx-r2](../../../.local/acceptance-releases/260913-1107-google-gpx-r2/REVIEW.md)，源码基点为 `0794d3c9182793b7b25c1cac77793e3c97e42092` 加该目录的 source.diff。
+
+独立执行证据：
+
+| 检查 | 本轮实际结果 |
+| --- | --- |
+| SHA256SUMS | 17项全部匹配，包括wheel、源码归档、差异、约束和原交付日志 |
+| 源码清单 | 793个文件与5个符号链接全部匹配 |
+| 包内容 | distribution artifact检查通过；8个关键生产文件在当前源码、快照、wheel与隔离site-packages中逐字一致 |
+| 隔离安装包回归 | 以CPython 3.11.13/core环境、`-o pythonpath=''`及禁用pytest缓存执行14个相关测试文件，**166 passed，69.89秒** |
+| CLI/MCP分发 | 按保留依赖约束，离线创建新的临时uv tool环境，真实CLI/MCP smoke通过；只清理该临时环境 |
+| 额外Provider边界 | 本审计另写内存探针，通过生产 `_geo_tool` 装配，只替换最外层opener，验证9种场景及重放；没有真实Provider请求 |
+| 原业务Result | 文件SHA-256仍与原审计值相同，未改写 |
+
+第1项的两轮问题均在当前安装包得到闭合：独立组件的数量与半径上限、明确错误分类、停止与恢复、实际请求及未知费用保留都通过。回归覆盖明确quota/rate原因在HTTP 400/429/503下的行为。额外探针验证quota或服务禁用若先发生在地址组件则1次请求后停止，若地址成功后发生在附近地点则2次停止；后续组件或坐标保持not_requested。明确INVALID_ARGUMENT即使随429返回也直接抛执行异常，未分类400同样不伪装成地点缺口；已有attempt保留，重放零新增请求，原始错误message/metadata未进入journal。真正限流仅重试失败组件并保留2/3秒退避；地址限流时同坐标的独立附近组件仍可先完成，累计4次请求符合两组件与有限重试含义。探针最初误将这一情形的上界写成3，检查实际请求序列后按现有独立组件语义纠正了审计断言，没有改产品或降低其承诺。
+
+第2项的重复准备实现与此前等输出优化结论继续成立；本轮补修后的真实producer、准入、executor、orchestrator和公开Run状态回归通过。超预算返回 `blocked / gpx_resource_budget_insufficient`，保留metadata成功和未尝试的GPX Work，不发布Result；原预算下resume仍如实阻塞，取消后以足够预算建立后继Run可复用metadata并完成GPX。未知RuntimeError仍暴露并成为execution_worker_crashed，不转换为正常资源等待。**586.77→54.42秒与4,068→2次是首轮历史全量测量，本轮没有重新测量全量耗时。**
+
+第3项实现未在二次补修中变化；本轮核对metadata优先、GPX补缺、available筛选、受影响组Work依赖标记，以及真实GPX producer到压缩空间比较/限定的回归。没有发现阻断问题。**55个坐标补用、71→21个限定、156组成员不变是首轮全量证据，本轮仅重新验证有界生产链与安装内容，未把它们冒称新一轮香港全量结果。** 用户已确认的0.311保持不变。
+
+本轮安装回归命令使用保留的 source 目录作为cwd：
+
+```sh
+rtk proxy env -u PYTHONPATH PYTHONDONTWRITEBYTECODE=1 ../venv/bin/python -m pytest -o pythonpath='' -p no:cacheprovider -q tests/test_google_nearby_requests.py tests/test_geo_tool.py tests/test_geo_recovery.py tests/test_geo_process_recovery.py tests/test_geo_capability_model.py tests/test_geocode.py tests/test_gpx.py tests/test_gpx_preparation.py tests/test_gpx_resource_delivery.py tests/test_compression.py tests/test_compression_gpx.py tests/test_source_validity.py tests/test_resources.py tests/test_precheck_orchestration.py --tb=short
+```
+
+分发复验在仓库根运行保留快照内的 `tests/run_distribution_smoke.py`，参数为该wheel、`--offline`、该目录 `dependencies.txt` 约束和保留venv的Python。没有从checkout注入产品包；没有为审计下载依赖或加载模型。一次额外探针最初误用RuntimeConfig字段名而未执行，按真实装配接口修正后完成上述9种情形；失败不计入产品缺陷。
+
+**通过范围是三项源码修复与这个确切隔离安装包，不是日常环境或历史业务恢复。** 本轮只读比对显示日常安装的geo.py、gpx.py、压缩producer和orchestrator仍与候选包不同，且摘要仍为原运行版本。日常CLI/Skills/已开Host未升级；旧失败Result没有被修复成成功，真实地图恢复和新的业务Result尚未执行。本次没有发现需要重新讨论产品语义的阻断问题，也没有给这些未执行事项记通过。
+
+
+**2026-09-13 第 4、5 包再次独立验收：实现与确切隔离交付通过，行为结论限定于已运行场景。**
+
+本轮重新读取用户指定的 surface `7B978889-A337-432A-B709-D83292FF6618`。当前交付会话为 `01a098d2-c21d-7a81-a37a-6907ec1b5368`，从此前讨论会话继续；第52行是用户“直接开始开发”的授权，第766行是最终交付。本次固定读取770行，SHA-256为 `6ef623dcac2ceaf7b6e0c756745e7000f97e154dbe423d652adf8895f87fb019`。没有向原会话发送消息或命令。本段更新此前“仅讨论通过”的状态，不改写当时的判断。
+
+没有发现需要退回修复的阻断问题。第4包把重要缺口、可支持的粗表达和后续更正落实到既有Plan Skill；第5包补齐完整默认组织规则的离线交付，并要求按关联与上下文处置异常。默认Profile全文未改变，Skill引用其逐字发布副本；没有新增Profile对象、固定提问配额、condition统一去向或Tool语义认证。公开contract和schema无变更，仍使用现有Work、Candidate、decision_notes与Source Sets。
+
+本次绑定 `.local/acceptance-releases/260913-1214-plan-skill/candidate-02/`，源码基点为 `0794d3c9182793b7b25c1cac77793e3c97e42092` 加明确列出的覆盖文件；没有包含第1—3包在途补修。独立结果见[复验指标](metrics/plan-packets-4-5-revalidation.json)，开发方原始材料见[行为验证报告](../260913-1214-plan-skill-behavior/report.md)。
+
+| 独立检查 | 实际结果 |
+| --- | --- |
+| 最终wheel | SHA-256 `249398c2150fbf129a946c9822b174dab150bc57eff1efedc1386d8dfcd2b7ef`，身份匹配 |
+| Skill交付 | 当前源码、构建快照、wheel和隔离site-packages逐字一致；Skill为 `16f15bb281460d05bdd61bb6b7ba1e3360757e1b1356c06a69d7a816d1842950` |
+| 默认Profile | 发布副本与权威逐字一致，SHA-256 `5f561a600a397e4ce96b3a57abf10ae3f2bc5c8c08b53f2bbc4bd50349523189`；7条会话均有完整读取回执 |
+| 安装版回归 | 独立复跑7个相关测试文件，**169 passed，10.83秒**；确认导入隔离安装，清除PYTHONPATH、禁用源码注入和pytest缓存 |
+| 离线分发 | 用保留约束重新创建临时uv tool环境，实际安装、Skill安装、CLI/doctor和MCP检查通过；首次被沙箱拒绝访问已有uv缓存，按相同离线范围重试成功 |
+| 行为数据与保存结果 | 7条会话前缀摘要、63次Read/Plan业务调用、18次discovery及35次图卡打开核对一致；7个最终候选均唯一完整对账、保持open，全部合成源与Result字节未变 |
+
+安装版检查使用CPython 3.11.13/core组合。开发方记录的1377项完整源码测试属于首版隔离导出，本轮没有重新运行；首版至最终版的生产差异仅为Skill的模型处理与费用说明。独立测试命令、JUnit和分发日志保留在忽略目录[本轮原始验证输出](outputs/plan-packets-4-5-revalidation/)，没有把临时安装、数据库或原始轨迹加入Git。
+
+第4包的实际候选有可核对的改善：旅行场景保留餐厅与活动两类检索线索，未知餐厅和品鉴归属进入调查；用户记不起时，候选明确保留店名、场所和活动关系的限制，没有猜酒店或把品鉴直接并入晚餐。书展与散步场景直接形成两个浅层活动目录，没有为了缺少城市或河名增加无关问题。后来更正品酒班归属时，真实update替换候选，相关两项改为独立酒店活动，其他组的成员保持；菜单选项没有变成全部实际点餐的事实。非餐饮场景也实际展开共同代表中的独立图卡，最后分开看展和体验课。
+
+第5包的实际候选保留了不同处置的含义：损坏原片与两个可读版本及另一相机素材同组，但明确说明共同代表、同stem和时间关系不认证修复完整或内容相同。遮挡但可读的视频停在可信旅行日期层；只知旅行的坏片、无背景坏片和可读未决项分别保留对应上下文与兜底。相关GPX进入旅行辅助资料，两份控制标记留原父目录；另一场景中属于朋友其他徒步活动的GPX单独保留，没有仅按扩展名加入当前活动。依据、未知和适用成员在实际Candidate中可读，不只是报告中的解释。
+
+7位执行者不能记成“最终版首轮7次全部成功”：首版4位后续重读升级内容，其中过宽的“无模型调用／费用”说明经修订才消除；最终版有另外3位从头执行。旧候选、修订和资源读取身份均保留。本轮确认了7次启动的 `fork_turns=none`、模型均为 `gpt-6-astra / low`，以及实际资源读取、命令、图卡和候选结果；任务及Agent间消息正文在本机JSONL中为加密内容，无法逐字独立审计全部提示和模拟回答。因此，本轮不认证严格盲测的无提示成功，也不从这些场景推导改动的因果收益或未来较弱模型的成功率。
+
+**通过范围仍不包括日常安装、原香港Plan重做或最终人工接受。** 日常安装的Plan Skill仍是旧摘要 `adac003173e98b31b015f5e134c0b49936b30c8c6e56e1bd9827101d012d69b9`；原香港Result仍为最初审计的 `1f9141e72d3fa01b47f8edebc8990d4fc531761bb6801214a9411aede945c638`。本次不认证Python 3.13.5加embeddings、1—5包整合发布、真实照片识别、大集合阅读效率、seal或Apply。HTML自动交付继续属于第6包；已有Preview测试通过不能记为第6包修复完成。

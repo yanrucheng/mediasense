@@ -2,7 +2,11 @@
 
 ## 交接状态
 
-记录日期：2026-09-13。阶段：**已按后续授权完成源码修复和真实 producer 的源码/隔离安装回放；日常环境未升级、业务 Result 未改写**。
+记录日期：2026-09-13。阶段：**代码修复已通过用户独立验收；重建的确切持久 wheel 又通过独立 Agent 回归及 CLI/MCP 复验。日常环境未升级、业务 Result 未改写；首轮全量压缩未重跑**。
+
+独立复验结论与范围见[运行验收报告末尾的第 1—3 包再次独立验收](../../../eval/sessions/260912-2333-hk-run-acceptance/report.md)。该结论绑定新 wheel `9e813bda30fa4b7cc33517d582aefd7547f48e7836a8a78ed7a0f9df31df9f9f`，不扩大为日常安装、真实 Provider 成功或历史业务恢复。
+
+本轮未修改此项实现。当前安装包证据见本页末尾的二次交付，首轮全量回放数据保留为历史记录。
 
 创建时用户要求只整理问题；本次已另行授权在现有设计与合约内直接修复。历史审计事实保持原义，最终实现与验证记录如下；没有改变公开坐标语义或默认尺度。
 
@@ -53,7 +57,7 @@ PreCheck Run 为 `precheck-run:8b5ff902fda54e6292b14d4fa5f0de42`，Result 为 `p
 
 ### 原因与修复
 
-当前源码仍在 GPX Work 上查询 `gps_coordinates`。新增测试用真实 MetadataProducer、GPXMatchProducer、rendition 和 embedding Work 构造消费链，修复前 `_prepare_input` 得到的坐标为 None，直接揭示了丢失；没有用手写同名字段假装生产者已接通。
+首轮修复前源码在 GPX Work 上查询 `gps_coordinates`。新增测试用真实 MetadataProducer、GPXMatchProducer、rendition 和 embedding Work 构造消费链，修复前 `_prepare_input` 得到的坐标为 None，直接揭示了丢失；没有用手写同名字段假装生产者已接通。
 
 现有压缩 producer 分别读取 metadata 的 `gps_coordinates` 和 GPX 的 `gpx_coordinates`，保留 metadata 优先、GPX 补缺及只有 available 值可用的规则。GPX 仍是带来源/匹配依据的候选；没有覆盖源 GPS、改变 Geo 采集坐标策略或将代表坐标推广成所有成员的事实。
 
@@ -84,4 +88,14 @@ PreCheck Run 为 `precheck-run:8b5ff902fda54e6292b14d4fa5f0de42`，Result 为 `p
 
 这证明本次已有 GPX 信息被实际消费并正确影响限定，不证明全部场景的语义分组正确，也不证明组数、地图查询数应减少。0.311 用户决定保持不变。没有封存新业务 Result、修改原 Result 或切换日常 Host；这些是独立后续交付。本次没有需要用户重新决定的具体事项。
 
-最终共同验收：源码 **158 passed**；隔离 wheel **158 passed**，并通过离线 CLI/MCP 分发 smoke。最终 wheel SHA-256：`55db47084afc8c75b3204d358ff0f771f7d8b2a337695efc15573139bdf4c55b`。
+首轮共同自验的历史记录：源码 **158 passed**；隔离 wheel **158 passed**，并通过离线 CLI/MCP 分发 smoke。旧 wheel SHA-256：`55db47084afc8c75b3204d358ff0f771f7d8b2a337695efc15573139bdf4c55b`；其临时产物已丢失。
+
+## 产物缺失后的二次交付（2026-09-13）
+
+用户已独立确认字段消费、metadata 优先、受影响 Work 失效及空间比较路径，接受本项代码。本轮只修复相邻 Google/GPX 问题并恢复可复核安装包，不改变压缩实现、坐标语义或 0.311 默认尺度。
+
+原 `/tmp/mediasense-run-acceptance-repairs/` 已不存在，无法重验旧 wheel。新构建基于 `0794d3c9182793b7b25c1cac77793e3c97e42092` 加本轮两个补修，源码和隔离 wheel 共同回归各 **166 passed**，包含真实 GPX producer 到压缩消费者的测试；包文件一致性及离线 CLI/MCP 分发 smoke 通过。没有重跑香港全量压缩，原 **55 个坐标、71→21 个限定、156 组**继续作为首轮历史证据，不是本轮新测量。
+
+新 wheel SHA-256：`9e813bda30fa4b7cc33517d582aefd7547f48e7836a8a78ed7a0f9df31df9f9f`。持久产物在仓库内 `.local/acceptance-releases/260913-1107-google-gpx-r2/`，由现有 Packet 指向，不新增发布注册表。保留源码、归档、差异、约束、venv 和日志：[复核说明](../../../.local/acceptance-releases/260913-1107-google-gpx-r2/REVIEW.md)、[校验清单](../../../.local/acceptance-releases/260913-1107-google-gpx-r2/SHA256SUMS)。[verification.json](verification.json) 的 current_delivery 是当前证据，previous_delivery 是不可冒充新包验收的旧记录。
+
+本次未进行日常安装升级或业务 Result 改写；本项代码通过与共同安装包独立复验的状态分开记录。

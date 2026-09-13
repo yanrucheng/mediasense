@@ -1,0 +1,921 @@
+{
+  "exchanges": [
+    {
+      "name": "complete-local-request",
+      "tool": "run",
+      "request": {
+        "action": "start",
+        "dataset_ref": "dataset:example",
+        "request_id": "request:local",
+        "prior_result_ref": "precheck-result:a",
+        "source_set": {
+          "kind": "precheck_relation",
+          "origin": "precheck-result:a",
+          "relation": "accounts_for",
+          "direction": "outbound"
+        },
+        "profile": {
+          "compression": {
+            "content_distance_scale": 0.311,
+            "spatial_scale_meters": 3000.0,
+            "target_entries": 2,
+            "temporal_scale_seconds": 86400.0
+          },
+          "configuration_identity": "sha256:ff4f40fd14e3a18c03b2acd7a0e53d1f514a8d613bbf564d25d210bc44545f5c",
+          "overrides": [
+            {
+              "source_set": {
+                "kind": "explicit",
+                "source_item_refs": [
+                  "source-item:input-0",
+                  "source-item:input-1"
+                ]
+              },
+              "compression": null
+            }
+          ]
+        }
+      },
+      "response": {
+        "run_ref": "precheck-run:b"
+      }
+    },
+    {
+      "name": "bounded-preparation-readback",
+      "tool": "read",
+      "request": {
+        "action": "review",
+        "dataset_ref": "dataset:example",
+        "result_ref": "precheck-result:b",
+        "include": [
+          "preparation"
+        ],
+        "page": {
+          "limit": 1
+        }
+      },
+      "response": {
+        "result": {
+          "ref": "precheck-result:b",
+          "coverage": "complete",
+          "readiness": "plan_ready"
+        },
+        "accounting": {
+          "total": 8,
+          "scope_condition": [
+            {
+              "scope": "source_media",
+              "condition": "usable",
+              "count": 8
+            }
+          ],
+          "routes": {
+            "frontier_only": 8,
+            "exception_only": 0,
+            "frontier_and_exception": 0,
+            "residual": 0
+          },
+          "frontier": {
+            "entry_evidence_count": 4,
+            "coverage_memberships": 8,
+            "represented_unique_source_items": 8
+          }
+        },
+        "preparation": {
+          "source_set": {
+            "kind": "precheck_relation",
+            "origin": "precheck-result:b",
+            "relation": "accounts_for",
+            "direction": "outbound"
+          },
+          "profile": {
+            "compression": {
+              "content_distance_scale": 0.311,
+              "spatial_scale_meters": 3000.0,
+              "target_entries": 2,
+              "temporal_scale_seconds": 86400.0
+            },
+            "configuration_identity": "sha256:ff4f40fd14e3a18c03b2acd7a0e53d1f514a8d613bbf564d25d210bc44545f5c",
+            "overrides": [
+              {
+                "compression": null,
+                "source_set": {
+                  "kind": "profile_scope",
+                  "index": 0
+                }
+              }
+            ]
+          }
+        },
+        "items": [
+          {
+            "evidence_ref": "evidence:fa66cf3b68f2101ce9d19f5daf9311d375f976ba4f871721c2ebf39f76c6e3a2",
+            "access": {
+              "kind": "local_artifact",
+              "locator": {
+                "kind": "local_file_path",
+                "value": "/example/workspace/precheck/_artifacts/sha256/ed/ede69abffca387cf5271a5c53bd670db872bf2839db3486c2a3303b02d5f63e6.jpg"
+              }
+            },
+            "observations": [
+              {
+                "basis": "builtin-image-rendition-v1",
+                "name": "pixel_dimensions",
+                "status": "available",
+                "value": {
+                  "height": 8,
+                  "profile": {
+                    "jpeg_quality": 85,
+                    "max_edge": 640,
+                    "name": "ordinary",
+                    "orientation": "exif-transpose-v1"
+                  },
+                  "width": 8
+                }
+              }
+            ],
+            "source_items": [
+              {
+                "source_item_ref": "source-item:output-0",
+                "locator": {
+                  "kind": "source_root_relative_path",
+                  "source_root_ref": "source-root:example",
+                  "value": "00000.jpg"
+                },
+                "observations": [
+                  {
+                    "basis": "accounted Source revision, bounded fingerprint, and stable current file identity",
+                    "name": "source_content_verification",
+                    "qualifications": [
+                      {
+                        "code": "ordinary_change_detection_only",
+                        "effect": "limits_interpretation",
+                        "message": "The observation detects ordinary source changes but is not an exact full-byte proof."
+                      }
+                    ],
+                    "status": "available",
+                    "value": {
+                      "observed_at": "2026-09-13T16:23:44.839944+00:00",
+                      "producer": "builtin-source-revision-observation-v1",
+                      "profile": "candidate-sha256-full-or-3x4k-v1",
+                      "size_bytes": 633,
+                      "value": "sha256:3ecd86ac926dcbcfa57a7365efdab3adb76faedf6f08f6cc152417ff67221605"
+                    }
+                  },
+                  {
+                    "basis": {
+                      "code": "capability_disabled"
+                    },
+                    "name": "content_sensitivity",
+                    "provenance": {
+                      "definitions": {
+                        "declared_properties": [
+                          "classification_distribution",
+                          "cumulative_probabilities"
+                        ],
+                        "labels": [
+                          "neutral",
+                          "low",
+                          "medium",
+                          "high"
+                        ],
+                        "meaning": "Native mutually exclusive ordinal class probabilities, not a nudity fact, accuracy or remote-processing permission.",
+                        "taxonomy": "freepik-native-levels"
+                      },
+                      "detector_identity": "Freepik/nsfw_image_detector@15b85477e4fd2000db76ae9aae0f89a72f95e2e3;profile=freepik-ordinal448-mps-fp32-v1;recipe=sha256:4847211787dd86b5f5d2949f9fd6ca55569f4641980d590fad87b61c29b27877",
+                      "identity_basis": "configuration",
+                      "profile": "freepik-ordinal448-mps-fp32-v1"
+                    },
+                    "status": "not_checked"
+                  },
+                  {
+                    "basis": {
+                      "code": "capability_disabled"
+                    },
+                    "name": "content_sensitivity",
+                    "provenance": {
+                      "definitions": {
+                        "declared_properties": [
+                          "region_detections"
+                        ],
+                        "labels": [
+                          "FEMALE_GENITALIA_COVERED",
+                          "FACE_FEMALE",
+                          "BUTTOCKS_EXPOSED",
+                          "FEMALE_BREAST_EXPOSED",
+                          "FEMALE_GENITALIA_EXPOSED",
+                          "MALE_BREAST_EXPOSED",
+                          "ANUS_EXPOSED",
+                          "FEET_EXPOSED",
+                          "BELLY_COVERED",
+                          "FEET_COVERED",
+                          "ARMPITS_COVERED",
+                          "ARMPITS_EXPOSED",
+                          "FACE_MALE",
+                          "BELLY_EXPOSED",
+                          "MALE_GENITALIA_EXPOSED",
+                          "ANUS_COVERED",
+                          "FEMALE_BREAST_COVERED",
+                          "BUTTOCKS_COVERED"
+                        ],
+                        "meaning": "Native body-region detection scores, not image sensitivity probabilities. Omitted labels do not establish real-world absence.",
+                        "taxonomy": "nudenet-3.4.2-native-body-labels"
+                      },
+                      "detector_identity": "notAI-tech/NudeNet/640m@nudenet-3.4.2/v3.4-weights;profile=nudenet640-native-cpu-fp32-v1;recipe=sha256:fa3df4704202b3e0c77781aa90d4eead5a43f0d6ba5ffe73cfeb9aacc6ba52d4",
+                      "identity_basis": "configuration",
+                      "profile": "nudenet640-native-cpu-fp32-v1"
+                    },
+                    "status": "not_checked"
+                  },
+                  {
+                    "basis": {
+                      "code": "coordinate_unavailable",
+                      "outcome": "not_applicable",
+                      "summary": "reverse_geocode: not_applicable"
+                    },
+                    "name": "address_candidate",
+                    "status": "not_applicable"
+                  },
+                  {
+                    "basis": {
+                      "code": "coordinate_unavailable",
+                      "outcome": "not_applicable",
+                      "summary": "nearby_places: not_applicable"
+                    },
+                    "name": "nearby_place_candidates",
+                    "status": "not_applicable"
+                  }
+                ]
+              }
+            ],
+            "represents": {
+              "source_set": {
+                "kind": "precheck_relation",
+                "origin": "evidence:fa66cf3b68f2101ce9d19f5daf9311d375f976ba4f871721c2ebf39f76c6e3a2",
+                "relation": "represents",
+                "direction": "outbound"
+              },
+              "source_count": 1,
+              "scope_condition": [
+                {
+                  "scope": "source_media",
+                  "condition": "usable",
+                  "count": 1
+                }
+              ],
+              "observations": [
+                {
+                  "name": "capture_time_range",
+                  "status": "missing",
+                  "basis": {
+                    "summary": "Computed from the exact members' retained observations.",
+                    "status_counts": {
+                      "unreported": 1
+                    }
+                  }
+                },
+                {
+                  "name": "media_type_counts",
+                  "status": "missing",
+                  "basis": {
+                    "summary": "Computed from the exact members' retained observations.",
+                    "status_counts": {
+                      "unreported": 1
+                    }
+                  }
+                }
+              ],
+              "basis": "one locally decoded rendition of this Source Item"
+            },
+            "available_expansions": [
+              {
+                "include": "prepared_targets",
+                "estimated_items": 2
+              },
+              {
+                "include": "provenance",
+                "estimated_items": 1
+              },
+              {
+                "include": "coverage_basis",
+                "estimated_items": 1
+              },
+              {
+                "include": "member_observations",
+                "estimated_items": 1
+              }
+            ],
+            "qualifications": [
+              {
+                "code": "lower_fidelity_rendition",
+                "effect": "limits_interpretation",
+                "message": "JPEG rendition is smaller and may omit source detail."
+              }
+            ],
+            "unassigned_prepared_evidence": [
+              "evidence:6c828f7862e37d299750320c6b0503ebd7e933ce0b696e96e39a6392376f30f3"
+            ]
+          }
+        ],
+        "page": {
+          "total": 4,
+          "next_cursor": "opaque:next-evidence-page"
+        }
+      }
+    },
+    {
+      "name": "direct-input-correspondence",
+      "tool": "read",
+      "request": {
+        "action": "resolve",
+        "dataset_ref": "dataset:example",
+        "result_ref": "precheck-result:a",
+        "source_set": {
+          "kind": "explicit",
+          "source_item_refs": [
+            "source-item:input-0"
+          ]
+        },
+        "target_result_ref": "precheck-result:b"
+      },
+      "response": {
+        "resolution": {
+          "source_set_identity": "sha256:90d943a8737a0c63e9b15431f2ba89756a666926823750a93680d39f079bfdd9",
+          "membership_identity": "sha256:ed19a641956aee8c419f0090f8ec41af08644708f20037c7b93e408c275bed02",
+          "target_result_ref": "precheck-result:b"
+        },
+        "members": [
+          {
+            "source_item_ref": "source-item:input-0",
+            "locator": {
+              "kind": "source_root_relative_path",
+              "source_root_ref": "source-root:example",
+              "value": "00000.jpg"
+            },
+            "scope": "source_media",
+            "condition": "usable",
+            "source_content_verification": {
+              "status": "available",
+              "observed_at": "2026-09-13T16:23:44.406465+00:00",
+              "producer": "builtin-source-revision-observation-v1",
+              "profile": "candidate-sha256-full-or-3x4k-v1",
+              "size_bytes": 633,
+              "value": "sha256:3ecd86ac926dcbcfa57a7365efdab3adb76faedf6f08f6cc152417ff67221605",
+              "basis": "accounted Source revision, bounded fingerprint, and stable current file identity",
+              "qualifications": [
+                {
+                  "code": "ordinary_change_detection_only",
+                  "effect": "limits_interpretation",
+                  "message": "The observation detects ordinary source changes but is not an exact full-byte proof."
+                }
+              ]
+            },
+            "correspondence": {
+              "status": "matched",
+              "source_item_ref": "source-item:output-0",
+              "basis": {
+                "code": "recorded_input_binding",
+                "verification_profile": "candidate-sha256-full-or-3x4k-v1"
+              },
+              "qualifications": [
+                {
+                  "code": "ordinary_change_detection_only",
+                  "effect": "limits_interpretation",
+                  "message": "The bound occurrence passed ordinary change detection, not a full-byte equality proof."
+                }
+              ]
+            }
+          }
+        ],
+        "page": {
+          "total": 1,
+          "next_cursor": null
+        }
+      }
+    },
+    {
+      "name": "independent-result-is-unproven",
+      "tool": "read",
+      "request": {
+        "action": "resolve",
+        "dataset_ref": "dataset:example",
+        "result_ref": "precheck-result:a",
+        "source_set": {
+          "kind": "explicit",
+          "source_item_refs": [
+            "source-item:input-0"
+          ]
+        },
+        "target_result_ref": "precheck-result:c"
+      },
+      "response": {
+        "resolution": {
+          "source_set_identity": "sha256:90d943a8737a0c63e9b15431f2ba89756a666926823750a93680d39f079bfdd9",
+          "membership_identity": "sha256:ed19a641956aee8c419f0090f8ec41af08644708f20037c7b93e408c275bed02",
+          "target_result_ref": "precheck-result:c"
+        },
+        "members": [
+          {
+            "source_item_ref": "source-item:input-0",
+            "locator": {
+              "kind": "source_root_relative_path",
+              "source_root_ref": "source-root:example",
+              "value": "00000.jpg"
+            },
+            "scope": "source_media",
+            "condition": "usable",
+            "source_content_verification": {
+              "status": "available",
+              "observed_at": "2026-09-13T16:23:44.406465+00:00",
+              "producer": "builtin-source-revision-observation-v1",
+              "profile": "candidate-sha256-full-or-3x4k-v1",
+              "size_bytes": 633,
+              "value": "sha256:3ecd86ac926dcbcfa57a7365efdab3adb76faedf6f08f6cc152417ff67221605",
+              "basis": "accounted Source revision, bounded fingerprint, and stable current file identity",
+              "qualifications": [
+                {
+                  "code": "ordinary_change_detection_only",
+                  "effect": "limits_interpretation",
+                  "message": "The observation detects ordinary source changes but is not an exact full-byte proof."
+                }
+              ]
+            },
+            "correspondence": {
+              "status": "unproven",
+              "basis": {
+                "code": "not_direct_successor"
+              }
+            }
+          }
+        ],
+        "page": {
+          "total": 1,
+          "next_cursor": null
+        }
+      }
+    }
+  ],
+  "invalid_requests": [
+    {
+      "name": "incomplete-compression",
+      "request": {
+        "action": "start",
+        "dataset_ref": "dataset:example",
+        "request_id": "request:local",
+        "prior_result_ref": "precheck-result:a",
+        "source_set": {
+          "kind": "precheck_relation",
+          "origin": "precheck-result:a",
+          "relation": "accounts_for",
+          "direction": "outbound"
+        },
+        "profile": {
+          "compression": {
+            "content_distance_scale": 0.311,
+            "target_entries": 2,
+            "temporal_scale_seconds": 86400.0
+          },
+          "configuration_identity": "sha256:ff4f40fd14e3a18c03b2acd7a0e53d1f514a8d613bbf564d25d210bc44545f5c",
+          "overrides": [
+            {
+              "source_set": {
+                "kind": "explicit",
+                "source_item_refs": [
+                  "source-item:input-0",
+                  "source-item:input-1"
+                ]
+              },
+              "compression": null
+            }
+          ]
+        }
+      },
+      "code": "invalid_request"
+    },
+    {
+      "name": "incomplete-profile",
+      "request": {
+        "action": "start",
+        "dataset_ref": "dataset:example",
+        "request_id": "request:local",
+        "prior_result_ref": "precheck-result:a",
+        "source_set": {
+          "kind": "precheck_relation",
+          "origin": "precheck-result:a",
+          "relation": "accounts_for",
+          "direction": "outbound"
+        },
+        "profile": {
+          "compression": {
+            "content_distance_scale": 0.311,
+            "spatial_scale_meters": 3000.0,
+            "target_entries": 2,
+            "temporal_scale_seconds": 86400.0
+          },
+          "overrides": [
+            {
+              "source_set": {
+                "kind": "explicit",
+                "source_item_refs": [
+                  "source-item:input-0",
+                  "source-item:input-1"
+                ]
+              },
+              "compression": null
+            }
+          ]
+        }
+      },
+      "code": "invalid_request"
+    },
+    {
+      "name": "snapshot-without-context",
+      "request": {
+        "action": "start",
+        "dataset_ref": "dataset:example",
+        "request_id": "request:local",
+        "source_set": {
+          "kind": "precheck_relation",
+          "origin": "precheck-result:a",
+          "relation": "accounts_for",
+          "direction": "outbound"
+        },
+        "profile": {
+          "compression": {
+            "content_distance_scale": 0.311,
+            "spatial_scale_meters": 3000.0,
+            "target_entries": 2,
+            "temporal_scale_seconds": 86400.0
+          },
+          "configuration_identity": "sha256:ff4f40fd14e3a18c03b2acd7a0e53d1f514a8d613bbf564d25d210bc44545f5c",
+          "overrides": [
+            {
+              "source_set": {
+                "kind": "explicit",
+                "source_item_refs": [
+                  "source-item:input-0",
+                  "source-item:input-1"
+                ]
+              },
+              "compression": null
+            }
+          ]
+        }
+      },
+      "code": "invalid_request"
+    },
+    {
+      "name": "override-without-snapshot",
+      "request": {
+        "action": "start",
+        "dataset_ref": "dataset:example",
+        "request_id": "request:local",
+        "prior_result_ref": "precheck-result:a",
+        "profile": {
+          "compression": {
+            "content_distance_scale": 0.311,
+            "spatial_scale_meters": 3000.0,
+            "target_entries": 2,
+            "temporal_scale_seconds": 86400.0
+          },
+          "configuration_identity": "sha256:ff4f40fd14e3a18c03b2acd7a0e53d1f514a8d613bbf564d25d210bc44545f5c",
+          "overrides": [
+            {
+              "source_set": {
+                "kind": "explicit",
+                "source_item_refs": [
+                  "source-item:input-0",
+                  "source-item:input-1"
+                ]
+              },
+              "compression": null
+            }
+          ]
+        }
+      },
+      "code": "invalid_request"
+    }
+  ],
+  "semantic_rejections": [
+    {
+      "name": "overlapping-overrides",
+      "request": {
+        "action": "start",
+        "dataset_ref": "dataset:example",
+        "request_id": "request:local",
+        "prior_result_ref": "precheck-result:a",
+        "source_set": {
+          "kind": "precheck_relation",
+          "origin": "precheck-result:a",
+          "relation": "accounts_for",
+          "direction": "outbound"
+        },
+        "profile": {
+          "compression": {
+            "content_distance_scale": 0.311,
+            "spatial_scale_meters": 3000.0,
+            "target_entries": 2,
+            "temporal_scale_seconds": 86400.0
+          },
+          "configuration_identity": "sha256:ff4f40fd14e3a18c03b2acd7a0e53d1f514a8d613bbf564d25d210bc44545f5c",
+          "overrides": [
+            {
+              "source_set": {
+                "kind": "explicit",
+                "source_item_refs": [
+                  "source-item:input-0",
+                  "source-item:input-1"
+                ]
+              },
+              "compression": null
+            },
+            {
+              "source_set": {
+                "kind": "explicit",
+                "source_item_refs": [
+                  "source-item:input-0",
+                  "source-item:input-1"
+                ]
+              },
+              "compression": null
+            }
+          ]
+        }
+      },
+      "response": {
+        "error": {
+          "code": "invalid_source_set",
+          "message": "overlapping-overrides"
+        }
+      }
+    },
+    {
+      "name": "smaller-snapshot",
+      "request": {
+        "action": "start",
+        "dataset_ref": "dataset:example",
+        "request_id": "request:local",
+        "prior_result_ref": "precheck-result:a",
+        "source_set": {
+          "kind": "explicit",
+          "source_item_refs": [
+            "source-item:input-0"
+          ]
+        },
+        "profile": {
+          "compression": {
+            "content_distance_scale": 0.311,
+            "spatial_scale_meters": 3000.0,
+            "target_entries": 2,
+            "temporal_scale_seconds": 86400.0
+          },
+          "configuration_identity": "sha256:ff4f40fd14e3a18c03b2acd7a0e53d1f514a8d613bbf564d25d210bc44545f5c",
+          "overrides": [
+            {
+              "source_set": {
+                "kind": "explicit",
+                "source_item_refs": [
+                  "source-item:input-0",
+                  "source-item:input-1"
+                ]
+              },
+              "compression": null
+            }
+          ]
+        }
+      },
+      "response": {
+        "error": {
+          "code": "invalid_source_set",
+          "message": "smaller-snapshot"
+        }
+      }
+    },
+    {
+      "name": "stale-configuration",
+      "request": {
+        "action": "start",
+        "dataset_ref": "dataset:example",
+        "request_id": "request:local",
+        "prior_result_ref": "precheck-result:a",
+        "source_set": {
+          "kind": "precheck_relation",
+          "origin": "precheck-result:a",
+          "relation": "accounts_for",
+          "direction": "outbound"
+        },
+        "profile": {
+          "compression": {
+            "content_distance_scale": 0.311,
+            "spatial_scale_meters": 3000.0,
+            "target_entries": 2,
+            "temporal_scale_seconds": 86400.0
+          },
+          "configuration_identity": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+          "overrides": [
+            {
+              "source_set": {
+                "kind": "explicit",
+                "source_item_refs": [
+                  "source-item:input-0",
+                  "source-item:input-1"
+                ]
+              },
+              "compression": null
+            }
+          ]
+        }
+      },
+      "response": {
+        "error": {
+          "code": "configuration_changed",
+          "message": "stale-configuration"
+        }
+      }
+    },
+    {
+      "name": "outside-reference",
+      "request": {
+        "action": "start",
+        "dataset_ref": "dataset:example",
+        "request_id": "request:local",
+        "prior_result_ref": "precheck-result:a",
+        "source_set": {
+          "kind": "precheck_relation",
+          "origin": "precheck-result:a",
+          "relation": "accounts_for",
+          "direction": "outbound"
+        },
+        "profile": {
+          "compression": {
+            "content_distance_scale": 0.311,
+            "spatial_scale_meters": 3000.0,
+            "target_entries": 2,
+            "temporal_scale_seconds": 86400.0
+          },
+          "configuration_identity": "sha256:ff4f40fd14e3a18c03b2acd7a0e53d1f514a8d613bbf564d25d210bc44545f5c",
+          "overrides": [
+            {
+              "source_set": {
+                "kind": "explicit",
+                "source_item_refs": [
+                  "source-item:outside"
+                ]
+              },
+              "compression": null
+            }
+          ]
+        }
+      },
+      "response": {
+        "error": {
+          "code": "reference_not_in_result",
+          "message": "outside-reference"
+        }
+      }
+    }
+  ],
+  "configuration_vectors": [
+    {
+      "config": {
+        "metadata": true,
+        "metadata_profile": {
+          "profile_id": "synthetic-元",
+          "timezone": "UTC",
+          "knowledge": []
+        },
+        "gpx": true,
+        "image_renditions": true,
+        "video": true,
+        "video_frame_limit": 3,
+        "bundles": true,
+        "compression_target": 200,
+        "directed_evidence_paths": [
+          "input/a.jpg"
+        ],
+        "embedding_profile": {
+          "name": "synthetic-v1",
+          "dimensions": 4,
+          "dtype": "float32-le",
+          "normalization": "unit_length"
+        },
+        "embedding_encoder_identity": "synthetic-encoder@sha256:one",
+        "sensitivity_profiles": [],
+        "sensitivity_detector_identities": [],
+        "sensitivity_configuration": {
+          "enabled": false,
+          "models": {
+            "detector": {
+              "enabled": false
+            }
+          }
+        },
+        "reverse_geocode_profile": {
+          "max_attempts": 3,
+          "max_places": 30,
+          "nearby_radius_meters": 500.0
+        },
+        "model_path": "/example/model",
+        "metadata_batch_size": 16,
+        "source_storage": "local",
+        "dataset_name": "example"
+      },
+      "recipes": {
+        "metadata": "metadata-recipe-v1",
+        "gpx": "gpx-recipe-v1",
+        "image_renditions": "image_renditions-recipe-v1",
+        "video": "video-recipe-v1",
+        "bundles": "bundles-recipe-v1",
+        "visual_selection": "visual_selection-recipe-v1",
+        "geo": "geo-recipe-v1",
+        "compression_recipe": "compression_recipe-recipe-v1"
+      },
+      "value": {
+        "kind": "precheck-preparation",
+        "values": {
+          "bundles": {
+            "enabled": true,
+            "recipe": "bundles-recipe-v1"
+          },
+          "compression_recipe": {
+            "recipe": "compression_recipe-recipe-v1",
+            "settings": {
+              "content_based_boundaries": true,
+              "exact_representative_limit": 256,
+              "representative_comparison_budget": 65536,
+              "representative_top_k": 0.5
+            }
+          },
+          "embedding": {
+            "encoder_identity": "synthetic-encoder@sha256:one",
+            "profile": {
+              "dimensions": 4,
+              "dtype": "float32-le",
+              "name": "synthetic-v1",
+              "normalization": "unit_length"
+            }
+          },
+          "geo": {
+            "profile": {
+              "max_attempts": 3,
+              "max_places": 30,
+              "nearby_radius_meters": 500.0
+            },
+            "recipe": "geo-recipe-v1"
+          },
+          "gpx": {
+            "enabled": true,
+            "recipe": "gpx-recipe-v1"
+          },
+          "image_renditions": {
+            "enabled": true,
+            "recipe": "image_renditions-recipe-v1"
+          },
+          "metadata": {
+            "enabled": true,
+            "profile": {
+              "knowledge": [],
+              "profile_id": "synthetic-元",
+              "timezone": "UTC"
+            },
+            "recipe": "metadata-recipe-v1"
+          },
+          "sensitivity": {
+            "disabled": [
+              "detector"
+            ],
+            "enabled": []
+          },
+          "video": {
+            "enabled": true,
+            "frame_limit": 3,
+            "recipe": "video-recipe-v1"
+          },
+          "visual_selection": {
+            "base_target": 200,
+            "directed_inputs": [
+              "input/a.jpg"
+            ],
+            "recipe": "visual_selection-recipe-v1"
+          }
+        }
+      },
+      "identity": "sha256:2dff7f2de988fc0aa049e3f75642734e73fce1afbdf20b53ae4067b7f676a308"
+    }
+  ],
+  "fixture": {
+    "accounted_source_count": 8,
+    "processable_source_refs": [
+      "source-item:input-0",
+      "source-item:input-1",
+      "source-item:input-2",
+      "source-item:input-3",
+      "source-item:input-4",
+      "source-item:input-5",
+      "source-item:input-6",
+      "source-item:input-7"
+    ],
+    "current_configuration_identity": "sha256:ff4f40fd14e3a18c03b2acd7a0e53d1f514a8d613bbf564d25d210bc44545f5c",
+    "note": "Synthetic exchanges derived from real local Run/Read output; relocated paths and opaque identities are illustrative. Result B uses the explicit full snapshot of A; Result C is independent."
+  }
+}

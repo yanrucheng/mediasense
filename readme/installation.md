@@ -46,17 +46,44 @@ and format declarations. The 0.9 Read change uses `review.items` and one MCP
 The 0.10 Geo journal migration preserves retained evidence but excludes old Host
 writers. No version number alone proves compatibility with a retained Dataset.
 
-The Plan optional-work update adds `working_notes` to the existing v3 Work store
-transactionally on first open. Existing Works start with empty notes; candidates,
-identities, revisions, receipts, cursor keys and pending seal reservations remain
-unchanged. No store is recreated and no Result or Frozen Plan is rewritten. This
-is an additive v3 storage extension, not a claim that an older Host implements
-the new Tool actions or Skill behavior. Back up an existing Dataset consistently
-before opening it with a new build; verify upgrade and recovery on an isolated
-copy first. The bounded Plan delivery check is
-`tests/run_plan_interaction_smoke.py --host <isolated-cli> --output <new-temp-dir>`
-using that installation's Python. It verifies notes, Candidate withdrawal,
-restart and the existing client-confirmation path without applying media.
+The continuous Plan view release uses private Plan store format 4. On a supported
+v3 Dataset, it keeps the existing database filename, Work/Result/Plan references,
+notes, preferences, cursor key, request history and Frozen Plan bytes. Nonempty
+old candidates gain kind=candidate; absent candidates remain absent. It retains
+a consistent pre-conversion database image beside the store and the preceding
+Dataset manifest. New requests use the new interface; old request IDs cannot be
+reinterpreted. It never invents reviewed_revision for earlier confirmations.
+
+Before upgrading a retained Dataset, stop its writers and finish any pending v3
+seal using the previous build. The new build refuses that unresolved publication
+instead of guessing its outcome. Back up the whole Dataset consistently; verify
+conversion and rollback on an isolated copy. Older Hosts reject format 4. A
+rollback may restore the retained old snapshot only before new writes; otherwise
+preserve the new state and use an explicitly verified recovery procedure.
+
+The normal plan.work create/update/inspect/seal path now returns a local page
+entry. The runtime starts a read-only loopback host on demand, verifies exact
+build identity and keeps it alive after the CLI exits. Transient connection data
+and diagnostics live below the selected user data home at runtime/plan-views;
+only explicitly bound Dataset/Work/Result resources can be read. There is no
+login service, remote hosting, media upload or HTTP planning/confirmation API.
+Page projection remains disposable; authoritative planning remains in the Dataset.
+
+Use the selected executable's `mediasense views status --json` to inspect its
+actual build/process and `mediasense views stop --json` to stop it. Before replacing
+an installation, stop the old build's page host with that executable. The next
+ordinary Work inspect automatically restarts/rebinds the current build and returns
+fresh URLs, without changing revision. A dead URL does not imply lost planning.
+A ready descriptor does not prove all images are readable; inspect the reported
+limits and actual page. Saving and display failures are separate.
+
+The isolated delivery check is `tests/run_plan_preview_delivery_smoke.py`, run
+with the isolated installation's Python and explicit --host, --output, --browser
+and --playwright paths. It generates 1200 synthetic media, calls ordinary CLI and
+MCP, and drives Chromium page controls. Keep output outside fixtures and Git.
+Its synthetic acceptance context proves binding enforcement, not an actual Human
+review or independent Agent's planning ability. Read the package-6 acceptance
+record for the exact verified build and remaining scope.
 
 
 ## Workflow
@@ -605,10 +632,14 @@ Reading retained V1 scores and thresholds (including 99/33) requires no model
 packages or weights. Historical missing positions/instances/input bindings remain
 unknown and sealed bytes never change.
 
-PreCheck private format 18 and Run snapshot 8 guard this output/configuration
-change. Opening a supported format-17 workspace upgrades only the store version
-marker; no Work outputs or Results are transformed. Older writers reject the
-new version. Before an authorized daily upgrade, finish/cancel old active Runs
+PreCheck private format 19 and Run snapshot 9 additionally retain complete
+ordinary Run preparation requirements and direct input bindings. Opening a
+supported format-17/18 workspace adds the Run-owned immutable preparation table
+and advances the store marker; no Work outputs, existing Run snapshots or Result
+bytes are transformed. Large frozen inputs are stored separately from frequently
+updated progress facts. Historical Results without recorded preparation report
+it as missing, and cannot acquire guessed lineage. Older writers reject the new
+version. Before an authorized daily upgrade, finish/cancel old active Runs
 with the old build or verify that the new build can retain their exact recipe;
 legacy sensitivity Runs cannot be converted into Freepik/640 while resuming.
 Use a consistent pre-upgrade Dataset backup and retained wheel for rollback;

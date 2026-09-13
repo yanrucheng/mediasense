@@ -4,7 +4,7 @@ title: "Design Documents"
 type: index
 status: active
 created: 2026-08-23
-updated: 2026-09-12
+updated: 2026-09-13
 timezone: "Asia/Shanghai"
 parent: "index-docs"
 depends-on: []
@@ -12,6 +12,8 @@ superseded-by: ""
 ---
 
 # Design Documents
+
+Read the applicable [basic concept model](../model/index.md) before proposing new designs. This directory owns design rationale and implementation choices; the model directory owns the accepted foundational concepts.
 
 | ID | Title | Status | Created | Summary |
 | --- | --- | --- | --- | --- |

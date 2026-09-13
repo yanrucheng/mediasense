@@ -44,6 +44,8 @@ from .accounting import AccountingStore
 from .source_validity import SourceContentProof, SourceValidityStore
 from .work import WorkStore
 
+PRODUCER_IDENTITY = "builtin-manufacturer-aware-exiftool-metadata-v1"
+
 
 _SIDECAR_SUFFIXES = (".xmp", ".exif", ".json", ".xml")
 _EXIF_DATETIME = re.compile(
@@ -499,7 +501,7 @@ class MetadataProducer:
         )
         spec = WorkSpec(
             capability="source-metadata",
-            producer_identity="builtin-manufacturer-aware-exiftool-metadata-v1",
+            producer_identity=PRODUCER_IDENTITY,
             dependencies=tuple(dependencies),
         )
         record = self.work.ensure_work(run_id, spec)

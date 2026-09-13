@@ -543,12 +543,15 @@ def test_start_preparation_failure_pauses_the_unowned_accounting_run(
     dataset_ref = str(opened["dataset_ref"])
     runtime = host._datasets[dataset_ref]
 
-    def fail_preparation(*_args, **_kwargs) -> None:
+    original_bind = runtime.precheck_run._store.bind_accounting_run
+
+    def fail_preparation(*args, **kwargs) -> None:
+        original_bind(*args, **kwargs)
         raise ValueError("simulated preparation failure")
 
     monkeypatch.setattr(
-        runtime.precheck_run,
-        "_resolved_execution_config",
+        runtime.precheck_run._store,
+        "bind_accounting_run",
         fail_preparation,
     )
     failed = host.call_tool(
@@ -850,7 +853,8 @@ def test_real_composition_hands_frozen_plan_to_apply_prepare(tmp_path: Path) -> 
             "work_ref": created["work_ref"],
             "base_revision": created["revision"],
             "request_id": "request:runtime-handoff-update",
-            "candidate_content": {
+            "organization_content": {
+                "kind": "candidate",
                 "result_ref": result_ref,
                 "scope": all_sources,
                 "logical_root": "Media",
@@ -887,6 +891,8 @@ def test_real_composition_hands_frozen_plan_to_apply_prepare(tmp_path: Path) -> 
             "request_id": "request:runtime-handoff-seal",
         },
         authority={
+            "work_ref": created["work_ref"],
+            "reviewed_revision": updated["revision"],
             "principal_ref": "human:test",
             "confirmed_content_identity": candidate_identity,
             "confirmed_at": "2026-09-02T00:00:00+00:00",

@@ -641,6 +641,16 @@ def _read_manifest(path: Path, *, migrate: bool = False) -> DatasetManifest:
         migrated["format_version"] = DATASET_MANIFEST_VERSION
         migrated["stores"] = dict(DATASET_STORE_VERSIONS)
         manifest = DatasetManifest.from_value(migrated, path=path)
+        if value["stores"].get("plan") == 3:
+            database = path.parent / "plan" / "work-v3.sqlite3"
+            if database.exists():
+                from mediasense.plan._sqlite import SQLitePlanStore
+
+                SQLitePlanStore(database)
+            backup = path.with_name("dataset.before-plan-v4.json")
+            if not backup.exists():
+                with backup.open("x") as stream:
+                    json.dump(value, stream, ensure_ascii=False, indent=2)
         _write_manifest(path, manifest)
         return manifest
     return DatasetManifest.from_value(value, path=path)
@@ -652,6 +662,8 @@ def _is_supported_legacy_manifest(value: object) -> bool:
     version = value.get("format_version")
     stores = value.get("stores")
     return (version, stores) in (
+        (3, {"apply": 2, "geo": 2, "plan": 4, "precheck": 18}),
+        (3, {"apply": 2, "geo": 2, "plan": 3, "precheck": 18}),
         (3, {"apply": 2, "geo": 2, "plan": 3, "precheck": 17}),
         (1, {"apply": 2, "geo": 1, "plan": 2, "precheck": 17}),
         (2, {"apply": 2, "plan": 3, "precheck": 17}),
@@ -725,11 +737,16 @@ def _verify_component_stores(workspace: Path, manifest: DatasetManifest) -> None
             )
         actual = int(row[0])
         expected = int(manifest.stores[name])
-        if name == "precheck" and actual == 17 and expected == 18:
+        if name == "plan" and actual == 3 and expected == 4:
+            from mediasense.plan._sqlite import SQLitePlanStore
+
+            SQLitePlanStore(database)
+            actual = 4
+        if name == "precheck" and actual in {17, 18} and expected == 19:
             from mediasense.precheck._accounting_sqlite import SQLiteAccounting
 
             SQLiteAccounting(database).initialize()
-            actual = 18
+            actual = 19
         if name == "geo" and actual == 1 and expected == 2:
             from mediasense.capabilities.geo.journal import GeoOperationJournal
 

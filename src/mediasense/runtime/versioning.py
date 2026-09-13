@@ -8,6 +8,6 @@ DATASET_MANIFEST_VERSION = 3
 DATASET_STORE_VERSIONS = {
     "apply": 2,
     "geo": 2,
-    "plan": 3,
-    "precheck": 18,
+    "plan": 4,
+    "precheck": 19,
 }

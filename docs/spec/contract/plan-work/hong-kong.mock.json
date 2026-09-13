@@ -31,6 +31,17 @@
           "default_hierarchy": "time_place_event",
           "maximum_depth": 3,
           "keep_related_raw_and_jpeg_together": true
+        },
+        "view": {
+          "work_ref": "plan-work:hk-001",
+          "result_ref": "precheck-result:hk-review-slice-002",
+          "revision": "work-revision:hk-001",
+          "current_revision": "work-revision:hk-001",
+          "observed_at": "2026-09-13T00:00:00Z",
+          "current_uri": "http://127.0.0.1:8765/example",
+          "revision_uri": "http://127.0.0.1:8765/example?revision=work-revision:hk-001",
+          "status": "ready",
+          "problems": []
         }
       }
     },
@@ -39,7 +50,8 @@
         "action": "update",
         "work_ref": "plan-work:hk-001",
         "base_revision": "work-revision:hk-001",
-        "candidate_content": {
+        "request_id": "request:plan-update-hk-001",
+        "organization_content": {
           "result_ref": "precheck-result:hk-review-slice-002",
           "scope": {
             "kind": "union",
@@ -52,14 +64,19 @@
               },
               {
                 "kind": "explicit",
-                "source_item_refs": ["source-item:215", "source-item:217"]
+                "source_item_refs": [
+                  "source-item:215",
+                  "source-item:217"
+                ]
               }
             ]
           },
           "logical_root": "Hong Kong review slice",
           "groups": [
             {
-              "relative_path": ["Illustrative bundle 61 subset"],
+              "relative_path": [
+                "Illustrative bundle 61 subset"
+              ],
               "members": {
                 "kind": "precheck_relation",
                 "origin": "evidence:bundle61-boundary",
@@ -69,30 +86,49 @@
               "source_naming": {
                 "default": "preserve_source_basename",
                 "overrides": [
-                  { "source_item_ref": "source-item:13", "name": "item-013.jpg" },
-                  { "source_item_ref": "source-item:14", "name": "item-014.jpg" },
-                  { "source_item_ref": "source-item:15", "name": "item-015.jpg" }
+                  {
+                    "source_item_ref": "source-item:13",
+                    "name": "item-013.jpg"
+                  },
+                  {
+                    "source_item_ref": "source-item:14",
+                    "name": "item-014.jpg"
+                  },
+                  {
+                    "source_item_ref": "source-item:15",
+                    "name": "item-015.jpg"
+                  }
                 ]
               }
             },
             {
-              "relative_path": ["Readable recovery candidate"],
+              "relative_path": [
+                "Readable recovery candidate"
+              ],
               "members": {
                 "kind": "explicit",
-                "source_item_refs": ["source-item:217"]
+                "source_item_refs": [
+                  "source-item:217"
+                ]
               },
-              "source_naming": { "default": "preserve_source_basename" }
+              "source_naming": {
+                "default": "preserve_source_basename"
+              }
             }
           ],
           "other_outcomes": [
             {
               "members": {
                 "kind": "explicit",
-                "source_item_refs": ["source-item:215"]
+                "source_item_refs": [
+                  "source-item:215"
+                ]
               },
               "outcome": "exclude_from_logical_organization",
               "reason": "The media container is unreadable; keep the Source Item accounted and do not substitute a repaired candidate.",
-              "evidence_refs": ["evidence:repair-patched"]
+              "evidence_refs": [
+                "evidence:repair-patched"
+              ]
             }
           ],
           "decision_notes": [
@@ -104,19 +140,25 @@
                 "direction": "outbound"
               },
               "summary": "Illustrative final grouping decision: reuse the complete PreCheck membership without treating that membership as semantic truth.",
-              "evidence_refs": ["evidence:bundle61-boundary"]
+              "evidence_refs": [
+                "evidence:bundle61-boundary"
+              ]
             },
             {
               "applies_to": {
                 "kind": "explicit",
-                "source_item_refs": ["source-item:215"]
+                "source_item_refs": [
+                  "source-item:215"
+                ]
               },
               "summary": "The repair association is useful evidence but does not prove identity and must not replace the invalid Source Item.",
-              "evidence_refs": ["evidence:repair-patched"]
+              "evidence_refs": [
+                "evidence:repair-patched"
+              ]
             }
-          ]
-        },
-        "request_id": "request:plan-update-hk-001"
+          ],
+          "kind": "candidate"
+        }
       },
       "response": {
         "outcome": "ok",
@@ -124,7 +166,18 @@
         "work_ref": "plan-work:hk-001",
         "result_ref": "precheck-result:hk-review-slice-002",
         "revision": "work-revision:hk-002",
-        "state": "open"
+        "state": "open",
+        "view": {
+          "work_ref": "plan-work:hk-001",
+          "result_ref": "precheck-result:hk-review-slice-002",
+          "revision": "work-revision:hk-002",
+          "current_revision": "work-revision:hk-002",
+          "observed_at": "2026-09-13T00:00:00Z",
+          "current_uri": "http://127.0.0.1:8765/example",
+          "revision_uri": "http://127.0.0.1:8765/example?revision=work-revision:hk-002",
+          "status": "ready",
+          "problems": []
+        }
       }
     },
     {
@@ -139,9 +192,25 @@
         "result_ref": "precheck-result:hk-review-slice-002",
         "revision": "work-revision:hk-002",
         "state": "open",
-        "returned_sections": ["overview", "preferences", "working_notes", "content", "validation"],
+        "returned_sections": [
+          "overview",
+          "preferences",
+          "working_notes",
+          "content",
+          "validation",
+          "view"
+        ],
         "sections": {
-          "overview": { "state": "open" },
+          "overview": {
+            "state": "open",
+            "organization_kind": "candidate",
+            "scope_summary": {
+              "scope": 5,
+              "organized": 4,
+              "other_outcomes": 1,
+              "unassigned": 0
+            }
+          },
           "preferences": {
             "default_hierarchy": "time_place_event",
             "maximum_depth": 3,
@@ -151,8 +220,6 @@
           "content": {
             "mode": "complete",
             "value": {
-              "contract": "mediasense.frozen-plan",
-              "plan_ref": "frozen-plan:hk-review-slice-reference-001",
               "result_ref": "precheck-result:hk-review-slice-002",
               "scope": {
                 "kind": "union",
@@ -165,14 +232,19 @@
                   },
                   {
                     "kind": "explicit",
-                    "source_item_refs": ["source-item:215", "source-item:217"]
+                    "source_item_refs": [
+                      "source-item:215",
+                      "source-item:217"
+                    ]
                   }
                 ]
               },
               "logical_root": "Hong Kong review slice",
               "groups": [
                 {
-                  "relative_path": ["Illustrative bundle 61 subset"],
+                  "relative_path": [
+                    "Illustrative bundle 61 subset"
+                  ],
                   "members": {
                     "kind": "precheck_relation",
                     "origin": "evidence:bundle61-boundary",
@@ -182,30 +254,49 @@
                   "source_naming": {
                     "default": "preserve_source_basename",
                     "overrides": [
-                      { "source_item_ref": "source-item:13", "name": "item-013.jpg" },
-                      { "source_item_ref": "source-item:14", "name": "item-014.jpg" },
-                      { "source_item_ref": "source-item:15", "name": "item-015.jpg" }
+                      {
+                        "source_item_ref": "source-item:13",
+                        "name": "item-013.jpg"
+                      },
+                      {
+                        "source_item_ref": "source-item:14",
+                        "name": "item-014.jpg"
+                      },
+                      {
+                        "source_item_ref": "source-item:15",
+                        "name": "item-015.jpg"
+                      }
                     ]
                   }
                 },
                 {
-                  "relative_path": ["Readable recovery candidate"],
+                  "relative_path": [
+                    "Readable recovery candidate"
+                  ],
                   "members": {
                     "kind": "explicit",
-                    "source_item_refs": ["source-item:217"]
+                    "source_item_refs": [
+                      "source-item:217"
+                    ]
                   },
-                  "source_naming": { "default": "preserve_source_basename" }
+                  "source_naming": {
+                    "default": "preserve_source_basename"
+                  }
                 }
               ],
               "other_outcomes": [
                 {
                   "members": {
                     "kind": "explicit",
-                    "source_item_refs": ["source-item:215"]
+                    "source_item_refs": [
+                      "source-item:215"
+                    ]
                   },
                   "outcome": "exclude_from_logical_organization",
                   "reason": "The media container is unreadable; keep the Source Item accounted and do not substitute a repaired candidate.",
-                  "evidence_refs": ["evidence:repair-patched"]
+                  "evidence_refs": [
+                    "evidence:repair-patched"
+                  ]
                 }
               ],
               "decision_notes": [
@@ -217,22 +308,44 @@
                     "direction": "outbound"
                   },
                   "summary": "Illustrative final grouping decision: reuse the complete PreCheck membership without treating that membership as semantic truth.",
-                  "evidence_refs": ["evidence:bundle61-boundary"]
+                  "evidence_refs": [
+                    "evidence:bundle61-boundary"
+                  ]
                 },
                 {
                   "applies_to": {
                     "kind": "explicit",
-                    "source_item_refs": ["source-item:215"]
+                    "source_item_refs": [
+                      "source-item:215"
+                    ]
                   },
                   "summary": "The repair association is useful evidence but does not prove identity and must not replace the invalid Source Item.",
-                  "evidence_refs": ["evidence:repair-patched"]
+                  "evidence_refs": [
+                    "evidence:repair-patched"
+                  ]
                 }
-              ]
+              ],
+              "kind": "candidate"
             }
           },
-          "validation": { "seal_ready": true, "issues": [] }
+          "validation": {
+            "seal_ready": true,
+            "issues": []
+          },
+          "view": {
+            "work_ref": "plan-work:hk-001",
+            "result_ref": "precheck-result:hk-review-slice-002",
+            "revision": "work-revision:hk-002",
+            "current_revision": "work-revision:hk-002",
+            "observed_at": "2026-09-13T00:00:00Z",
+            "current_uri": "http://127.0.0.1:8765/example",
+            "revision_uri": "http://127.0.0.1:8765/example?revision=work-revision:hk-002",
+            "status": "ready",
+            "problems": []
+          }
         },
-        "candidate_content_identity": "sha256:9bf2f04a79aaf245143cfcb295c3a732575269c9aa1340edc78c3da167ffe006"
+        "candidate_content_identity": "sha256:9bf2f04a79aaf245143cfcb295c3a732575269c9aa1340edc78c3da167ffe006",
+        "reserved_plan_ref": "frozen-plan:hk-review-slice-reference-001"
       }
     },
     {
@@ -240,8 +353,13 @@
         "action": "inspect",
         "work_ref": "plan-work:hk-001",
         "revision": "work-revision:hk-002",
-        "sections": ["content"],
-        "page": { "collection": "groups", "limit": 1 }
+        "sections": [
+          "content"
+        ],
+        "page": {
+          "collection": "groups",
+          "limit": 1
+        }
       },
       "response": {
         "outcome": "ok",
@@ -250,13 +368,13 @@
         "result_ref": "precheck-result:hk-review-slice-002",
         "revision": "work-revision:hk-002",
         "state": "open",
-        "returned_sections": ["content"],
+        "returned_sections": [
+          "content"
+        ],
         "sections": {
           "content": {
             "mode": "page",
             "header": {
-              "contract": "mediasense.frozen-plan",
-              "plan_ref": "frozen-plan:hk-review-slice-reference-001",
               "result_ref": "precheck-result:hk-review-slice-002",
               "scope": {
                 "kind": "union",
@@ -269,16 +387,22 @@
                   },
                   {
                     "kind": "explicit",
-                    "source_item_refs": ["source-item:215", "source-item:217"]
+                    "source_item_refs": [
+                      "source-item:215",
+                      "source-item:217"
+                    ]
                   }
                 ]
               },
-              "logical_root": "Hong Kong review slice"
+              "logical_root": "Hong Kong review slice",
+              "kind": "candidate"
             },
             "collection": "groups",
             "items": [
               {
-                "relative_path": ["Illustrative bundle 61 subset"],
+                "relative_path": [
+                  "Illustrative bundle 61 subset"
+                ],
                 "members": {
                   "kind": "precheck_relation",
                   "origin": "evidence:bundle61-boundary",
@@ -288,9 +412,18 @@
                 "source_naming": {
                   "default": "preserve_source_basename",
                   "overrides": [
-                    { "source_item_ref": "source-item:13", "name": "item-013.jpg" },
-                    { "source_item_ref": "source-item:14", "name": "item-014.jpg" },
-                    { "source_item_ref": "source-item:15", "name": "item-015.jpg" }
+                    {
+                      "source_item_ref": "source-item:13",
+                      "name": "item-013.jpg"
+                    },
+                    {
+                      "source_item_ref": "source-item:14",
+                      "name": "item-014.jpg"
+                    },
+                    {
+                      "source_item_ref": "source-item:15",
+                      "name": "item-015.jpg"
+                    }
                   ]
                 }
               }
@@ -303,7 +436,8 @@
             }
           }
         },
-        "candidate_content_identity": "sha256:9bf2f04a79aaf245143cfcb295c3a732575269c9aa1340edc78c3da167ffe006"
+        "candidate_content_identity": "sha256:9bf2f04a79aaf245143cfcb295c3a732575269c9aa1340edc78c3da167ffe006",
+        "reserved_plan_ref": "frozen-plan:hk-review-slice-reference-001"
       }
     },
     {
@@ -311,7 +445,9 @@
         "action": "inspect",
         "work_ref": "plan-work:hk-001",
         "revision": "work-revision:hk-002",
-        "sections": ["content"],
+        "sections": [
+          "content"
+        ],
         "page": {
           "collection": "groups",
           "cursor": "plan-cursor:hk-groups-002"
@@ -324,13 +460,13 @@
         "result_ref": "precheck-result:hk-review-slice-002",
         "revision": "work-revision:hk-002",
         "state": "open",
-        "returned_sections": ["content"],
+        "returned_sections": [
+          "content"
+        ],
         "sections": {
           "content": {
             "mode": "page",
             "header": {
-              "contract": "mediasense.frozen-plan",
-              "plan_ref": "frozen-plan:hk-review-slice-reference-001",
               "result_ref": "precheck-result:hk-review-slice-002",
               "scope": {
                 "kind": "union",
@@ -343,34 +479,52 @@
                   },
                   {
                     "kind": "explicit",
-                    "source_item_refs": ["source-item:215", "source-item:217"]
+                    "source_item_refs": [
+                      "source-item:215",
+                      "source-item:217"
+                    ]
                   }
                 ]
               },
-              "logical_root": "Hong Kong review slice"
+              "logical_root": "Hong Kong review slice",
+              "kind": "candidate"
             },
             "collection": "groups",
             "items": [
               {
-                "relative_path": ["Readable recovery candidate"],
+                "relative_path": [
+                  "Readable recovery candidate"
+                ],
                 "members": {
                   "kind": "explicit",
-                  "source_item_refs": ["source-item:217"]
+                  "source_item_refs": [
+                    "source-item:217"
+                  ]
                 },
-                "source_naming": { "default": "preserve_source_basename" }
+                "source_naming": {
+                  "default": "preserve_source_basename"
+                }
               }
             ],
-            "page": { "collection": "groups", "returned": 1, "complete": true }
+            "page": {
+              "collection": "groups",
+              "returned": 1,
+              "complete": true
+            }
           }
         },
-        "candidate_content_identity": "sha256:9bf2f04a79aaf245143cfcb295c3a732575269c9aa1340edc78c3da167ffe006"
+        "candidate_content_identity": "sha256:9bf2f04a79aaf245143cfcb295c3a732575269c9aa1340edc78c3da167ffe006",
+        "reserved_plan_ref": "frozen-plan:hk-review-slice-reference-001"
       }
     },
     {
       "context": {
         "human_confirmation": {
           "principal_ref": "user:illustrative-reviewer",
-          "content_identity": "sha256:9bf2f04a79aaf245143cfcb295c3a732575269c9aa1340edc78c3da167ffe006"
+          "work_ref": "plan-work:hk-001",
+          "reviewed_revision": "work-revision:hk-002",
+          "confirmed_content_identity": "sha256:9bf2f04a79aaf245143cfcb295c3a732575269c9aa1340edc78c3da167ffe006",
+          "confirmed_at": "2026-08-27T11:38:00+08:00"
         }
       },
       "request": {
@@ -405,14 +559,19 @@
                 },
                 {
                   "kind": "explicit",
-                  "source_item_refs": ["source-item:215", "source-item:217"]
+                  "source_item_refs": [
+                    "source-item:215",
+                    "source-item:217"
+                  ]
                 }
               ]
             },
             "logical_root": "Hong Kong review slice",
             "groups": [
               {
-                "relative_path": ["Illustrative bundle 61 subset"],
+                "relative_path": [
+                  "Illustrative bundle 61 subset"
+                ],
                 "members": {
                   "kind": "precheck_relation",
                   "origin": "evidence:bundle61-boundary",
@@ -422,30 +581,49 @@
                 "source_naming": {
                   "default": "preserve_source_basename",
                   "overrides": [
-                    { "source_item_ref": "source-item:13", "name": "item-013.jpg" },
-                    { "source_item_ref": "source-item:14", "name": "item-014.jpg" },
-                    { "source_item_ref": "source-item:15", "name": "item-015.jpg" }
+                    {
+                      "source_item_ref": "source-item:13",
+                      "name": "item-013.jpg"
+                    },
+                    {
+                      "source_item_ref": "source-item:14",
+                      "name": "item-014.jpg"
+                    },
+                    {
+                      "source_item_ref": "source-item:15",
+                      "name": "item-015.jpg"
+                    }
                   ]
                 }
               },
               {
-                "relative_path": ["Readable recovery candidate"],
+                "relative_path": [
+                  "Readable recovery candidate"
+                ],
                 "members": {
                   "kind": "explicit",
-                  "source_item_refs": ["source-item:217"]
+                  "source_item_refs": [
+                    "source-item:217"
+                  ]
                 },
-                "source_naming": { "default": "preserve_source_basename" }
+                "source_naming": {
+                  "default": "preserve_source_basename"
+                }
               }
             ],
             "other_outcomes": [
               {
                 "members": {
                   "kind": "explicit",
-                  "source_item_refs": ["source-item:215"]
+                  "source_item_refs": [
+                    "source-item:215"
+                  ]
                 },
                 "outcome": "exclude_from_logical_organization",
                 "reason": "The media container is unreadable; keep the Source Item accounted and do not substitute a repaired candidate.",
-                "evidence_refs": ["evidence:repair-patched"]
+                "evidence_refs": [
+                  "evidence:repair-patched"
+                ]
               }
             ],
             "decision_notes": [
@@ -457,15 +635,21 @@
                   "direction": "outbound"
                 },
                 "summary": "Illustrative final grouping decision: reuse the complete PreCheck membership without treating that membership as semantic truth.",
-                "evidence_refs": ["evidence:bundle61-boundary"]
+                "evidence_refs": [
+                  "evidence:bundle61-boundary"
+                ]
               },
               {
                 "applies_to": {
                   "kind": "explicit",
-                  "source_item_refs": ["source-item:215"]
+                  "source_item_refs": [
+                    "source-item:215"
+                  ]
                 },
                 "summary": "The repair association is useful evidence but does not prove identity and must not replace the invalid Source Item.",
-                "evidence_refs": ["evidence:repair-patched"]
+                "evidence_refs": [
+                  "evidence:repair-patched"
+                ]
               }
             ]
           },
@@ -478,6 +662,17 @@
               "confirmed_by": "user:illustrative-reviewer"
             }
           }
+        },
+        "view": {
+          "work_ref": "plan-work:hk-001",
+          "result_ref": "precheck-result:hk-review-slice-002",
+          "revision": "work-revision:hk-002",
+          "current_revision": "work-revision:hk-002",
+          "observed_at": "2026-09-13T00:00:00Z",
+          "current_uri": "http://127.0.0.1:8765/example",
+          "revision_uri": "http://127.0.0.1:8765/example?revision=work-revision:hk-002",
+          "status": "ready",
+          "problems": []
         }
       }
     },
@@ -485,7 +680,10 @@
       "context": {
         "human_confirmation": {
           "principal_ref": "user:illustrative-reviewer",
-          "content_identity": "sha256:9bf2f04a79aaf245143cfcb295c3a732575269c9aa1340edc78c3da167ffe006"
+          "work_ref": "plan-work:hk-001",
+          "reviewed_revision": "work-revision:hk-002",
+          "confirmed_content_identity": "sha256:9bf2f04a79aaf245143cfcb295c3a732575269c9aa1340edc78c3da167ffe006",
+          "confirmed_at": "2026-08-27T11:38:00+08:00"
         }
       },
       "request": {
@@ -520,14 +718,19 @@
                 },
                 {
                   "kind": "explicit",
-                  "source_item_refs": ["source-item:215", "source-item:217"]
+                  "source_item_refs": [
+                    "source-item:215",
+                    "source-item:217"
+                  ]
                 }
               ]
             },
             "logical_root": "Hong Kong review slice",
             "groups": [
               {
-                "relative_path": ["Illustrative bundle 61 subset"],
+                "relative_path": [
+                  "Illustrative bundle 61 subset"
+                ],
                 "members": {
                   "kind": "precheck_relation",
                   "origin": "evidence:bundle61-boundary",
@@ -537,30 +740,49 @@
                 "source_naming": {
                   "default": "preserve_source_basename",
                   "overrides": [
-                    { "source_item_ref": "source-item:13", "name": "item-013.jpg" },
-                    { "source_item_ref": "source-item:14", "name": "item-014.jpg" },
-                    { "source_item_ref": "source-item:15", "name": "item-015.jpg" }
+                    {
+                      "source_item_ref": "source-item:13",
+                      "name": "item-013.jpg"
+                    },
+                    {
+                      "source_item_ref": "source-item:14",
+                      "name": "item-014.jpg"
+                    },
+                    {
+                      "source_item_ref": "source-item:15",
+                      "name": "item-015.jpg"
+                    }
                   ]
                 }
               },
               {
-                "relative_path": ["Readable recovery candidate"],
+                "relative_path": [
+                  "Readable recovery candidate"
+                ],
                 "members": {
                   "kind": "explicit",
-                  "source_item_refs": ["source-item:217"]
+                  "source_item_refs": [
+                    "source-item:217"
+                  ]
                 },
-                "source_naming": { "default": "preserve_source_basename" }
+                "source_naming": {
+                  "default": "preserve_source_basename"
+                }
               }
             ],
             "other_outcomes": [
               {
                 "members": {
                   "kind": "explicit",
-                  "source_item_refs": ["source-item:215"]
+                  "source_item_refs": [
+                    "source-item:215"
+                  ]
                 },
                 "outcome": "exclude_from_logical_organization",
                 "reason": "The media container is unreadable; keep the Source Item accounted and do not substitute a repaired candidate.",
-                "evidence_refs": ["evidence:repair-patched"]
+                "evidence_refs": [
+                  "evidence:repair-patched"
+                ]
               }
             ],
             "decision_notes": [
@@ -572,15 +794,21 @@
                   "direction": "outbound"
                 },
                 "summary": "Illustrative final grouping decision: reuse the complete PreCheck membership without treating that membership as semantic truth.",
-                "evidence_refs": ["evidence:bundle61-boundary"]
+                "evidence_refs": [
+                  "evidence:bundle61-boundary"
+                ]
               },
               {
                 "applies_to": {
                   "kind": "explicit",
-                  "source_item_refs": ["source-item:215"]
+                  "source_item_refs": [
+                    "source-item:215"
+                  ]
                 },
                 "summary": "The repair association is useful evidence but does not prove identity and must not replace the invalid Source Item.",
-                "evidence_refs": ["evidence:repair-patched"]
+                "evidence_refs": [
+                  "evidence:repair-patched"
+                ]
               }
             ]
           },
@@ -593,6 +821,17 @@
               "confirmed_by": "user:illustrative-reviewer"
             }
           }
+        },
+        "view": {
+          "work_ref": "plan-work:hk-001",
+          "result_ref": "precheck-result:hk-review-slice-002",
+          "revision": "work-revision:hk-002",
+          "current_revision": "work-revision:hk-002",
+          "observed_at": "2026-09-13T00:00:00Z",
+          "current_uri": "http://127.0.0.1:8765/example",
+          "revision_uri": "http://127.0.0.1:8765/example?revision=work-revision:hk-002",
+          "status": "ready",
+          "problems": []
         }
       }
     },
@@ -601,11 +840,14 @@
         "action": "update",
         "work_ref": "plan-work:hk-001",
         "base_revision": "work-revision:hk-002",
-        "candidate_content": {
+        "request_id": "request:plan-update-after-seal",
+        "organization_content": {
           "result_ref": "precheck-result:hk-review-slice-002",
           "scope": {
             "kind": "explicit",
-            "source_item_refs": ["source-item:215"]
+            "source_item_refs": [
+              "source-item:215"
+            ]
           },
           "logical_root": "Too late",
           "groups": [],
@@ -613,13 +855,15 @@
             {
               "members": {
                 "kind": "explicit",
-                "source_item_refs": ["source-item:215"]
+                "source_item_refs": [
+                  "source-item:215"
+                ]
               },
               "outcome": "retain_current_organization"
             }
-          ]
-        },
-        "request_id": "request:plan-update-after-seal"
+          ],
+          "kind": "candidate"
+        }
       },
       "response": {
         "outcome": "error",

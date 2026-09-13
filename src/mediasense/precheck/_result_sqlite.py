@@ -48,6 +48,12 @@ class SQLiteResultStore:
         *,
         result_ref: str | None = None,
     ) -> SealedResult:
+        from ._sqlite_scope import connection_scope
+
+        with connection_scope(self.database_path):
+            return self._seal(draft, result_ref=result_ref)
+
+    def _seal(self, draft, *, result_ref=None):
         artifact_ids = self._validate(draft)
         result_ref = result_ref or f"precheck-result:{uuid4().hex}"
         _validate_result_ref(result_ref)
@@ -593,13 +599,10 @@ class SQLiteResultStore:
 
     @contextmanager
     def _connect(self) -> Iterator[sqlite3.Connection]:
-        connection = sqlite3.connect(self.database_path, timeout=30)
-        connection.row_factory = sqlite3.Row
-        connection.execute("PRAGMA foreign_keys = ON")
-        try:
+        from ._sqlite_scope import connect
+
+        with connect(self.database_path) as connection:
             yield connection
-        finally:
-            connection.close()
 
     @contextmanager
     def _transaction(self) -> Iterator[sqlite3.Connection]:
@@ -730,7 +733,8 @@ def _package(
         if source.qualifications:
             view["qualifications"] = list(source.qualifications)
         source_records.append(
-            {"relative_path": source.relative_path.as_posix(), "view": view}
+            {"relative_path": source.relative_path.as_posix(), "view": view,
+             **({"accounting": source.accounting} if source.accounting is not None else {})}
         )
         member: dict[str, object] = {
             "target": source.ref,
@@ -804,12 +808,23 @@ def _package(
             item.artifact_id for item in draft.evidence if item.artifact_id is not None
         ),
         "execution_boundary": draft.execution_boundary,
+        **({"preparation": draft.preparation, "input_bindings": draft.input_bindings}
+           if draft.preparation is not None else {}),
     }
 
 
 def _validate_contract_values(draft: ResultDraft) -> None:
     """Reject internal drafts that could emit an invalid public read projection."""
 
+    from ._preparation import validate_retained_preparation
+
+    try:
+        validate_retained_preparation(draft.preparation, draft.input_bindings,
+                                     {s.ref: {"locator": s.locator} for s in draft.sources},
+                                     {s.ref: {"scope": s.scope} for s in draft.sources},
+                                     {s.ref: {"accounting": s.accounting} for s in draft.sources})
+    except (ValueError, KeyError, TypeError) as error:
+        raise ResultSealError(str(error)) from error
     _nonempty(draft.dataset_id, "Dataset identity")
     _nonempty(draft.dataset_ref, "Dataset reference")
     if draft.dataset_name is not None:

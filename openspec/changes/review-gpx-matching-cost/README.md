@@ -2,7 +2,11 @@
 
 ## 交接状态
 
-记录日期：2026-09-13。阶段：**已按后续授权完成源码修复、等输出成本测量及隔离安装验证；未升级日常环境**。
+记录日期：2026-09-13。阶段：**重复解析优化已获用户确认；资源不足的公开反馈补修及确切持久 wheel 已通过独立 Agent 复验。未升级日常环境；首轮全量计时未重测**。
+
+独立复验结论与范围见[运行验收报告末尾的第 1—3 包再次独立验收](../../../eval/sessions/260912-2333-hk-run-acceptance/report.md)。该结论绑定新 wheel `9e813bda30fa4b7cc33517d582aefd7547f48e7836a8a78ed7a0f9df31df9f9f`，不扩大为日常安装、真实 Provider 成功或历史业务恢复。
+
+当前证据见本页末尾的二次交付。原全量计时保留为历史记录；旧临时 wheel 已不存在，本轮重新构建并记录新身份。
 
 创建时用户要求只整理问题；本次已另行授权在现有设计与合约内直接修复。历史事实保持原义，以下交付记录补充实际实现和测量，没有修改匹配语义或公开合约。
 
@@ -97,4 +101,23 @@ prove 计时包含已有有效性存储写入；未单独测 SQLite commit 或�
 
 没有重跑完整业务 PreCheck，原 587.44 秒也不是新一轮端到端对照的分母。当前改善来自首次解析及匹配准备，逐项有效性和持久化仍有成本。未认证超大轨迹的峰值内存、恶劣磁盘/卸载或任意设备吞吐。日常安装未切换；本次没有需要用户重新决定的匹配语义或产品取舍。
 
-最终共同验收：源码 **158 passed**；隔离 wheel **158 passed**，并通过离线 CLI/MCP 分发 smoke。最终 wheel SHA-256：`55db47084afc8c75b3204d358ff0f771f7d8b2a337695efc15573139bdf4c55b`。
+首轮共同自验的历史记录：源码 **158 passed**；隔离 wheel **158 passed**，并通过离线 CLI/MCP 分发 smoke。旧 wheel SHA-256：`55db47084afc8c75b3204d358ff0f771f7d8b2a337695efc15573139bdf4c55b`；其临时产物已丢失。
+
+## 独立复核后的二次交付（2026-09-13）
+
+用户确认等输出优化证据成立，同时发现 ResourceLimitExceeded 从 GPX 内存准入穿过 stage adapter，最终落入 Run 的通用 execution_failed，缺少资源原因与恢复方式。新增[公开交付测试](../../../tests/test_gpx_resource_delivery.py)使用真实 producer、ResourceAdmission、executor、orchestrator 和 Run 状态流，只替换资源估算以生成已知超预算条件；补修前公开 state 为 failed，所需 blocked 断言失败。
+
+补修仅在 `_gpx` 消费执行结果时捕获现有 ResourceLimitExceeded，沿视频/敏感性阶段既有模式抛出 `_BlockedExecution`。公开 status 现在为 `blocked + gpx_resource_budget_insufficient`，说明 GPX 超出已冻结预算，并给出“取消本 Run、以足够资源启动后继 Run，已完成 Work 可复用”的恢复路径。没有修改通用 run.py 异常处理、资源估算、GPX 匹配/缓存或公开 schema；未知实现异常仍抛出并记录 execution_worker_crashed。
+
+测试实际验证：
+
+- 128 MiB 的冻结预算拒绝替身估算的 256 MiB 需求；metadata Work 保持 succeeded，GPX Work 为 ready 且 attempt_count=0，不伪造源项失败或 Result。
+- 只读 status 不执行工作；原 Run resume 后仍以原预算阻塞，没有暗中提高资源。
+- 取消后以 512 MiB 预算建立后继 Run，复用已有 metadata 并成功完成 GPX；随后如实报告尚未提供的 Geo 服务前提，未制造完成 Result。
+- 未知 RuntimeError 不被重标为资源等待。
+
+源码与隔离 wheel 共同回归各 **166 passed**，包文件一致性与离线 CLI/MCP smoke 通过。使用 CPython 3.11.13、core 依赖及 pytest；未安装模型 extras、调用真实 Provider 或升级日常环境。**本轮没有重测 2,136 项全量耗时**，不把原 586.77→54.42 秒写成新 wheel 的实测。
+
+新 wheel SHA-256：`9e813bda30fa4b7cc33517d582aefd7547f48e7836a8a78ed7a0f9df31df9f9f`。持久目录为 `.local/acceptance-releases/260913-1107-google-gpx-r2/`；完整源码、归档、差异、约束、venv、日志均留存，详见[复核说明](../../../.local/acceptance-releases/260913-1107-google-gpx-r2/REVIEW.md)、[校验清单](../../../.local/acceptance-releases/260913-1107-google-gpx-r2/SHA256SUMS)和 [verification.json](verification.json) 的 current_delivery。旧数据归 previous_delivery，旧临时路径不再作为当前产物入口。
+
+此项补修没有新的产品取舍待决；用户独立验收状态未由工程自验代替。

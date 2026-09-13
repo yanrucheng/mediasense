@@ -40,14 +40,15 @@ def test_dataset_registration_requires_an_internal_id(tmp_path: Path) -> None:
         store.register_dataset("dataset:dataset-a")
 
 
-def test_incompatible_schema_requires_a_fresh_workspace(tmp_path: Path) -> None:
+@pytest.mark.parametrize("version", [16, SCHEMA_VERSION + 1])
+def test_incompatible_schema_requires_a_fresh_workspace(tmp_path: Path, version) -> None:
     database = tmp_path / "working.sqlite3"
     store = AccountingStore(database)
     store.register_dataset("dataset-a")
     with sqlite3.connect(database) as connection:
         connection.execute(
             "UPDATE internal_schema SET version = ? WHERE singleton = 1",
-            (SCHEMA_VERSION - 2,),
+            (version,),
         )
 
     with pytest.raises(RuntimeError, match="fresh MediaSense workspace"):

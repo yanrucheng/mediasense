@@ -31,6 +31,10 @@ from mediasense.runtime.host import RuntimeHost
 from run_distribution_smoke import _seed_plan_ready_result
 
 
+def receipt(value):
+    return {k: v for k, v in value.items() if k != "view"}
+
+
 async def exercise(
     host: Path, root: Path, browser: Path | None = None, paged_preview: bool = False
 ):
@@ -158,7 +162,7 @@ async def exercise(
                 args["authority"] = authority
             return await call(session, "mediasense.plan.work", args)
 
-        assert await plan(note_request) == saved
+        assert receipt(await plan(note_request)) == receipt(saved)
         view = await plan({"action": "inspect", "work_ref": work})
         assert (
             view["revision"] == saved["revision"]
@@ -189,6 +193,7 @@ async def exercise(
             )
             evidence.extend(item["evidence_ref"] for item in reviewed["items"])
         candidate = {
+            "kind": "candidate",
             "result_ref": result_ref,
             "scope": scope,
             "logical_root": "Synthetic collection",
@@ -223,7 +228,7 @@ async def exercise(
             return result
 
         current = await update(
-            saved, "request:smoke-candidate", candidate_content=candidate
+            saved, "request:smoke-candidate", organization_content=candidate
         )
         baseline = await plan({"action": "inspect", "work_ref": work})
         await reject_null_page_limit()
@@ -235,7 +240,7 @@ async def exercise(
                 "request_id": "request:smoke-invalid-preferences",
                 "organization_preferences": {"": "invalid preference key"},
                 "working_notes": "must not save",
-                "candidate_content": None,
+                "organization_content": None,
             }
         )
         assert invalid_preferences["error"]["code"] == "invalid_request", invalid_preferences
@@ -255,12 +260,12 @@ async def exercise(
                     "work_ref": work,
                     "base_revision": current["revision"],
                     "request_id": f"request:smoke-invalid-{index}",
-                    "candidate_content": invalid,
+                    "organization_content": invalid,
                     "working_notes": "must not save",
                     "organization_preferences": {"invalid": True},
                 }
             )
-            assert response["error"]["code"] == "candidate_invalid", response
+            assert response["error"]["code"] == "organization_invalid", response
             assert await plan({"action": "inspect", "work_ref": work}) == baseline
         identity = (await plan({"action": "inspect", "work_ref": work}))[
             "candidate_content_identity"
@@ -268,7 +273,7 @@ async def exercise(
         withdrawn = await update(
             current,
             "request:smoke-withdraw",
-            candidate_content=None,
+            organization_content=None,
             working_notes="",
             organization_preferences={},
         )
@@ -300,7 +305,7 @@ async def exercise(
                 "work_ref": work,
                 "base_revision": withdrawn["revision"],
                 "request_id": "request:smoke-replace",
-                "candidate_content": candidate,
+                "organization_content": candidate,
             }
         )
         assert current["outcome"] == "ok"
@@ -377,6 +382,8 @@ async def exercise(
         }
         assert (await plan(seal))["error"]["code"] == "confirmation_required"
         authority = {
+            "work_ref": work,
+            "reviewed_revision": view["revision"],
             "principal_ref": "human:synthetic-acceptance",
             "confirmed_content_identity": identity,
             "confirmed_at": "2026-09-12T10:00:00+00:00",
@@ -396,13 +403,16 @@ async def exercise(
         latest = await plan({"action": "inspect", "work_ref": work})
         assert latest["candidate_content_identity"] == identity
         seal["revision"] = newer["revision"]
+        assert (await plan(seal, authority))["error"]["code"] == "confirmation_binding_mismatch"
+        # Simulate a new Human review event for this revision, never carry the old event.
+        authority["reviewed_revision"] = seal["revision"]
         frozen = await plan(seal, authority)
         assert frozen["outcome"] == "ok" and frozen["state"] == "closed", frozen
-        assert await plan(seal, authority) == frozen
+        assert receipt(await plan(seal, authority)) == receipt(frozen)
         assert (
             frozen["plan_ref"]
             == frozen["frozen_plan"]["sealed_content"]["plan_ref"]
-            == inspected["sections"]["content"]["value"]["plan_ref"]
+            == inspected["reserved_plan_ref"]
         )
         assert (
             frozen["frozen_plan"]["sealed_content"]["decision_notes"]

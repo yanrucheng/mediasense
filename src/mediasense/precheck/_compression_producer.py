@@ -28,6 +28,8 @@ from .artifact import ArtifactStore
 from .embedding import EmbeddingProfile, read_embedding
 from .work import WorkStore
 
+PRODUCER_IDENTITY = "builtin-adaptive-compression-v2"
+
 
 @dataclass(frozen=True, slots=True)
 class CompressionInput:
@@ -76,6 +78,12 @@ class AdaptiveCompressionProducer:
         profile: AdaptiveCompressionProfile,
         owner: str = "builtin-adaptive-compression",
     ) -> tuple[CompressionGroupOutcome, ...]:
+        from ._sqlite_scope import connection_scope
+
+        with connection_scope(self.database_path):
+            return self._produce(run_id, inputs, profile=profile, owner=owner)
+
+    def _produce(self, run_id, inputs, *, profile, owner):
         attached = {
             record.work_id: record for record in self.work.list_run_work(run_id)
         }
@@ -84,13 +92,13 @@ class AdaptiveCompressionProducer:
         groups = build_adaptive_groups(points, profile)
         inputs_by_path = {item.relative_path: item for item in inputs}
         work_by_path = {point.relative_path: records for point, records in prepared}
+        group_for_member = {member: index for index, group in enumerate(groups) for member in group.members}
+        inputs_by_group = [[] for _ in groups]
+        for point in points:
+            inputs_by_group[group_for_member[point.relative_path]].append(inputs_by_path[point.relative_path])
         outcomes = []
-        for group in groups:
-            group_inputs = tuple(
-                inputs_by_path[point.relative_path]
-                for point in points
-                if set(point.members) <= set(group.members)
-            )
+        for group, group_inputs in zip(groups, inputs_by_group, strict=True):
+            group_members = set(group.members)
             upstream_records = {
                 record.work_id: record
                 for item in group_inputs
@@ -117,7 +125,7 @@ class AdaptiveCompressionProducer:
                 for dependency in record.spec.dependencies
                 if dependency.kind
                 in {DependencyKind.SOURCE_REVISION, DependencyKind.SOURCE_CONTENT}
-                and _source_dependency_path(dependency) in group.members
+                and _source_dependency_path(dependency) in group_members
             }
             dependencies = [
                 WorkDependency(
@@ -195,7 +203,7 @@ class AdaptiveCompressionProducer:
                 )
             spec = WorkSpec(
                 capability="adaptive-compression-group",
-                producer_identity="builtin-adaptive-compression-v2",
+                producer_identity=PRODUCER_IDENTITY,
                 dependencies=tuple(dependencies),
             )
             record = self.work.ensure_work(run_id, spec)

@@ -1,13 +1,13 @@
 """Private SQLite schema for mutable PreCheck working state."""
 
-SCHEMA_VERSION = 18
+SCHEMA_VERSION = 19
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS internal_schema (
     singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
     version INTEGER NOT NULL
 );
-INSERT OR IGNORE INTO internal_schema (singleton, version) VALUES (1, 18);
+INSERT OR IGNORE INTO internal_schema (singleton, version) VALUES (1, 19);
 
 CREATE TABLE IF NOT EXISTS datasets (
     dataset_id TEXT PRIMARY KEY,
@@ -58,6 +58,14 @@ CREATE TABLE IF NOT EXISTS precheck_runs (
 );
 CREATE INDEX IF NOT EXISTS precheck_runs_dataset_state
     ON precheck_runs(dataset_ref, state);
+CREATE INDEX IF NOT EXISTS precheck_runs_accounting
+    ON precheck_runs(accounting_run_id);
+
+-- Large immutable input/scope values must not be rewritten with progress facts.
+CREATE TABLE IF NOT EXISTS precheck_run_preparation (
+    run_ref TEXT PRIMARY KEY REFERENCES precheck_runs(run_ref),
+    value_json TEXT NOT NULL
+);
 
 CREATE TABLE IF NOT EXISTS precheck_scope_reviews (
     run_ref TEXT NOT NULL REFERENCES precheck_runs(run_ref),

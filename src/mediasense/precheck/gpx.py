@@ -29,6 +29,8 @@ from ._work_types import (
 from .source_validity import SourceContentProof, SourceValidityStore
 from .work import WorkStore
 
+PRODUCER_IDENTITY = "builtin-gpx-match-v1"
+
 
 @dataclass(frozen=True, slots=True)
 class GPXMatchProfile:
@@ -296,7 +298,7 @@ class GPXMatchProducer:
             )
         return WorkSpec(
             capability="gpx-location-candidate",
-            producer_identity="builtin-gpx-match-v1",
+            producer_identity=PRODUCER_IDENTITY,
             dependencies=tuple(dependencies),
         )
 

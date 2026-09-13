@@ -4,7 +4,7 @@ title: "MediaSense Plan Working State Tool Contract"
 type: spec
 status: active
 created: 2026-08-27
-updated: 2026-09-12
+updated: 2026-09-13
 timezone: "Asia/Shanghai"
 parent: "index-contract"
 depends-on:
@@ -18,253 +18,220 @@ tags: ["mediasense", "plan", "tool-contract", "working-state"]
 
 # MediaSense Plan Working State Tool Contract
 
-本页位于稳定合约目录。当前规范以此处为准；迁移到此目录本身不构成新的实现或真实数据验收。
+2026-09-13，第 6 包定案设计按用户授权进入实现。本页和机器定义共同拥有当前接口；
+包内草案不构成另一套已发布接口。源码、隔离安装、页面操作及 Human/Agent 验收
+分别见[实施记录](../../../../openspec/changes/review-plan-preview-delivery/acceptance.md)。
+此前 optional-work 记录保留在[原验收](../../../../openspec/changes/refine-plan-interaction/acceptance.md)。
 
-2026-09-12，用户在完成交互与确认流程讨论后确认进入研发。本次可选工作说明、候选保留／替换／撤下及读取语义已定稿；Tool、Skill、Preview 及实际隔离 wheel/MCP 已完成实现验收，日常 CLI/项目 Skills 已按独立复核的构建升级，原注册的新 Host 已验证；现有 Agent 会话加载仍需重新确认。范围见[开发交接](../../../../openspec/changes/refine-plan-interaction/README.md)，证据与未认证范围见[实现验收](../../../../openspec/changes/refine-plan-interaction/acceptance.md)。
+## Authority and compatibility
 
+`mediasense.plan.work` owns one mutable Work bound to one exact trusted,
+plan-ready PreCheck Result. Its four actions remain create, update, inspect and
+seal. The Agent owns interpretation, grouping, naming, information sufficiency
+and recording decisions. Tools own persistence, mechanical validation, rendering,
+prepared-image delivery and page entry. Planning/viewing never reorganizes source
+media or acquires remote/model/Geo evidence.
 
-2026-09-12 用户复核收窄首轮验收：正常保存路径证据成立，但发现身份字段注入、非法结构错误分类、Preview 图片交付三处缺口。上述三项已通过用户独立复验；后续发现的 Preview 选定 Evidence 分页缺口也已获用户独立复核通过。2026-09-12 按用户授权完成日常安装升级，保留原 Python、extras、依赖和配置。当前契约承诺不变，详细证据见上述实现验收链接。
+[`plan-work.tool.json`](plan-work.tool.json) is the authoritative exchange shape.
+The existing Zero BC policy applies: `organization_content` replaces
+`candidate_content`, without compatibility alias or dual organization.
+Persistent-state conversion is separate from API compatibility. Frozen Plan
+format, content encoding and publication/recovery semantics remain unchanged.
 
-## Decision
+## Entry and lifecycle
 
-`mediasense.plan.work` owns one mutable, revisioned Plan Working State and the deterministic transition from one exact revision to a conforming, immutable Frozen Plan. It stores Agent-authored working notes, Human organization preferences, and complete candidate decisions. It does not interpret media, recognize events, choose groups, generate names, decide what to ask, or modify source files.
+Create requires result_ref and request_id, optionally organization_preferences.
+Trusted PreCheck Read enforces Result integrity and plan_ready. Complete or
+explicitly partial coverage is accepted; ordinary recorded location gaps do not
+independently block entry. Result failures retain existing not-found,
+unavailable, untrusted, inconsistent and not-ready meanings.
 
-[`plan-work.tool.json`](plan-work.tool.json) is the authoritative request and response shape. [`hong-kong.mock.json`](hong-kong.mock.json) is a complete human-readable transcript validated by [`tests/test_plan_work_contract.py`](../../../../tests/test_plan_work_contract.py).
+A new Work is open, with empty notes, no organization and no Plan scope, and
+immediately offers a page. Open/closed describes its lifecycle, separately from
+absent/draft/candidate organization, scope completeness, display availability and
+Human confirmation. Closed Works preserve their Frozen Plan and reject edits;
+later changes require a new Work. A reserved Plan reference is not publication.
 
-The Tool has four actions: `create`, `update`, `inspect`, and `seal`. There is no Geo acquisition, `preview`, `validate`, independent Confirm Tool, or Frozen Plan read Tool.
+## Atomic organization saving
 
-## Backward Compatibility Policy
+Update requires work_ref, current base_revision, request_id and at least one
+mutable field. All supplied fields commit together or not at all.
 
-| Attribute | Value |
+| Field | Omitted | Supplied |
+| --- | --- | --- |
+| organization_content | Preserve current organization | Object replaces whole organization; null clears |
+| working_notes | Preserve text | String replaces exact text; empty string clears |
+| organization_preferences | Preserve snapshot | Object replaces whole snapshot; empty object clears |
+
+Every newly accepted update creates a new opaque revision, including same-value
+writes. Stale base_revision returns revision_conflict. Notes/preferences/clear
+do not analyze a replacement organization; post-commit display may read the
+retained organization and Result. Revisions support equality only.
+
+Organization reuses result_ref, scope, logical_root, groups, other_outcomes and
+decision_notes with `kind: draft | candidate`. It excludes contract, plan_ref
+and seal. Source Set, group, naming and note rules reuse Frozen Plan definitions.
+
+Drafts require exact Result binding, nonempty resolvable scope, nonempty resolved
+members for saved groups/outcomes, no overlapping or out-of-scope dispositions,
+safe destinations/naming and valid note/evidence references. Empty group and
+outcome arrays are allowed. Scope may remain partly unassigned; the Tool computes
+the remainder without inventing retention, exclusion or fallback groups.
+Directory ideas without definite membership belong in notes. Plan scope and
+Result coverage remain distinct.
+
+Candidates additionally require complete outcome partition and existing Frozen
+Plan validation. Fully assigned drafts do not automatically become candidates.
+Drafts have no sealable identity. Candidate identity removes kind and adds the
+Tool-owned contract and reserved plan_ref before existing sealed_content encoding.
+Notes, preferences and page data never enter that identity or Frozen Plan.
+
+Working notes retain discussion context, actual sources, affected scope and
+unresolved implications; they are not a transcript, verified Observation,
+attachment store or confirmation. Exact text is preserved without silent
+normalization/truncation. Preferences remain a JSON snapshot without independent
+identity. Necessary final rationale belongs in decision_notes. Evidence references
+remain Result-local; a textual path grants no file custody.
+
+## Safe retry and view delivery
+
+Identical accepted create/update/seal requests return the original business
+receipt with no repeated transition. Different input under the same request_id
+returns idempotency_conflict. Seal also binds trusted context. Historical
+unsupported requests are retained for audit and cannot be reused under the new
+interface.
+
+`view` is a fresh observation per invocation, outside the immutable receipt.
+Replay may recover unavailable delivery or report an old receipt as superseded
+after another save. It never rewrites the old receipt or creates a revision.
+Saving and display delivery have separate outcomes.
+
+The descriptor binds work_ref, result_ref, requested revision, observed_at,
+observed current_revision, current_uri, revision_uri, status and problems:
+
+| Status | Meaning |
 | --- | --- |
-| Production status | Not in production |
-| BC Level | None — Zero BC policy |
+| ready | Core planning content and browsing entry can be delivered |
+| degraded | Core content is delivered with identified local evidence limits |
+| unavailable | Core page or runtime access cannot currently be delivered |
+| superseded | The requested saved revision is no longer current |
 
-No production consumer exists. Compatibility aliases, version routers, deprecated draft fields, and dual representations are prohibited.
+Current URI continues discussion; revision URI identifies the exact review.
+Unavailable addresses are null. Transient addresses are not Plan identities
+and may be reacquired after restart. Limits discovered while drilling down appear
+at the affected resource without changing organization.
 
-## Authority and permissions
+Expected serving/resource failure returns a successful receipt plus truthful
+view status. Unexpected implementation exceptions propagate from renderer code;
+the outer runtime reports operation_failed, retains diagnostics and includes
+committed_receipt when a create/update/seal commit is known. Rendering cannot
+roll back planning or require a repeated semantic write. State-only inspect
+remains available without rendering or launching a page host.
 
-The Tool is authoritative for:
+## Inspect and bounded reading
 
-- one `work_ref`, its exact bound `result_ref`, open or closed lifecycle, and revision tokens;
-- the current organization preference snapshot, optional working-note text, and optional complete candidate organization content;
-- deterministic validation issues and the global identity of an exact sealable candidate; and
-- the successful transition from an exact confirmed candidate to one `plan_ref`.
+Inspect resolves one current revision atomically. A stale supplied revision
+returns revision_conflict; permanent historical-draft retrieval is not promised.
+It returns work_ref, result_ref, revision, state and reserved_plan_ref, plus
+requested sections in canonical order:
 
-The Planning Agent remains responsible for interpretation, evidence selection, grouping, naming, and deciding what to ask the Human. Organization preferences are plan-scoped input inside the existing Working State; they are not a Profile entity or `profile_ref`.
+`overview, preferences, working_notes, content, validation, view`.
 
-Only a trusted Human authentication context may authorize `seal`. The ordinary request has no `confirmed_by`, credential, UI assertion, or self-declared authority field. Authentication technology and interaction design are outside this contract.
+Overview reports organization_kind and exact scope_summary (scope, organized,
+other_outcomes, unassigned), or null scope when absent. Content is the saved
+organization, not a Frozen Plan-shaped draft. Complete mode means the collection
+was fully returned; kind separately determines draft/candidate meaning.
 
-## Entry gate and lifecycle
+Groups, other_outcomes and decision_notes support pages with content as the sole
+section. Page headers retain organization meaning. Absent organization returns
+null content, including valid initial page requests. Invalid/stale cursors are
+still errors. Cursors bind Work, revision, collection, query and position, retain
+integrity across compatible restarts and reach a true end without mixing versions.
+Candidate identity remains global.
 
-`create` binds one exact immutable PreCheck Result. The Tool resolves its Result view through the existing [`mediasense.precheck.read`](../precheck-read/) semantics and accepts only:
+Validation reports deterministic freeze conditions, not semantic sufficiency or
+Human acceptance. Absent organization normally reads successfully with
+candidate_missing; draft with draft_not_candidate. Complete validated candidates
+report seal_ready and identity. Seal revalidates the conditions it owns.
 
-- `readiness: plan_ready`;
-- successful trusted PreCheck Read, which enforces seal, hash, reference and Observation integrity without a returned constant.
+## Continuous page
 
-Missing coordinates, no_result and terminal known Geo failure never independently prevent entry, including a whole collection without locations.
+The ordinary Tool delivers pages for absent organization, notes-only discussion,
+partial/full drafts, complete candidates, withdrawal and frozen Works. Agents
+do not author HTML, start temporary servers or maintain duplicate presentation
+business data. Views are regenerable from saved Work and bound Result.
 
-Coverage may be `complete` or honestly bounded `partial`. A blocked or invalid
-Result returns `result_not_ready` or `result_untrusted` and creates no Working
-State. PreCheck Read owns the effective readiness judgment, including safely
-blocking a historical Result that lacks a required per-Source-Item fact. Plan does
-not inspect Geo acquisition summaries, batches, deduplication, caching, or
-provider-request state.
+The page distinguishes working context from retained final decisions and exposes
+saved directory hierarchy, exact expanded counts, readable member filenames and
+source information, target naming, other outcomes, unassigned scope, note scopes
+and qualified actual Evidence. Groups and derived parents preserve saved
+first-appearance order; members use stable source-path/ref ordering. Functional
+bounded continuation must browse beyond the first 100 items to the true end.
+Truncation and image failure never imply unseen members were reviewed.
 
-A new Working State is `open`, has empty working notes, and has no Candidate.
-Each newly accepted `update` atomically changes its explicitly supplied fields and
-produces a new opaque revision token, including a same-value write. An idempotent
-replay returns the original receipt without another revision. Successful `seal` closes the
-exact revision, publishes a Frozen Plan, and returns that complete Frozen Plan
-object as the formal input to Apply preparation. A closed Work remains inspectable
-but rejects update and a semantically different seal. Later changes require
-another `create`; draft retention and cloning from a Frozen Plan are outside this
-contract.
+A loaded page fixes Work/revision. Background detection only prompts; refresh
+can resolve current state. Stale pages/cursors refuse incompatible reads and
+offer the current entry. New content is not appended to old lists. Closure
+updates actual frozen status under the same revision; projection dependencies
+include Work state and publication, not revision alone.
 
-## Safe retry and concurrency
+Unreadable images retain explicit placeholders and provenance without invented
+substitutes or automatic reacquisition. Such gaps do not automatically invalidate
+organization. Untrusted/unavailable Result or unresolved membership prevents
+claims of complete review and remains a seal barrier. Agent and Human assess
+image-gap significance and retain material final limitations in decision_notes.
 
-`create`, `update`, and `seal` require `request_id`:
+Runtime owns the real entry lifetime after CLI/Tool return, loopback access,
+health/build identity, stop and reconnection. It serves only explicitly bound
+Dataset/Work/Result resources, with no filesystem-root exposure or HTTP
+write/confirmation/Apply endpoint. Text is data, not executable code. There is
+no remote hosting/CDN/model dependency or login-service installation side effect.
+Old drafts need not be permanently retained; old entries explicitly report
+obsolescence. Closed Works never silently follow another Work.
 
-- the same ID with the same request returns the same result;
-- the same ID with a different request returns `idempotency_conflict`; and
-- a lost successful response can be recovered without creating another Work, revision, or Plan.
+## Strict revision-bound acceptance and seal
 
-Revision tokens are opaque. Callers may compare them only for equality. `update` requires `base_revision`; a stale token returns `revision_conflict` and never overwrites newer content. `seal` requires an exact revision and candidate content identity.
+Seal requires work_ref, exact current revision, candidate_content_identity,
+request_id, and trusted Human context:
 
-## Organization preferences
+`principal_ref, work_ref, reviewed_revision, confirmed_content_identity, confirmed_at`.
 
-`organization_preferences` is a JSON object stored as an exact plan-scoped snapshot. It contains only user-visible planning preferences and constraints. It has no independent ID, version, registry, or lifecycle.
+Trusted Work/reviewed revision must equal the requested/current Work/revision.
+A stale request returns revision_conflict; mismatched trusted binding returns
+confirmation_binding_mismatch; different identity returns content_identity_mismatch.
+Missing context returns confirmation_required. Ordinary request fields, notes,
+page visits and digests cannot supply Human authority.
 
-`create` stores the initial object. On `update`, omission and an empty object have different stable meanings:
+**Every new save invalidates old confirmation**, including note/preference and
+same-value writes. Withdrawal then restoration of identical content never revives
+it. Refresh, pagination, re-rendering and idempotent replay do not create revisions
+and therefore do not invalidate matching acceptance. Agent stops sealing after
+Human withdrawal and saves the appropriate draft/withdrawal.
 
-- omitting `organization_preferences` preserves the current snapshot unchanged;
-- providing any object replaces the entire snapshot atomically; and
-- providing `{}` explicitly clears the snapshot to no preferences.
+After exact-page review and explicit chat acceptance, the Agent conveys that
+actual scope through the existing trusted local-client transport and seals
+directly. No new popup or digest recital is required. Saving a redundant
+confirmation note after acceptance would create a new revision requiring review.
 
-There is no preference patch or merge behavior. The Tool preserves the resulting snapshot for re-entry and inspection but does not treat an unknown preference as authority to invent organization semantics. Final organization decisions must appear in candidate content and, after sealing, in the Frozen Plan.
+The Tool checks complete candidate, trusted Result and deterministic Frozen Plan
+constraints, publishes the unchanged-format artifact, records principal/time
+in final_confirmation and closes the same revision. It returns the complete
+artifact for Apply. Matching reserved-publication retry recovers exactly one
+artifact. Freezing does not move media.
 
-## Working notes
+## Errors and conformance evidence
 
-`working_notes` is optional free text inside the existing Working State. It holds
-only the work summary an Agent chooses to save: relevant understanding, supplied
-information and its source, affected scope, material alternatives, and unresolved
-implications when needed to continue. It is not a full transcript, a structured
-partial organization, a verified Observation, an attachment store, or confirmation.
+The machine definition enumerates error codes and envelopes. Unknown/invalid
+top-level fields and missing mutable fields are invalid_request. Supplied
+organization structure, references or organization-rule failures are
+organization_invalid. Transport schema validation may reject before dispatch.
+Multiple independent errors do not establish a universal error precedence.
+Failures never repair groups, widen scope or widen authority silently.
 
-On `update`, omission preserves the text, a string replaces it completely, and
-`""` clears it. New Works read as `""`. The field has no additional character cap
-or pagination in this profile. Accepted text must be preserved and read back in
-full without silent truncation or normalization; existing whole-request transport
-and resource limits still apply. A textual path does not create a retention or
-reading guarantee for the referenced material.
-
-Working notes and preferences never enter the Frozen Plan or its content identity.
-The Agent transfers any material final rationale into existing `decision_notes`
-and uses only Result-local Evidence in `evidence_refs`. Additional information
-keeps its actual source and never rewrites the bound Result or expands its scope.
-
-## Candidate content and `update`
-
-`update` requires `work_ref`, `base_revision`, `request_id`, and at least one of
-`organization_preferences`, `working_notes`, or `candidate_content`. Supplying a
-field counts even if its value is unchanged. The three fields can change together
-in one atomic update; an invalid field or Candidate rejects the entire write.
-
-`candidate_content` has three distinct meanings:
-
-- omitted: preserve the current Candidate and identity, including their absence;
-- a complete object: validate and atomically replace the whole Candidate; and
-- `null`: clear the current Candidate and its sealable identity.
-
-An object composes the existing Frozen Plan source-set, logical-group,
-other-outcome, and decision-note schemas. It omits only fields owned by sealing:
-`contract`, `plan_ref`, and the `seal` envelope. Partial objects, JSON Patch, and
-natural-language instructions are not candidate content.
-
-Only a supplied complete Candidate is analyzed against the exact bound Result.
-Notes-only, preferences-only, and withdrawal updates perform no Candidate
-analysis or PreCheck Read; they preserve the same concurrency, cancellation,
-commit and seal-recovery protections. Invalid candidate structure, references or
-organization change nothing. The Tool does not interpret notes or preferences to
-decide whether to preserve, replace, or withdraw a Candidate.
-
-The reserved future `plan_ref` remains attached to the Work, including after
-withdrawal. It is included in the materialized `sealed_content` and its digest;
-reservation creates no published Frozen Plan. A new Work revision therefore need
-not change `candidate_content_identity`. Clearing does not promise recovery of
-historical candidates, and re-entering a sealable state requires a complete
-Candidate submission. Closed Works remain immutable.
-
-## `inspect` and pagination
-
-`inspect` reads one exact revision. Omitting `revision` atomically resolves the
-current revision and returns its opaque token; supplying a stale token returns
-`revision_conflict`. Historical revision retrieval is not promised.
-
-Supported sections, also returned by default in this order, are `overview`,
-`preferences`, `working_notes`, `content`, and `validation`. Explicit selection
-returns only the requested sections, in the same canonical order.
-`returned_sections` and the actual section fields agree.
-
-When no Candidate exists, the Work is normally readable. Requested `content` is
-JSON `null`; requested `validation` is `seal_ready: false` with a
-`candidate_missing` error issue. No candidate identity is returned. Notes and
-preferences remain available, including `""` and `{}` when empty. A valid paged
-request without a cursor also returns `content: null` in this state, not an empty
-organization or a continuation. Request, revision and cursor checks still apply;
-an old or invalid cursor is never silently ignored after withdrawal.
-
-When a Candidate exists, the complete content section contains its exact
-`sealed_content` conforming to Frozen Plan `$defs.sealedContent`. Large `groups`,
-`other_outcomes`, or `decision_notes` collections may be requested page by page.
-Page requests still require `sections: ["content"]`.
-
-Every cursor binds `work_ref`, revision, collection, query shape, and continuation
-position. A page from another revision or section is invalid. Every page of a
-sealable revision reports the same global `candidate_content_identity`; page
-identities do not exist. Following `next_cursor` until `complete: true` obtains
-the complete requested collection without changing the Candidate's meaning.
-
-Validation reports the saved deterministic Candidate validation. It does not
-reacquire evidence for a note edit or prove semantic correctness, preference fit,
-current availability of external material, or Human acceptance. `seal_ready: true`
-requires a complete candidate identity; `false` returns issues and no sealable
-identity. Sealing revalidates the conditions owned by that operation.
-
-## `seal`
-
-`seal` requires:
-
-- `work_ref`;
-- exact `revision`;
-- exact `candidate_content_identity` returned by `inspect`;
-- `request_id`; and
-- a trusted Human authentication context bound to that same identity.
-
-The Tool proves the current revision, identity, Human confirmation, exact Result binding, complete source-set expansion, outcome partition, path and naming safety, and every semantic condition owned by the existing [Frozen Plan Contract](../frozen-plan/). Failure produces no Plan and leaves the Work open.
-
-Success atomically:
-
-1. creates the complete Frozen Plan artifact using the already-confirmed `sealed_content`;
-2. records the trusted confirming principal and time in the existing `seal.final_confirmation` fields;
-3. closes the Working State; and
-4. returns the complete conforming Frozen Plan plus `plan_ref`, `result_ref`, and `content_identity`.
-
-A stale Work revision is rejected even when candidate content is unchanged.
-After reading the current revision, the same exact content may be sealed under a
-still-valid trusted confirmation; a note edit alone does not require another
-semantic discussion. User withdrawal or correction cannot be overridden by an
-unchanged digest. Working-note prose never supplies authentication.
-
-The returned `plan_ref` becomes authoritative only on successful seal. Repeating the identical request in the same confirmation context returns the same artifact. A new semantic change requires another Working State and another Human confirmation.
-
-## Errors
-
-Errors use the shared `outcome: "error"` envelope with action, optional resolved Work and revision, and structured code and message. Codes owned by this Tool are:
-
-- `invalid_request`;
-- `result_not_found`;
-- `result_not_ready`;
-- `result_untrusted`;
-- `work_not_found`;
-- `work_closed`;
-- `revision_conflict`;
-- `idempotency_conflict`;
-- `invalid_cursor`;
-- `candidate_invalid`;
-- `content_identity_mismatch`;
-- `capability_unavailable`;
-- `confirmation_required`;
-- `access_denied`; and
-- `operation_failed`.
-
-Missing update fields, wrong top-level field types and unknown request fields use
-`invalid_request`. A supplied Candidate object that fails its structure, reference
-or organization validation uses `candidate_invalid` and changes no field. A
-transport may reject a schema-invalid request before Tool dispatch. An ordinary
-inspect without a Candidate is successful; seal without a Candidate uses
-`candidate_invalid` when its other preconditions hold. These statements do not
-prescribe a total error order for multiply-invalid calls.
-
-Existing Result-local reference failures retain the meanings established by the PreCheck read and Frozen Plan contracts. Errors never silently rebind a Work, repair a candidate, reinterpret a source set, or widen Human authority.
-
-## Boundaries
-
-This Tool does not expose or define:
-
-- SQLite, storage layout, caches, checkpoints, provider APIs, model calls, or planning algorithms;
-- CLI syntax, UI presentation, identity-provider implementation, or credentials;
-- event recognition, semantic grouping, naming, or user-question strategy;
-- copy, move, link, filesystem destination, Apply authorization, or execution receipts; or
-- a generic Job, Organization Profile, Dataset Tool, Confirm Tool, or Frozen Plan Read Tool.
-
-## Mock and conformance
-
-The primary Mock uses the exact plan-ready, valid partial Result from the existing PreCheck read Mock and returns the exact Frozen Plan from the existing Frozen Plan Mock. It demonstrates create, atomic update, current-revision inspect, paged inspection, trusted Human seal, safe seal retry, and closed-work rejection. The active Geo Tool Mock and Plan Geo workflow fixtures additionally demonstrate authorization preflight, revision-bound enrichment, refusal, continuation, partial failure, and restart-safe replay.
-
-[`interaction.mock.json`](interaction.mock.json) adds synthetic examples for optional
-work saving, absent Candidates, preservation and withdrawal, atomic failures,
-revision/content separation and final sealing. Its trusted context is test input,
-not a claim that the JSON request can authenticate a Human.
-
-JSON Schema validates all request and response shapes with Draft 2020-12 strict compilation and registered external schemas. Semantic tests additionally prove Result entry gates, revision conflicts, cursor binding, one global candidate identity, Human confirmation boundaries, idempotency, Working State closure, and complete Frozen Plan conformance.
+[Primary exchanges](hong-kong.mock.json) and
+[continuous scenarios](interaction.mock.json) are static examples, not runtime
+receipts or Human acceptance. Implementation evidence separately covers ordinary
+CLI/MCP, live entry after Tool return, actual browser navigation, large member
+continuation, failures, installation resources and strict confirmation.
+Human comprehensibility review and independent/weaker Agent effectiveness require
+their own actual evidence; deterministic tests do not certify them.

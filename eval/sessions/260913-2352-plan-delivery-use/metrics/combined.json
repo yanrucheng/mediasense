@@ -1,0 +1,134 @@
+{
+  "requested_weak_comparison": "skipped_by_user",
+  "unavailable_models": [
+    "gpt-5.6-luna",
+    "gpt-5.5",
+    "gpt-5.6-terra",
+    "gpt-5.6-sol"
+  ],
+  "model_access_failure": "403 before execution; no account changes",
+  "executed_models": [
+    {
+      "model": "gpt-6-astra",
+      "effort": "low"
+    }
+  ],
+  "complete_skill_read_event_lines": [
+    25
+  ],
+  "actual_image_views": 9,
+  "image_paths": [
+    "file:///private/tmp/mediasense-p6-agent-use/review-loop/dataset/precheck/_artifacts/sha256/fb/fb0d94fab54d9d3ea9aa9536bab5c0c13100dc9809e57c94fd5735774b8e56b9.jpg",
+    "file:///private/tmp/mediasense-p6-agent-use/review-loop/dataset/precheck/_artifacts/sha256/02/02a11f75308e21f010d7b2ccdb7a092d4338dab3bbd527e788c89982eeb7336c.jpg",
+    "file:///private/tmp/mediasense-p6-agent-use/review-loop/dataset/precheck/_artifacts/sha256/cd/cd00a5a3301a1c213c087b8ddec3f21840cdf1d71af96281ca75d7f522f3494d.jpg",
+    "file:///private/tmp/mediasense-p6-agent-use/review-loop/dataset/precheck/_artifacts/sha256/80/806b90e3ea7affec0bbe62fbf0eec176688a4d1048015f77d9caae7faf6bb14e.jpg",
+    "file:///private/tmp/mediasense-p6-agent-use/review-loop/dataset/precheck/_artifacts/sha256/da/da857f5d8adc608bbdd4b1950db73b560e184795905561a9e232a1e29e9ca6d5.jpg",
+    "file:///private/tmp/mediasense-p6-agent-use/review-loop/dataset/precheck/_artifacts/sha256/7f/7f80b390aedb9319cafec670f4703515f9292843f9977b5954ffb14fd8348867.jpg",
+    "file:///private/tmp/mediasense-p6-agent-use/review-loop/dataset/precheck/_artifacts/sha256/69/69f7fc07a97bc14adcd7d875360881252be3d8797d8326441a9d90334c414f80.jpg",
+    "file:///private/tmp/mediasense-p6-agent-use/review-loop/dataset/precheck/_artifacts/sha256/ac/ace37c9e80a02e9789ccea777bab782bf8e4bbf9b16f8446d0a3886aa373fda5.jpg",
+    "file:///private/tmp/mediasense-p6-agent-use/review-loop/dataset/precheck/_artifacts/sha256/bd/bdb758795af0c20785a3423ef49f027a3a3afcc02732ddd1d9861526dad7ae08.jpg"
+  ],
+  "mcp_calls": {
+    "mediasense.plan.work:discovery": 2,
+    "mediasense.precheck.read:discovery": 2,
+    "mediasense.precheck.read:review": 2,
+    "mediasense.plan.work:invalid_envelope": 1,
+    "mediasense.plan.work:create": 1,
+    "mediasense.plan.work:update": 3,
+    "mediasense.precheck.read:resolve": 1,
+    "mediasense.plan.work:inspect": 4,
+    "mediasense.plan.work:seal": 1
+  },
+  "ordinary_tool_errors": [
+    {
+      "request": {
+        "request": {
+          "action": "create",
+          "result_ref": "precheck-result:b5a2ca1b820845e9a3b79a7aa8922839",
+          "organization_preferences": {
+            "retrieval": "按参加的活动找回",
+            "source_names": "保留原文件名"
+          },
+          "request_id": "request:review-loop-create"
+        }
+      },
+      "error": {
+        "code": "host_operation_failed",
+        "message": "The Tool Host encountered an internal operation failure; no completion is implied. Retry after diagnosis.",
+        "diagnostic_id": "diagnostic:a63a265b-792b-4e82-b552-2ba413c8dd4e"
+      }
+    }
+  ],
+  "work_ref": "plan-work:97c58692-319b-42b0-b85a-032a608b97e3",
+  "frozen_plan_ref": "frozen-plan:f7598f89-8927-41b2-8a72-c00254836127",
+  "accepted_and_frozen_revision": "work-revision:334f43d5-b301-4a1f-ac4d-5175a0301fe5",
+  "successful_updates": 3,
+  "agent_authored_html_files": 0,
+  "source_files_unchanged": 12,
+  "result_unchanged": true,
+  "groups": [
+    {
+      "path": [
+        "0620",
+        "1-书展"
+      ],
+      "count": 0
+    },
+    {
+      "path": [
+        "0620",
+        "2-河边散步"
+      ],
+      "count": 0
+    },
+    {
+      "path": [
+        "0621",
+        "1-北岸文化中心看展"
+      ],
+      "count": 1
+    },
+    {
+      "path": [
+        "0621",
+        "2-陶艺体验课"
+      ],
+      "count": 3
+    },
+    {
+      "path": [
+        "0621",
+        "3-傍晚河边散步"
+      ],
+      "count": 2
+    }
+  ],
+  "other_outcomes": [
+    {
+      "evidence_refs": [
+        "evidence:5393e542f1cb84fbe69d031bdcbbeb9d472e8ccbba2a30bfdc303ae25234d149"
+      ],
+      "members": {
+        "kind": "explicit",
+        "source_item_refs": [
+          "source-item:5e241e8ecdf87fe25135a2c2bc6fee51573027e6bac4178afaf1be1d5b5f9e93"
+        ]
+      },
+      "outcome": "retain_current_organization",
+      "reason": "用户说明 IMG_0301 是无关便条，明确要求保留原处。证据卡自身只能表明关联未知；不将用户知识改写成 Result 事实。"
+    }
+  ],
+  "wheel_sha256": "be8dd255892856cc8f90caad25c330dce293b67b49dabaaaac33294e8c084e4c",
+  "installed_package_files_verified": 141,
+  "full_source_tests": "1453 passed, 17 deselected; final production delta is app.js presentation only",
+  "limitations": [
+    "synthetic scene cards, not real photo recognition",
+    "developer/evaluator page review, not independent Human acceptance",
+    "one independent same-model low-effort run, not weak-model comparison"
+  ],
+  "mcp_trace_scope": "Agent calls plus two evaluator inspect calls during isolated display-build reconnection; initialize/list/open transport setup is not counted.",
+  "complete_profile_read_event_lines": [
+    30
+  ],
+  "agent_session_id": "01a09b88-3764-7eb0-8933-221e0c0bece5"
+}

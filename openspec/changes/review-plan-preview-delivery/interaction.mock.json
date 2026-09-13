@@ -1,0 +1,2684 @@
+{
+  "purpose": "Proposed packet-6 interface examples, not runtime receipts, actual Human acceptance, installed behavior or a PreCheck Result schema.",
+  "authority": "Current docs/spec/contract remains active until this proposal is reviewed and promoted.",
+  "fixture": {
+    "result_ref": "precheck-result:preview-spec-r",
+    "readiness": "plan_ready",
+    "coverage": "complete",
+    "sources": [
+      {
+        "source_item_ref": "source-item:s1",
+        "relative_path": "inputs/source-01.jpg"
+      },
+      {
+        "source_item_ref": "source-item:s2",
+        "relative_path": "inputs/source-02.jpg"
+      },
+      {
+        "source_item_ref": "source-item:s3",
+        "relative_path": "inputs/source-03.jpg"
+      },
+      {
+        "source_item_ref": "source-item:s4",
+        "relative_path": "inputs/source-04.jpg"
+      },
+      {
+        "source_item_ref": "source-item:s5",
+        "relative_path": "inputs/source-05.jpg"
+      },
+      {
+        "source_item_ref": "source-item:s6",
+        "relative_path": "inputs/source-06.jpg"
+      },
+      {
+        "source_item_ref": "source-item:s7",
+        "relative_path": "inputs/source-07.jpg"
+      },
+      {
+        "source_item_ref": "source-item:s8",
+        "relative_path": "inputs/source-08.jpg"
+      }
+    ],
+    "evidence": [
+      {
+        "evidence_ref": "evidence:e1",
+        "source_items": [
+          "source-item:s1"
+        ]
+      },
+      {
+        "evidence_ref": "evidence:e2",
+        "source_items": [
+          "source-item:s4"
+        ]
+      }
+    ],
+    "reserved_plan_refs": {
+      "plan-work:preview-spec-w": "frozen-plan:preview-spec-p",
+      "plan-work:preview-spec-failure": "frozen-plan:preview-spec-failure"
+    },
+    "candidate_identity": "sha256:ee9c63a0784d0d897a98b08d8b36fe6378b4564db2d9c07feebef046a60ddba3"
+  },
+  "cases": [
+    {
+      "name": "create_without_organization",
+      "request": {
+        "action": "create",
+        "result_ref": "precheck-result:preview-spec-r",
+        "request_id": "request:create-w",
+        "organization_preferences": {
+          "preserve_source_basename": true
+        }
+      },
+      "response": {
+        "outcome": "ok",
+        "action": "create",
+        "work_ref": "plan-work:preview-spec-w",
+        "result_ref": "precheck-result:preview-spec-r",
+        "revision": "work-revision:r0",
+        "state": "open",
+        "organization_preferences": {
+          "preserve_source_basename": true
+        },
+        "view": {
+          "work_ref": "plan-work:preview-spec-w",
+          "result_ref": "precheck-result:preview-spec-r",
+          "revision": "work-revision:r0",
+          "observed_at": "2026-09-13T08:00:00Z",
+          "current_revision": "work-revision:r0",
+          "current_uri": "http://127.0.0.1:43127/spec-only/work/preview-spec-w",
+          "revision_uri": "http://127.0.0.1:43127/spec-only/work/preview-spec-w?revision=work-revision:r0",
+          "status": "ready",
+          "problems": []
+        }
+      }
+    },
+    {
+      "name": "inspect_absent",
+      "request": {
+        "action": "inspect",
+        "work_ref": "plan-work:preview-spec-w"
+      },
+      "response": {
+        "outcome": "ok",
+        "action": "inspect",
+        "work_ref": "plan-work:preview-spec-w",
+        "result_ref": "precheck-result:preview-spec-r",
+        "revision": "work-revision:r0",
+        "state": "open",
+        "reserved_plan_ref": "frozen-plan:preview-spec-p",
+        "returned_sections": [
+          "overview",
+          "preferences",
+          "working_notes",
+          "content",
+          "validation",
+          "view"
+        ],
+        "sections": {
+          "overview": {
+            "state": "open",
+            "organization_kind": "none",
+            "scope_summary": null
+          },
+          "preferences": {
+            "preserve_source_basename": true
+          },
+          "working_notes": "",
+          "content": null,
+          "validation": {
+            "seal_ready": false,
+            "issues": [
+              {
+                "code": "candidate_missing",
+                "severity": "error",
+                "message": "尚无候选；Work仍可正常读取。"
+              }
+            ]
+          },
+          "view": {
+            "work_ref": "plan-work:preview-spec-w",
+            "result_ref": "precheck-result:preview-spec-r",
+            "revision": "work-revision:r0",
+            "observed_at": "2026-09-13T08:00:10Z",
+            "current_revision": "work-revision:r0",
+            "current_uri": "http://127.0.0.1:43127/spec-only/work/preview-spec-w",
+            "revision_uri": "http://127.0.0.1:43127/spec-only/work/preview-spec-w?revision=work-revision:r0",
+            "status": "ready",
+            "problems": []
+          }
+        }
+      }
+    },
+    {
+      "name": "notes_before_tree",
+      "request": {
+        "action": "update",
+        "work_ref": "plan-work:preview-spec-w",
+        "base_revision": "work-revision:r0",
+        "request_id": "request:notes",
+        "working_notes": "子集关系正在讨论，尚未保存目录。"
+      },
+      "response": {
+        "outcome": "ok",
+        "action": "update",
+        "work_ref": "plan-work:preview-spec-w",
+        "result_ref": "precheck-result:preview-spec-r",
+        "revision": "work-revision:r1",
+        "state": "open",
+        "view": {
+          "work_ref": "plan-work:preview-spec-w",
+          "result_ref": "precheck-result:preview-spec-r",
+          "revision": "work-revision:r1",
+          "observed_at": "2026-09-13T08:00:20Z",
+          "current_revision": "work-revision:r1",
+          "current_uri": "http://127.0.0.1:43127/spec-only/work/preview-spec-w",
+          "revision_uri": "http://127.0.0.1:43127/spec-only/work/preview-spec-w?revision=work-revision:r1",
+          "status": "ready",
+          "problems": []
+        }
+      }
+    },
+    {
+      "name": "save_partial_draft",
+      "request": {
+        "action": "update",
+        "work_ref": "plan-work:preview-spec-w",
+        "base_revision": "work-revision:r1",
+        "request_id": "request:draft-partial",
+        "organization_content": {
+          "kind": "draft",
+          "result_ref": "precheck-result:preview-spec-r",
+          "scope": {
+            "kind": "explicit",
+            "source_item_refs": [
+              "source-item:s1",
+              "source-item:s2",
+              "source-item:s3",
+              "source-item:s4",
+              "source-item:s5",
+              "source-item:s6",
+              "source-item:s7",
+              "source-item:s8"
+            ]
+          },
+          "logical_root": "Media",
+          "groups": [
+            {
+              "relative_path": [
+                "目录甲"
+              ],
+              "members": {
+                "kind": "explicit",
+                "source_item_refs": [
+                  "source-item:s1",
+                  "source-item:s2",
+                  "source-item:s3"
+                ]
+              },
+              "source_naming": {
+                "default": "preserve_source_basename"
+              }
+            },
+            {
+              "relative_path": [
+                "目录乙"
+              ],
+              "members": {
+                "kind": "explicit",
+                "source_item_refs": [
+                  "source-item:s4",
+                  "source-item:s5"
+                ]
+              },
+              "source_naming": {
+                "default": "preserve_source_basename"
+              }
+            }
+          ],
+          "other_outcomes": [],
+          "decision_notes": [
+            {
+              "applies_to": {
+                "kind": "explicit",
+                "source_item_refs": [
+                  "source-item:s1",
+                  "source-item:s2",
+                  "source-item:s3"
+                ]
+              },
+              "summary": "Agent暂按现有来源关系安排子集A，命名仍可讨论。",
+              "evidence_refs": [
+                "evidence:e1"
+              ]
+            }
+          ]
+        },
+        "working_notes": "已暂存子集A、B的目录；子集C尚未安排。"
+      },
+      "response": {
+        "outcome": "ok",
+        "action": "update",
+        "work_ref": "plan-work:preview-spec-w",
+        "result_ref": "precheck-result:preview-spec-r",
+        "revision": "work-revision:r2",
+        "state": "open",
+        "view": {
+          "work_ref": "plan-work:preview-spec-w",
+          "result_ref": "precheck-result:preview-spec-r",
+          "revision": "work-revision:r2",
+          "observed_at": "2026-09-13T08:00:30Z",
+          "current_revision": "work-revision:r2",
+          "current_uri": "http://127.0.0.1:43127/spec-only/work/preview-spec-w",
+          "revision_uri": "http://127.0.0.1:43127/spec-only/work/preview-spec-w?revision=work-revision:r2",
+          "status": "ready",
+          "problems": []
+        }
+      }
+    },
+    {
+      "name": "inspect_partial_draft",
+      "request": {
+        "action": "inspect",
+        "work_ref": "plan-work:preview-spec-w",
+        "revision": "work-revision:r2"
+      },
+      "response": {
+        "outcome": "ok",
+        "action": "inspect",
+        "work_ref": "plan-work:preview-spec-w",
+        "result_ref": "precheck-result:preview-spec-r",
+        "revision": "work-revision:r2",
+        "state": "open",
+        "reserved_plan_ref": "frozen-plan:preview-spec-p",
+        "returned_sections": [
+          "overview",
+          "preferences",
+          "working_notes",
+          "content",
+          "validation",
+          "view"
+        ],
+        "sections": {
+          "overview": {
+            "state": "open",
+            "organization_kind": "draft",
+            "scope_summary": {
+              "scope": 8,
+              "organized": 5,
+              "other_outcomes": 0,
+              "unassigned": 3
+            }
+          },
+          "preferences": {
+            "preserve_source_basename": true
+          },
+          "working_notes": "已暂存子集A、B的目录；子集C尚未安排。",
+          "content": {
+            "mode": "complete",
+            "value": {
+              "kind": "draft",
+              "result_ref": "precheck-result:preview-spec-r",
+              "scope": {
+                "kind": "explicit",
+                "source_item_refs": [
+                  "source-item:s1",
+                  "source-item:s2",
+                  "source-item:s3",
+                  "source-item:s4",
+                  "source-item:s5",
+                  "source-item:s6",
+                  "source-item:s7",
+                  "source-item:s8"
+                ]
+              },
+              "logical_root": "Media",
+              "groups": [
+                {
+                  "relative_path": [
+                    "目录甲"
+                  ],
+                  "members": {
+                    "kind": "explicit",
+                    "source_item_refs": [
+                      "source-item:s1",
+                      "source-item:s2",
+                      "source-item:s3"
+                    ]
+                  },
+                  "source_naming": {
+                    "default": "preserve_source_basename"
+                  }
+                },
+                {
+                  "relative_path": [
+                    "目录乙"
+                  ],
+                  "members": {
+                    "kind": "explicit",
+                    "source_item_refs": [
+                      "source-item:s4",
+                      "source-item:s5"
+                    ]
+                  },
+                  "source_naming": {
+                    "default": "preserve_source_basename"
+                  }
+                }
+              ],
+              "other_outcomes": [],
+              "decision_notes": [
+                {
+                  "applies_to": {
+                    "kind": "explicit",
+                    "source_item_refs": [
+                      "source-item:s1",
+                      "source-item:s2",
+                      "source-item:s3"
+                    ]
+                  },
+                  "summary": "Agent暂按现有来源关系安排子集A，命名仍可讨论。",
+                  "evidence_refs": [
+                    "evidence:e1"
+                  ]
+                }
+              ]
+            }
+          },
+          "validation": {
+            "seal_ready": false,
+            "issues": [
+              {
+                "code": "draft_not_candidate",
+                "severity": "error",
+                "message": "正常草案尚未提交完整候选。"
+              }
+            ]
+          },
+          "view": {
+            "work_ref": "plan-work:preview-spec-w",
+            "result_ref": "precheck-result:preview-spec-r",
+            "revision": "work-revision:r2",
+            "observed_at": "2026-09-13T08:00:40Z",
+            "current_revision": "work-revision:r2",
+            "current_uri": "http://127.0.0.1:43127/spec-only/work/preview-spec-w",
+            "revision_uri": "http://127.0.0.1:43127/spec-only/work/preview-spec-w?revision=work-revision:r2",
+            "status": "ready",
+            "problems": []
+          }
+        }
+      }
+    },
+    {
+      "name": "overlap_rejects_combined_notes",
+      "request": {
+        "action": "update",
+        "work_ref": "plan-work:preview-spec-w",
+        "base_revision": "work-revision:r2",
+        "request_id": "request:overlap",
+        "organization_content": {
+          "kind": "draft",
+          "result_ref": "precheck-result:preview-spec-r",
+          "scope": {
+            "kind": "explicit",
+            "source_item_refs": [
+              "source-item:s1",
+              "source-item:s2",
+              "source-item:s3",
+              "source-item:s4",
+              "source-item:s5",
+              "source-item:s6",
+              "source-item:s7",
+              "source-item:s8"
+            ]
+          },
+          "logical_root": "Media",
+          "groups": [
+            {
+              "relative_path": [
+                "目录甲"
+              ],
+              "members": {
+                "kind": "explicit",
+                "source_item_refs": [
+                  "source-item:s1",
+                  "source-item:s2",
+                  "source-item:s3"
+                ]
+              },
+              "source_naming": {
+                "default": "preserve_source_basename"
+              }
+            },
+            {
+              "relative_path": [
+                "目录乙"
+              ],
+              "members": {
+                "kind": "explicit",
+                "source_item_refs": [
+                  "source-item:s4",
+                  "source-item:s5",
+                  "source-item:s1"
+                ]
+              },
+              "source_naming": {
+                "default": "preserve_source_basename"
+              }
+            }
+          ],
+          "other_outcomes": [],
+          "decision_notes": [
+            {
+              "applies_to": {
+                "kind": "explicit",
+                "source_item_refs": [
+                  "source-item:s1",
+                  "source-item:s2",
+                  "source-item:s3"
+                ]
+              },
+              "summary": "Agent暂按现有来源关系安排子集A，命名仍可讨论。",
+              "evidence_refs": [
+                "evidence:e1"
+              ]
+            }
+          ]
+        },
+        "working_notes": "不得只保存这条说明。"
+      },
+      "response": {
+        "outcome": "error",
+        "action": "update",
+        "work_ref": "plan-work:preview-spec-w",
+        "revision": "work-revision:r2",
+        "error": {
+          "code": "organization_invalid",
+          "message": "此例用于约束失败语义。"
+        }
+      },
+      "semantic_rejection": "overlap"
+    },
+    {
+      "name": "incomplete_candidate_rejected",
+      "request": {
+        "action": "update",
+        "work_ref": "plan-work:preview-spec-w",
+        "base_revision": "work-revision:r2",
+        "request_id": "request:incomplete",
+        "organization_content": {
+          "kind": "candidate",
+          "result_ref": "precheck-result:preview-spec-r",
+          "scope": {
+            "kind": "explicit",
+            "source_item_refs": [
+              "source-item:s1",
+              "source-item:s2",
+              "source-item:s3",
+              "source-item:s4",
+              "source-item:s5",
+              "source-item:s6",
+              "source-item:s7",
+              "source-item:s8"
+            ]
+          },
+          "logical_root": "Media",
+          "groups": [
+            {
+              "relative_path": [
+                "目录甲"
+              ],
+              "members": {
+                "kind": "explicit",
+                "source_item_refs": [
+                  "source-item:s1",
+                  "source-item:s2",
+                  "source-item:s3"
+                ]
+              },
+              "source_naming": {
+                "default": "preserve_source_basename"
+              }
+            },
+            {
+              "relative_path": [
+                "目录乙"
+              ],
+              "members": {
+                "kind": "explicit",
+                "source_item_refs": [
+                  "source-item:s4",
+                  "source-item:s5"
+                ]
+              },
+              "source_naming": {
+                "default": "preserve_source_basename"
+              }
+            }
+          ],
+          "other_outcomes": [],
+          "decision_notes": [
+            {
+              "applies_to": {
+                "kind": "explicit",
+                "source_item_refs": [
+                  "source-item:s1",
+                  "source-item:s2",
+                  "source-item:s3"
+                ]
+              },
+              "summary": "Agent暂按现有来源关系安排子集A，命名仍可讨论。",
+              "evidence_refs": [
+                "evidence:e1"
+              ]
+            }
+          ]
+        }
+      },
+      "response": {
+        "outcome": "error",
+        "action": "update",
+        "work_ref": "plan-work:preview-spec-w",
+        "revision": "work-revision:r2",
+        "error": {
+          "code": "organization_invalid",
+          "message": "此例用于约束失败语义。"
+        }
+      },
+      "semantic_rejection": "incomplete_candidate"
+    },
+    {
+      "name": "save_fully_accounted_draft",
+      "request": {
+        "action": "update",
+        "work_ref": "plan-work:preview-spec-w",
+        "base_revision": "work-revision:r2",
+        "request_id": "request:full-draft",
+        "organization_content": {
+          "kind": "draft",
+          "result_ref": "precheck-result:preview-spec-r",
+          "scope": {
+            "kind": "explicit",
+            "source_item_refs": [
+              "source-item:s1",
+              "source-item:s2",
+              "source-item:s3",
+              "source-item:s4",
+              "source-item:s5",
+              "source-item:s6",
+              "source-item:s7",
+              "source-item:s8"
+            ]
+          },
+          "logical_root": "Media",
+          "groups": [
+            {
+              "relative_path": [
+                "目录甲"
+              ],
+              "members": {
+                "kind": "explicit",
+                "source_item_refs": [
+                  "source-item:s1",
+                  "source-item:s2",
+                  "source-item:s3"
+                ]
+              },
+              "source_naming": {
+                "default": "preserve_source_basename"
+              }
+            },
+            {
+              "relative_path": [
+                "目录乙"
+              ],
+              "members": {
+                "kind": "explicit",
+                "source_item_refs": [
+                  "source-item:s4",
+                  "source-item:s5"
+                ]
+              },
+              "source_naming": {
+                "default": "preserve_source_basename"
+              }
+            }
+          ],
+          "other_outcomes": [
+            {
+              "outcome": "retain_current_organization",
+              "members": {
+                "kind": "explicit",
+                "source_item_refs": [
+                  "source-item:s6",
+                  "source-item:s7",
+                  "source-item:s8"
+                ]
+              },
+              "reason": "此例中用户要求子集C保留现有组织；这不是未安排的替代含义。"
+            }
+          ],
+          "decision_notes": [
+            {
+              "applies_to": {
+                "kind": "explicit",
+                "source_item_refs": [
+                  "source-item:s1",
+                  "source-item:s2",
+                  "source-item:s3"
+                ]
+              },
+              "summary": "Agent暂按现有来源关系安排子集A，命名仍可讨论。",
+              "evidence_refs": [
+                "evidence:e1"
+              ]
+            }
+          ]
+        },
+        "working_notes": "各项已有去向；当前仍是组织草案。"
+      },
+      "response": {
+        "outcome": "ok",
+        "action": "update",
+        "work_ref": "plan-work:preview-spec-w",
+        "result_ref": "precheck-result:preview-spec-r",
+        "revision": "work-revision:r3",
+        "state": "open",
+        "view": {
+          "work_ref": "plan-work:preview-spec-w",
+          "result_ref": "precheck-result:preview-spec-r",
+          "revision": "work-revision:r3",
+          "observed_at": "2026-09-13T08:01:10Z",
+          "current_revision": "work-revision:r3",
+          "current_uri": "http://127.0.0.1:43127/spec-only/work/preview-spec-w",
+          "revision_uri": "http://127.0.0.1:43127/spec-only/work/preview-spec-w?revision=work-revision:r3",
+          "status": "ready",
+          "problems": []
+        }
+      }
+    },
+    {
+      "name": "full_draft_is_not_candidate",
+      "request": {
+        "action": "inspect",
+        "work_ref": "plan-work:preview-spec-w",
+        "revision": "work-revision:r3"
+      },
+      "response": {
+        "outcome": "ok",
+        "action": "inspect",
+        "work_ref": "plan-work:preview-spec-w",
+        "result_ref": "precheck-result:preview-spec-r",
+        "revision": "work-revision:r3",
+        "state": "open",
+        "reserved_plan_ref": "frozen-plan:preview-spec-p",
+        "returned_sections": [
+          "overview",
+          "preferences",
+          "working_notes",
+          "content",
+          "validation",
+          "view"
+        ],
+        "sections": {
+          "overview": {
+            "state": "open",
+            "organization_kind": "draft",
+            "scope_summary": {
+              "scope": 8,
+              "organized": 5,
+              "other_outcomes": 3,
+              "unassigned": 0
+            }
+          },
+          "preferences": {
+            "preserve_source_basename": true
+          },
+          "working_notes": "各项已有去向；当前仍是组织草案。",
+          "content": {
+            "mode": "complete",
+            "value": {
+              "kind": "draft",
+              "result_ref": "precheck-result:preview-spec-r",
+              "scope": {
+                "kind": "explicit",
+                "source_item_refs": [
+                  "source-item:s1",
+                  "source-item:s2",
+                  "source-item:s3",
+                  "source-item:s4",
+                  "source-item:s5",
+                  "source-item:s6",
+                  "source-item:s7",
+                  "source-item:s8"
+                ]
+              },
+              "logical_root": "Media",
+              "groups": [
+                {
+                  "relative_path": [
+                    "目录甲"
+                  ],
+                  "members": {
+                    "kind": "explicit",
+                    "source_item_refs": [
+                      "source-item:s1",
+                      "source-item:s2",
+                      "source-item:s3"
+                    ]
+                  },
+                  "source_naming": {
+                    "default": "preserve_source_basename"
+                  }
+                },
+                {
+                  "relative_path": [
+                    "目录乙"
+                  ],
+                  "members": {
+                    "kind": "explicit",
+                    "source_item_refs": [
+                      "source-item:s4",
+                      "source-item:s5"
+                    ]
+                  },
+                  "source_naming": {
+                    "default": "preserve_source_basename"
+                  }
+                }
+              ],
+              "other_outcomes": [
+                {
+                  "outcome": "retain_current_organization",
+                  "members": {
+                    "kind": "explicit",
+                    "source_item_refs": [
+                      "source-item:s6",
+                      "source-item:s7",
+                      "source-item:s8"
+                    ]
+                  },
+                  "reason": "此例中用户要求子集C保留现有组织；这不是未安排的替代含义。"
+                }
+              ],
+              "decision_notes": [
+                {
+                  "applies_to": {
+                    "kind": "explicit",
+                    "source_item_refs": [
+                      "source-item:s1",
+                      "source-item:s2",
+                      "source-item:s3"
+                    ]
+                  },
+                  "summary": "Agent暂按现有来源关系安排子集A，命名仍可讨论。",
+                  "evidence_refs": [
+                    "evidence:e1"
+                  ]
+                }
+              ]
+            }
+          },
+          "validation": {
+            "seal_ready": false,
+            "issues": [
+              {
+                "code": "draft_not_candidate",
+                "severity": "error",
+                "message": "正常草案尚未提交完整候选。"
+              }
+            ]
+          },
+          "view": {
+            "work_ref": "plan-work:preview-spec-w",
+            "result_ref": "precheck-result:preview-spec-r",
+            "revision": "work-revision:r3",
+            "observed_at": "2026-09-13T08:01:20Z",
+            "current_revision": "work-revision:r3",
+            "current_uri": "http://127.0.0.1:43127/spec-only/work/preview-spec-w",
+            "revision_uri": "http://127.0.0.1:43127/spec-only/work/preview-spec-w?revision=work-revision:r3",
+            "status": "ready",
+            "problems": []
+          }
+        }
+      }
+    },
+    {
+      "name": "submit_complete_candidate",
+      "request": {
+        "action": "update",
+        "work_ref": "plan-work:preview-spec-w",
+        "base_revision": "work-revision:r3",
+        "request_id": "request:candidate",
+        "organization_content": {
+          "kind": "candidate",
+          "result_ref": "precheck-result:preview-spec-r",
+          "scope": {
+            "kind": "explicit",
+            "source_item_refs": [
+              "source-item:s1",
+              "source-item:s2",
+              "source-item:s3",
+              "source-item:s4",
+              "source-item:s5",
+              "source-item:s6",
+              "source-item:s7",
+              "source-item:s8"
+            ]
+          },
+          "logical_root": "Media",
+          "groups": [
+            {
+              "relative_path": [
+                "目录甲"
+              ],
+              "members": {
+                "kind": "explicit",
+                "source_item_refs": [
+                  "source-item:s1",
+                  "source-item:s2",
+                  "source-item:s3"
+                ]
+              },
+              "source_naming": {
+                "default": "preserve_source_basename"
+              }
+            },
+            {
+              "relative_path": [
+                "目录乙"
+              ],
+              "members": {
+                "kind": "explicit",
+                "source_item_refs": [
+                  "source-item:s4",
+                  "source-item:s5"
+                ]
+              },
+              "source_naming": {
+                "default": "preserve_source_basename"
+              }
+            }
+          ],
+          "other_outcomes": [
+            {
+              "outcome": "retain_current_organization",
+              "members": {
+                "kind": "explicit",
+                "source_item_refs": [
+                  "source-item:s6",
+                  "source-item:s7",
+                  "source-item:s8"
+                ]
+              },
+              "reason": "此例中用户要求子集C保留现有组织；这不是未安排的替代含义。"
+            }
+          ],
+          "decision_notes": [
+            {
+              "applies_to": {
+                "kind": "explicit",
+                "source_item_refs": [
+                  "source-item:s1",
+                  "source-item:s2",
+                  "source-item:s3"
+                ]
+              },
+              "summary": "Agent根据已准备的来源关系安排子集A；最终名称为目录甲。",
+              "evidence_refs": [
+                "evidence:e1"
+              ]
+            }
+          ]
+        },
+        "working_notes": "子集A、B分别归组；子集C按用户偏好保留现有组织。"
+      },
+      "response": {
+        "outcome": "ok",
+        "action": "update",
+        "work_ref": "plan-work:preview-spec-w",
+        "result_ref": "precheck-result:preview-spec-r",
+        "revision": "work-revision:r4",
+        "state": "open",
+        "view": {
+          "work_ref": "plan-work:preview-spec-w",
+          "result_ref": "precheck-result:preview-spec-r",
+          "revision": "work-revision:r4",
+          "observed_at": "2026-09-13T08:01:30Z",
+          "current_revision": "work-revision:r4",
+          "current_uri": "http://127.0.0.1:43127/spec-only/work/preview-spec-w",
+          "revision_uri": "http://127.0.0.1:43127/spec-only/work/preview-spec-w?revision=work-revision:r4",
+          "status": "ready",
+          "problems": []
+        }
+      }
+    },
+    {
+      "name": "inspect_complete_candidate",
+      "request": {
+        "action": "inspect",
+        "work_ref": "plan-work:preview-spec-w",
+        "revision": "work-revision:r4"
+      },
+      "response": {
+        "outcome": "ok",
+        "action": "inspect",
+        "work_ref": "plan-work:preview-spec-w",
+        "result_ref": "precheck-result:preview-spec-r",
+        "revision": "work-revision:r4",
+        "state": "open",
+        "reserved_plan_ref": "frozen-plan:preview-spec-p",
+        "returned_sections": [
+          "overview",
+          "preferences",
+          "working_notes",
+          "content",
+          "validation",
+          "view"
+        ],
+        "sections": {
+          "overview": {
+            "state": "open",
+            "organization_kind": "candidate",
+            "scope_summary": {
+              "scope": 8,
+              "organized": 5,
+              "other_outcomes": 3,
+              "unassigned": 0
+            }
+          },
+          "preferences": {
+            "preserve_source_basename": true
+          },
+          "working_notes": "子集A、B分别归组；子集C按用户偏好保留现有组织。",
+          "content": {
+            "mode": "complete",
+            "value": {
+              "kind": "candidate",
+              "result_ref": "precheck-result:preview-spec-r",
+              "scope": {
+                "kind": "explicit",
+                "source_item_refs": [
+                  "source-item:s1",
+                  "source-item:s2",
+                  "source-item:s3",
+                  "source-item:s4",
+                  "source-item:s5",
+                  "source-item:s6",
+                  "source-item:s7",
+                  "source-item:s8"
+                ]
+              },
+              "logical_root": "Media",
+              "groups": [
+                {
+                  "relative_path": [
+                    "目录甲"
+                  ],
+                  "members": {
+                    "kind": "explicit",
+                    "source_item_refs": [
+                      "source-item:s1",
+                      "source-item:s2",
+                      "source-item:s3"
+                    ]
+                  },
+                  "source_naming": {
+                    "default": "preserve_source_basename"
+                  }
+                },
+                {
+                  "relative_path": [
+                    "目录乙"
+                  ],
+                  "members": {
+                    "kind": "explicit",
+                    "source_item_refs": [
+                      "source-item:s4",
+                      "source-item:s5"
+                    ]
+                  },
+                  "source_naming": {
+                    "default": "preserve_source_basename"
+                  }
+                }
+              ],
+              "other_outcomes": [
+                {
+                  "outcome": "retain_current_organization",
+                  "members": {
+                    "kind": "explicit",
+                    "source_item_refs": [
+                      "source-item:s6",
+                      "source-item:s7",
+                      "source-item:s8"
+                    ]
+                  },
+                  "reason": "此例中用户要求子集C保留现有组织；这不是未安排的替代含义。"
+                }
+              ],
+              "decision_notes": [
+                {
+                  "applies_to": {
+                    "kind": "explicit",
+                    "source_item_refs": [
+                      "source-item:s1",
+                      "source-item:s2",
+                      "source-item:s3"
+                    ]
+                  },
+                  "summary": "Agent根据已准备的来源关系安排子集A；最终名称为目录甲。",
+                  "evidence_refs": [
+                    "evidence:e1"
+                  ]
+                }
+              ]
+            }
+          },
+          "validation": {
+            "seal_ready": true,
+            "issues": []
+          },
+          "view": {
+            "work_ref": "plan-work:preview-spec-w",
+            "result_ref": "precheck-result:preview-spec-r",
+            "revision": "work-revision:r4",
+            "observed_at": "2026-09-13T08:01:40Z",
+            "current_revision": "work-revision:r4",
+            "current_uri": "http://127.0.0.1:43127/spec-only/work/preview-spec-w",
+            "revision_uri": "http://127.0.0.1:43127/spec-only/work/preview-spec-w?revision=work-revision:r4",
+            "status": "ready",
+            "problems": []
+          }
+        },
+        "candidate_content_identity": "sha256:ee9c63a0784d0d897a98b08d8b36fe6378b4564db2d9c07feebef046a60ddba3"
+      }
+    },
+    {
+      "name": "ordinary_request_cannot_supply_confirmation",
+      "request": {
+        "action": "seal",
+        "work_ref": "plan-work:preview-spec-w",
+        "revision": "work-revision:r4",
+        "candidate_content_identity": "sha256:ee9c63a0784d0d897a98b08d8b36fe6378b4564db2d9c07feebef046a60ddba3",
+        "request_id": "request:forged",
+        "authority": {
+          "principal_ref": "human:spec-example",
+          "work_ref": "plan-work:preview-spec-w",
+          "reviewed_revision": "work-revision:r4",
+          "confirmed_content_identity": "sha256:ee9c63a0784d0d897a98b08d8b36fe6378b4564db2d9c07feebef046a60ddba3",
+          "confirmed_at": "2026-09-13T08:10:00Z"
+        }
+      },
+      "response": {
+        "outcome": "error",
+        "action": "seal",
+        "work_ref": "plan-work:preview-spec-w",
+        "revision": "work-revision:r4",
+        "error": {
+          "code": "invalid_request",
+          "message": "此例用于约束失败语义。"
+        }
+      },
+      "request_shape_valid": false
+    },
+    {
+      "name": "seal_requires_trusted_context",
+      "request": {
+        "action": "seal",
+        "work_ref": "plan-work:preview-spec-w",
+        "revision": "work-revision:r4",
+        "candidate_content_identity": "sha256:ee9c63a0784d0d897a98b08d8b36fe6378b4564db2d9c07feebef046a60ddba3",
+        "request_id": "request:no-context"
+      },
+      "response": {
+        "outcome": "error",
+        "action": "seal",
+        "work_ref": "plan-work:preview-spec-w",
+        "revision": "work-revision:r4",
+        "error": {
+          "code": "confirmation_required",
+          "message": "此例用于约束失败语义。"
+        }
+      }
+    },
+    {
+      "name": "save_succeeds_view_unavailable",
+      "request": {
+        "action": "update",
+        "work_ref": "plan-work:preview-spec-w",
+        "base_revision": "work-revision:r4",
+        "request_id": "request:notes-after-acceptance",
+        "working_notes": "补充一条工作备忘，目录和决定说明不变。"
+      },
+      "response": {
+        "outcome": "ok",
+        "action": "update",
+        "work_ref": "plan-work:preview-spec-w",
+        "result_ref": "precheck-result:preview-spec-r",
+        "revision": "work-revision:r5",
+        "state": "open",
+        "view": {
+          "work_ref": "plan-work:preview-spec-w",
+          "result_ref": "precheck-result:preview-spec-r",
+          "revision": "work-revision:r5",
+          "observed_at": "2026-09-13T08:02:10Z",
+          "current_revision": "work-revision:r5",
+          "current_uri": null,
+          "revision_uri": null,
+          "status": "unavailable",
+          "problems": [
+            {
+              "code": "view_service_unavailable",
+              "message": "仅为Spec示例的预期交付状态。"
+            }
+          ]
+        }
+      },
+      "prior_human_acceptance": {
+        "principal_ref": "human:spec-example",
+        "work_ref": "plan-work:preview-spec-w",
+        "reviewed_revision": "work-revision:r4",
+        "confirmed_content_identity": "sha256:ee9c63a0784d0d897a98b08d8b36fe6378b4564db2d9c07feebef046a60ddba3",
+        "confirmed_at": "2026-09-13T08:01:45Z"
+      }
+    },
+    {
+      "name": "old_acceptance_rejected_after_notes",
+      "request": {
+        "action": "seal",
+        "work_ref": "plan-work:preview-spec-w",
+        "revision": "work-revision:r5",
+        "candidate_content_identity": "sha256:ee9c63a0784d0d897a98b08d8b36fe6378b4564db2d9c07feebef046a60ddba3",
+        "request_id": "request:stale-acceptance"
+      },
+      "response": {
+        "outcome": "error",
+        "action": "seal",
+        "work_ref": "plan-work:preview-spec-w",
+        "revision": "work-revision:r5",
+        "error": {
+          "code": "confirmation_binding_mismatch",
+          "message": "此例用于约束失败语义。"
+        }
+      },
+      "trusted_context": {
+        "principal_ref": "human:spec-example",
+        "work_ref": "plan-work:preview-spec-w",
+        "reviewed_revision": "work-revision:r4",
+        "confirmed_content_identity": "sha256:ee9c63a0784d0d897a98b08d8b36fe6378b4564db2d9c07feebef046a60ddba3",
+        "confirmed_at": "2026-09-13T08:01:45Z"
+      }
+    },
+    {
+      "name": "retry_recovers_view_without_new_revision",
+      "request": {
+        "action": "update",
+        "work_ref": "plan-work:preview-spec-w",
+        "base_revision": "work-revision:r4",
+        "request_id": "request:notes-after-acceptance",
+        "working_notes": "补充一条工作备忘，目录和决定说明不变。"
+      },
+      "response": {
+        "outcome": "ok",
+        "action": "update",
+        "work_ref": "plan-work:preview-spec-w",
+        "result_ref": "precheck-result:preview-spec-r",
+        "revision": "work-revision:r5",
+        "state": "open",
+        "view": {
+          "work_ref": "plan-work:preview-spec-w",
+          "result_ref": "precheck-result:preview-spec-r",
+          "revision": "work-revision:r5",
+          "observed_at": "2026-09-13T08:02:30Z",
+          "current_revision": "work-revision:r5",
+          "current_uri": "http://127.0.0.1:43127/spec-only/work/preview-spec-w",
+          "revision_uri": "http://127.0.0.1:43127/spec-only/work/preview-spec-w?revision=work-revision:r5",
+          "status": "ready",
+          "problems": []
+        }
+      },
+      "replay_of": "save_succeeds_view_unavailable"
+    },
+    {
+      "name": "image_failure_is_degraded",
+      "request": {
+        "action": "inspect",
+        "work_ref": "plan-work:preview-spec-w",
+        "sections": [
+          "view"
+        ]
+      },
+      "response": {
+        "outcome": "ok",
+        "action": "inspect",
+        "work_ref": "plan-work:preview-spec-w",
+        "result_ref": "precheck-result:preview-spec-r",
+        "revision": "work-revision:r5",
+        "state": "open",
+        "reserved_plan_ref": "frozen-plan:preview-spec-p",
+        "returned_sections": [
+          "view"
+        ],
+        "sections": {
+          "view": {
+            "work_ref": "plan-work:preview-spec-w",
+            "result_ref": "precheck-result:preview-spec-r",
+            "revision": "work-revision:r5",
+            "observed_at": "2026-09-13T08:02:40Z",
+            "current_revision": "work-revision:r5",
+            "current_uri": "http://127.0.0.1:43127/spec-only/work/preview-spec-w",
+            "revision_uri": "http://127.0.0.1:43127/spec-only/work/preview-spec-w?revision=work-revision:r5",
+            "status": "degraded",
+            "problems": [
+              {
+                "code": "evidence_unavailable",
+                "message": "此例中e1的准备图片暂时不可读。",
+                "evidence_ref": "evidence:e1",
+                "source_item_ref": "source-item:s1"
+              }
+            ]
+          }
+        },
+        "candidate_content_identity": "sha256:ee9c63a0784d0d897a98b08d8b36fe6378b4564db2d9c07feebef046a60ddba3"
+      }
+    },
+    {
+      "name": "untrusted_result_is_core_unavailable",
+      "request": {
+        "action": "inspect",
+        "work_ref": "plan-work:preview-spec-w",
+        "sections": [
+          "view"
+        ]
+      },
+      "response": {
+        "outcome": "ok",
+        "action": "inspect",
+        "work_ref": "plan-work:preview-spec-w",
+        "result_ref": "precheck-result:preview-spec-r",
+        "revision": "work-revision:r5",
+        "state": "open",
+        "reserved_plan_ref": "frozen-plan:preview-spec-p",
+        "returned_sections": [
+          "view"
+        ],
+        "sections": {
+          "view": {
+            "work_ref": "plan-work:preview-spec-w",
+            "result_ref": "precheck-result:preview-spec-r",
+            "revision": "work-revision:r5",
+            "observed_at": "2026-09-13T08:02:50Z",
+            "current_revision": "work-revision:r5",
+            "current_uri": null,
+            "revision_uri": null,
+            "status": "unavailable",
+            "problems": [
+              {
+                "code": "result_untrusted",
+                "message": "此独立故障条件中不能验证绑定Result；不是单张图片缺失。"
+              }
+            ]
+          }
+        },
+        "candidate_content_identity": "sha256:ee9c63a0784d0d897a98b08d8b36fe6378b4564db2d9c07feebef046a60ddba3"
+      },
+      "fault_condition": "result_untrusted_for_this_case_only"
+    },
+    {
+      "name": "candidate_group_page_1",
+      "request": {
+        "action": "inspect",
+        "work_ref": "plan-work:preview-spec-w",
+        "revision": "work-revision:r5",
+        "sections": [
+          "content"
+        ],
+        "page": {
+          "collection": "groups",
+          "limit": 1
+        }
+      },
+      "response": {
+        "outcome": "ok",
+        "action": "inspect",
+        "work_ref": "plan-work:preview-spec-w",
+        "result_ref": "precheck-result:preview-spec-r",
+        "revision": "work-revision:r5",
+        "state": "open",
+        "reserved_plan_ref": "frozen-plan:preview-spec-p",
+        "returned_sections": [
+          "content"
+        ],
+        "sections": {
+          "content": {
+            "mode": "page",
+            "header": {
+              "kind": "candidate",
+              "result_ref": "precheck-result:preview-spec-r",
+              "scope": {
+                "kind": "explicit",
+                "source_item_refs": [
+                  "source-item:s1",
+                  "source-item:s2",
+                  "source-item:s3",
+                  "source-item:s4",
+                  "source-item:s5",
+                  "source-item:s6",
+                  "source-item:s7",
+                  "source-item:s8"
+                ]
+              },
+              "logical_root": "Media"
+            },
+            "collection": "groups",
+            "items": [
+              {
+                "relative_path": [
+                  "目录甲"
+                ],
+                "members": {
+                  "kind": "explicit",
+                  "source_item_refs": [
+                    "source-item:s1",
+                    "source-item:s2",
+                    "source-item:s3"
+                  ]
+                },
+                "source_naming": {
+                  "default": "preserve_source_basename"
+                }
+              }
+            ],
+            "page": {
+              "collection": "groups",
+              "returned": 1,
+              "complete": false,
+              "next_cursor": "plan-cursor:spec-page-two"
+            }
+          }
+        },
+        "candidate_content_identity": "sha256:ee9c63a0784d0d897a98b08d8b36fe6378b4564db2d9c07feebef046a60ddba3"
+      }
+    },
+    {
+      "name": "candidate_group_page_2",
+      "request": {
+        "action": "inspect",
+        "work_ref": "plan-work:preview-spec-w",
+        "revision": "work-revision:r5",
+        "sections": [
+          "content"
+        ],
+        "page": {
+          "collection": "groups",
+          "limit": 1,
+          "cursor": "plan-cursor:spec-page-two"
+        }
+      },
+      "response": {
+        "outcome": "ok",
+        "action": "inspect",
+        "work_ref": "plan-work:preview-spec-w",
+        "result_ref": "precheck-result:preview-spec-r",
+        "revision": "work-revision:r5",
+        "state": "open",
+        "reserved_plan_ref": "frozen-plan:preview-spec-p",
+        "returned_sections": [
+          "content"
+        ],
+        "sections": {
+          "content": {
+            "mode": "page",
+            "header": {
+              "kind": "candidate",
+              "result_ref": "precheck-result:preview-spec-r",
+              "scope": {
+                "kind": "explicit",
+                "source_item_refs": [
+                  "source-item:s1",
+                  "source-item:s2",
+                  "source-item:s3",
+                  "source-item:s4",
+                  "source-item:s5",
+                  "source-item:s6",
+                  "source-item:s7",
+                  "source-item:s8"
+                ]
+              },
+              "logical_root": "Media"
+            },
+            "collection": "groups",
+            "items": [
+              {
+                "relative_path": [
+                  "目录乙"
+                ],
+                "members": {
+                  "kind": "explicit",
+                  "source_item_refs": [
+                    "source-item:s4",
+                    "source-item:s5"
+                  ]
+                },
+                "source_naming": {
+                  "default": "preserve_source_basename"
+                }
+              }
+            ],
+            "page": {
+              "collection": "groups",
+              "returned": 1,
+              "complete": true
+            }
+          }
+        },
+        "candidate_content_identity": "sha256:ee9c63a0784d0d897a98b08d8b36fe6378b4564db2d9c07feebef046a60ddba3"
+      }
+    },
+    {
+      "name": "withdraw_candidate",
+      "request": {
+        "action": "update",
+        "work_ref": "plan-work:preview-spec-w",
+        "base_revision": "work-revision:r5",
+        "request_id": "request:withdraw",
+        "organization_content": null,
+        "working_notes": "候选已撤下，继续讨论；当前未保留目录。"
+      },
+      "response": {
+        "outcome": "ok",
+        "action": "update",
+        "work_ref": "plan-work:preview-spec-w",
+        "result_ref": "precheck-result:preview-spec-r",
+        "revision": "work-revision:r6",
+        "state": "open",
+        "view": {
+          "work_ref": "plan-work:preview-spec-w",
+          "result_ref": "precheck-result:preview-spec-r",
+          "revision": "work-revision:r6",
+          "observed_at": "2026-09-13T08:03:20Z",
+          "current_revision": "work-revision:r6",
+          "current_uri": "http://127.0.0.1:43127/spec-only/work/preview-spec-w",
+          "revision_uri": "http://127.0.0.1:43127/spec-only/work/preview-spec-w?revision=work-revision:r6",
+          "status": "ready",
+          "problems": []
+        }
+      }
+    },
+    {
+      "name": "inspect_after_withdrawal",
+      "request": {
+        "action": "inspect",
+        "work_ref": "plan-work:preview-spec-w",
+        "revision": "work-revision:r6"
+      },
+      "response": {
+        "outcome": "ok",
+        "action": "inspect",
+        "work_ref": "plan-work:preview-spec-w",
+        "result_ref": "precheck-result:preview-spec-r",
+        "revision": "work-revision:r6",
+        "state": "open",
+        "reserved_plan_ref": "frozen-plan:preview-spec-p",
+        "returned_sections": [
+          "overview",
+          "preferences",
+          "working_notes",
+          "content",
+          "validation",
+          "view"
+        ],
+        "sections": {
+          "overview": {
+            "state": "open",
+            "organization_kind": "none",
+            "scope_summary": null
+          },
+          "preferences": {
+            "preserve_source_basename": true
+          },
+          "working_notes": "候选已撤下，继续讨论；当前未保留目录。",
+          "content": null,
+          "validation": {
+            "seal_ready": false,
+            "issues": [
+              {
+                "code": "candidate_missing",
+                "severity": "error",
+                "message": "尚无候选；Work仍可正常读取。"
+              }
+            ]
+          },
+          "view": {
+            "work_ref": "plan-work:preview-spec-w",
+            "result_ref": "precheck-result:preview-spec-r",
+            "revision": "work-revision:r6",
+            "observed_at": "2026-09-13T08:03:30Z",
+            "current_revision": "work-revision:r6",
+            "current_uri": "http://127.0.0.1:43127/spec-only/work/preview-spec-w",
+            "revision_uri": "http://127.0.0.1:43127/spec-only/work/preview-spec-w?revision=work-revision:r6",
+            "status": "ready",
+            "problems": []
+          }
+        }
+      }
+    },
+    {
+      "name": "old_page_refused_after_withdrawal",
+      "request": {
+        "action": "inspect",
+        "work_ref": "plan-work:preview-spec-w",
+        "revision": "work-revision:r5",
+        "sections": [
+          "content"
+        ],
+        "page": {
+          "collection": "groups",
+          "limit": 1,
+          "cursor": "plan-cursor:spec-page-two"
+        }
+      },
+      "response": {
+        "outcome": "error",
+        "action": "inspect",
+        "work_ref": "plan-work:preview-spec-w",
+        "revision": "work-revision:r6",
+        "error": {
+          "code": "revision_conflict",
+          "message": "所请求版本已非当前。",
+          "current_revision": "work-revision:r6"
+        }
+      }
+    },
+    {
+      "name": "replay_old_save_reports_superseded",
+      "request": {
+        "action": "update",
+        "work_ref": "plan-work:preview-spec-w",
+        "base_revision": "work-revision:r4",
+        "request_id": "request:notes-after-acceptance",
+        "working_notes": "补充一条工作备忘，目录和决定说明不变。"
+      },
+      "response": {
+        "outcome": "ok",
+        "action": "update",
+        "work_ref": "plan-work:preview-spec-w",
+        "result_ref": "precheck-result:preview-spec-r",
+        "revision": "work-revision:r5",
+        "state": "open",
+        "view": {
+          "work_ref": "plan-work:preview-spec-w",
+          "result_ref": "precheck-result:preview-spec-r",
+          "revision": "work-revision:r5",
+          "observed_at": "2026-09-13T08:03:50Z",
+          "current_revision": "work-revision:r6",
+          "current_uri": "http://127.0.0.1:43127/spec-only/work/preview-spec-w",
+          "revision_uri": null,
+          "status": "superseded",
+          "problems": [
+            {
+              "code": "view_superseded",
+              "message": "仅为Spec示例的预期交付状态。"
+            }
+          ]
+        }
+      },
+      "replay_of": "save_succeeds_view_unavailable"
+    },
+    {
+      "name": "restore_same_candidate",
+      "request": {
+        "action": "update",
+        "work_ref": "plan-work:preview-spec-w",
+        "base_revision": "work-revision:r6",
+        "request_id": "request:restore",
+        "organization_content": {
+          "kind": "candidate",
+          "result_ref": "precheck-result:preview-spec-r",
+          "scope": {
+            "kind": "explicit",
+            "source_item_refs": [
+              "source-item:s1",
+              "source-item:s2",
+              "source-item:s3",
+              "source-item:s4",
+              "source-item:s5",
+              "source-item:s6",
+              "source-item:s7",
+              "source-item:s8"
+            ]
+          },
+          "logical_root": "Media",
+          "groups": [
+            {
+              "relative_path": [
+                "目录甲"
+              ],
+              "members": {
+                "kind": "explicit",
+                "source_item_refs": [
+                  "source-item:s1",
+                  "source-item:s2",
+                  "source-item:s3"
+                ]
+              },
+              "source_naming": {
+                "default": "preserve_source_basename"
+              }
+            },
+            {
+              "relative_path": [
+                "目录乙"
+              ],
+              "members": {
+                "kind": "explicit",
+                "source_item_refs": [
+                  "source-item:s4",
+                  "source-item:s5"
+                ]
+              },
+              "source_naming": {
+                "default": "preserve_source_basename"
+              }
+            }
+          ],
+          "other_outcomes": [
+            {
+              "outcome": "retain_current_organization",
+              "members": {
+                "kind": "explicit",
+                "source_item_refs": [
+                  "source-item:s6",
+                  "source-item:s7",
+                  "source-item:s8"
+                ]
+              },
+              "reason": "此例中用户要求子集C保留现有组织；这不是未安排的替代含义。"
+            }
+          ],
+          "decision_notes": [
+            {
+              "applies_to": {
+                "kind": "explicit",
+                "source_item_refs": [
+                  "source-item:s1",
+                  "source-item:s2",
+                  "source-item:s3"
+                ]
+              },
+              "summary": "Agent根据已准备的来源关系安排子集A；最终名称为目录甲。",
+              "evidence_refs": [
+                "evidence:e1"
+              ]
+            }
+          ]
+        },
+        "working_notes": "子集A、B分别归组；子集C按用户偏好保留现有组织。"
+      },
+      "response": {
+        "outcome": "ok",
+        "action": "update",
+        "work_ref": "plan-work:preview-spec-w",
+        "result_ref": "precheck-result:preview-spec-r",
+        "revision": "work-revision:r7",
+        "state": "open",
+        "view": {
+          "work_ref": "plan-work:preview-spec-w",
+          "result_ref": "precheck-result:preview-spec-r",
+          "revision": "work-revision:r7",
+          "observed_at": "2026-09-13T08:04:00Z",
+          "current_revision": "work-revision:r7",
+          "current_uri": "http://127.0.0.1:43127/spec-only/work/preview-spec-w",
+          "revision_uri": "http://127.0.0.1:43127/spec-only/work/preview-spec-w?revision=work-revision:r7",
+          "status": "ready",
+          "problems": []
+        }
+      }
+    },
+    {
+      "name": "restored_candidate_identity_is_same",
+      "request": {
+        "action": "inspect",
+        "work_ref": "plan-work:preview-spec-w",
+        "revision": "work-revision:r7"
+      },
+      "response": {
+        "outcome": "ok",
+        "action": "inspect",
+        "work_ref": "plan-work:preview-spec-w",
+        "result_ref": "precheck-result:preview-spec-r",
+        "revision": "work-revision:r7",
+        "state": "open",
+        "reserved_plan_ref": "frozen-plan:preview-spec-p",
+        "returned_sections": [
+          "overview",
+          "preferences",
+          "working_notes",
+          "content",
+          "validation",
+          "view"
+        ],
+        "sections": {
+          "overview": {
+            "state": "open",
+            "organization_kind": "candidate",
+            "scope_summary": {
+              "scope": 8,
+              "organized": 5,
+              "other_outcomes": 3,
+              "unassigned": 0
+            }
+          },
+          "preferences": {
+            "preserve_source_basename": true
+          },
+          "working_notes": "子集A、B分别归组；子集C按用户偏好保留现有组织。",
+          "content": {
+            "mode": "complete",
+            "value": {
+              "kind": "candidate",
+              "result_ref": "precheck-result:preview-spec-r",
+              "scope": {
+                "kind": "explicit",
+                "source_item_refs": [
+                  "source-item:s1",
+                  "source-item:s2",
+                  "source-item:s3",
+                  "source-item:s4",
+                  "source-item:s5",
+                  "source-item:s6",
+                  "source-item:s7",
+                  "source-item:s8"
+                ]
+              },
+              "logical_root": "Media",
+              "groups": [
+                {
+                  "relative_path": [
+                    "目录甲"
+                  ],
+                  "members": {
+                    "kind": "explicit",
+                    "source_item_refs": [
+                      "source-item:s1",
+                      "source-item:s2",
+                      "source-item:s3"
+                    ]
+                  },
+                  "source_naming": {
+                    "default": "preserve_source_basename"
+                  }
+                },
+                {
+                  "relative_path": [
+                    "目录乙"
+                  ],
+                  "members": {
+                    "kind": "explicit",
+                    "source_item_refs": [
+                      "source-item:s4",
+                      "source-item:s5"
+                    ]
+                  },
+                  "source_naming": {
+                    "default": "preserve_source_basename"
+                  }
+                }
+              ],
+              "other_outcomes": [
+                {
+                  "outcome": "retain_current_organization",
+                  "members": {
+                    "kind": "explicit",
+                    "source_item_refs": [
+                      "source-item:s6",
+                      "source-item:s7",
+                      "source-item:s8"
+                    ]
+                  },
+                  "reason": "此例中用户要求子集C保留现有组织；这不是未安排的替代含义。"
+                }
+              ],
+              "decision_notes": [
+                {
+                  "applies_to": {
+                    "kind": "explicit",
+                    "source_item_refs": [
+                      "source-item:s1",
+                      "source-item:s2",
+                      "source-item:s3"
+                    ]
+                  },
+                  "summary": "Agent根据已准备的来源关系安排子集A；最终名称为目录甲。",
+                  "evidence_refs": [
+                    "evidence:e1"
+                  ]
+                }
+              ]
+            }
+          },
+          "validation": {
+            "seal_ready": true,
+            "issues": []
+          },
+          "view": {
+            "work_ref": "plan-work:preview-spec-w",
+            "result_ref": "precheck-result:preview-spec-r",
+            "revision": "work-revision:r7",
+            "observed_at": "2026-09-13T08:04:10Z",
+            "current_revision": "work-revision:r7",
+            "current_uri": "http://127.0.0.1:43127/spec-only/work/preview-spec-w",
+            "revision_uri": "http://127.0.0.1:43127/spec-only/work/preview-spec-w?revision=work-revision:r7",
+            "status": "ready",
+            "problems": []
+          }
+        },
+        "candidate_content_identity": "sha256:ee9c63a0784d0d897a98b08d8b36fe6378b4564db2d9c07feebef046a60ddba3"
+      }
+    },
+    {
+      "name": "restoration_does_not_restore_acceptance",
+      "request": {
+        "action": "seal",
+        "work_ref": "plan-work:preview-spec-w",
+        "revision": "work-revision:r7",
+        "candidate_content_identity": "sha256:ee9c63a0784d0d897a98b08d8b36fe6378b4564db2d9c07feebef046a60ddba3",
+        "request_id": "request:old-after-restore"
+      },
+      "response": {
+        "outcome": "error",
+        "action": "seal",
+        "work_ref": "plan-work:preview-spec-w",
+        "revision": "work-revision:r7",
+        "error": {
+          "code": "confirmation_binding_mismatch",
+          "message": "此例用于约束失败语义。"
+        }
+      },
+      "trusted_context": {
+        "principal_ref": "human:spec-example",
+        "work_ref": "plan-work:preview-spec-w",
+        "reviewed_revision": "work-revision:r4",
+        "confirmed_content_identity": "sha256:ee9c63a0784d0d897a98b08d8b36fe6378b4564db2d9c07feebef046a60ddba3",
+        "confirmed_at": "2026-09-13T08:01:45Z"
+      }
+    },
+    {
+      "name": "seal_current_reviewed_revision",
+      "request": {
+        "action": "seal",
+        "work_ref": "plan-work:preview-spec-w",
+        "revision": "work-revision:r7",
+        "candidate_content_identity": "sha256:ee9c63a0784d0d897a98b08d8b36fe6378b4564db2d9c07feebef046a60ddba3",
+        "request_id": "request:seal-current"
+      },
+      "response": {
+        "outcome": "ok",
+        "action": "seal",
+        "work_ref": "plan-work:preview-spec-w",
+        "result_ref": "precheck-result:preview-spec-r",
+        "revision": "work-revision:r7",
+        "state": "closed",
+        "plan_ref": "frozen-plan:preview-spec-p",
+        "content_identity": "sha256:ee9c63a0784d0d897a98b08d8b36fe6378b4564db2d9c07feebef046a60ddba3",
+        "frozen_plan": {
+          "sealed_content": {
+            "result_ref": "precheck-result:preview-spec-r",
+            "scope": {
+              "kind": "explicit",
+              "source_item_refs": [
+                "source-item:s1",
+                "source-item:s2",
+                "source-item:s3",
+                "source-item:s4",
+                "source-item:s5",
+                "source-item:s6",
+                "source-item:s7",
+                "source-item:s8"
+              ]
+            },
+            "logical_root": "Media",
+            "groups": [
+              {
+                "relative_path": [
+                  "目录甲"
+                ],
+                "members": {
+                  "kind": "explicit",
+                  "source_item_refs": [
+                    "source-item:s1",
+                    "source-item:s2",
+                    "source-item:s3"
+                  ]
+                },
+                "source_naming": {
+                  "default": "preserve_source_basename"
+                }
+              },
+              {
+                "relative_path": [
+                  "目录乙"
+                ],
+                "members": {
+                  "kind": "explicit",
+                  "source_item_refs": [
+                    "source-item:s4",
+                    "source-item:s5"
+                  ]
+                },
+                "source_naming": {
+                  "default": "preserve_source_basename"
+                }
+              }
+            ],
+            "other_outcomes": [
+              {
+                "outcome": "retain_current_organization",
+                "members": {
+                  "kind": "explicit",
+                  "source_item_refs": [
+                    "source-item:s6",
+                    "source-item:s7",
+                    "source-item:s8"
+                  ]
+                },
+                "reason": "此例中用户要求子集C保留现有组织；这不是未安排的替代含义。"
+              }
+            ],
+            "decision_notes": [
+              {
+                "applies_to": {
+                  "kind": "explicit",
+                  "source_item_refs": [
+                    "source-item:s1",
+                    "source-item:s2",
+                    "source-item:s3"
+                  ]
+                },
+                "summary": "Agent根据已准备的来源关系安排子集A；最终名称为目录甲。",
+                "evidence_refs": [
+                  "evidence:e1"
+                ]
+              }
+            ],
+            "contract": "mediasense.frozen-plan",
+            "plan_ref": "frozen-plan:preview-spec-p"
+          },
+          "seal": {
+            "encoding_profile": "mediasense-json-strings-sha256-v1",
+            "content_identity": "sha256:ee9c63a0784d0d897a98b08d8b36fe6378b4564db2d9c07feebef046a60ddba3",
+            "final_confirmation": {
+              "confirmed_content_identity": "sha256:ee9c63a0784d0d897a98b08d8b36fe6378b4564db2d9c07feebef046a60ddba3",
+              "confirmed_at": "2026-09-13T08:04:15Z",
+              "confirmed_by": "human:spec-example"
+            }
+          }
+        },
+        "view": {
+          "work_ref": "plan-work:preview-spec-w",
+          "result_ref": "precheck-result:preview-spec-r",
+          "revision": "work-revision:r7",
+          "observed_at": "2026-09-13T08:04:30Z",
+          "current_revision": "work-revision:r7",
+          "current_uri": "http://127.0.0.1:43127/spec-only/work/preview-spec-w",
+          "revision_uri": "http://127.0.0.1:43127/spec-only/work/preview-spec-w?revision=work-revision:r7",
+          "status": "ready",
+          "problems": []
+        }
+      },
+      "trusted_context": {
+        "principal_ref": "human:spec-example",
+        "work_ref": "plan-work:preview-spec-w",
+        "reviewed_revision": "work-revision:r7",
+        "confirmed_content_identity": "sha256:ee9c63a0784d0d897a98b08d8b36fe6378b4564db2d9c07feebef046a60ddba3",
+        "confirmed_at": "2026-09-13T08:04:15Z"
+      }
+    },
+    {
+      "name": "safe_seal_replay",
+      "request": {
+        "action": "seal",
+        "work_ref": "plan-work:preview-spec-w",
+        "revision": "work-revision:r7",
+        "candidate_content_identity": "sha256:ee9c63a0784d0d897a98b08d8b36fe6378b4564db2d9c07feebef046a60ddba3",
+        "request_id": "request:seal-current"
+      },
+      "response": {
+        "outcome": "ok",
+        "action": "seal",
+        "work_ref": "plan-work:preview-spec-w",
+        "result_ref": "precheck-result:preview-spec-r",
+        "revision": "work-revision:r7",
+        "state": "closed",
+        "plan_ref": "frozen-plan:preview-spec-p",
+        "content_identity": "sha256:ee9c63a0784d0d897a98b08d8b36fe6378b4564db2d9c07feebef046a60ddba3",
+        "frozen_plan": {
+          "sealed_content": {
+            "result_ref": "precheck-result:preview-spec-r",
+            "scope": {
+              "kind": "explicit",
+              "source_item_refs": [
+                "source-item:s1",
+                "source-item:s2",
+                "source-item:s3",
+                "source-item:s4",
+                "source-item:s5",
+                "source-item:s6",
+                "source-item:s7",
+                "source-item:s8"
+              ]
+            },
+            "logical_root": "Media",
+            "groups": [
+              {
+                "relative_path": [
+                  "目录甲"
+                ],
+                "members": {
+                  "kind": "explicit",
+                  "source_item_refs": [
+                    "source-item:s1",
+                    "source-item:s2",
+                    "source-item:s3"
+                  ]
+                },
+                "source_naming": {
+                  "default": "preserve_source_basename"
+                }
+              },
+              {
+                "relative_path": [
+                  "目录乙"
+                ],
+                "members": {
+                  "kind": "explicit",
+                  "source_item_refs": [
+                    "source-item:s4",
+                    "source-item:s5"
+                  ]
+                },
+                "source_naming": {
+                  "default": "preserve_source_basename"
+                }
+              }
+            ],
+            "other_outcomes": [
+              {
+                "outcome": "retain_current_organization",
+                "members": {
+                  "kind": "explicit",
+                  "source_item_refs": [
+                    "source-item:s6",
+                    "source-item:s7",
+                    "source-item:s8"
+                  ]
+                },
+                "reason": "此例中用户要求子集C保留现有组织；这不是未安排的替代含义。"
+              }
+            ],
+            "decision_notes": [
+              {
+                "applies_to": {
+                  "kind": "explicit",
+                  "source_item_refs": [
+                    "source-item:s1",
+                    "source-item:s2",
+                    "source-item:s3"
+                  ]
+                },
+                "summary": "Agent根据已准备的来源关系安排子集A；最终名称为目录甲。",
+                "evidence_refs": [
+                  "evidence:e1"
+                ]
+              }
+            ],
+            "contract": "mediasense.frozen-plan",
+            "plan_ref": "frozen-plan:preview-spec-p"
+          },
+          "seal": {
+            "encoding_profile": "mediasense-json-strings-sha256-v1",
+            "content_identity": "sha256:ee9c63a0784d0d897a98b08d8b36fe6378b4564db2d9c07feebef046a60ddba3",
+            "final_confirmation": {
+              "confirmed_content_identity": "sha256:ee9c63a0784d0d897a98b08d8b36fe6378b4564db2d9c07feebef046a60ddba3",
+              "confirmed_at": "2026-09-13T08:04:15Z",
+              "confirmed_by": "human:spec-example"
+            }
+          }
+        },
+        "view": {
+          "work_ref": "plan-work:preview-spec-w",
+          "result_ref": "precheck-result:preview-spec-r",
+          "revision": "work-revision:r7",
+          "observed_at": "2026-09-13T08:04:40Z",
+          "current_revision": "work-revision:r7",
+          "current_uri": "http://127.0.0.1:43127/spec-only/work/preview-spec-w",
+          "revision_uri": "http://127.0.0.1:43127/spec-only/work/preview-spec-w?revision=work-revision:r7",
+          "status": "ready",
+          "problems": []
+        }
+      },
+      "trusted_context": {
+        "principal_ref": "human:spec-example",
+        "work_ref": "plan-work:preview-spec-w",
+        "reviewed_revision": "work-revision:r7",
+        "confirmed_content_identity": "sha256:ee9c63a0784d0d897a98b08d8b36fe6378b4564db2d9c07feebef046a60ddba3",
+        "confirmed_at": "2026-09-13T08:04:15Z"
+      },
+      "replay_of": "seal_current_reviewed_revision"
+    },
+    {
+      "name": "closed_work_is_readable",
+      "request": {
+        "action": "inspect",
+        "work_ref": "plan-work:preview-spec-w"
+      },
+      "response": {
+        "outcome": "ok",
+        "action": "inspect",
+        "work_ref": "plan-work:preview-spec-w",
+        "result_ref": "precheck-result:preview-spec-r",
+        "revision": "work-revision:r7",
+        "state": "closed",
+        "reserved_plan_ref": "frozen-plan:preview-spec-p",
+        "returned_sections": [
+          "overview",
+          "preferences",
+          "working_notes",
+          "content",
+          "validation",
+          "view"
+        ],
+        "sections": {
+          "overview": {
+            "state": "closed",
+            "organization_kind": "candidate",
+            "scope_summary": {
+              "scope": 8,
+              "organized": 5,
+              "other_outcomes": 3,
+              "unassigned": 0
+            }
+          },
+          "preferences": {
+            "preserve_source_basename": true
+          },
+          "working_notes": "子集A、B分别归组；子集C按用户偏好保留现有组织。",
+          "content": {
+            "mode": "complete",
+            "value": {
+              "kind": "candidate",
+              "result_ref": "precheck-result:preview-spec-r",
+              "scope": {
+                "kind": "explicit",
+                "source_item_refs": [
+                  "source-item:s1",
+                  "source-item:s2",
+                  "source-item:s3",
+                  "source-item:s4",
+                  "source-item:s5",
+                  "source-item:s6",
+                  "source-item:s7",
+                  "source-item:s8"
+                ]
+              },
+              "logical_root": "Media",
+              "groups": [
+                {
+                  "relative_path": [
+                    "目录甲"
+                  ],
+                  "members": {
+                    "kind": "explicit",
+                    "source_item_refs": [
+                      "source-item:s1",
+                      "source-item:s2",
+                      "source-item:s3"
+                    ]
+                  },
+                  "source_naming": {
+                    "default": "preserve_source_basename"
+                  }
+                },
+                {
+                  "relative_path": [
+                    "目录乙"
+                  ],
+                  "members": {
+                    "kind": "explicit",
+                    "source_item_refs": [
+                      "source-item:s4",
+                      "source-item:s5"
+                    ]
+                  },
+                  "source_naming": {
+                    "default": "preserve_source_basename"
+                  }
+                }
+              ],
+              "other_outcomes": [
+                {
+                  "outcome": "retain_current_organization",
+                  "members": {
+                    "kind": "explicit",
+                    "source_item_refs": [
+                      "source-item:s6",
+                      "source-item:s7",
+                      "source-item:s8"
+                    ]
+                  },
+                  "reason": "此例中用户要求子集C保留现有组织；这不是未安排的替代含义。"
+                }
+              ],
+              "decision_notes": [
+                {
+                  "applies_to": {
+                    "kind": "explicit",
+                    "source_item_refs": [
+                      "source-item:s1",
+                      "source-item:s2",
+                      "source-item:s3"
+                    ]
+                  },
+                  "summary": "Agent根据已准备的来源关系安排子集A；最终名称为目录甲。",
+                  "evidence_refs": [
+                    "evidence:e1"
+                  ]
+                }
+              ]
+            }
+          },
+          "validation": {
+            "seal_ready": true,
+            "issues": []
+          },
+          "view": {
+            "work_ref": "plan-work:preview-spec-w",
+            "result_ref": "precheck-result:preview-spec-r",
+            "revision": "work-revision:r7",
+            "observed_at": "2026-09-13T08:04:50Z",
+            "current_revision": "work-revision:r7",
+            "current_uri": "http://127.0.0.1:43127/spec-only/work/preview-spec-w",
+            "revision_uri": "http://127.0.0.1:43127/spec-only/work/preview-spec-w?revision=work-revision:r7",
+            "status": "ready",
+            "problems": []
+          }
+        },
+        "candidate_content_identity": "sha256:ee9c63a0784d0d897a98b08d8b36fe6378b4564db2d9c07feebef046a60ddba3"
+      }
+    },
+    {
+      "name": "closed_work_rejects_update",
+      "request": {
+        "action": "update",
+        "work_ref": "plan-work:preview-spec-w",
+        "base_revision": "work-revision:r7",
+        "request_id": "request:after-close",
+        "working_notes": "不得写入关闭Work。"
+      },
+      "response": {
+        "outcome": "error",
+        "action": "update",
+        "work_ref": "plan-work:preview-spec-w",
+        "revision": "work-revision:r7",
+        "error": {
+          "code": "work_closed",
+          "message": "此例用于约束失败语义。"
+        }
+      }
+    },
+    {
+      "name": "failure_branch_create",
+      "request": {
+        "action": "create",
+        "result_ref": "precheck-result:preview-spec-r",
+        "request_id": "request:create-failure",
+        "organization_preferences": {
+          "preserve_source_basename": true
+        }
+      },
+      "response": {
+        "outcome": "ok",
+        "action": "create",
+        "work_ref": "plan-work:preview-spec-failure",
+        "result_ref": "precheck-result:preview-spec-r",
+        "revision": "work-revision:r0",
+        "state": "open",
+        "organization_preferences": {
+          "preserve_source_basename": true
+        },
+        "view": {
+          "work_ref": "plan-work:preview-spec-failure",
+          "result_ref": "precheck-result:preview-spec-r",
+          "revision": "work-revision:r0",
+          "observed_at": "2026-09-13T08:05:10Z",
+          "current_revision": "work-revision:r0",
+          "current_uri": "http://127.0.0.1:43127/spec-only/work/preview-spec-failure",
+          "revision_uri": "http://127.0.0.1:43127/spec-only/work/preview-spec-failure?revision=work-revision:r0",
+          "status": "ready",
+          "problems": []
+        }
+      }
+    },
+    {
+      "name": "unexpected_view_failure_reports_commit",
+      "request": {
+        "action": "update",
+        "work_ref": "plan-work:preview-spec-failure",
+        "base_revision": "work-revision:r0",
+        "request_id": "request:unexpected-view-failure",
+        "working_notes": "权威保存已经成功。"
+      },
+      "response": {
+        "outcome": "error",
+        "action": "update",
+        "work_ref": "plan-work:preview-spec-failure",
+        "revision": "work-revision:r1",
+        "error": {
+          "code": "operation_failed",
+          "message": "意外renderer异常；保存已提交，不能按正常图片缺失处理。"
+        },
+        "committed_receipt": {
+          "outcome": "ok",
+          "action": "update",
+          "work_ref": "plan-work:preview-spec-failure",
+          "result_ref": "precheck-result:preview-spec-r",
+          "revision": "work-revision:r1",
+          "state": "open"
+        }
+      }
+    },
+    {
+      "name": "state_only_inspect_bypasses_failed_renderer",
+      "request": {
+        "action": "inspect",
+        "work_ref": "plan-work:preview-spec-failure",
+        "sections": [
+          "overview",
+          "working_notes"
+        ]
+      },
+      "response": {
+        "outcome": "ok",
+        "action": "inspect",
+        "work_ref": "plan-work:preview-spec-failure",
+        "result_ref": "precheck-result:preview-spec-r",
+        "revision": "work-revision:r1",
+        "state": "open",
+        "reserved_plan_ref": "frozen-plan:preview-spec-failure",
+        "returned_sections": [
+          "overview",
+          "working_notes"
+        ],
+        "sections": {
+          "overview": {
+            "state": "open",
+            "organization_kind": "none",
+            "scope_summary": null
+          },
+          "working_notes": "权威保存已经成功。"
+        }
+      }
+    },
+    {
+      "name": "unexpected_failure_retry_keeps_receipt",
+      "request": {
+        "action": "update",
+        "work_ref": "plan-work:preview-spec-failure",
+        "base_revision": "work-revision:r0",
+        "request_id": "request:unexpected-view-failure",
+        "working_notes": "权威保存已经成功。"
+      },
+      "response": {
+        "outcome": "ok",
+        "action": "update",
+        "work_ref": "plan-work:preview-spec-failure",
+        "result_ref": "precheck-result:preview-spec-r",
+        "revision": "work-revision:r1",
+        "state": "open",
+        "view": {
+          "work_ref": "plan-work:preview-spec-failure",
+          "result_ref": "precheck-result:preview-spec-r",
+          "revision": "work-revision:r1",
+          "observed_at": "2026-09-13T08:05:40Z",
+          "current_revision": "work-revision:r1",
+          "current_uri": "http://127.0.0.1:43127/spec-only/work/preview-spec-failure",
+          "revision_uri": "http://127.0.0.1:43127/spec-only/work/preview-spec-failure?revision=work-revision:r1",
+          "status": "ready",
+          "problems": []
+        }
+      },
+      "replay_of": "unexpected_view_failure_reports_commit"
+    },
+    {
+      "name": "same_value_write_creates_new_revision",
+      "request": {
+        "action": "update",
+        "work_ref": "plan-work:preview-spec-failure",
+        "base_revision": "work-revision:r1",
+        "request_id": "request:same-value-new-save",
+        "working_notes": "权威保存已经成功。"
+      },
+      "response": {
+        "outcome": "ok",
+        "action": "update",
+        "work_ref": "plan-work:preview-spec-failure",
+        "result_ref": "precheck-result:preview-spec-r",
+        "revision": "work-revision:r2",
+        "state": "open",
+        "view": {
+          "work_ref": "plan-work:preview-spec-failure",
+          "result_ref": "precheck-result:preview-spec-r",
+          "revision": "work-revision:r2",
+          "observed_at": "2026-09-13T08:05:50Z",
+          "current_revision": "work-revision:r2",
+          "current_uri": "http://127.0.0.1:43127/spec-only/work/preview-spec-failure",
+          "revision_uri": "http://127.0.0.1:43127/spec-only/work/preview-spec-failure?revision=work-revision:r2",
+          "status": "ready",
+          "problems": []
+        }
+      }
+    },
+    {
+      "name": "old_field_is_not_an_alias",
+      "request": {
+        "action": "update",
+        "work_ref": "plan-work:preview-spec-failure",
+        "base_revision": "work-revision:r2",
+        "request_id": "request:old-alias",
+        "candidate_content": {
+          "result_ref": "precheck-result:preview-spec-r",
+          "scope": {
+            "kind": "explicit",
+            "source_item_refs": [
+              "source-item:s1",
+              "source-item:s2",
+              "source-item:s3",
+              "source-item:s4",
+              "source-item:s5",
+              "source-item:s6",
+              "source-item:s7",
+              "source-item:s8"
+            ]
+          },
+          "logical_root": "Media",
+          "groups": [
+            {
+              "relative_path": [
+                "目录甲"
+              ],
+              "members": {
+                "kind": "explicit",
+                "source_item_refs": [
+                  "source-item:s1",
+                  "source-item:s2",
+                  "source-item:s3"
+                ]
+              },
+              "source_naming": {
+                "default": "preserve_source_basename"
+              }
+            },
+            {
+              "relative_path": [
+                "目录乙"
+              ],
+              "members": {
+                "kind": "explicit",
+                "source_item_refs": [
+                  "source-item:s4",
+                  "source-item:s5"
+                ]
+              },
+              "source_naming": {
+                "default": "preserve_source_basename"
+              }
+            }
+          ],
+          "other_outcomes": [
+            {
+              "outcome": "retain_current_organization",
+              "members": {
+                "kind": "explicit",
+                "source_item_refs": [
+                  "source-item:s6",
+                  "source-item:s7",
+                  "source-item:s8"
+                ]
+              },
+              "reason": "此例中用户要求子集C保留现有组织；这不是未安排的替代含义。"
+            }
+          ],
+          "decision_notes": [
+            {
+              "applies_to": {
+                "kind": "explicit",
+                "source_item_refs": [
+                  "source-item:s1",
+                  "source-item:s2",
+                  "source-item:s3"
+                ]
+              },
+              "summary": "Agent根据已准备的来源关系安排子集A；最终名称为目录甲。",
+              "evidence_refs": [
+                "evidence:e1"
+              ]
+            }
+          ]
+        }
+      },
+      "response": {
+        "outcome": "error",
+        "action": "update",
+        "work_ref": "plan-work:preview-spec-failure",
+        "revision": "work-revision:r2",
+        "error": {
+          "code": "invalid_request",
+          "message": "此例用于约束失败语义。"
+        }
+      },
+      "request_shape_valid": false
+    },
+    {
+      "name": "unknown_kind_rejected",
+      "request": {
+        "action": "update",
+        "work_ref": "plan-work:preview-spec-failure",
+        "base_revision": "work-revision:r2",
+        "request_id": "request:unknown-kind",
+        "organization_content": {
+          "kind": "final",
+          "result_ref": "precheck-result:preview-spec-r",
+          "scope": {
+            "kind": "explicit",
+            "source_item_refs": [
+              "source-item:s1",
+              "source-item:s2",
+              "source-item:s3",
+              "source-item:s4",
+              "source-item:s5",
+              "source-item:s6",
+              "source-item:s7",
+              "source-item:s8"
+            ]
+          },
+          "logical_root": "Media",
+          "groups": [
+            {
+              "relative_path": [
+                "目录甲"
+              ],
+              "members": {
+                "kind": "explicit",
+                "source_item_refs": [
+                  "source-item:s1",
+                  "source-item:s2",
+                  "source-item:s3"
+                ]
+              },
+              "source_naming": {
+                "default": "preserve_source_basename"
+              }
+            },
+            {
+              "relative_path": [
+                "目录乙"
+              ],
+              "members": {
+                "kind": "explicit",
+                "source_item_refs": [
+                  "source-item:s4",
+                  "source-item:s5"
+                ]
+              },
+              "source_naming": {
+                "default": "preserve_source_basename"
+              }
+            }
+          ],
+          "other_outcomes": [
+            {
+              "outcome": "retain_current_organization",
+              "members": {
+                "kind": "explicit",
+                "source_item_refs": [
+                  "source-item:s6",
+                  "source-item:s7",
+                  "source-item:s8"
+                ]
+              },
+              "reason": "此例中用户要求子集C保留现有组织；这不是未安排的替代含义。"
+            }
+          ],
+          "decision_notes": [
+            {
+              "applies_to": {
+                "kind": "explicit",
+                "source_item_refs": [
+                  "source-item:s1",
+                  "source-item:s2",
+                  "source-item:s3"
+                ]
+              },
+              "summary": "Agent根据已准备的来源关系安排子集A；最终名称为目录甲。",
+              "evidence_refs": [
+                "evidence:e1"
+              ]
+            }
+          ]
+        }
+      },
+      "response": {
+        "outcome": "error",
+        "action": "update",
+        "work_ref": "plan-work:preview-spec-failure",
+        "revision": "work-revision:r2",
+        "error": {
+          "code": "organization_invalid",
+          "message": "此例用于约束失败语义。"
+        }
+      },
+      "request_shape_valid": false
+    }
+  ]
+}

@@ -2,7 +2,11 @@
 
 ## 交接状态
 
-记录日期：2026-09-13。阶段：**已按后续授权完成源码修复与隔离安装验证；未升级日常环境、未重采真实地图、未改写业务 Result**。
+记录日期：2026-09-13。阶段：**二次补修已通过独立 Agent 复验；确切持久 wheel 的 166 项回归及离线 CLI/MCP 通过。未升级日常环境、未重采真实地图、未改写业务 Result**。
+
+独立复验结论与范围见[运行验收报告末尾的第 1—3 包再次独立验收](../../../eval/sessions/260912-2333-hk-run-acceptance/report.md)。该结论绑定新 wheel `9e813bda30fa4b7cc33517d582aefd7547f48e7836a8a78ed7a0f9df31df9f9f`，不扩大为日常安装、真实 Provider 成功或历史业务恢复。
+
+当前证据见本页末尾的二次交付。首轮临时产物已不存在，旧 wheel 不能再作为可复核安装包。
 
 创建时用户要求只整理问题；本次已另行授权在现有设计与合约内直接修复。下方“已确认事实”保留历史审计含义，最终实现与验证见本页交付记录。没有修改公开合约。
 
@@ -54,7 +58,7 @@ PreCheck Run 为 `precheck-run:8b5ff902fda54e6292b14d4fa5f0de42`，Result 为 `p
 
 ### 事实复核与原因
 
-当前 checkout 的独立 `nearby_places` 入口仍直接传入 30，组合入口才收窄为 10。修复前，新增的生产装配测试真实执行 `_geo_tool → GeoQueryTool → GeoCapability → GoogleMapsReverseGeocoder → UrllibJsonTransport`，只替换最外层 opener：捕获到 30；模拟 HTTP 400 服务禁用得到 partial；请求参数拒绝和无法分类的 400 均未停止批次。这五个针对性断言修复前均失败。
+首轮修复前 checkout 的独立 `nearby_places` 入口直接传入 30，组合入口才收窄为 10。修复前，新增的生产装配测试真实执行 `_geo_tool → GeoQueryTool → GeoCapability → GoogleMapsReverseGeocoder → UrllibJsonTransport`，只替换最外层 opener：捕获到 30；模拟 HTTP 400 服务禁用得到 partial；请求参数拒绝和无法分类的 400 均未停止批次。这五个针对性断言修复前均失败。
 
 这证明当前代码缺陷仍存在，不证明历史 164 次 400 全由数量参数引起。历史响应体缺失的证据边界不变。
 
@@ -86,4 +90,18 @@ PreCheck Run 为 `precheck-run:8b5ff902fda54e6292b14d4fa5f0de42`，Result 为 `p
 
 源码与隔离安装路径已验证；没有真实地图成功认证，也未修改历史 332 次请求及未知费用。历史业务 Result 保持完整性，日常 Host/Skill 未升级。新执行若遇到未知拒绝仍需诊断，不会凭 HTTP 400 推断地点失败。历史失败的重采、已发布 Result 的后继交付和日常升级属于另行处理范围。本次工程修复没有需要用户重新决定的公开语义或产品取舍。
 
-最终共同验收：源码 **158 passed**；隔离 wheel **158 passed**，并通过离线 CLI/MCP 分发 smoke。最终 wheel SHA-256：`55db47084afc8c75b3204d358ff0f771f7d8b2a337695efc15573139bdf4c55b`。
+首轮共同自验的历史记录：源码 **158 passed**；隔离 wheel **158 passed**，并通过离线 CLI/MCP 分发 smoke。旧 wheel SHA-256：`55db47084afc8c75b3204d358ff0f771f7d8b2a337695efc15573139bdf4c55b`；其临时产物已丢失。
+
+## 独立复核后的二次交付（2026-09-13）
+
+用户独立复核发现：相同 `QUOTA_EXCEEDED` 在 HTTP 400 下只发送 2 次，在 HTTP 429 下却发送 4 次。根因是 transport 在读取响应体之前按 HTTP 状态决定了暂态重试。新增真实生产装配测试还发现反向问题：带 `RESOURCE_EXHAUSTED + RATE_LIMIT_EXCEEDED` 的 HTTP 400 被误当作永久配额故障。
+
+补修让暂态 HTTP 异常也携带有界响应供 adapter 分类。保留原有 GeoTransientError 类型和默认 HTTP 回退；明确 `QUOTA_EXCEEDED` 优先判为 provider_quota，明确 `RATE_LIMIT_EXCEEDED` 优先判为可重试限流；响应没有提供更具体依据时才使用既有 HTTP 回退。`Retry-After` 在响应被重分类时仍保留。新增内部暂态异常只承载这项必要的诊断信息，没有新 Tool、持久结构、合约变更或原始响应交付。
+
+[测试](../../../tests/test_google_nearby_requests.py) 通过原生产装配及最外层离线 opener，逐一验证 HTTP **400、429、503**：明确配额故障均为 **2 次请求后 blocked**，无退避和额外请求；明确限流均为最多 **4 次总请求**，退避为 **2 / 3 秒**。成功地址、后续 not_requested、未知费用及零新增请求重放均保持。两个问题的针对性测试补修前为 **5 failed / 3 passed**，补修后为 **21 passed**；源码和隔离 wheel 的共同回归各 **166 passed**。
+
+新的确切产物采用提交 `0794d3c9182793b7b25c1cac77793e3c97e42092` 加 `source.diff` 构建，wheel SHA-256：`9e813bda30fa4b7cc33517d582aefd7547f48e7836a8a78ed7a0f9df31df9f9f`。它不是旧 wheel 的恢复或同字节副本。包文件一致性与离线 CLI/MCP 分发 smoke 通过。
+
+持久目录为仓库内 `.local/acceptance-releases/260913-1107-google-gpx-r2/`，已被 Git 忽略，保留 wheel、源码目录/归档、差异、逐文件摘要、依赖约束、隔离 venv 和日志，测试清理不会删除该目录。复核入口：[说明](../../../.local/acceptance-releases/260913-1107-google-gpx-r2/REVIEW.md)、[校验清单](../../../.local/acceptance-releases/260913-1107-google-gpx-r2/SHA256SUMS)、[当前精简证据](verification.json)。旧记录放在 JSON 的 previous_delivery 下，不再指称当前安装包。
+
+本轮未调用真实地图、修改业务 Result 或切换日常安装。工程遗漏已补齐；是否通过独立验收仍由用户复核，不在本记录中代为关闭问题。

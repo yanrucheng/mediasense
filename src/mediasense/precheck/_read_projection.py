@@ -24,6 +24,27 @@ class ReviewItems(Sequence):
         return self.cache[index]
 
 
+class ResolvedMembers(Sequence):
+    """Project only requested source positions, including any verified binding."""
+
+    def __init__(self, graph, refs, correspondence=None):
+        self.graph, self.refs, self.correspondence = graph, refs, correspondence
+
+    def __len__(self):
+        return len(self.refs)
+
+    def __getitem__(self, index):
+        from .read import _resolved_member
+
+        if isinstance(index, slice):
+            return [self[i] for i in range(*index.indices(len(self)))]
+        ref = self.refs[index]
+        value = _resolved_member(self.graph, ref)
+        if self.correspondence is not None:
+            value["correspondence"] = self.correspondence(ref)
+        return value
+
+
 def source_lineage(graph, ref, active=None):
     from .read import _ReadFailure
 

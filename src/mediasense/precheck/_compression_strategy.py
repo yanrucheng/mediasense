@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from bisect import bisect_left
 from dataclasses import dataclass
 from datetime import datetime, timezone
 import hashlib
@@ -120,13 +121,17 @@ def build_adaptive_groups(
     ideal_cuts = tuple(
         round(index * len(ordered) / target) for index in range(1, target)
     )
+    def nearest_cut_distance(position):
+        index = bisect_left(ideal_cuts, position)
+        return min((abs(position - cut) for cut in ideal_cuts[max(0, index - 1):index + 1]), default=0)
+
     selected_cuts = {
         index
         for index, _score in sorted(
             enumerate(boundaries, start=1),
             key=lambda item: (
                 item[1]["score"],
-                -min((abs(item[0] - cut) for cut in ideal_cuts), default=0),
+                -nearest_cut_distance(item[0]),
                 -item[0],
             ),
             reverse=True,

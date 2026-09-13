@@ -1,250 +1,338 @@
 {
-  "recorded_date": "2026-09-13",
-  "base_commit": "615c3359941927515f0c0a8738a3f08122bcad46",
-  "scope": "source repairs and isolated installation only",
-  "public_contract_changed": false,
-  "daily_installation_changed": false,
-  "real_provider_calls": 0,
-  "business_result_rewritten": false,
-  "wheel": {
-    "file_name": "mediasense-0.10.2-py3-none-any.whl",
-    "sha256": "55db47084afc8c75b3204d358ff0f771f7d8b2a337695efc15573139bdf4c55b",
-    "path": "/tmp/mediasense-run-acceptance-repairs/release-final/wheel/mediasense-0.10.2-py3-none-any.whl",
-    "scope": "HEAD plus this task only; concurrent unrelated edits excluded"
+  "current_delivery": {
+    "recorded_date": "2026-09-13",
+    "pass": "independent-review-followup-2",
+    "source_identity": {
+      "base_commit": "0794d3c9182793b7b25c1cac77793e3c97e42092",
+      "files": {
+        "src/mediasense/geo.py": "79f1c28ebb7a66de852c2766a07fc490409380565c329a556d4f59dbe80aa8a8",
+        "src/mediasense/precheck/_orchestrator.py": "20b3489d83624443b392069cad460b1f88da7df433b0e78a5b922af0e9e681c7",
+        "tests/test_google_nearby_requests.py": "1f41df367dabaf17d507d7662c399e18df0300557966b0428c6029a9a6d1a9cf",
+        "tests/test_gpx_resource_delivery.py": "0f366e03620de1966d6bd493d3639880de6227fcb9e1365ecfdb8523712da027"
+      },
+      "new_untracked_test": "tests/test_gpx_resource_delivery.py",
+      "scope": "Exact HEAD plus two acceptance fixes; no changes to GPX matching or compression semantics"
+    },
+    "source_diff_sha256": "a58e5c4a66989cd5ee0452cc11ceff7530face586704b7ad9a8939799e2af9f9",
+    "source_archive_sha256": "c2a4383389ee631417bcba19f338295d5060bb3a7ea174263683e1c3cd5c2516",
+    "wheel": {
+      "path": "/Users/chengyanru/repos/personal/mediasense/.local/acceptance-releases/260913-1107-google-gpx-r2/wheel/mediasense-0.10.2-py3-none-any.whl",
+      "sha256": "9e813bda30fa4b7cc33517d582aefd7547f48e7836a8a78ed7a0f9df31df9f9f",
+      "version": "0.10.2",
+      "bytes": 634694
+    },
+    "retained_directory": "/Users/chengyanru/repos/personal/mediasense/.local/acceptance-releases/260913-1107-google-gpx-r2",
+    "retention": "Local, gitignored, persistent directory; retain until owner explicitly retires the acceptance evidence. Not temporary scratch.",
+    "review_instructions": "/Users/chengyanru/repos/personal/mediasense/.local/acceptance-releases/260913-1107-google-gpx-r2/REVIEW.md",
+    "artifact_manifest": "/Users/chengyanru/repos/personal/mediasense/.local/acceptance-releases/260913-1107-google-gpx-r2/SHA256SUMS",
+    "environment": {
+      "python": "3.11.13",
+      "platform": "darwin",
+      "machine": "arm64",
+      "extras": [],
+      "test_dependency": "pytest",
+      "constraints": "/Users/chengyanru/repos/personal/mediasense/.local/acceptance-releases/260913-1107-google-gpx-r2/dependencies.txt",
+      "installed_packages": "/Users/chengyanru/repos/personal/mediasense/.local/acceptance-releases/260913-1107-google-gpx-r2/installed-packages.json",
+      "venv": "/Users/chengyanru/repos/personal/mediasense/.local/acceptance-releases/260913-1107-google-gpx-r2/venv"
+    },
+    "checks": {
+      "source": {
+        "passed": 166,
+        "wall_seconds": 45.12,
+        "log": "/Users/chengyanru/repos/personal/mediasense/.local/acceptance-releases/260913-1107-google-gpx-r2/logs/source-regression.txt"
+      },
+      "installed": {
+        "passed": 166,
+        "wall_seconds": 50.99,
+        "log": "/Users/chengyanru/repos/personal/mediasense/.local/acceptance-releases/260913-1107-google-gpx-r2/logs/installed-regression.txt"
+      },
+      "targeted_before_fix": {
+        "failed": 5,
+        "passed": 3,
+        "log": "/Users/chengyanru/repos/personal/mediasense/.local/acceptance-releases/260913-1107-google-gpx-r2/logs/before.txt"
+      },
+      "targeted_after_fix": {
+        "passed": 21,
+        "log": "/Users/chengyanru/repos/personal/mediasense/.local/acceptance-releases/260913-1107-google-gpx-r2/logs/targeted-final.txt"
+      },
+      "artifact_consistency": "passed",
+      "distribution_cli_mcp": "passed",
+      "distribution_log": "/Users/chengyanru/repos/personal/mediasense/.local/acceptance-releases/260913-1107-google-gpx-r2/logs/distribution-smoke.txt",
+      "ruff": "passed",
+      "git_diff_check": "passed"
+    },
+    "source_command": "rtk proxy .venv/bin/python -m pytest -q tests/test_google_nearby_requests.py tests/test_geo_tool.py tests/test_geo_recovery.py tests/test_geo_process_recovery.py tests/test_geo_capability_model.py tests/test_geocode.py tests/test_gpx.py tests/test_gpx_preparation.py tests/test_gpx_resource_delivery.py tests/test_compression.py tests/test_compression_gpx.py tests/test_source_validity.py tests/test_resources.py tests/test_precheck_orchestration.py --tb=short",
+    "installed_command": "rtk proxy env -u PYTHONPATH /Users/chengyanru/repos/personal/mediasense/.local/acceptance-releases/260913-1107-google-gpx-r2/venv/bin/python -m pytest -o pythonpath='' -q tests/test_google_nearby_requests.py tests/test_geo_tool.py tests/test_geo_recovery.py tests/test_geo_process_recovery.py tests/test_geo_capability_model.py tests/test_geocode.py tests/test_gpx.py tests/test_gpx_preparation.py tests/test_gpx_resource_delivery.py tests/test_compression.py tests/test_compression_gpx.py tests/test_source_validity.py tests/test_resources.py tests/test_precheck_orchestration.py --tb=short",
+    "installed_cwd": "/Users/chengyanru/repos/personal/mediasense/.local/acceptance-releases/260913-1107-google-gpx-r2/source",
+    "source_injection": false,
+    "public_contract_changed": false,
+    "daily_installation_changed": false,
+    "real_provider_calls": 0,
+    "business_result_rewritten": false,
+    "old_artifact": {
+      "sha256": "55db47084afc8c75b3204d358ff0f771f7d8b2a337695efc15573139bdf4c55b",
+      "status": "unavailable; old /tmp artifacts removed; not asserted equivalent to replacement"
+    },
+    "whole_fixture_performance_rerun": false,
+    "whole_fixture_compression_rerun": false,
+    "issue_verification": {
+      "public_reason": "gpx_resource_budget_insufficient",
+      "public_state": "blocked",
+      "resume_condition": "Original resource budget is frozen; cancel and start a successor with sufficient GPX resources; completed Work remains reusable.",
+      "same_run_resume": "still blocked under unchanged budget",
+      "successor": "metadata reused; GPX succeeded; next unmet Geo prerequisite still reported; no fake Result",
+      "unknown_exception": "execution_worker_crashed; exception propagates",
+      "matching_implementation_changed": false
+    }
   },
-  "checks": {
-    "source": {
-      "passed": 158,
-      "wall_seconds": 73.61
+  "previous_delivery": {
+    "recorded_date": "2026-09-13",
+    "base_commit": "615c3359941927515f0c0a8738a3f08122bcad46",
+    "scope": "source repairs and isolated installation only",
+    "public_contract_changed": false,
+    "daily_installation_changed": false,
+    "real_provider_calls": 0,
+    "business_result_rewritten": false,
+    "wheel": {
+      "file_name": "mediasense-0.10.2-py3-none-any.whl",
+      "sha256": "55db47084afc8c75b3204d358ff0f771f7d8b2a337695efc15573139bdf4c55b",
+      "path": "/tmp/mediasense-run-acceptance-repairs/release-final/wheel/mediasense-0.10.2-py3-none-any.whl",
+      "scope": "HEAD plus this task only; concurrent unrelated edits excluded"
     },
-    "installed": {
-      "passed": 158,
-      "wall_seconds": 71.54,
-      "source_injection": false
+    "checks": {
+      "source": {
+        "passed": 158,
+        "wall_seconds": 73.61
+      },
+      "installed": {
+        "passed": 158,
+        "wall_seconds": 71.54,
+        "source_injection": false
+      },
+      "pytest_files": [
+        "tests/test_google_nearby_requests.py",
+        "tests/test_geo_tool.py",
+        "tests/test_geo_recovery.py",
+        "tests/test_geo_process_recovery.py",
+        "tests/test_geo_capability_model.py",
+        "tests/test_geocode.py",
+        "tests/test_gpx.py",
+        "tests/test_gpx_preparation.py",
+        "tests/test_compression.py",
+        "tests/test_compression_gpx.py",
+        "tests/test_source_validity.py",
+        "tests/test_resources.py",
+        "tests/test_precheck_orchestration.py"
+      ],
+      "source_command": "rtk proxy .venv/bin/python -m pytest -q tests/test_google_nearby_requests.py tests/test_geo_tool.py tests/test_geo_recovery.py tests/test_geo_process_recovery.py tests/test_geo_capability_model.py tests/test_geocode.py tests/test_gpx.py tests/test_gpx_preparation.py tests/test_compression.py tests/test_compression_gpx.py tests/test_source_validity.py tests/test_resources.py tests/test_precheck_orchestration.py --tb=short",
+      "installed_command": "rtk proxy env -u PYTHONPATH /tmp/mediasense-run-acceptance-repairs/release/venv/bin/python -m pytest -o pythonpath= -q tests/test_google_nearby_requests.py tests/test_geo_tool.py tests/test_geo_recovery.py tests/test_geo_process_recovery.py tests/test_geo_capability_model.py tests/test_geocode.py tests/test_gpx.py tests/test_gpx_preparation.py tests/test_compression.py tests/test_compression_gpx.py tests/test_source_validity.py tests/test_resources.py tests/test_precheck_orchestration.py --tb=short",
+      "installed_cwd": "/tmp/mediasense-run-acceptance-repairs/release-final/source",
+      "distribution_smoke": "passed: artifact consistency, isolated CLI and MCP; offline core dependencies",
+      "ruff": "passed",
+      "git_diff_check": "passed"
     },
-    "pytest_files": [
-      "tests/test_google_nearby_requests.py",
-      "tests/test_geo_tool.py",
-      "tests/test_geo_recovery.py",
-      "tests/test_geo_process_recovery.py",
-      "tests/test_geo_capability_model.py",
-      "tests/test_geocode.py",
-      "tests/test_gpx.py",
-      "tests/test_gpx_preparation.py",
-      "tests/test_compression.py",
-      "tests/test_compression_gpx.py",
-      "tests/test_source_validity.py",
-      "tests/test_resources.py",
-      "tests/test_precheck_orchestration.py"
+    "isolation_root": "/tmp/mediasense-run-acceptance-repairs",
+    "reproduction": {
+      "gpx": "tests/run_gpx_cost_check.py --database <retained-work.sqlite3> --run-id 5ad2ccf2528d4783a1b58c7100d370c7 --output <new-isolated-dir> [--baseline-module <gpx.py from base commit>]",
+      "compression": "tests/run_compression_gpx_check.py --database <retained-work.sqlite3> --run-id 5ad2ccf2528d4783a1b58c7100d370c7 --output <new-isolated-dir>"
+    },
+    "source_files": {
+      "src/mediasense/precheck/gpx.py": "11684656bf47219c2f42420900b9e231d169e5b9e83806059101a839bb003e0f",
+      "tests/test_gpx_preparation.py": "1f1a2fb85f74ec88a0ef5f2b132eca0051b28d266d4500fb588aae641e734307",
+      "tests/test_compression_gpx.py": "31ded313290230fd88032f3e6d5022cf7885ab0752406718a830dc3ceb73824c",
+      "tests/run_gpx_cost_check.py": "41ca32f0ea4a026b92d3f6bb8303a48203c3675f629c1a0917e330a25fb9d07a",
+      "tests/run_compression_gpx_check.py": "632e2bf46da2e6a90160e79e4fcb847582321eaa3d3662bc2c43d49cc6d45e05",
+      "src/mediasense/precheck/_orchestrator.py": "1e72bb2178310588fef58b332fadc6a6ffa1febacd981c4424c17a7562650862"
+    },
+    "baseline": {
+      "first_execution": {
+        "wall_seconds": 586.7706102079246,
+        "cpu_seconds": 552.701806,
+        "counts": {
+          "proofs": 8136,
+          "track_reads": 4068,
+          "track_bytes": 8079812784,
+          "parses": 4068,
+          "matches": 2034
+        },
+        "timing_seconds": {
+          "proofs": 24.84263240522705,
+          "parses": 477.30271133594215,
+          "matches": 0.7485533577855676
+        },
+        "work_count": 2136,
+        "reused": 0,
+        "output_digest": "cdf145dc78dc6723ef7c174578b941b18d4dcdec0de42b0f408185a7fc64bd4a",
+        "peak_rss_bytes": 238452736
+      },
+      "new_producer_work_reuse": {
+        "wall_seconds": 17.49515837500803,
+        "cpu_seconds": 7.310292000000004,
+        "counts": {
+          "proofs": 4068
+        },
+        "timing_seconds": {
+          "proofs": 10.594101670430973
+        },
+        "work_count": 2136,
+        "reused": 2136,
+        "output_digest": "cdf145dc78dc6723ef7c174578b941b18d4dcdec0de42b0f408185a7fc64bd4a",
+        "peak_rss_bytes": 238452736
+      },
+      "source_database": "/Users/chengyanru/Library/Application Support/MediaSense/datasets/dataset-b9f71c8826d891a534c33b7e/precheck/work.sqlite3",
+      "baseline_module_sha256": "e6689fc891e4a763349a6f0e1001500154ba6b8fb5a8b1ed63107208e2bdf11f",
+      "module": "/private/tmp/mediasense-run-acceptance-repairs/gpx.py"
+    },
+    "source_first_observation": {
+      "first_execution": {
+        "wall_seconds": 48.98242654115893,
+        "cpu_seconds": 21.385209,
+        "counts": {
+          "proofs": 8138,
+          "track_reads": 2,
+          "track_bytes": 3972376,
+          "parses": 2,
+          "matches": 2034
+        },
+        "timing_seconds": {
+          "proofs": 23.984296212205663,
+          "parses": 0.2660873339045793,
+          "matches": 0.03477110271342099
+        },
+        "work_count": 2136,
+        "reused": 0,
+        "output_digest": "cdf145dc78dc6723ef7c174578b941b18d4dcdec0de42b0f408185a7fc64bd4a",
+        "peak_rss_bytes": 238272512
+      },
+      "new_producer_work_reuse": {
+        "wall_seconds": 15.39533704216592,
+        "cpu_seconds": 7.102815,
+        "counts": {
+          "proofs": 4068
+        },
+        "timing_seconds": {
+          "proofs": 9.361983764916658
+        },
+        "work_count": 2136,
+        "reused": 2136,
+        "output_digest": "cdf145dc78dc6723ef7c174578b941b18d4dcdec0de42b0f408185a7fc64bd4a",
+        "peak_rss_bytes": 238272512
+      },
+      "source_database": "/Users/chengyanru/Library/Application Support/MediaSense/datasets/dataset-b9f71c8826d891a534c33b7e/precheck/work.sqlite3",
+      "baseline_module_sha256": null,
+      "module": "/Users/chengyanru/repos/personal/mediasense/src/mediasense/precheck/gpx.py"
+    },
+    "source_second_observation": {
+      "first_execution": {
+        "wall_seconds": 56.324647792149335,
+        "cpu_seconds": 23.611478,
+        "counts": {
+          "proofs": 8138,
+          "track_reads": 2,
+          "track_bytes": 3972376,
+          "parses": 2,
+          "matches": 2034
+        },
+        "timing_seconds": {
+          "proofs": 26.828341181389987,
+          "parses": 0.23203787487000227,
+          "matches": 0.023896037135273218
+        },
+        "work_count": 2136,
+        "reused": 0,
+        "output_digest": "cdf145dc78dc6723ef7c174578b941b18d4dcdec0de42b0f408185a7fc64bd4a",
+        "peak_rss_bytes": 238010368
+      },
+      "new_producer_work_reuse": {
+        "wall_seconds": 19.923636709107086,
+        "cpu_seconds": 7.980668999999999,
+        "counts": {
+          "proofs": 4068
+        },
+        "timing_seconds": {
+          "proofs": 12.146146800369024
+        },
+        "work_count": 2136,
+        "reused": 2136,
+        "output_digest": "cdf145dc78dc6723ef7c174578b941b18d4dcdec0de42b0f408185a7fc64bd4a",
+        "peak_rss_bytes": 238010368
+      },
+      "source_database": "/Users/chengyanru/Library/Application Support/MediaSense/datasets/dataset-b9f71c8826d891a534c33b7e/precheck/work.sqlite3",
+      "baseline_module_sha256": null,
+      "module": "/Users/chengyanru/repos/personal/mediasense/src/mediasense/precheck/gpx.py"
+    },
+    "final_wheel": {
+      "first_execution": {
+        "wall_seconds": 54.42312083300203,
+        "cpu_seconds": 23.663778,
+        "counts": {
+          "proofs": 8138,
+          "track_reads": 2,
+          "track_bytes": 3972376,
+          "parses": 2,
+          "matches": 2034
+        },
+        "timing_seconds": {
+          "proofs": 25.750506091630086,
+          "parses": 0.23501916718669236,
+          "matches": 0.02325148554518819
+        },
+        "work_count": 2136,
+        "reused": 0,
+        "output_digest": "cdf145dc78dc6723ef7c174578b941b18d4dcdec0de42b0f408185a7fc64bd4a",
+        "peak_rss_bytes": 239058944
+      },
+      "new_producer_work_reuse": {
+        "wall_seconds": 18.698495708871633,
+        "cpu_seconds": 7.673599000000003,
+        "counts": {
+          "proofs": 4068
+        },
+        "timing_seconds": {
+          "proofs": 11.505072061903775
+        },
+        "work_count": 2136,
+        "reused": 2136,
+        "output_digest": "cdf145dc78dc6723ef7c174578b941b18d4dcdec0de42b0f408185a7fc64bd4a",
+        "peak_rss_bytes": 239058944
+      },
+      "source_database": "/Users/chengyanru/Library/Application Support/MediaSense/datasets/dataset-b9f71c8826d891a534c33b7e/precheck/work.sqlite3",
+      "baseline_module_sha256": null,
+      "module": "/private/tmp/mediasense-run-acceptance-repairs/release/venv/lib/python3.11/site-packages/mediasense/precheck/gpx.py"
+    },
+    "fixture": {
+      "original_directory_verifier": "SHA list passed; package size failed because extra test directories are present",
+      "manifest_only_snapshot_verifier": "passed",
+      "files": 10608,
+      "logical_bytes": 1759421497,
+      "tracks": [
+        {
+          "relative_path": "260501-HK美食之旅/a-files/GPX/2026-05-03T05-33-10+0800.gpx",
+          "size_bytes": 2131984,
+          "sha256": "1a35a98cebd7866d1d93f274c096982cbea43d2884f59b0a83110ee27e5886ea",
+          "matches_verified_fixture": true
+        },
+        {
+          "relative_path": "260501-HK美食之旅/a-files/GPX/2026-05-05T21-47-16+0800.gpx",
+          "size_bytes": 1840392,
+          "sha256": "ac0d5bdd70b7c24d793ef682194a00a63b71d90948c7d54d62a2ea3a73449e3b",
+          "matches_verified_fixture": true
+        }
+      ]
+    },
+    "timing_limits": [
+      "single-host observations; OS cache not cleared",
+      "other offline verification overlapped part of baseline",
+      "producer loop including validation and Work persistence, not whole PreCheck",
+      "logical bytes are not physical disk I/O",
+      "no separate SQLite commit measurement"
     ],
-    "source_command": "rtk proxy .venv/bin/python -m pytest -q tests/test_google_nearby_requests.py tests/test_geo_tool.py tests/test_geo_recovery.py tests/test_geo_process_recovery.py tests/test_geo_capability_model.py tests/test_geocode.py tests/test_gpx.py tests/test_gpx_preparation.py tests/test_compression.py tests/test_compression_gpx.py tests/test_source_validity.py tests/test_resources.py tests/test_precheck_orchestration.py --tb=short",
-    "installed_command": "rtk proxy env -u PYTHONPATH /tmp/mediasense-run-acceptance-repairs/release/venv/bin/python -m pytest -o pythonpath= -q tests/test_google_nearby_requests.py tests/test_geo_tool.py tests/test_geo_recovery.py tests/test_geo_process_recovery.py tests/test_geo_capability_model.py tests/test_geocode.py tests/test_gpx.py tests/test_gpx_preparation.py tests/test_compression.py tests/test_compression_gpx.py tests/test_source_validity.py tests/test_resources.py tests/test_precheck_orchestration.py --tb=short",
-    "installed_cwd": "/tmp/mediasense-run-acceptance-repairs/release-final/source",
-    "distribution_smoke": "passed: artifact consistency, isolated CLI and MCP; offline core dependencies",
-    "ruff": "passed",
-    "git_diff_check": "passed"
-  },
-  "isolation_root": "/tmp/mediasense-run-acceptance-repairs",
-  "reproduction": {
-    "gpx": "tests/run_gpx_cost_check.py --database <retained-work.sqlite3> --run-id 5ad2ccf2528d4783a1b58c7100d370c7 --output <new-isolated-dir> [--baseline-module <gpx.py from base commit>]",
-    "compression": "tests/run_compression_gpx_check.py --database <retained-work.sqlite3> --run-id 5ad2ccf2528d4783a1b58c7100d370c7 --output <new-isolated-dir>"
-  },
-  "source_files": {
-    "src/mediasense/precheck/gpx.py": "11684656bf47219c2f42420900b9e231d169e5b9e83806059101a839bb003e0f",
-    "tests/test_gpx_preparation.py": "1f1a2fb85f74ec88a0ef5f2b132eca0051b28d266d4500fb588aae641e734307",
-    "tests/test_compression_gpx.py": "31ded313290230fd88032f3e6d5022cf7885ab0752406718a830dc3ceb73824c",
-    "tests/run_gpx_cost_check.py": "41ca32f0ea4a026b92d3f6bb8303a48203c3675f629c1a0917e330a25fb9d07a",
-    "tests/run_compression_gpx_check.py": "632e2bf46da2e6a90160e79e4fcb847582321eaa3d3662bc2c43d49cc6d45e05",
-    "src/mediasense/precheck/_orchestrator.py": "1e72bb2178310588fef58b332fadc6a6ffa1febacd981c4424c17a7562650862"
-  },
-  "baseline": {
-    "first_execution": {
-      "wall_seconds": 586.7706102079246,
-      "cpu_seconds": 552.701806,
-      "counts": {
-        "proofs": 8136,
-        "track_reads": 4068,
-        "track_bytes": 8079812784,
-        "parses": 4068,
-        "matches": 2034
-      },
-      "timing_seconds": {
-        "proofs": 24.84263240522705,
-        "parses": 477.30271133594215,
-        "matches": 0.7485533577855676
-      },
-      "work_count": 2136,
-      "reused": 0,
-      "output_digest": "cdf145dc78dc6723ef7c174578b941b18d4dcdec0de42b0f408185a7fc64bd4a",
-      "peak_rss_bytes": 238452736
+    "valid_output_status_counts": {
+      "missing": 247,
+      "available": 1787,
+      "not_applicable": 102
     },
-    "new_producer_work_reuse": {
-      "wall_seconds": 17.49515837500803,
-      "cpu_seconds": 7.310292000000004,
-      "counts": {
-        "proofs": 4068
-      },
-      "timing_seconds": {
-        "proofs": 10.594101670430973
-      },
-      "work_count": 2136,
-      "reused": 2136,
-      "output_digest": "cdf145dc78dc6723ef7c174578b941b18d4dcdec0de42b0f408185a7fc64bd4a",
-      "peak_rss_bytes": 238452736
-    },
-    "source_database": "/Users/chengyanru/Library/Application Support/MediaSense/datasets/dataset-b9f71c8826d891a534c33b7e/precheck/work.sqlite3",
-    "baseline_module_sha256": "e6689fc891e4a763349a6f0e1001500154ba6b8fb5a8b1ed63107208e2bdf11f",
-    "module": "/private/tmp/mediasense-run-acceptance-repairs/gpx.py"
-  },
-  "source_first_observation": {
-    "first_execution": {
-      "wall_seconds": 48.98242654115893,
-      "cpu_seconds": 21.385209,
-      "counts": {
-        "proofs": 8138,
-        "track_reads": 2,
-        "track_bytes": 3972376,
-        "parses": 2,
-        "matches": 2034
-      },
-      "timing_seconds": {
-        "proofs": 23.984296212205663,
-        "parses": 0.2660873339045793,
-        "matches": 0.03477110271342099
-      },
-      "work_count": 2136,
-      "reused": 0,
-      "output_digest": "cdf145dc78dc6723ef7c174578b941b18d4dcdec0de42b0f408185a7fc64bd4a",
-      "peak_rss_bytes": 238272512
-    },
-    "new_producer_work_reuse": {
-      "wall_seconds": 15.39533704216592,
-      "cpu_seconds": 7.102815,
-      "counts": {
-        "proofs": 4068
-      },
-      "timing_seconds": {
-        "proofs": 9.361983764916658
-      },
-      "work_count": 2136,
-      "reused": 2136,
-      "output_digest": "cdf145dc78dc6723ef7c174578b941b18d4dcdec0de42b0f408185a7fc64bd4a",
-      "peak_rss_bytes": 238272512
-    },
-    "source_database": "/Users/chengyanru/Library/Application Support/MediaSense/datasets/dataset-b9f71c8826d891a534c33b7e/precheck/work.sqlite3",
-    "baseline_module_sha256": null,
-    "module": "/Users/chengyanru/repos/personal/mediasense/src/mediasense/precheck/gpx.py"
-  },
-  "source_second_observation": {
-    "first_execution": {
-      "wall_seconds": 56.324647792149335,
-      "cpu_seconds": 23.611478,
-      "counts": {
-        "proofs": 8138,
-        "track_reads": 2,
-        "track_bytes": 3972376,
-        "parses": 2,
-        "matches": 2034
-      },
-      "timing_seconds": {
-        "proofs": 26.828341181389987,
-        "parses": 0.23203787487000227,
-        "matches": 0.023896037135273218
-      },
-      "work_count": 2136,
-      "reused": 0,
-      "output_digest": "cdf145dc78dc6723ef7c174578b941b18d4dcdec0de42b0f408185a7fc64bd4a",
-      "peak_rss_bytes": 238010368
-    },
-    "new_producer_work_reuse": {
-      "wall_seconds": 19.923636709107086,
-      "cpu_seconds": 7.980668999999999,
-      "counts": {
-        "proofs": 4068
-      },
-      "timing_seconds": {
-        "proofs": 12.146146800369024
-      },
-      "work_count": 2136,
-      "reused": 2136,
-      "output_digest": "cdf145dc78dc6723ef7c174578b941b18d4dcdec0de42b0f408185a7fc64bd4a",
-      "peak_rss_bytes": 238010368
-    },
-    "source_database": "/Users/chengyanru/Library/Application Support/MediaSense/datasets/dataset-b9f71c8826d891a534c33b7e/precheck/work.sqlite3",
-    "baseline_module_sha256": null,
-    "module": "/Users/chengyanru/repos/personal/mediasense/src/mediasense/precheck/gpx.py"
-  },
-  "final_wheel": {
-    "first_execution": {
-      "wall_seconds": 54.42312083300203,
-      "cpu_seconds": 23.663778,
-      "counts": {
-        "proofs": 8138,
-        "track_reads": 2,
-        "track_bytes": 3972376,
-        "parses": 2,
-        "matches": 2034
-      },
-      "timing_seconds": {
-        "proofs": 25.750506091630086,
-        "parses": 0.23501916718669236,
-        "matches": 0.02325148554518819
-      },
-      "work_count": 2136,
-      "reused": 0,
-      "output_digest": "cdf145dc78dc6723ef7c174578b941b18d4dcdec0de42b0f408185a7fc64bd4a",
-      "peak_rss_bytes": 239058944
-    },
-    "new_producer_work_reuse": {
-      "wall_seconds": 18.698495708871633,
-      "cpu_seconds": 7.673599000000003,
-      "counts": {
-        "proofs": 4068
-      },
-      "timing_seconds": {
-        "proofs": 11.505072061903775
-      },
-      "work_count": 2136,
-      "reused": 2136,
-      "output_digest": "cdf145dc78dc6723ef7c174578b941b18d4dcdec0de42b0f408185a7fc64bd4a",
-      "peak_rss_bytes": 239058944
-    },
-    "source_database": "/Users/chengyanru/Library/Application Support/MediaSense/datasets/dataset-b9f71c8826d891a534c33b7e/precheck/work.sqlite3",
-    "baseline_module_sha256": null,
-    "module": "/private/tmp/mediasense-run-acceptance-repairs/release/venv/lib/python3.11/site-packages/mediasense/precheck/gpx.py"
-  },
-  "fixture": {
-    "original_directory_verifier": "SHA list passed; package size failed because extra test directories are present",
-    "manifest_only_snapshot_verifier": "passed",
-    "files": 10608,
-    "logical_bytes": 1759421497,
-    "tracks": [
-      {
-        "relative_path": "260501-HK美食之旅/a-files/GPX/2026-05-03T05-33-10+0800.gpx",
-        "size_bytes": 2131984,
-        "sha256": "1a35a98cebd7866d1d93f274c096982cbea43d2884f59b0a83110ee27e5886ea",
-        "matches_verified_fixture": true
-      },
-      {
-        "relative_path": "260501-HK美食之旅/a-files/GPX/2026-05-05T21-47-16+0800.gpx",
-        "size_bytes": 1840392,
-        "sha256": "ac0d5bdd70b7c24d793ef682194a00a63b71d90948c7d54d62a2ea3a73449e3b",
-        "matches_verified_fixture": true
-      }
-    ]
-  },
-  "timing_limits": [
-    "single-host observations; OS cache not cleared",
-    "other offline verification overlapped part of baseline",
-    "producer loop including validation and Work persistence, not whole PreCheck",
-    "logical bytes are not physical disk I/O",
-    "no separate SQLite commit measurement"
-  ],
-  "valid_output_status_counts": {
-    "missing": 247,
-    "available": 1787,
-    "not_applicable": 102
-  },
-  "output_equality": "Every Work identity and entire output equals the retained reference in every measured phase.",
-  "original_result_integrity_verified_after_tests": true
+    "output_equality": "Every Work identity and entire output equals the retained reference in every measured phase.",
+    "original_result_integrity_verified_after_tests": true
+  }
 }
