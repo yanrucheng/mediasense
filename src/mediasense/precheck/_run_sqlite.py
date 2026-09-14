@@ -6,6 +6,7 @@ from contextlib import contextmanager, nullcontext
 from collections.abc import Callable, Mapping
 from datetime import datetime, timedelta, timezone
 import json
+import hashlib
 from pathlib import Path
 import sqlite3
 from typing import Iterator
@@ -70,6 +71,17 @@ class SQLiteRunStore:
         execution_config: dict[str, object] | None = None,
     ) -> tuple[dict[str, object], bool]:
         request_json = _json(request)
+        compact_config = None
+        preparation_json = None
+        if execution_config is not None:
+            compact_config = {**execution_config, "preparation": None}
+            if execution_config.get("preparation") is not None:
+                preparation_json = _json(execution_config["preparation"])
+                # Bind the separately stored, write-once payload to this Run.
+                # Progress reads need only this small integrity commitment.
+                compact_config["preparation_digest"] = hashlib.sha256(
+                    preparation_json.encode("utf-8")
+                ).hexdigest()
         request_id = str(request["request_id"])
         observed_at = self.now()
         with self._transaction() as connection:
@@ -104,12 +116,12 @@ class SQLiteRunStore:
                     _json(_unknown_progress()),
                     observed_at,
                     observed_at,
-                    None if execution_config is None else _json({**execution_config, "preparation": None}),
+                    None if compact_config is None else _json(compact_config),
                 ),
             )
-            if execution_config is not None and execution_config.get("preparation") is not None:
+            if preparation_json is not None:
                 connection.execute("INSERT INTO precheck_run_preparation (run_ref, value_json) VALUES (?, ?)",
-                                   (run_ref, _json(execution_config["preparation"])))
+                                   (run_ref, preparation_json))
             row = connection.execute(
                 "SELECT * FROM precheck_runs WHERE run_ref = ?", (run_ref,)
             ).fetchone()
@@ -144,8 +156,16 @@ class SQLiteRunStore:
             row = self._require(connection, run_ref)
             config = _optional_json(row["execution_config_json"])
             preparation = connection.execute("SELECT value_json FROM precheck_run_preparation WHERE run_ref = ?", (run_ref,)).fetchone()
-        if config is not None and preparation is not None:
-            config["preparation"] = json.loads(preparation["value_json"])
+        if not isinstance(config, dict) or preparation is None:
+            raise RunExecutionConflict("Run frozen preparation is missing")
+        encoded = preparation["value_json"]
+        digest = config.pop("preparation_digest", None)
+        if digest is not None and hashlib.sha256(encoded.encode("utf-8")).hexdigest() != digest:
+            raise RunExecutionConflict("Run frozen preparation integrity check failed")
+        from ._preparation import validate_frozen_preparation
+
+        config["preparation"] = json.loads(encoded)
+        validate_frozen_preparation(config["preparation"], json.loads(row["request_json"]))
         return config
 
     def current_state(self, run_ref):
@@ -185,33 +205,6 @@ class SQLiteRunStore:
                     WHERE run_ref = ?
                     """,
                     (accounting_run_id, self.now(), run_ref),
-                )
-            return _record(self._require(connection, run_ref))
-
-    def configure_execution(
-        self,
-        run_ref: str,
-        configuration: dict[str, object],
-    ) -> dict[str, object]:
-        encoded = _json(configuration)
-        with self._transaction() as connection:
-            row = self._require(connection, run_ref)
-            record = _record(row)
-            existing = record["execution_config"]
-            if existing is not None and existing != configuration:
-                raise RunExecutionConflict(
-                    "Run execution configuration is already fixed"
-                )
-            if existing is None:
-                if record["state"] not in {"running", "paused", "blocked"}:
-                    raise RunStateConflict(record)
-                connection.execute(
-                    """
-                    UPDATE precheck_runs
-                    SET execution_config_json = ?, updated_at = ?
-                    WHERE run_ref = ?
-                    """,
-                    (encoded, self.now(), run_ref),
                 )
             return _record(self._require(connection, run_ref))
 

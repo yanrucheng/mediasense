@@ -100,7 +100,8 @@ def test_entry_skill_owns_bootstrap_and_stage_local_prerequisites() -> None:
     assert "Establish readiness" in entry
     assert "[installation and upgrade runbook](references/installation.md)" in entry
     assert (skill_root / "mediasense/references/installation.md").is_file()
-    assert "MediaSense `0.10.x` CLI" in entry
+    major, minor, _patch = application_version().split(".", maxsplit=2)
+    assert f"MediaSense `{major}.{minor}.x` CLI" in entry
     assert "MediaSense `0.2.x` CLI" not in entry
     assert "current Agent session" in entry
     assert "Route to the owning stage" in entry

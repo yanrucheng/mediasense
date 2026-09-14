@@ -30,6 +30,19 @@ from mediasense.precheck import discovery
 SPEC_ROOT = Path(__file__).parents[1] / "docs" / "spec" / "contract/precheck-read"
 
 
+def test_result_encoding_preserves_exact_canonical_bytes():
+    from mediasense.precheck._result_sqlite import _encode_package
+
+    # Non-ASCII and non-BMP content must not change identities, escaping, key
+    # ordering or numeric spelling when a large Result is encoded in chunks.
+    value = {"z": [None, True, 1.25, -0.0], "a": {"说明": "来源 🖼\n\\\""}}
+    assert _encode_package(value) == (
+        '{"a":{"说明":"来源 🖼\\n\\\\\\\""},"z":[null,true,1.25,-0.0]}'
+    ).encode("utf-8")
+    with pytest.raises(ValueError):
+        _encode_package({"value": float("nan")})
+
+
 def test_ordinary_rendition_is_frontier_and_high_resolution_expands_from_it(
     tmp_path: Path,
 ) -> None:

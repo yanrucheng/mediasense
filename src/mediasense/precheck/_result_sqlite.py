@@ -6,6 +6,7 @@ from collections.abc import Mapping
 from contextlib import contextmanager
 from datetime import datetime, timezone
 import hashlib
+from io import BytesIO
 import json
 import os
 from pathlib import Path
@@ -640,13 +641,18 @@ def _validate_result_ref(result_ref: str) -> None:
 
 
 def _encode_package(package: Mapping[str, object]) -> bytes:
-    return json.dumps(
-        package,
+    encoder = json.JSONEncoder(
         ensure_ascii=False,
         allow_nan=False,
         separators=(",", ":"),
         sort_keys=True,
-    ).encode("utf-8")
+    )
+    # Preserve canonical bytes without materializing a second, potentially
+    # wide-Unicode string for the entire Result beside its UTF-8 payload.
+    with BytesIO() as output:
+        for chunk in encoder.iterencode(package):
+            output.write(chunk.encode("utf-8"))
+        return output.getvalue()
 
 
 def _recover_unregistered_publication(

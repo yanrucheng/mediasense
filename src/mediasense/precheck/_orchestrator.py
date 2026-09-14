@@ -459,12 +459,13 @@ class PrecheckOrchestrator:
     ) -> dict[str, object]:
         if not self._running(run_ref):
             return self.run_control.sync_accounting(run_ref)
-        if config.preparation is not None:
-            from ._preparation import preparation_configuration_value, preparation_configuration_identity, resolved_preparation_recipes
+        if config.preparation is None:
+            raise ValueError("Run frozen preparation is required before execution")
+        from ._preparation import preparation_configuration_value, preparation_configuration_identity, resolved_preparation_recipes
 
-            current = preparation_configuration_value(config.value(), resolved_preparation_recipes(config, self.dependencies))
-            if preparation_configuration_identity(current) != config.preparation["profile"]["configuration_identity"]:
-                raise _BlockedExecution("preparation_recipe_changed", "Installed preparation recipes differ from this Run's frozen requirements.", "Restore the original recipes and resume, or start a new ordinary Run with current requirements.")
+        current = preparation_configuration_value(config.value(), resolved_preparation_recipes(config, self.dependencies))
+        if preparation_configuration_identity(current) != config.preparation["profile"]["configuration_identity"]:
+            raise _BlockedExecution("preparation_recipe_changed", "Installed preparation recipes differ from this Run's frozen requirements.", "Restore the original recipes and resume, or start a new ordinary Run with current requirements.")
         accounting = AccountingStore(self.database_path)
         attachment = accounting.get_source_attachment(accounting_run_id)
         config = config.resolve_resources(source_root=attachment.source_root)
@@ -473,7 +474,7 @@ class PrecheckOrchestrator:
         assert config.ffmpeg_threads is not None
         assert config.model_batch_size is not None
         self._checkpoint(run_ref, "accounting", total="unknown")
-        snapshot = config.preparation.get("input") if config.preparation else None
+        snapshot = config.preparation["input"]
         if snapshot is None:
             accounting.process_run(
                 accounting_run_id,
@@ -1392,13 +1393,18 @@ class PrecheckOrchestrator:
 
         inputs: list[CompressionInput] = []
         covered: set[Path] = set()
+        from ._preparation import override_path_partitions, compression_parameters
+
+        partition_for = override_path_partitions(config.preparation)
         work_store = WorkStore(self.database_path)
         for bundle_work_id in bundle_work_ids:
             bundle_work = work_store.get_work(bundle_work_id)
             representative_path = _bundle_representative(bundle_work)
-            member_paths = _bundle_member_paths(bundle_work)
+            member_paths = tuple(path for path in _bundle_member_paths(bundle_work) if path not in partition_for)
+            if not member_paths:
+                continue
             visual = visual_by_path.get(representative_path)
-            if visual is None:
+            if visual is None or representative_path not in member_paths:
                 alternatives = sorted(
                     path for path in member_paths if path in visual_by_path
                 )
@@ -1426,9 +1432,6 @@ class PrecheckOrchestrator:
             )
         if not inputs:
             return (), tuple(sorted(visual_by_path))
-        from ._preparation import override_path_partitions, compression_parameters
-
-        partition_for = override_path_partitions(config.preparation)
         parameters = ([config.preparation["profile"]["compression"],
                        *(override["compression"] for override in config.preparation["profile"]["overrides"])]
                       if config.preparation else [compression_parameters(config.compression_target)])
@@ -1588,7 +1591,7 @@ def _initial_evidence_media(
     override_paths = override_path_partitions(config.preparation)
     requested = set(config.directed_evidence_paths) | set(override_paths)
     demanded = set(requested)
-    expanded_bundle_ids = set()
+    remainder_demands = {}
     evidence_limit = min(
         2_000,
         max(128, (config.compression_target or 200) * 4),
@@ -1605,11 +1608,12 @@ def _initial_evidence_media(
                 "Resume the Run after retrying or resolving failed bundle Work.",
             )
         if any(path in override_paths for path in candidate.members):
-            # Directed members must be compared as themselves. A touched bundle
-            # is expanded to all actual members, including a boundary remainder.
-            requested.update(candidate.members)
-            demanded.update(candidate.members)
-            expanded_bundle_ids.add(outcome.work.work_id)
+            # Resolve the actual boundary first. Directed members are individual
+            # demands; a remainder retains the base preparation/association rule.
+            remaining = tuple(path for path in candidate.members if path not in override_paths)
+            if remaining:
+                choices = (candidate.representative_path, *candidate.boundary_paths)
+                remainder_demands[outcome.work.work_id] = next((path for path in choices if path in remaining), min(remaining))
         score = int(candidate.candidate_id.rsplit(":", 1)[-1], 16)
         entry = (
             -score,
@@ -1626,6 +1630,9 @@ def _initial_evidence_media(
     for _score, _candidate_id, _work_id, representative, boundaries in selected_entries:
         demanded.add(representative)
         demanded.update(boundaries)
+        if _work_id in remainder_demands:
+            requested.add(remainder_demands[_work_id])
+            demanded.add(remainder_demands[_work_id])
     selected = []
     fallback_heap: list[tuple[int, str, AccountedItem]] = []
     seen_requested: set[Path] = set()
@@ -1655,7 +1662,7 @@ def _initial_evidence_media(
             f"Directed evidence paths are not eligible Source Items: {paths}",
             "Start a fresh Run with paths from the current Dataset accounting.",
         )
-    return tuple(selected), tuple(entry[2] for entry in selected_entries if entry[2] not in expanded_bundle_ids)
+    return tuple(selected), tuple(entry[2] for entry in selected_entries)
 
 
 def _bundle_representative(record: WorkRecord) -> Path:

@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import sqlite3
 from threading import Barrier
+import weakref
 
 import pytest
 
@@ -319,19 +320,28 @@ def test_eviction_and_oversized_results_fall_back_to_validation(tmp_path, monkey
     )
     second = store.seal(replace(draft, evidence=(changed, *draft.evidence[1:])))
     expected = reader.read(request_for(first))
+    first_graph = weakref.ref(reader._cached_result[2])
+    validate = reader._validate_package
+
+    def validate_after_eviction(*args):
+        assert first_graph() is None
+        return validate(*args)
+
+    monkeypatch.setattr(reader, "_validate_package", validate_after_eviction)
     reader.read(request_for(second))
     assert reader.read(request_for(first)) == expected
-    # A direct correspondence read retains at most two verified Results.
-    assert validations == [first.result_ref, second.result_ref]
+    assert reader._cached_secondary is None
+    assert validations == [first.result_ref, second.result_ref, first.result_ref]
     third = store.seal(replace(draft, dataset_name="third"))
     reader.read(request_for(third))
     reader.read(request_for(second))
-    assert validations == [first.result_ref, second.result_ref, third.result_ref, second.result_ref]
+    assert validations == [first.result_ref, second.result_ref, first.result_ref, third.result_ref, second.result_ref]
     monkeypatch.setattr(reading, "_MAX_CACHED_RESULT_BYTES", 0)
     reader.read(request_for(first))
     assert reader._cached_result is None
+    assert reader._cached_secondary is None
     assert reader.read(request_for(first)) == expected
-    assert len(validations) == 6
+    assert len(validations) == 7
 
 
 def test_completed_status_and_read_share_validation(tmp_path, monkeypatch):

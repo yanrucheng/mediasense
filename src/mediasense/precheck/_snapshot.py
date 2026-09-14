@@ -3,7 +3,9 @@
 from dataclasses import replace
 from pathlib import Path
 
-from ._fingerprint import FINGERPRINT_ALGORITHM, fingerprint_candidate, stat_identity
+from ._fingerprint import (
+    FINGERPRINT_ALGORITHM, SourceChangedDuringRead, fingerprint_candidate, stat_identity,
+)
 from ._result_types import source_root_reference
 from .discovery import DiscoveredSource, SourceKind, SourceScope, SourceCondition
 
@@ -40,7 +42,11 @@ def snapshot_events(accounting, run_id, snapshot):
             "Restore the bound source attachment and resume this Run.",
         )
     if not _same_root_identity(attachment, probe):
-        raise SourceSnapshotChanged("The declared source root binding changed.")
+        raise _BlockedExecution(
+            "source_attachment_unavailable",
+            "The original source attachment is not available at this location.",
+            "Restore the original source attachment and resume this Run.",
+        )
     row = accounting._database.load_run(run_id)
     root_ref = source_root_reference(row["dataset_id"], attachment.reuse_domain)
     for member in snapshot["members"]:
@@ -65,7 +71,11 @@ def snapshot_events(accounting, run_id, snapshot):
         try:
             observed = path.lstat()
         except FileNotFoundError as error:
-            if not attachment.source_root.exists():
+            current_root = accounting._probe(attachment.source_root)
+            if (
+                current_root.state is not AttachmentState.AVAILABLE
+                or not _same_root_identity(attachment, current_root)
+            ):
                 raise _BlockedExecution(
                     "source_attachment_unavailable",
                     "Source attachment disconnected during verification.",
@@ -108,6 +118,10 @@ def snapshot_events(accounting, run_id, snapshot):
         )
         try:
             proof = fingerprint_candidate(event)
+        except SourceChangedDuringRead as error:
+            raise SourceSnapshotChanged(
+                "A declared input revision changed during verification."
+            ) from error
         except OSError as error:
             raise _BlockedExecution(
                 "source_verification_unavailable",

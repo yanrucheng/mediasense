@@ -96,6 +96,71 @@ def members(call, ref, selection, **kwargs):
     return response
 
 
+def test_accepted_run_releases_input_graph_after_freezing(tmp_path):
+    import weakref
+
+    host, runtime, call, _ = host_collection(tmp_path)
+    _, old, page = result(call, "first")
+    graph = weakref.ref(runtime.precheck_read._cached_result[2])
+    # Direct Run start freezes/initializes but does not schedule a Host worker.
+    # This observes the execution boundary without racing publication.
+    started = runtime.precheck_run.run({
+        "action": "start",
+        "dataset_ref": runtime.opened.manifest.dataset_ref,
+        "request_id": "second",
+        "prior_result_ref": old,
+        **page["preparation"],
+    })
+    assert "error" not in started, started
+    assert graph() is None
+    assert call("read", action="review", result_ref=old, include=["preparation"]) == page
+    assert "error" not in call("run", action="cancel", run_ref=started["run_ref"])
+
+
+def test_correspondence_pages_reuse_two_verified_graphs(tmp_path, monkeypatch):
+    from mediasense.precheck import PrecheckReadTool
+    import mediasense.precheck.read as reading
+
+    host, runtime, call, _ = host_collection(tmp_path)
+    _, old, page = result(call, "first")
+    _, new, _ = result(call, "second", prior_result_ref=old, **page["preparation"])
+    reader = PrecheckReadTool(runtime.precheck_run.database_path)
+    validate = reader._validate_package
+    validations = []
+
+    def counted(*args):
+        validations.append(args[1])
+        return validate(*args)
+
+    monkeypatch.setattr(reader, "_validate_package", counted)
+    request = {
+        "dataset_ref": runtime.opened.manifest.dataset_ref,
+        "action": "resolve",
+        "result_ref": old,
+        "target_result_ref": new,
+        "source_set": page["preparation"]["source_set"],
+        "page": {"limit": 1},
+    }
+    refs = []
+    while True:
+        response = reader.read(request)
+        assert "error" not in response, response
+        refs.extend(m["correspondence"]["source_item_ref"] for m in response["members"])
+        assert all(m["correspondence"]["status"] == "matched" for m in response["members"])
+        cursor = response["page"]["next_cursor"]
+        if cursor is None:
+            break
+        request["page"]["cursor"] = cursor
+    assert len(set(refs)) == 8
+    assert validations == [old, new]
+    assert reader._cached_secondary is not None
+    # Both graphs share the existing cap; neither errors nor an oversized
+    # read may leave an old peer behind as a successful cache entry.
+    monkeypatch.setattr(reading, "_MAX_CACHED_RESULT_BYTES", 0)
+    assert "error" not in reader.read(request)
+    assert reader._cached_result is reader._cached_secondary is None
+
+
 def test_local_partition_readback_correspondence_and_retention(tmp_path, monkeypatch):
     host, runtime, call, source = host_collection(tmp_path)
     before = {p.name: p.read_bytes() for p in source.iterdir()}
@@ -355,6 +420,27 @@ def test_auxiliary_is_accounted_but_cannot_be_a_compression_override(tmp_path):
     assert [m["scope"] for m in preserved].count("auxiliary") == 1
 
 
+def test_replay_storage_failure_is_not_misclassified_as_caller_input(
+    tmp_path, monkeypatch
+):
+    _, runtime, call, _ = host_collection(tmp_path)
+
+    def corrupt_record(_request):
+        raise ValueError("corrupt retained execution JSON")
+
+    monkeypatch.setattr(runtime.precheck_run._store, "replay_start", corrupt_record)
+    with pytest.raises(ValueError, match="corrupt retained"):
+        call("run", action="start", request_id="valid-request")
+    with pytest.raises(ValueError, match="corrupt retained"):
+        runtime.precheck_run.run(
+            {
+                "action": "start",
+                "dataset_ref": runtime.opened.manifest.dataset_ref,
+                "request_id": "valid-request",
+            }
+        )
+
+
 def test_missing_directed_input_prepares_only_that_source(tmp_path, monkeypatch):
     _, _, call, _ = host_collection(tmp_path, count=129)
     _, old, page = result(call, "first")
@@ -384,6 +470,61 @@ def test_missing_directed_input_prepares_only_that_source(tmp_path, monkeypatch)
     _, _, prepared = result(call, "directed", prior_result_ref=old, **request)
     assert decoded == [missing[0]["locator"]["value"]]
     assert prepared["accounting"]["total"] == 129
+
+
+@pytest.mark.parametrize(
+    "selected_paths,expected_new",
+    [
+        (["00050.jpg"], {"00050.jpg"}),
+        (["00000.jpg", "00099.jpg", "00050.jpg"], {"00001.jpg", "00050.jpg"}),
+    ],
+)
+def test_crossing_bundle_keeps_remainder_sampling(
+    tmp_path, monkeypatch, selected_paths, expected_new
+):
+    from test_precheck_orchestration import FakeExifTool
+    from mediasense.precheck import rendition
+
+    _, runtime, call, _ = host_collection(tmp_path, count=100)
+    runtime.precheck_run._execution_config = replace(
+        runtime.precheck_run._execution_config, metadata=True, bundles=True
+    )
+    runtime.precheck_run._orchestrator.dependencies = replace(
+        runtime.precheck_run._orchestrator.dependencies,
+        metadata_runner=FakeExifTool(
+            {f"{i:05}.jpg": "2026:05:01 12:00:00+08:00" for i in range(100)}
+        ),
+        exiftool_version="13.30",
+    )
+    _, old, page = result(call, "first")
+    assert page["page"]["total"] == 1
+    rows = members(call, old, page["preparation"]["source_set"])["members"]
+    refs = [
+        m["source_item_ref"] for m in rows if m["locator"]["value"] in selected_paths
+    ]
+    decoded = []
+    original = rendition._decode_rgb
+
+    def decode(path):
+        decoded.append(path.name)
+        return original(path)
+
+    monkeypatch.setattr(rendition, "_decode_rgb", decode)
+    request = deepcopy(page["preparation"])
+    request["profile"]["overrides"] = [
+        {
+            "source_set": {"kind": "explicit", "source_item_refs": refs},
+            "compression": None,
+        }
+    ]
+    _, _, current = result(call, "partition", prior_result_ref=old, **request)
+    assert set(decoded) == expected_new
+    assert current["accounting"]["total"] == 100
+    assert current["page"]["total"] == len(selected_paths) + 1
+    assert (
+        current["preparation"]["profile"]["compression"]
+        == page["preparation"]["profile"]["compression"]
+    )
 
 
 def test_threshold_only_reuses_embedding_without_checking_backend(

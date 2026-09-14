@@ -197,6 +197,20 @@ class PrecheckReadTool:
         self._cached_result = None
         self._cached_secondary = None
 
+    def _evict(self, result_ref: str) -> None:
+        """Release a consumed input graph without affecting retained Result data."""
+        with self._cache_lock:
+            if (
+                self._cached_result is not None
+                and self._cached_result[2].result_ref == result_ref
+            ):
+                self._cached_result = None
+            if (
+                self._cached_secondary is not None
+                and self._cached_secondary[2].result_ref == result_ref
+            ):
+                self._cached_secondary = None
+
     def read(self, request: dict[str, object]) -> dict[str, object]:
         result_ref = request.get("result_ref")
         operation = request.get("action")
@@ -236,7 +250,10 @@ class PrecheckReadTool:
                     "invalid_request",
                     "operation must be review, expand, resolve, or geo_summary.",
                 )
-            graph, result_digest = self._load(result_ref)
+            graph, result_digest = self._load(
+                result_ref,
+                retain_peer=operation == "resolve" and "target_result_ref" in request,
+            )
             if graph.result.get("dataset_ref") != request["dataset_ref"]:
                 raise _ReadFailure(
                     "result_not_found", "Result does not exist in this Dataset."
@@ -293,11 +310,14 @@ class PrecheckReadTool:
             database.st_ino,
         )
 
-    def _load(self, result_ref: str) -> tuple[_ResultGraph, str]:
+    def _load(
+        self, result_ref: str, *, retain_peer: bool = False
+    ) -> tuple[_ResultGraph, str]:
         from mediasense.runtime.resources import contract_validator
         from ._read_file import read_sealed_bytes
 
-        # One bounded entry per Reader. The same Reader is shared by Read and Run.
+        # Ordinary reads retain one graph; cross-Result resolution may retain two
+        # within the same byte budget. Read and Run share this Reader.
         # The lock also prevents concurrent cold calls from validating the same
         # Result repeatedly. No failure is retained as a successful cache entry.
         with self._cache_lock:
@@ -316,13 +336,21 @@ class PrecheckReadTool:
                     _READ_PROJECTION_REVISION,
                     _sha256_identity(_canonical_json(schema).encode()),
                 )
-                previous = self._cached_result
-                cached = previous
+                cached = self._cached_result
+                peer = self._cached_secondary if retain_peer else None
                 if cached is None or cached[0] != key:
-                    secondary = self._cached_secondary
-                    if secondary is not None and secondary[0] == key:
-                        cached = secondary
-                candidate = cached is not None and cached[0] == key and row["size_bytes"] <= _MAX_CACHED_RESULT_BYTES
+                    peer = cached if retain_peer else None
+                    cached = self._cached_secondary
+                if cached is not None and cached[0] != key:
+                    cached = None
+                # Release unrelated graphs before decoding and validating a new
+                # package, when allocations and indexes reach their high-water mark.
+                self._cached_result = None
+                self._cached_secondary = None
+                candidate = (
+                    cached is not None
+                    and row["size_bytes"] <= _MAX_CACHED_RESULT_BYTES
+                )
                 encoded, identity = read_sealed_bytes(
                     self.workspace,
                     row["relative_path"],
@@ -333,8 +361,6 @@ class PrecheckReadTool:
                 if encoded is None:
                     graph = cached[2]
                 else:
-                    self._cached_result = None
-                    self._cached_secondary = None
                     cached = None
                     graph = self._validate_package(encoded, result_ref, artifact_rows)
                 # Do not publish a verification for a registration/proof snapshot
@@ -356,13 +382,18 @@ class PrecheckReadTool:
                     return graph, str(row["digest"])
                 if row["size_bytes"] <= _MAX_CACHED_RESULT_BYTES:
                     self._cached_result = (key, identity, graph, row["size_bytes"])
-                    if previous is not None and previous[0] != key:
-                        self._cached_secondary = (previous if previous[3] + row["size_bytes"] <= _MAX_CACHED_RESULT_BYTES else None)
+                    if (
+                        peer is not None
+                        and peer[0] != key
+                        and peer[3] + row["size_bytes"] <= _MAX_CACHED_RESULT_BYTES
+                    ):
+                        self._cached_secondary = peer
                 else:
                     self._cached_result = None
                 return graph, str(row["digest"])
             except OSError as error:
                 self._cached_result = None
+                self._cached_secondary = None
                 if error.errno in {errno.ELOOP, errno.ENOTDIR}:
                     raise _ReadFailure(
                         "result_untrusted",
@@ -375,9 +406,11 @@ class PrecheckReadTool:
                 ) from error
             except ValueError as error:
                 self._cached_result = None
+                self._cached_secondary = None
                 raise _ReadFailure("result_untrusted", str(error)) from error
             except BaseException:
                 self._cached_result = None
+                self._cached_secondary = None
                 raise
 
     def _validate_package(self, encoded, result_ref, artifact_rows) -> _ResultGraph:
@@ -979,7 +1012,9 @@ class PrecheckReadTool:
             _, refs, membership_identity = cached
         correspondence, target_digest = None, None
         if "target_result_ref" in request:
-            target, target_digest = self._load(request["target_result_ref"])
+            target, target_digest = self._load(
+                request["target_result_ref"], retain_peer=True
+            )
             if target.result["dataset_ref"] != request["dataset_ref"]:
                 raise _ReadFailure("result_not_found", "Target Result is not in this Dataset.")
             from ._preparation import correspondence_for

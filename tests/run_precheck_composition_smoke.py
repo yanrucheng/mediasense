@@ -11,6 +11,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import sqlite3
 from time import monotonic
 
 import anyio
@@ -147,6 +148,23 @@ async def exercise(executable: Path, root: Path):
                 return status["result"]["ref"]
             await anyio.sleep(0.05)
         raise AssertionError("Installed Run did not finish")
+
+    async def settled(session, ref):
+        deadline = monotonic() + 120
+        while monotonic() < deadline:
+            status = await call(
+                session,
+                "mediasense.precheck.run",
+                {
+                    "dataset_ref": dataset,
+                    "action": "status",
+                    "run_ref": ref,
+                },
+            )
+            if status["state"] != "running":
+                return status
+            await anyio.sleep(0.05)
+        raise AssertionError("Installed Run did not reach a durable boundary")
 
     async with connected() as session:
         opened = await call(
@@ -399,6 +417,82 @@ async def exercise(executable: Path, root: Path):
             old_again["revision"] == notes["revision"]
             and old_again["result_ref"] == old
         )
+        repairs = []
+        for fault in ("missing_preparation", "corrupt_preparation", "changed_source"):
+            detached = root / "detached-source"
+            source.rename(detached)
+            started = await call(
+                session,
+                "mediasense.precheck.run",
+                {
+                    **next_start,
+                    "request_id": "request:" + fault,
+                },
+            )
+            ref = started["run_ref"]
+            waiting = await settled(session, ref)
+            assert waiting["state"] == "blocked", waiting
+            assert waiting["reason"]["code"] == "source_attachment_unavailable"
+            detached.rename(source)
+            original = None
+            if fault == "changed_source":
+                changed_path = source / "00.jpg"
+                original = (changed_path.read_bytes(), changed_path.stat())
+                Image.new("RGB", (24, 8), "green").save(changed_path)
+            else:
+                with sqlite3.connect(workspace / "precheck/work.sqlite3") as connection:
+                    if fault == "missing_preparation":
+                        connection.execute(
+                            "DELETE FROM precheck_run_preparation WHERE run_ref = ?",
+                            (ref,),
+                        )
+                    else:
+                        connection.execute(
+                            "UPDATE precheck_run_preparation SET value_json = 'null' WHERE run_ref = ?",
+                            (ref,),
+                        )
+            await call(
+                session,
+                "mediasense.precheck.run",
+                {
+                    "dataset_ref": dataset,
+                    "action": "resume",
+                    "run_ref": ref,
+                },
+            )
+            failed = await settled(session, ref)
+            assert failed["state"] == "failed", failed
+            expected = (
+                "source_snapshot_changed"
+                if fault == "changed_source"
+                else "execution_failed"
+            )
+            assert failed["reason"]["code"] == expected, failed
+            if original is not None:
+                changed_path.write_bytes(original[0])
+                os.utime(
+                    changed_path, ns=(original[1].st_atime_ns, original[1].st_mtime_ns)
+                )
+            repairs.append({"fault": fault, "run_ref": ref, "outcome": failed})
+        with sqlite3.connect(workspace / "precheck/work.sqlite3") as connection:
+            assert (
+                connection.execute("SELECT count(*) FROM sealed_results").fetchone()[0]
+                == 2
+            )
+            connection.execute("DELETE FROM precheck_run_preparation")
+        # Force a separate CLI process to prove Result reads do not consult Run snapshots.
+        assert (
+            cli(
+                "mediasense.precheck.read",
+                {
+                    "dataset_ref": dataset,
+                    "action": "review",
+                    "result_ref": new,
+                    "include": ["preparation", "execution_boundary"],
+                },
+            )
+            == new_page
+        )
     after = {
         p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in source.iterdir()
     }
@@ -425,6 +519,7 @@ async def exercise(executable: Path, root: Path):
         "provider_requests": 0,
         "model_execution": "disabled",
         "restart_replay": True,
+        "repair_faults": repairs,
     }
     (root / "report.json").write_text(json.dumps(report, ensure_ascii=False, indent=2))
     print(

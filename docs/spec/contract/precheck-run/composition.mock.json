@@ -828,7 +828,8 @@
         "bundles": "bundles-recipe-v1",
         "visual_selection": "visual_selection-recipe-v1",
         "geo": "geo-recipe-v1",
-        "compression_recipe": "compression_recipe-recipe-v1"
+        "compression_recipe": "compression_recipe-recipe-v1",
+        "bundle_partition": "bundle-partition-recipe-v1"
       },
       "value": {
         "kind": "precheck-preparation",
@@ -840,6 +841,7 @@
           "compression_recipe": {
             "recipe": "compression_recipe-recipe-v1",
             "settings": {
+              "bundle_partition_recipe": "bundle-partition-recipe-v1",
               "content_based_boundaries": true,
               "exact_representative_limit": 256,
               "representative_comparison_budget": 65536,
@@ -900,7 +902,7 @@
           }
         }
       },
-      "identity": "sha256:2dff7f2de988fc0aa049e3f75642734e73fce1afbdf20b53ae4067b7f676a308"
+      "identity": "sha256:1edf5907759a38e217b733e81b0034b606646cb74b3f16f2af0b203b9903f091"
     }
   ],
   "fixture": {

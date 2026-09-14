@@ -99,6 +99,8 @@ class AdaptiveCompressionProducer:
         outcomes = []
         for group, group_inputs in zip(groups, inputs_by_group, strict=True):
             group_members = set(group.members)
+            if any(item.bundle_work_id is not None and set(item.member_paths) != _record_source_paths(attached[item.bundle_work_id]) for item in group_inputs):
+                group = replace(group, basis={**group.basis, "input_scope": "recorded_bundle_membership_subset"})
             upstream_records = {
                 record.work_id: record
                 for item in group_inputs
@@ -112,11 +114,16 @@ class AdaptiveCompressionProducer:
                 != item.relative_path.as_posix()
                 for item in group_inputs
             ):
+                outside_partition = any(
+                    item.bundle_work_id is not None
+                    and Path(_mapping_value(attached[item.bundle_work_id].output, "candidate")["representative_path"]) not in item.member_paths
+                    for item in group_inputs
+                )
                 group = replace(
                     group,
                     qualifications=(
                         *group.qualifications,
-                        "unavailable_bundle_representative_replaced",
+                        "bundle_representative_outside_partition" if outside_partition else "unavailable_bundle_representative_replaced",
                     ),
                 )
             source_dependencies = {
@@ -254,7 +261,7 @@ class AdaptiveCompressionProducer:
             _mapping_value(bundle.output, "candidate")
             # A bundle's preferred representative is a candidate, not a guarantee
             # of decodability. Any verified visual member can represent it.
-            if _record_source_paths(bundle) != set(item.member_paths):
+            if not set(item.member_paths) <= _record_source_paths(bundle):
                 raise ValueError("bundle Work membership does not match input")
         elif item.member_paths != (item.relative_path,):
             raise ValueError("multi-source compression input requires bundle Work")

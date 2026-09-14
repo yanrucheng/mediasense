@@ -57,6 +57,7 @@ def installed_preparation_recipes():
         },
         "bundles": {"producer": bundle_recipe, "profile": asdict(BundleProfile())},
         "visual_selection": "builtin-bounded-initial-selection-v1",
+        "bundle_partition": "directed-members-with-base-remainder-v1",
         "geo": {"producer": geo_recipe, "acquisition": acquisition_policy_value()},
         "compression_recipe": {
             "producer": compression_recipe,
@@ -162,6 +163,8 @@ def preparation_configuration_value(config, recipes):
     for key in compression_parameters(1):
         fixed.pop(key)
     fixed["content_based_boundaries"] = embedding is not None
+    if config["bundles"]:
+        fixed["bundle_partition_recipe"] = recipes["bundle_partition"]
     values = {
         "metadata": {
             "enabled": config["metadata"],
@@ -312,6 +315,69 @@ def freeze_preparation(request, config, recipes, graph=None, result_digest=None)
             "members": inputs,
         },
     }
+
+
+def validate_frozen_preparation(preparation, request):
+    """Reject incomplete recovery input; historical Result absence is unrelated."""
+    from mediasense.runtime.resources import contract_validator
+
+    if not isinstance(preparation, dict) or set(preparation) != {
+        "profile",
+        "configuration",
+        "scopes",
+        "input",
+    }:
+        raise ValueError("Run frozen preparation is incomplete")
+    contract = contract_validator("mediasense.precheck.run")
+    validator = contract.evolve(
+        schema={"$defs": contract.schema["$defs"], "$ref": "#/$defs/processing_profile"}
+    )
+    profile = preparation["profile"]
+    if not validator.is_valid(profile) or (
+        preparation_configuration_identity(preparation["configuration"])
+        != profile["configuration_identity"]
+    ):
+        raise ValueError("Run frozen profile is invalid")
+    if "profile" in request and profile != request["profile"]:
+        raise ValueError("Run frozen profile contradicts its accepted request")
+    snapshot, scopes = preparation["input"], preparation["scopes"]
+    if (snapshot is not None) != ("source_set" in request):
+        raise ValueError("Run frozen input contradicts its accepted request")
+    if not isinstance(scopes, list) or len(scopes) != len(profile["overrides"]):
+        raise ValueError("Run frozen scope count disagrees with its profile")
+    if snapshot is None:
+        if scopes:
+            raise ValueError("Run overrides have no frozen input")
+        return
+    if not isinstance(snapshot, dict) or set(snapshot) != {
+        "result_ref",
+        "digest",
+        "members",
+    }:
+        raise ValueError("Run frozen input is incomplete")
+    if snapshot["result_ref"] != request.get("prior_result_ref") or not isinstance(
+        snapshot["members"], list
+    ):
+        raise ValueError("Run frozen input binding is invalid")
+    refs = {member["source_item_ref"] for member in snapshot["members"]}
+    if len(refs) != len(snapshot["members"]):
+        raise ValueError("Run frozen input has duplicate occurrences")
+    occupied = set()
+    for scope, override in zip(scopes, profile["overrides"], strict=True):
+        selected = set(scope)
+        if (
+            not selected
+            or len(selected) != len(scope)
+            or not selected <= refs
+            or selected & occupied
+        ):
+            raise ValueError("Run frozen scope membership is invalid")
+        selector = override["source_set"]
+        if selector["kind"] == "explicit" and selected != set(
+            selector["source_item_refs"]
+        ):
+            raise ValueError("Run frozen scope contradicts its accepted request")
+        occupied.update(selected)
 
 
 def preparation_readback(result_ref, preparation):

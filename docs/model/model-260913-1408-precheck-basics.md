@@ -4,7 +4,7 @@ title: "PreCheck 基础概念模型：阶段、Run、Result 与 Profile"
 type: model
 status: active
 created: 2026-09-13
-updated: 2026-09-13
+updated: 2026-09-14
 timezone: "Asia/Shanghai"
 parent: "index-model"
 depends-on:
@@ -17,7 +17,7 @@ tags: ["precheck", "concept-model", "run", "result", "profile"]
 
 ## 状态与范围
 
-2026-09-13，用户确认本页的基础概念、关系和实例变化规则，第一部分模型建模完成。当前对外 Contract 尚未据此改造；下一部分讨论如何把模型落实为技术契约。
+2026-09-13，用户确认本页的基础概念、关系和实例变化规则，第一部分模型建模完成。普通 Run 与局部准备的对外 Contract 已按本模型落实；实现与隔离验收另见下方实施路线，不改变本页已确认的概念。
 
 本页只回答：PreCheck 有哪些概念，它们属于什么种类，实例如何产生，以及修改是否需要增加新的概念。核心模型与依照它形成的代码和契约保持业务无关。
 
@@ -78,6 +78,6 @@ Run 可以尚未产生 Result，也可能因失败而没有 Result。正常的�
 
 计算能力、缓存、调度和存储属于实现层；Source Item、Evidence 等属于 Result 内部内容的展开。它们不与阶段、运行实例、结果和配置值混在同一层建模。
 
-技术契约下一步确定如何创建和继续 Run、如何表达 Profile、如何读取 Result，以及输入、效果、错误与恢复的具体承诺。该工作以本页模型为依据；当前调用仍遵循 [docs/spec/contract](../spec/contract/index.md)。
+技术契约现已确定普通 Run、完整 Profile、准备回读及直接来源对应的具体承诺；该工作以本页模型为依据，当前调用遵循 [docs/spec/contract](../spec/contract/index.md)。
 
 [实施路线](../../openspec/changes/simplify-precheck-run-composition/README.md)保留后续合约与工程讨论，不是本模型的第二份定义。

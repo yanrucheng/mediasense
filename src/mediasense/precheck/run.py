@@ -441,24 +441,11 @@ class PrecheckRunTool:
             self._store.bind_accounting_run(run_ref, accounting_run_id)
         configuration = record["execution_config"]
         if configuration is None:
-            try:
-                configuration = self._resolved_execution_config(
-                    str(accounting_run_id)
-                ).value()
-                self._store.configure_execution(run_ref, configuration)
-            except (RunExecutionConflict, ValueError, OSError):
-                _LOGGER.exception(
-                    "PreCheck execution initialization failed for %s", run_ref
-                )
-                failed = self.mark_failed(
-                    run_ref,
-                    code="execution_initialization_failed",
-                    message=(
-                        "The execution configuration could not be initialized. "
-                        "Execution was not started."
-                    ),
-                )
-                return None, failed
+            return None, self.mark_failed(
+                run_ref,
+                code="execution_failed",
+                message="The Run's frozen execution configuration is missing.",
+            )
         worker_token = uuid4().hex
         if not self._store.claim_execution_worker(
             run_ref,
@@ -480,10 +467,7 @@ class PrecheckRunTool:
         if not isinstance(worker, dict) or worker.get("token") != worker_token:
             return self._status_record(record)
         accounting_run_id = record["accounting_run_id"]
-        configuration = self._store.execution_configuration(run_ref)
-        if not isinstance(accounting_run_id, str) or not isinstance(
-            configuration, dict
-        ):
+        if not isinstance(accounting_run_id, str):
             return self.mark_failed(
                 run_ref,
                 code="execution_not_prepared",
@@ -504,6 +488,7 @@ class PrecheckRunTool:
 
         try:
             try:
+                configuration = self._store.execution_configuration(run_ref)
                 config = PrecheckExecutionConfig.from_value(configuration)
                 result = self._orchestrator.advance(
                     run_ref, str(accounting_run_id), config
@@ -603,33 +588,11 @@ class PrecheckRunTool:
                 rebind_reason=rebind_reason,
             )
         if record["execution_config"] is None:
-            self._store.configure_execution(
-                run_ref,
-                self._resolved_execution_config(accounting_run_id).value(),
-            )
+            raise RunExecutionConflict("The Run's frozen execution configuration is missing")
         checkpoint = self._store.get(run_ref)["execution_checkpoint"]
         assert isinstance(checkpoint, dict)
         if checkpoint["phase"] not in _PHASE_NAMES:
             self.record_phase(run_ref, "accounting")
-
-    def _resolved_execution_config(
-        self, accounting_run_id: str
-    ) -> PrecheckExecutionConfig:
-        attachment = AccountingStore(self.database_path).get_source_attachment(
-            accounting_run_id
-        )
-        config = self._execution_config
-        if config.sensitivity_profiles and not config.sensitivity_detector_identities:
-            from dataclasses import replace
-
-            config = replace(
-                config,
-                sensitivity_detector_identities=tuple(
-                    d.identity
-                    for d in self._orchestrator.dependencies.sensitivity_detectors
-                ),
-            )
-        return config.resolve_resources(source_root=attachment.source_root)
 
     def mark_failed(
         self, run_ref: str, *, code: str, message: str
@@ -732,6 +695,12 @@ class PrecheckRunTool:
         return self.complete_with_result(run_ref, sealed.result_ref)
 
     def _start(self, request: dict[str, object]) -> dict[str, object]:
+        from ._preparation import canonical
+
+        try:
+            canonical(request)
+        except (ValueError, TypeError):
+            return _error("start", "invalid_request", "Start inputs must be finite canonical JSON.")
         try:
             replay = self._store.replay_start(request)
         except RunIdempotencyConflict:
@@ -740,8 +709,6 @@ class PrecheckRunTool:
                 "idempotency_conflict",
                 "request_id was already used with different start inputs",
             )
-        except ValueError:
-            return _error("start", "invalid_request", "Start inputs must be finite canonical JSON.")
         if replay is not None:
             return _start_response(replay)
 
@@ -813,6 +780,10 @@ class PrecheckRunTool:
                 current_state="failed",
                 allowed_actions=[],
             )
+        if prior_result_ref is not None:
+            # Exact inputs are now frozen in this Run. Keeping the prior graph
+            # resident during execution would duplicate the next Result's graph.
+            self._reader._evict(str(prior_result_ref))
         return _start_response(record)
 
     def validated_start_configuration(self, request):

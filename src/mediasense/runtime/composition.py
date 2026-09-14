@@ -39,7 +39,7 @@ from mediasense.precheck import (
 )
 from mediasense.precheck.read import bind_precheck_read
 from mediasense.precheck._orchestrator import PrecheckExecutionConfig
-from mediasense.precheck._preparation import installed_preparation_recipes
+from mediasense.precheck._preparation import canonical, installed_preparation_recipes
 
 from mediasense.precheck.source_attachment import (
     SourceAttachmentError,
@@ -292,11 +292,13 @@ class DatasetRuntime:
             from mediasense.precheck._run_sqlite import RunIdempotencyConflict
 
             try:
+                canonical(request)
+            except (ValueError, TypeError):
+                return {"error": {"code": "invalid_request", "message": "Start inputs must be finite canonical JSON."}}
+            try:
                 replay = self.precheck_run._store.replay_start(request)
             except RunIdempotencyConflict:
                 return self.precheck_run.run(request)
-            except ValueError:
-                return {"error": {"code": "invalid_request", "message": "Start inputs must be finite canonical JSON."}}
             if replay is not None:
                 return {"run_ref": replay["run_ref"]}
             prior = request.get("prior_result_ref")

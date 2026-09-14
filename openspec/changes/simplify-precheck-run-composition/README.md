@@ -2,7 +2,7 @@
 
 ## 当前状态
 
-2026-09-13，用户确认基础模型、完整显式请求方案及“局部修改参数、其余参数不变，派生分组允许随真实依赖变化”，随后明确授权正式开发与隔离安装验收。2026-09-14 实现已落地，正在完成最后的构建和规模验收；准确完成项见 [tasks.md](tasks.md)，实际证据及限制见 [acceptance.md](acceptance.md)。
+2026-09-13，用户确认基础模型、完整显式请求方案及“局部修改参数、其余参数不变，派生分组允许随真实依赖变化”，随后明确授权正式开发与隔离安装验收。2026-09-14 独立验收发现冻结要求缺失后的恢复降级、源变化误分类及成本测量缺口；用户已授权本轮补修。两个行为问题及隔离入口已完成补测，修正测量与内存优化正在执行成本矩阵；此前约 25.1% 的 RSS 差异来自累计高水位记录，不能作为本轮独立 Run 比较。准确完成项见 [tasks.md](tasks.md)，实际证据及限制见 [acceptance.md](acceptance.md)。
 
 当前 Run/Read 契约、Schema、示例与发布副本已据此改造。此前撤回提前实现的记录属于设计阶段，不限制本次已授权开发。日常安装升级和发布不在授权范围内。
 
@@ -28,8 +28,8 @@ Plan：解释证据、决定哪里需要调整、保留有依据的判断
 | 位置 | 用途 |
 | --- | --- |
 | [proposal.md](proposal.md) | 目的、范围及影响 |
-| [现有 Run 契约](../../../docs/spec/contract/precheck-run/index.md) | 实现前的现状与既有运行承诺；拟定修改见本包 design/specs |
-| [现有 Read 契约](../../../docs/spec/contract/precheck-read/index.md) | 实现前的读取语义与 Source Set 基础 |
+| [现有 Run 契约](../../../docs/spec/contract/precheck-run/index.md) | 当前普通 Run、Profile、输入、效果与失败的正式承诺 |
+| [现有 Read 契约](../../../docs/spec/contract/precheck-read/index.md) | 当前读取、准备回读、Source Set 和来源对应的正式承诺 |
 | [design.md](design.md) | 配置投影、边界处理、来源依据、内部职责与工程选择 |
 | [specs/](specs/) | 本次行为增量及场景；不取代当前契约 |
 | [tasks.md](tasks.md) | 具体文件边界、依赖顺序、通过标准和开发门槛 |
@@ -57,4 +57,4 @@ Plan：解释证据、决定哪里需要调整、保留有依据的判断
 
 设计调查时 start 只有 action/dataset_ref/request_id/prior_result_ref；当时 Read 缺少完整配置回读和可靠跨 Result 对应。源项引用含 accounting Run 身份，不能复制旧引用。已有 WorkStore/producer 复用和不可变发布继续作为实现基础。
 
-现有 build_adaptive_groups 的纯合成数量后备反例见 design；它证明范围外分组可能变化，不证明所有阈值算法都会如此。此前62项定向测试通过是历史机制证据；旧500→3→200测试使用过期调用格式，其修正与重跑列入未来任务。本次设计验证不使用真实媒体、模型或网络服务。
+现有 build_adaptive_groups 的纯合成数量后备反例见 design；它证明范围外分组可能变化，不证明所有阈值算法都会如此。此前62项定向测试通过是历史机制证据；设计时旧500→3→200测试使用过期调用格式；本次已按当前契约修正并重跑。开发验收使用合成媒体和真实 Host/安装入口，不调用外部地图或模型；详细界限见 acceptance。
