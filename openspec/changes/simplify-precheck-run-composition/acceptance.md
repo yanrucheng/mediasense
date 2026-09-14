@@ -108,28 +108,64 @@ A failure of these mechanisms blocks release. Unexpected dominating full-source 
 仅支持同一 Dataset、一份 prior Result 的完整输入快照和直接后继对应。没有自动合并多 Result、迁移文件、调和源修改或猜测缺失历史；`matched` 只具备声明的普通变化检测强度，不是完整字节相等或观测/分组等价。真实模型质量、远端服务、所有平台与文件系统、大媒体吞吐及 Human 的组织判断未认证。本次未改日常 CLI、用户配置、业务 Dataset、项目 Skill 安装或发布版本。
 
 
-## 独立验收补修记录（2026-09-14，进行中）
+## 独立验收补修记录（2026-09-14）
 
-本节记录独立验收指出缺口后的补修，前面的 r6 实施记录保留为历史。本轮仅授权开发与隔离验收，成本矩阵尚在执行，未宣布整体验收通过。
+**本轮规定的行为、回归、隔离入口及成本自验通过，等待独立验收。** 前面的 r6 记录保留为历史，不再作为本轮成本结论。未执行日常安装升级或发布。
 
-### 行为补修
+### 接手身份与改动
 
-- 冻结要求：r6 把 preparation 从进度行移入只写一次表，但读取时缺行返回 None；orchestrator 随后选择普通发现，Result 又被当作合法历史缺项。现在执行读取必需冻结记录，验证结构、原请求及新记录的载荷摘要；摘要位于已有 execution_config JSON，未增加表、实体或公共字段。缺配置不再从当前默认值重建。读取/解析放入 worker 的失败收尾边界，坏 JSON 也不会留下假运行。真正历史 Result 的 preparation=null 语义不变，Read 仍只依赖封存数据。
-- 源修订：SourceChangedDuringRead 继承 OSError，原分支误判为临时不可读。现在先捕获确定的变化并映射为 failed/source_snapshot_changed；普通 PermissionError/OSError 继续可恢复等待。初始核验与封存前复核均有反例。
-- 修复前新增用例为 **7 failed、1 passed**；首轮相关回归 **116 passed**，后续含规范编码与发布重试的回归 **86 passed**。原始日志保存在 `.local/acceptance-releases/260914-run-composition-repair/`。
+接手时当前代码和测试与 r6 一致，只有 5 份文档在快照后变化；[初始差异](../../../.local/acceptance-releases/260914-run-composition-repair/initial-r6-differences.json)、[初始逐文件身份](../../../.local/acceptance-releases/260914-run-composition-repair/initial-source-files.json)和工作树补丁均保留。期间并行提交 `62be2fe`、`b79be81` 纳入前一轮补修及 0.11.0 版本工作，本任务未撤回或覆盖。最终运行代码与 `candidate-2/source-files.json` 一致；更新后的[完整交接导出身份](../../../.local/acceptance-releases/260914-run-composition-repair/final/source-files.json)及[最终 wheel 对应记录](../../../.local/acceptance-releases/260914-run-composition-repair/final/artifact-identity.json)独立保存。
 
-### 隔离构建与检查
+| 问题 | 原因、修复与反例 |
+| --- | --- |
+| 冻结要求丢失后恢复降级 | r6 缺行时返回 preparation=None，执行转为普通发现，Result 再被误标为历史缺项。现在读取必须取得完整冻结记录，核对结构、原请求及新记录载荷摘要；摘要复用 execution_config JSON，不加表、实体或公共字段。缺配置不再从当前默认值重建，读取/解析在 worker 失败收尾内。删除、null、坏 JSON、改变 input/scopes/profile 均 failed/execution_failed，未访问快照源、未发布新 Result。完整旧冻结记录仍可恢复；历史 Result 的合法 null 投影和独立读取不变。 |
+| 源变化误分类 | SourceChangedDuringRead 继承 OSError，曾被当作临时不可读。现在先捕获确定变化，返回 failed/source_snapshot_changed；普通 PermissionError/OSError 保留 blocked/source_verification_unavailable，恢复访问后继续同一 Run。初始核验和发布前复核均有正反例。 |
+| 成本与内存 | 改为每规模、每重复独立进程，固定暖工作区副本；区分 Run 区间、预热和后置留存检查。增量 JSON 编码避免整份 Unicode 文本与 UTF-8 字节并存，保持规范字节和全部校验。封存后由原 worker 接收已有 SealedResult，释放准备/草稿/生产者临时对象，再完整读回校验并写 completed；不新增状态或实体，不删除 Work/Result。 |
 
-候选 `candidate-1` 从独立源码导出构建，完整逐文件身份、工作树差异、依赖约束和日志均保留。wheel SHA-256 为 `8c8d8730106f8998ab7d8e340e0c8114f48b700b35a997c99d5fccf8456be48e`。并行版本工作把源码版本更新为 0.11.0，本任务保留该改动，仅生成隔离的 `mediasense-0.11.0-py3-none-any.whl`，没有执行发布或日常切换。
+行为反例修复前为 **7 failed、1 passed**，见 [reproduction.log](../../../.local/acceptance-releases/260914-run-composition-repair/reproduction.log)。后续 116 项定向、86 项结果/恢复回归通过；对象存活反例在第一候选上失败，补修后与相关回归共 **101 passed**。正常 8 项 / 2 入口 → 指定两项分别呈现 / 4 入口、历史读取、默认值变化后的恢复、发布重试和原 Result 留存均有真实 Host 覆盖。
 
-实际安装使用 CPython 3.11.13 与 r6 相同的 33 项 core 安装组合（MediaSense 自身由候选替换），无模型 extras。artifact 内容校验通过；**78 次 MCP、6 次 CLI** 通过普通 Run→Read→新 Run→Read→Plan、重启重放、缺确认拒绝及新增三个故障。删除/损坏冻结记录均 failed/execution_failed，合成源修订变化为 failed/source_snapshot_changed，仍只有原两份 Result。删除全部测试 Run 冻结记录后，独立 CLI 进程继续完整读取 Result。源修订注入由验收脚本修改其自建媒体并恢复；正常链路与结束时源 SHA-256 相同，provider requests=0，模型关闭。
+### 最终测试与隔离入口
 
-默认开发环境检查首轮 **1465 passed、8 failed、17 deselected**：4 项因沙盒禁止 loopback；3 项因并行版本更新后开发环境仍保留旧包元数据；1 项把旧版本线写死在测试中。该断言改为核对实际版本线，未改产品契约。使用隔离 wheel、清除 PYTHONPATH 并允许测试本地 loopback 后，失败文件及补修回归共 **74 passed**。没有切换日常或开发安装来消除版本差异。Ruff 与 OpenSpec strict 通过。
+- 最终隔离 wheel 默认集：**1474 passed、17 deselected**，[日志](../../../.local/acceptance-releases/260914-run-composition-repair/candidate-2/default-tests.log)。500→3→200 与 100000 成员分页在已安装 wheel 中 **2 passed**，[日志](../../../.local/acceptance-releases/260914-run-composition-repair/candidate-2/scale-tests.log)。Ruff、OpenSpec strict、artifact/发布资源一致性检查通过。
+- Wheel：`mediasense-0.11.0-py3-none-any.whl`，SHA-256 **`8b52d48704de8af6621c7b40689c9a830221b7fa03ef02b5bf5f5a2e6fc0deb2`**。来源为 `b79be81` 加保留差异；[逐文件身份](../../../.local/acceptance-releases/260914-run-composition-repair/candidate-2/source-files.json)、[补丁](../../../.local/acceptance-releases/260914-run-composition-repair/candidate-2/source.diff)、[固定依赖](../../../.local/acceptance-releases/260914-run-composition-repair/candidate-2/dependencies.txt)均保留。0.11.0 来自并行版本工作，本任务只构建隔离 wheel。
+- CPython 3.11.13，与 r6 相同的 core 依赖版本；无模型 extras，另在隔离 venv 安装固定 pytest。实际 **85 次 MCP、6 次 CLI** 通过 Run→Read→新 Run→Read→Plan、重启重放、缺确认拒绝；[报告](../../../.local/acceptance-releases/260914-run-composition-repair/candidate-2/installed-smoke/report.json)和[完整交换](../../../.local/acceptance-releases/260914-run-composition-repair/candidate-2/installed-smoke/trace.json)包含实际返回。
+- 安装入口的删除/损坏冻结记录、合成源修订变化三个注入均得到预期 failed 状态，仍只有两份正常 Result。删除全部测试 Run 冻结记录后，独立 CLI 进程仍完整读取 Result。源修改仅由测试器在自建媒体中注入并恢复；正常链路及结束时源 SHA-256 相同，provider requests=0，模型关闭。
+- 首轮开发环境默认检查有 8 项失败：4 项 loopback 沙盒限制、3 项并行版本更新后的旧包元数据、1 项写死旧版本线的测试。断言改为核对实际版本线，未改产品契约；隔离复核 74 项通过，最终上述完整默认集也全部通过。失败记录保留，未通过切换日常安装掩盖环境差异。
 
-### 成本测量进展
+### 修正后的成本比较
 
-旧 ru_maxrss 数据是同一进程的累计高水位，不能当成每个 Run 的独立峰值；r6 每规模一次也不是中位数。修正的测量器逐规模、逐重复启动新解释器，先复制固定暖工作区再测单次新 Run，所有旧 Result 保留。源、廉价准备开关、两个图像规格、target_entries=2、1 worker/2 pending、512 MiB executor 预算及变化检测 profile 保持；实际 Run RSS、预热前后的进程高水位、公开读取和后置留存检查分别记录。20 ms RSS 采样是近似区间峰值，ru_maxrss 单独保留；不刷新 OS 文件缓存，计时包括同样的 SQL 计数和状态轮询。
+同一 Mac（48 GiB、18 个逻辑 CPU）、CPython/core 依赖、合成 8×8 JPEG 内容、来源变化检测 profile、普通/高清准备、完整 accounting 与 2 个入口义务保持。固定 1 worker、2 pending、512 MiB executor 预算（不是进程 RSS 上限）。metadata/video/GPX/embedding/detector/provider 不参与规模计算。每个样本从固定工作区副本开始，显式读 prior Result 预热，随后只运行一次新 Run；复制与预热不计入 Run 墙钟。旧 Result 哈希使用流式读取，避免测量器先制造整份文件缓冲。OS 文件缓存不刷新，样本串行；测试未与测量重叠。
 
-初次定位在 JSON 编码阶段观察到约 296 MiB RSS 增量。原实现先构造整份 Unicode JSON，再编码成 UTF-8；现在用标准 JSONEncoder 分块写入 BytesIO，避免同时保留整份宽 Unicode 文本。规范字节、非有限值拒绝、封存和读取核验以及故障重试承诺不变。正式比较还使用流式哈希检查历史 Result，避免测量器自身先读入整份文件抬高高水位；该调整不减少核验。
+普通矩阵使用同一固定[测量脚本](../../../.local/acceptance-releases/260914-run-composition-repair/scale-measurement.py)，各报告含脚本 SHA、PID、时间、负载、预算、输入内容身份和阶段记录；最终仓库脚本另补了局部选择与峰值上下界报告。基线是接手前实现，走普通发现；候选走显式同快照输入并额外封存配置、accounting 和直接绑定。因此是相同覆盖与准备义务下的产品成本比较，不是相同接口/算法的微基准。旧状态数量也保留：基线各 4 份 Result，候选 4096/8192 模板分别 10/12 份。
 
-正式基线、r6 对照及候选重复矩阵和分阶段记录尚未完成；本节将在完成后补齐数值与明确通过/未通过项。
+| 输入 | 基线墙钟中位 s | 最终墙钟中位 s | 基线 Run 峰值 MiB | 最终 Run 峰值 MiB | RSS 变化 |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 4096 | 261.739 | 103.839 | 443.2 | 362.8 | -18.1% |
+| 8192 | 964.744 | 306.563 | 818.2 | 667.5 | -18.4% |
+
+每格来自 **3 个独立进程样本**。[全部样本/汇总](../../../.local/acceptance-releases/260914-run-composition-repair/cost-summary.json)保留原值。4096 墙钟范围为基线 242.669—317.845 s、候选 97.085—107.497 s；8192 为基线 926.699—986.142 s、候选 291.051—308.836 s。时间差也包含主体实现已有的协调优化，不能全部归因于本次内存补修。
+
+| 最终输入 | accounting/snapshot s | Work lookup s | assembly s | sealing s | 完整读取校验 s | SELECT / 写语句中位 |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 4096 | 5.780 | 10.970 | 10.908 | 22.229 | 4.799 | 357381 / 77893 |
+| 8192 | 26.247 | 29.455 | 36.741 | 59.948 | 9.217 | 716080 / 155739 |
+
+分项是函数包围时间，部分嵌套；sealing 含最终来源与 pin 验证，不能相加当成互斥 I/O 分解。有效暖输入 **12/12 个正式样本零新解码**，Work lookup 次数分别 8194/16386；查询/写入及存储量随源项和关系近似成比例增长，不用两档耗时冒充通用复杂度证明。
+
+RSS 记录采用 20 ms 当前 RSS 采样与独立的 ru_maxrss。原累计高水位无法重置，不能直接分摊给多个规模。本轮 12 个正式样本的高水位都在 Run 窗口内再次上升，因此可确定其 Run 峰值；若未上升只能报告采样下界和历史上界。短暂原生/GIL 峰值可能漏采，例如最终 8192 首轮采样约 653 MiB、区间高水位约 674 MiB，本表采用后者。该矩阵的进程峰值（含预热、公开读取和留存检查）恰与对应 Run 峰值相同；原始字段仍分别保存，未推断长驻多 Run 进程的未来峰值。
+
+### 内存归因、输出与留存
+
+同方法的 8192 单轮诊断（不冒充三次中位数）显示：r6 编码阶段约增加 297 MiB；增量编码后约增加 74 MiB，第一候选总峰值仍约 875 MiB。对象存活测试进一步证明已封存草稿和准备数据仍压在读回栈上；释放它们后，最终候选首轮读回从约 390 MiB 上升到 612 MiB，总峰值转移到接受/冻结输入阶段约 674 MiB。局部样本额外记录 run_acceptance/frozen_input_write，8192 接受阶段高水位约 672 MiB，支持这一定位。未放松来源核验、规范字节、注册/引用/pin 检查或保留策略。
+
+[独立输出核验](../../../.local/acceptance-releases/260914-run-composition-repair/cost-output-audit.json)覆盖全部 16 个正式/诊断样本：4096 为 4096 Source、8192 Evidence、40958 条关系；8192 为 8192 Source、16384 Evidence、81918 条关系，各版本数量相同。相同合成图像按内容复用 2 个物理产物，其引用、大小与 SHA 均核对；物理去重不合并 Source occurrence。每样本保留全部原 Result，恰增加一份新 Result。候选 Result 约 38.78/77.55 MB，基线约 35.46/70.92 MB；新增封存数据没有为压低内存而删除，路径长度也影响少量字节数。
+
+[局部参数样本](../../../.local/acceptance-releases/260914-run-composition-repair/local-candidate-2-r2/metrics.json)分别使用独立进程，完整交代 4096/8192 项并返回 **6 个入口、零新解码**；所选 T 通过公开关系 resolve 全量分页，核对去重、数量和 membership_identity。局部样本墙钟约 113.081/302.503 s，Run 峰值约 364.9/671.7 MiB，均为单轮功能/归因证据。
+
+测量存在一项明确的夹具限制：旧 Result 封存绝对材料路径，克隆 workspace 后旧材料页会正确返回 evidence_unavailable，不能把相同故障页当成可用性证明。本轮未改写旧字节或放宽路径核验；[定位记录](../../../.local/acceptance-releases/260914-run-composition-repair/clone-path-diagnosis.json)证明材料在原处和副本的 SHA 相同。局部选择使用返回的 Evidence 引用和公开 represents 关系，不声称打开旧图片。[原位置只读复验](../../../.local/acceptance-releases/260914-run-composition-repair/original-result-reads.json)对两个规模、两套原夹具共 4 次均完整返回 2 个入口、零材料故障。正常同址新 Run、缓存清理和独立 CLI 的旧 Result 可读性另由功能/安装测试证明。普通成本数字只证明所述克隆、暖缓存和有限读取条件，不认证 workspace 迁移后的地址重绑定。
+
+### 通过项与边界
+
+- **通过**：冻结缺失/损坏拒绝、源变化/读取不可用区分、合法恢复与历史读取、必要回归、最终隔离入口、规定规模功能、独立重复成本、零重复昂贵计算、完整输出与旧 Result 留存。
+- **本轮清单无未关闭的自验失败**；早期失败及修正过程保留。尚未执行用户独立验收。
+- 未认证真实大图/视频与模型吞吐、其他平台/文件系统、长驻 Host 多轮内存或工作区迁移后的旧绝对地址恢复。未改变已确认 Run/Result/Profile 模型、公共契约、留存义务或外部效果范围；未执行日常安装升级与发布。完成后停止，等待独立验收。

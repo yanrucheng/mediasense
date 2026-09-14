@@ -16,6 +16,58 @@ from test_run_composition import (
 )
 
 
+def test_publication_read_releases_frozen_input_and_draft(tmp_path, monkeypatch):
+    from dataclasses import fields
+    import weakref
+    from mediasense.precheck._result_types import ResultDraft
+    import mediasense.precheck._snapshot as snapshots
+
+    class TrackedPreparation(dict):
+        pass
+
+    class TrackedDraft(ResultDraft):
+        pass
+
+    _, runtime, call, _ = host_collection(tmp_path)
+    frozen, drafts = [], []
+    configuration = runtime.precheck_run._store.execution_configuration
+    seal_preparation = snapshots.seal_preparation
+    validate = runtime.precheck_read._validate_package
+
+    def tracked_configuration(*args):
+        value = configuration(*args)
+        value["preparation"] = TrackedPreparation(value["preparation"])
+        frozen.append(weakref.ref(value["preparation"]))
+        return value
+
+    def tracked_draft(*args):
+        value = seal_preparation(*args)
+        tracked = TrackedDraft(
+            **{field.name: getattr(value, field.name) for field in fields(value)}
+        )
+        drafts.append(weakref.ref(tracked))
+        return tracked
+
+    def validate_after_release(*args):
+        assert all(ref() is None for ref in frozen + drafts)
+        return validate(*args)
+
+    monkeypatch.setattr(
+        runtime.precheck_run._store, "execution_configuration", tracked_configuration
+    )
+    monkeypatch.setattr(snapshots, "seal_preparation", tracked_draft)
+    monkeypatch.setattr(
+        runtime.precheck_read, "_validate_package", validate_after_release
+    )
+    _, old, page = result(call, "first")
+    _, new, _ = result(call, "second", prior_result_ref=old, **page["preparation"])
+    assert new != old
+    assert frozen and drafts
+    assert (
+        call("read", action="review", result_ref=old, include=["preparation"]) == page
+    )
+
+
 @pytest.mark.parametrize(
     "damage", ["missing", "null", "invalid_json", "input", "scopes", "profile"]
 )

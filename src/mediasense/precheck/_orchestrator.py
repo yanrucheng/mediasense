@@ -17,6 +17,7 @@ from typing import Protocol, TypeVar, cast
 from mediasense.capabilities.geo import GeoQueryTool
 
 from ._accounting_types import AccountedItem
+from ._result_types import SealedResult
 from ._compression_producer import (
     AdaptiveCompressionProducer,
     CompressionGroupOutcome,
@@ -134,7 +135,7 @@ class _RunControl(Protocol):
         total: int | str | None = None,
     ) -> None: ...
 
-    def publish_result(self, run_ref: str, draft) -> dict[str, object]: ...
+    def seal_result(self, run_ref: str, draft) -> SealedResult | dict[str, object]: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -456,7 +457,7 @@ class PrecheckOrchestrator:
         run_ref: str,
         accounting_run_id: str,
         config: PrecheckExecutionConfig,
-    ) -> dict[str, object]:
+    ) -> SealedResult | dict[str, object]:
         if not self._running(run_ref):
             return self.run_control.sync_accounting(run_ref)
         if config.preparation is None:
@@ -773,7 +774,9 @@ class PrecheckOrchestrator:
                 pass
         draft = seal_preparation(draft, config.preparation)
         self._checkpoint(run_ref, "publishing", total=1)
-        return self.run_control.publish_result(run_ref, draft)
+        # Return the durable publication to the same worker. Its full readback
+        # happens after this frame's producer outputs and draft are released.
+        return self.run_control.seal_result(run_ref, draft)
 
     def _visual_execution_summary(
         self, run_id: str, config: PrecheckExecutionConfig

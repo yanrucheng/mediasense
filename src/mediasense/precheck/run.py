@@ -31,6 +31,7 @@ from ._orchestrator import (
     _BlockedExecution,
 )
 from .accounting import AccountingStore
+from ._result_types import SealedResult
 from .read import PrecheckReadTool, _ReadFailure, _ResultGraph
 from .result import ResultDraft, ResultSealError, ResultStore
 from .scope_review import (
@@ -490,8 +491,16 @@ class PrecheckRunTool:
             try:
                 configuration = self._store.execution_configuration(run_ref)
                 config = PrecheckExecutionConfig.from_value(configuration)
-                result = self._orchestrator.advance(
+                outcome = self._orchestrator.advance(
                     run_ref, str(accounting_run_id), config
+                )
+                # The Result now owns its frozen data. Do not retain a second
+                # input snapshot while fully validating the published package.
+                del config, configuration
+                result = (
+                    self.complete_with_result(run_ref, outcome.result_ref)
+                    if isinstance(outcome, SealedResult)
+                    else outcome
                 )
             except SourceSnapshotChanged as error:
                 result = self.mark_failed(run_ref, code="source_snapshot_changed", message=str(error))
@@ -659,6 +668,18 @@ class PrecheckRunTool:
     def publish_result(self, run_ref: str, draft: ResultDraft) -> dict[str, object]:
         """Internal automatic seal path; it is deliberately not a public action."""
 
+        outcome = self.seal_result(run_ref, draft)
+        return (
+            self.complete_with_result(run_ref, outcome.result_ref)
+            if isinstance(outcome, SealedResult)
+            else outcome
+        )
+
+    def seal_result(
+        self, run_ref: str, draft: ResultDraft
+    ) -> SealedResult | dict[str, object]:
+        """Publish durably; the owning worker still must verify and complete."""
+
         try:
             record = self._store.get(run_ref)
         except KeyError:
@@ -692,7 +713,7 @@ class PrecheckRunTool:
                 message="Result publication could not write the workspace.",
                 resume_when="Workspace storage is writable with sufficient free space.",
             )
-        return self.complete_with_result(run_ref, sealed.result_ref)
+        return sealed
 
     def _start(self, request: dict[str, object]) -> dict[str, object]:
         from ._preparation import canonical

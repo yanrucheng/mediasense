@@ -40,6 +40,8 @@ tags: ["migration", "capability", "parity"]
 
 ## 2026-09-14：普通 Run 与局部准备
 
+后续独立验收补修已完成自验：冻结缺失/损坏不再退回默认执行，确定源变化进入 failed/source_snapshot_changed；最终隔离默认集 1474 passed，85 次 MCP、6 次 CLI 通过。各规模三次独立进程比较中，4096/8192 的 RSS 中位峰值为 362.8/667.5 MiB，较修正基线降低约 18.1%/18.4%；完整输出与留存另行核对。最终 wheel SHA-256 `8b52d48704de8af6621c7b40689c9a830221b7fa03ef02b5bf5f5a2e6fc0deb2`，详见[补修验收](../../../openspec/changes/simplify-precheck-run-composition/acceptance.md#独立验收补修记录2026-09-14)。等待用户独立验收；本任务未执行日常安装升级或发布。下段及 r6 数字保留为此前历史，不再代表当前成本结论。
+
 本次正式契约、功能实现和隔离入口自验已完成，整体成本验收未通过（8192 项 RSS 较接手基线增加约 25.1%），按用户指示暂停后续改造，等待讨论；依据为[实施验收](../../../openspec/changes/simplify-precheck-run-composition/acceptance.md#实施验收记录2026-09-14)。最终 wheel SHA-256 `1835e3e904ee75b4e5f442ecd1b177edb1abb5e68d0de8e1eadb1e95d37f6b86`；默认回归 1462 项通过，实际安装的 47 次 MCP 与 5 次 CLI 调用通过。源码/资源/约束/日志在 `.local/acceptance-releases/260914-0034-run-composition/` 保留；未升级日常安装或发布。
 
 | 能力 | 迁移判断 | 配置、执行、交付证据及界限 |

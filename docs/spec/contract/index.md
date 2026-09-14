@@ -30,7 +30,7 @@ superseded-by: ""
 
 2026-09-13 第 6 包按已定案设计进入实现：Plan Work 当前接口统一保存 draft/candidate，普通 Tool 自动交付持续页面，并严格绑定 Work/revision 的最终确认。现行机器定义、Skill 与发布资源同步；源码、隔离安装和浏览器验证见[本包实施记录](../../../openspec/changes/review-plan-preview-delivery/acceptance.md)。日常安装未切换，Human 页面审阅和较弱 Agent 效果不由自动化检查代替。
 
-2026-09-14，用户授权的普通 Run 与局部准备改造已落实到 Run/Read 正式契约、实现及隔离 CLI/MCP：完整 Profile、固定全量输入、互斥局部参数、按依赖复用、不可变准备回读和直接来源对应。Profile 仍是配置值，改要求创建新 Run，恢复继续原 Run；Plan 创建新 Work 并重新确认。功能和隔离入口自验已通过，但规模成本门槛尚未关闭：8192 项 RSS 较接手基线增加约 25.1%，待讨论进一步定位。确切构建、规模成本及验收界限见[实施验收](../../../openspec/changes/simplify-precheck-run-composition/acceptance.md)。这里的实现自验不宣称用户独立验收、日常安装升级或发布。
+2026-09-14，用户授权的普通 Run 与局部准备改造已落实到 Run/Read 正式契约、实现及隔离 CLI/MCP：完整 Profile、固定全量输入、互斥局部参数、按依赖复用、不可变准备回读和直接来源对应。Profile 仍是配置值，改要求创建新 Run，恢复继续原 Run；Plan 创建新 Work 并重新确认。后续独立验收发现的冻结恢复、源变化分类及成本缺口已补修：最终隔离自验和各规模三次独立测量通过，4096/8192 的 RSS 中位峰值较修正基线降低约 18.1%/18.4%；等待用户独立验收。确切构建、规模成本及验收界限见[实施验收](../../../openspec/changes/simplify-precheck-run-composition/acceptance.md)。这里的实现自验不宣称用户独立验收、日常安装升级或发布。
 
 ## 阅读入口
 

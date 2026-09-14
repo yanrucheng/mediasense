@@ -105,6 +105,19 @@ class Measurements:
                 row["peak_increment_bytes"] = (
                     row["sampled_peak_rss_bytes"] - row["start_rss_bytes"]
                 )
+                # Native code can hold the GIL across a brief peak. A newly
+                # increased OS high-water mark proves the interval peak; when
+                # it did not increase, sampling supplies only a lower bound.
+                row["peak_exact"] = (
+                    row["historical_peak_after_bytes"]
+                    > row["historical_peak_before_bytes"]
+                )
+                row["peak_lower_bound_bytes"] = (
+                    row["historical_peak_after_bytes"]
+                    if row["peak_exact"]
+                    else row["sampled_peak_rss_bytes"]
+                )
+                row["peak_upper_bound_bytes"] = row["historical_peak_after_bytes"]
                 self.spans.append(row)
             print(json.dumps({"event": "phase", **row}), flush=True)
 
@@ -274,9 +287,45 @@ def worker(args):
             extras = {"prior_result_ref": prior, **old_page["preparation"]}
         if args.local_override:
             extras = deepcopy(extras)
+            selection = {
+                "kind": "precheck_relation",
+                "origin": old_page["items"][0]["evidence_ref"],
+                "relation": "represents",
+                "direction": "outbound",
+            }
+            # A copied workspace cannot rebind absolute paths in old sealed
+            # Evidence. Its reference and exact relationship remain readable;
+            # selecting members does not claim that the old image was opened.
+            selected, cursor = [], None
+            while True:
+                resolved = call(
+                    "read",
+                    action="resolve",
+                    result_ref=prior,
+                    source_set=selection,
+                    page={"limit": 1000, **({"cursor": cursor} if cursor else {})},
+                )
+                assert "error" not in resolved, resolved
+                selected.extend(m["source_item_ref"] for m in resolved["members"])
+                following = resolved["page"]["next_cursor"]
+                assert following is None or following != cursor
+                if following is None:
+                    break
+                cursor = following
+            assert len(selected) == len(set(selected)) == size // 2
+            membership = json.dumps(
+                {"result_ref": prior, "source_set": selection, "members": selected},
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+            assert (
+                resolved["resolution"]["membership_identity"]
+                == "sha256:" + hashlib.sha256(membership.encode()).hexdigest()
+            )
             extras["profile"]["overrides"] = [
                 {
-                    "source_set": old_page["items"][0]["represents"]["source_set"],
+                    "source_set": selection,
                     "compression": {
                         **extras["profile"]["compression"],
                         "target_entries": 4,
@@ -407,6 +456,11 @@ def worker(args):
         "process_peak_through_run_and_read_bytes": measured_process_peak,
         "process_peak_after_retention_checks_bytes": high_water(),
         "old_results_retained": len(old_results),
+        "prior_material_faults": [
+            item["error"]["code"] for item in old_page["items"] if "error" in item
+        ]
+        if old_page
+        else [],
         "source_unchanged": True,
         "public_read": next(s for s in measure.spans if s["phase"] == "public_read"),
         "cases": [{"size": size, "records": [record]}],

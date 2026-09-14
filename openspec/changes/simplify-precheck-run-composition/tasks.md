@@ -52,14 +52,14 @@ Exit: the Agent can complete the round trip with current public Tools and does n
 Owner boundary: `runtime/composition.py`, `host.py`, `mcp_host.py`, shipped schemas/Skill snapshots, focused contract/runtime tests, distribution smoke and the existing migration ledger.
 
 - [x] 5.1 Run the deterministic vertical acceptance matrix with real internal components through the same Host. Mock/schema validation alone does not close this item.
-- [ ] 5.2 Update the stale `tests/scale/test_multiple_results.py` call shapes against the current contracts, then verify the round trip and measured cost breakdown at declared sizes.
+- [x] 5.2 Update the stale `tests/scale/test_multiple_results.py` call shapes against the current contracts, then verify the round trip and measured cost breakdown at declared sizes.
 - [x] 5.3 Verify the focused failure/recovery suites and required repository checks; broaden testing only for uncovered integration concerns. Record exact builds and unrelated concurrent failures separately.
 - [x] 5.4 Build an isolated wheel and exercise installed CLI/MCP Run→Read→new Run→Read→Plan Work. Prove schema/Skill snapshot consistency and source read-only behavior with synthetic local inputs and no provider effects.
 - [x] 5.5 Record capability, configuration, composition, public delivery and migration outcomes in existing acceptance/ledger homes. Do not claim daily installation has upgraded or publish without the applicable authorization.
 
 Exit: the second milestone is complete only with actual implementation and installed-entry evidence. The current design-only milestone cannot check these boxes.
 
-验收结论与确切构建见 [acceptance.md](acceptance.md#实施验收记录2026-09-14)。勾选项表示该项自验完成，不代表整体成本验收、日常安装、发布或用户独立验收。5.2 已完成规模功能与测量，8192 项 RSS 较基线增加约 25.1%，成本门槛未通过，按用户指示暂停后续改造，等待讨论。
+验收结论与确切构建见 [acceptance.md](acceptance.md#实施验收记录2026-09-14)。勾选项表示该项自验完成，不代表整体成本验收、日常安装、发布或用户独立验收。r6 的 5.2 成本门槛曾未通过；本轮第 6 节完成独立重复测量和补修，已关闭该自验缺口。最终数据与限制见 acceptance 的独立验收补修记录，用户独立验收尚未执行。
 
 
 ## 6. 独立验收补修（2026-09-14）
@@ -70,5 +70,7 @@ Exit: the second milestone is complete only with actual implementation and insta
 - [x] 6.2 Run 执行必须读取原冻结要求；缺行、非法 JSON/null、被改动的输入/范围/Profile 终止执行，不能默认扫描或发布历史缺项 Result。历史 Result 独立读取、合法旧冻结 Run 恢复继续保留。
 - [x] 6.3 SourceChangedDuringRead 映射为 failed/source_snapshot_changed；暂时读取不可用保留 blocked/source_verification_unavailable 和同 Run 恢复。覆盖初始与发布前核验。
 - [x] 6.4 隔离 wheel 的 CLI/MCP 往返、三个故障注入、无重复发布、删除 Run 快照后的 Result 冷读取通过；准确构建及限制见 acceptance。
-- [ ] 6.5 每个规模和重复样本使用独立进程；固定暖工作区副本，区分 Run RSS 与进程累计峰值，完成基线/候选各三次的 4096/8192 成本比较及局部参数复用检查。
-- [ ] 6.6 根据阶段内存记录验证增量编码优化；保持相同规范封存字节、完整核验、全部输出和旧 Result 留存，完成成本归因与最终交接。
+- [x] 6.5 每个规模和重复样本使用独立进程；固定暖工作区副本，区分 Run RSS 与进程累计峰值，完成基线/候选各三次的 4096/8192 成本比较及局部参数复用检查。
+- [x] 6.6 根据阶段内存记录验证增量编码优化；保持相同规范封存字节、完整核验、全部输出和旧 Result 留存，完成成本归因与最终交接。
+
+本轮全部补修自验完成后停止，等待独立验收；不继续日常安装、升级或发布。
