@@ -1,0 +1,619 @@
+{
+  "snapshot": ".local/acceptance-releases/260914-run-composition-repair/candidate-2/source",
+  "snapshot_base": "b79be81",
+  "snapshot_wheel_sha256": "8b52d48704de8af6621c7b40689c9a830221b7fa03ef02b5bf5f5a2e6fc0deb2",
+  "python": "3.11.13",
+  "sqlite": "3.47.1",
+  "samples": [
+    {
+      "mode": "light",
+      "wall": 10.084787957996014,
+      "process_cpu": 6.074308,
+      "user_cpu": 3.290556,
+      "system_cpu": 2.7837479999999997,
+      "name": "light-512-a",
+      "accounted": 512,
+      "entry_count": 2,
+      "new_decode": 0,
+      "source_unchanged": true,
+      "raw": ".local/tool-execution-efficiency/260914-1359/light-512-a/512-0/measurement"
+    },
+    {
+      "mode": "legacy",
+      "wall": 10.397992915997747,
+      "process_cpu": 6.5143759999999995,
+      "user_cpu": 3.5884059999999995,
+      "system_cpu": 2.9259639999999996,
+      "name": "legacy-512-a",
+      "accounted": 512,
+      "entry_count": 2,
+      "new_decode": 0,
+      "source_unchanged": true,
+      "raw": ".local/tool-execution-efficiency/260914-1359/legacy-512-a/512-0/measurement"
+    },
+    {
+      "mode": "legacy",
+      "wall": 8.905548665992683,
+      "process_cpu": 5.92315,
+      "user_cpu": 3.277894,
+      "system_cpu": 2.645254,
+      "name": "legacy-512-b",
+      "accounted": 512,
+      "entry_count": 2,
+      "new_decode": 0,
+      "source_unchanged": true,
+      "raw": ".local/tool-execution-efficiency/260914-1359/legacy-512-b/512-0/measurement"
+    },
+    {
+      "mode": "light",
+      "wall": 9.906218749994878,
+      "process_cpu": 5.865513,
+      "user_cpu": 3.2025430000000004,
+      "system_cpu": 2.662965,
+      "name": "light-512-b",
+      "accounted": 512,
+      "entry_count": 2,
+      "new_decode": 0,
+      "source_unchanged": true,
+      "raw": ".local/tool-execution-efficiency/260914-1359/light-512-b/512-0/measurement"
+    },
+    {
+      "mode": "light",
+      "wall": 8.733800375004648,
+      "process_cpu": 5.404431000000001,
+      "user_cpu": 2.903255,
+      "system_cpu": 2.5011699999999997,
+      "name": "poll1-512",
+      "accounted": 512,
+      "entry_count": 2,
+      "new_decode": 0,
+      "source_unchanged": true,
+      "raw": ".local/tool-execution-efficiency/260914-1359/poll1-512/512-0/measurement"
+    },
+    {
+      "mode": "sql",
+      "wall": 10.86859345799894,
+      "process_cpu": 6.989738,
+      "user_cpu": 3.913965,
+      "system_cpu": 3.0757700000000003,
+      "name": "sql-512",
+      "accounted": 512,
+      "entry_count": 2,
+      "new_decode": 0,
+      "source_unchanged": true,
+      "raw": ".local/tool-execution-efficiency/260914-1359/sql-512/512-0/measurement"
+    },
+    {
+      "mode": "cprofile",
+      "wall": 13.020963249990018,
+      "process_cpu": 9.289235999999999,
+      "user_cpu": 6.671159,
+      "system_cpu": 2.618072,
+      "name": "cprofile-512",
+      "accounted": 512,
+      "entry_count": 2,
+      "new_decode": 0,
+      "source_unchanged": true,
+      "raw": ".local/tool-execution-efficiency/260914-1359/cprofile-512/512-0/measurement"
+    },
+    {
+      "mode": "sql",
+      "wall": 10.208535917001427,
+      "process_cpu": 6.659008999999999,
+      "user_cpu": 3.8160049999999996,
+      "system_cpu": 2.842999,
+      "name": "sql-phases-512",
+      "accounted": 512,
+      "entry_count": 2,
+      "new_decode": 0,
+      "source_unchanged": true,
+      "raw": ".local/tool-execution-efficiency/260914-1359/sql-phases-512/512-0/measurement",
+      "events": [
+        [
+          "MainThread",
+          "PrecheckRunTool._start",
+          0.04546533300890587,
+          0.0502673749870155,
+          0.028035541999999913
+        ],
+        [
+          "mediasense-precheck-run:ccfa1cb9bdd24138a460b43d23bb0b2c",
+          "mediasense.precheck._snapshot.process_snapshot",
+          0.11118412500945851,
+          0.27549470799567644,
+          0.10307174999999999
+        ],
+        [
+          "mediasense-precheck-run:ccfa1cb9bdd24138a460b43d23bb0b2c",
+          "PrecheckOrchestrator._renditions",
+          0.6021192920015892,
+          5.294585625000764,
+          0.431989333
+        ],
+        [
+          "mediasense-precheck-run:ccfa1cb9bdd24138a460b43d23bb0b2c",
+          "PrecheckOrchestrator._compression",
+          5.9162200419959845,
+          0.09457920800196007,
+          0.09066558399999991
+        ],
+        [
+          "mediasense-precheck-run:ccfa1cb9bdd24138a460b43d23bb0b2c",
+          "ResultStore.build_minimal",
+          6.154091792006511,
+          0.9825784159911564,
+          0.5840732909999999
+        ],
+        [
+          "mediasense-precheck-run:ccfa1cb9bdd24138a460b43d23bb0b2c",
+          "SQLiteResultStore.seal",
+          7.227086250000866,
+          2.2709044170042034,
+          1.4336206669999998
+        ],
+        [
+          "mediasense-precheck-run:ccfa1cb9bdd24138a460b43d23bb0b2c",
+          "PrecheckOrchestrator.advance",
+          0.10802450000483077,
+          9.391946957999608,
+          2.8838347079999997
+        ],
+        [
+          "mediasense-precheck-run:ccfa1cb9bdd24138a460b43d23bb0b2c",
+          "PrecheckReadTool._validate_package",
+          9.504801542003406,
+          0.5820477499946719,
+          0.5787577499999998
+        ]
+      ],
+      "sql_phases": {
+        "other:CONNECT": [
+          628,
+          2.1561148700129706,
+          0.09851262899999892
+        ],
+        "other:execute": [
+          5408,
+          0.9033930252771825,
+          0.3793177879999964
+        ],
+        "other:fetch": [
+          2701,
+          0.0305215470289113,
+          0.009808118999996715
+        ],
+        "other:CLOSE": [
+          628,
+          0.0846767912589712,
+          0.0298082140000037
+        ],
+        "other:iterate": [
+          21578,
+          0.015521953362622298,
+          0.015329052999999782
+        ],
+        "other:COMMIT": [
+          7,
+          0.007083831980708055,
+          0.0014007509999994304
+        ],
+        "other:ROLLBACK": [
+          1,
+          4.958012141287327e-06,
+          4.957999999999352e-06
+        ],
+        "PrecheckRunTool._start:CONNECT": [
+          14,
+          0.006300249995547347,
+          0.0011074609999999208
+        ],
+        "PrecheckRunTool._start:execute": [
+          43,
+          0.004898879982647486,
+          0.004193456999999956
+        ],
+        "PrecheckRunTool._start:fetch": [
+          18,
+          5.22900081705302e-05,
+          5.2336000000097194e-05
+        ],
+        "PrecheckRunTool._start:CLOSE": [
+          14,
+          0.00041291600791737437,
+          0.0004133349999997371
+        ],
+        "PrecheckRunTool._start:iterate": [
+          12,
+          1.2541990145109594e-05,
+          1.266799999988244e-05
+        ],
+        "PrecheckRunTool._start:COMMIT": [
+          3,
+          0.002240999965579249,
+          0.0013102499999999573
+        ],
+        "PrecheckRunTool._status:CONNECT": [
+          76,
+          0.0539630840648897,
+          0.008941499000000075
+        ],
+        "PrecheckRunTool._status:execute": [
+          672,
+          1.018871679159929,
+          0.30006699800000114
+        ],
+        "PrecheckRunTool._status:fetch": [
+          446,
+          0.032890308095375076,
+          0.00151895399999602
+        ],
+        "PrecheckRunTool._status:iterate": [
+          80,
+          6.816904351580888e-05,
+          6.858000000087294e-05
+        ],
+        "PrecheckOrchestrator.advance:CONNECT": [
+          585,
+          0.067924292961834,
+          0.030423123000000475
+        ],
+        "PrecheckOrchestrator.advance:execute": [
+          1753,
+          0.1444416151061887,
+          0.13665047000000083
+        ],
+        "PrecheckRunTool._status:CLOSE": [
+          76,
+          0.07271266503084917,
+          0.005819291999999643
+        ],
+        "PrecheckOrchestrator.advance:fetch": [
+          1114,
+          0.003017126160557382,
+          0.0030187590000002127
+        ],
+        "PrecheckOrchestrator.advance:CLOSE": [
+          585,
+          0.015538947001914494,
+          0.015051911999998696
+        ],
+        "PrecheckOrchestrator.advance:COMMIT": [
+          25,
+          0.013583584950538352,
+          0.005568250000000149
+        ],
+        "mediasense.precheck._snapshot.process_snapshot:CONNECT": [
+          9,
+          0.008192997018340975,
+          0.0010140020000000095
+        ],
+        "mediasense.precheck._snapshot.process_snapshot:execute": [
+          3101,
+          0.02826707139320206,
+          0.027299256000000095
+        ],
+        "mediasense.precheck._snapshot.process_snapshot:fetch": [
+          1035,
+          0.0009665238321758807,
+          0.0009682189999998762
+        ],
+        "mediasense.precheck._snapshot.process_snapshot:CLOSE": [
+          9,
+          0.0003765010042116046,
+          0.0003765829999999963
+        ],
+        "mediasense.precheck._snapshot.process_snapshot:iterate": [
+          1025,
+          0.016090403092675842,
+          0.0160738449999999
+        ],
+        "PrecheckOrchestrator.advance:iterate": [
+          4,
+          1.5409896150231361e-06,
+          1.582999999999446e-06
+        ],
+        "PrecheckOrchestrator._renditions:CONNECT": [
+          515,
+          1.4288556680257898,
+          0.07436637899999887
+        ],
+        "PrecheckOrchestrator._renditions:execute": [
+          1030,
+          0.34610003369743936,
+          0.2841887559999986
+        ],
+        "PrecheckOrchestrator._renditions:fetch": [
+          515,
+          0.006864845199743286,
+          0.003662208999998806
+        ],
+        "PrecheckOrchestrator._renditions:CLOSE": [
+          515,
+          0.03071330313105136,
+          0.026072831000000518
+        ],
+        "ImageRenditionProducer.produce_profiles:CONNECT": [
+          512,
+          0.04582782009674702,
+          0.043024746999998434
+        ],
+        "ImageRenditionProducer.produce_profiles:execute": [
+          24064,
+          1.2759310301480582,
+          0.7973233559999752
+        ],
+        "ImageRenditionProducer.produce_profiles:fetch": [
+          14336,
+          0.026508298295084387,
+          0.0261910310000067
+        ],
+        "ImageRenditionProducer.produce_profiles:COMMIT": [
+          3072,
+          1.5159728803555481,
+          0.6910520710000072
+        ],
+        "ImageRenditionProducer.produce_profiles:iterate": [
+          18432,
+          0.01689641404664144,
+          0.01671022600000166
+        ],
+        "ImageRenditionProducer.produce_profiles:CLOSE": [
+          512,
+          0.03070436198322568,
+          0.030233679999999652
+        ],
+        "PrecheckOrchestrator._compression:CONNECT": [
+          4,
+          0.0018454589881002903,
+          0.00034149999999988356
+        ],
+        "PrecheckOrchestrator._compression:execute": [
+          4121,
+          0.018771908100461587,
+          0.017533918999999676
+        ],
+        "PrecheckOrchestrator._compression:fetch": [
+          3085,
+          0.0038879372004885226,
+          0.003674439999998058
+        ],
+        "PrecheckOrchestrator._compression:CLOSE": [
+          4,
+          0.0001794179988792166,
+          0.00017945900000004844
+        ],
+        "PrecheckOrchestrator._compression:iterate": [
+          10774,
+          0.007835446653189138,
+          0.0077045520000043055
+        ],
+        "PrecheckOrchestrator._compression:COMMIT": [
+          2,
+          0.0013136659981682897,
+          0.0005932490000000179
+        ],
+        "ResultStore.build_minimal:CONNECT": [
+          2,
+          0.00013954199675936252,
+          0.00013958200000008247
+        ],
+        "ResultStore.build_minimal:execute": [
+          9743,
+          0.3021976745512802,
+          0.16498639800000148
+        ],
+        "ResultStore.build_minimal:fetch": [
+          6667,
+          0.014271353866206482,
+          0.013777657000003884
+        ],
+        "ResultStore.build_minimal:iterate": [
+          9731,
+          0.008799539427855052,
+          0.008498118999979543
+        ],
+        "ResultStore.build_minimal:CLOSE": [
+          2,
+          0.0002390000008745119,
+          0.00023849999999991933
+        ],
+        "ResultStore.build_minimal:COMMIT": [
+          1024,
+          0.4376604119606782,
+          0.18794837700000278
+        ],
+        "SQLiteResultStore.seal:CONNECT": [
+          1,
+          0.00011974999506492168,
+          0.00011775000000002755
+        ],
+        "SQLiteResultStore.seal:execute": [
+          12298,
+          0.5560656117595499,
+          0.27952622299997665
+        ],
+        "SQLiteResultStore.seal:fetch": [
+          7172,
+          0.012117460006265901,
+          0.011976782999992386
+        ],
+        "SQLiteResultStore.seal:iterate": [
+          4615,
+          0.005985907366266474,
+          0.0058476320000073745
+        ],
+        "SQLiteResultStore.seal:COMMIT": [
+          2049,
+          0.9568437705456745,
+          0.4059721179999829
+        ],
+        "SQLiteResultStore.seal:executemany": [
+          2,
+          0.003759624989470467,
+          0.003729207999999762
+        ],
+        "SQLiteResultStore.seal:CLOSE": [
+          1,
+          0.00013154199405107647,
+          0.0001314159999998843
+        ]
+      },
+      "counts": {
+        "MainThread:PrecheckRunTool.record_phase": 1,
+        "MainThread:PrecheckRunTool._start": 1,
+        "MainThread:PrecheckRunTool._issues": 75,
+        "MainThread:PrecheckRunTool._status_record": 75,
+        "MainThread:PrecheckRunTool._status": 74,
+        "mediasense-precheck-run:ccfa1cb9bdd24138a460b43d23bb0b2c:PrecheckOrchestrator._running": 527,
+        "mediasense-precheck-run:ccfa1cb9bdd24138a460b43d23bb0b2c:PrecheckRunTool.record_phase": 23,
+        "mediasense-precheck-run:ccfa1cb9bdd24138a460b43d23bb0b2c:PrecheckOrchestrator._checkpoint": 12,
+        "mediasense-precheck-run:ccfa1cb9bdd24138a460b43d23bb0b2c:mediasense.precheck._snapshot.process_snapshot": 1,
+        "mediasense-precheck-run:ccfa1cb9bdd24138a460b43d23bb0b2c:PrecheckRunTool._issues": 3,
+        "mediasense-precheck-run:ccfa1cb9bdd24138a460b43d23bb0b2c:PrecheckRunTool._status_record": 3,
+        "mediasense-precheck-run:ccfa1cb9bdd24138a460b43d23bb0b2c:PrecheckOrchestrator._finish_phase": 11,
+        "ThreadPoolExecutor-0_0:PrecheckOrchestrator._running": 512,
+        "ThreadPoolExecutor-0_0:SourceValidityStore._record": 1024,
+        "ThreadPoolExecutor-0_0:SourceValidityStore.prove": 1024,
+        "ThreadPoolExecutor-0_0:SQLiteWorkStore._get_work": 2048,
+        "ThreadPoolExecutor-0_0:SQLiteWorkStore.ensure_work": 1024,
+        "ThreadPoolExecutor-0_0:mediasense.precheck._artifact_sqlite._digest_file": 1024,
+        "ThreadPoolExecutor-0_0:SQLiteArtifactStore.verify": 1024,
+        "ThreadPoolExecutor-0_0:SQLiteArtifactStore.artifacts_for_work": 1024,
+        "ThreadPoolExecutor-0_0:ImageRenditionProducer.produce_profiles": 512,
+        "mediasense-precheck-run:ccfa1cb9bdd24138a460b43d23bb0b2c:PrecheckOrchestrator._renditions": 1,
+        "mediasense-precheck-run:ccfa1cb9bdd24138a460b43d23bb0b2c:SQLiteWorkStore._get_work": 2050,
+        "mediasense-precheck-run:ccfa1cb9bdd24138a460b43d23bb0b2c:SQLiteWorkStore.ensure_work": 2,
+        "mediasense-precheck-run:ccfa1cb9bdd24138a460b43d23bb0b2c:PrecheckOrchestrator._compression": 1,
+        "ThreadPoolExecutor-1_0:PrecheckOrchestrator._running": 1,
+        "ThreadPoolExecutor-1_0:PrecheckRunTool._issues": 1,
+        "ThreadPoolExecutor-1_0:PrecheckRunTool._status_record": 1,
+        "ThreadPoolExecutor-1_0:SQLiteWorkStore._get_work": 2052,
+        "mediasense-precheck-run:ccfa1cb9bdd24138a460b43d23bb0b2c:mediasense.precheck._artifact_sqlite._digest_file": 2048,
+        "mediasense-precheck-run:ccfa1cb9bdd24138a460b43d23bb0b2c:SQLiteArtifactStore.verify": 2048,
+        "mediasense-precheck-run:ccfa1cb9bdd24138a460b43d23bb0b2c:SQLiteArtifactStore.artifacts_for_work": 1024,
+        "mediasense-precheck-run:ccfa1cb9bdd24138a460b43d23bb0b2c:ResultStore.build_minimal": 1,
+        "mediasense-precheck-run:ccfa1cb9bdd24138a460b43d23bb0b2c:SourceValidityStore._record": 1024,
+        "mediasense-precheck-run:ccfa1cb9bdd24138a460b43d23bb0b2c:SourceValidityStore.prove": 1024,
+        "mediasense-precheck-run:ccfa1cb9bdd24138a460b43d23bb0b2c:SQLiteResultStore._validate_source_verifications": 2,
+        "mediasense-precheck-run:ccfa1cb9bdd24138a460b43d23bb0b2c:SQLiteResultStore._validate": 1,
+        "mediasense-precheck-run:ccfa1cb9bdd24138a460b43d23bb0b2c:mediasense.precheck._result_sqlite._digest_file": 2,
+        "mediasense-precheck-run:ccfa1cb9bdd24138a460b43d23bb0b2c:SQLiteResultStore._validate_final_pins": 1,
+        "mediasense-precheck-run:ccfa1cb9bdd24138a460b43d23bb0b2c:SQLiteResultStore.seal": 1,
+        "mediasense-precheck-run:ccfa1cb9bdd24138a460b43d23bb0b2c:PrecheckOrchestrator.advance": 1,
+        "mediasense-precheck-run:ccfa1cb9bdd24138a460b43d23bb0b2c:PrecheckReadTool._validate_package": 1,
+        "mediasense-precheck-run:ccfa1cb9bdd24138a460b43d23bb0b2c:PrecheckRunTool.advance_claimed": 1
+      },
+      "sql_totals": {
+        "CONNECT": [
+          2346,
+          3.769283733156044,
+          0.2579886719999967,
+          0.1755335830093827
+        ],
+        "COMMIT": [
+          6182,
+          2.9346991457568947,
+          1.2938450659999923,
+          0.022184791989275254
+        ],
+        "CLOSE": [
+          2346,
+          0.2356854454119457,
+          0.1083252220000018,
+          0.049484791001304984
+        ]
+      }
+    }
+  ],
+  "micro": {
+    "python": "3.11.13",
+    "sqlite": "3.47.1",
+    "batch": [
+      {
+        "batch": 1,
+        "commits": 512,
+        "wall": 0.465616042012698,
+        "cpu": 0.24697500000000003,
+        "journal_mode": "delete",
+        "synchronous": 2,
+        "digest": "6d003a6e1fcdb925244f4b2d69bdfcd255907081d5aa5c70247e490f322fbc80"
+      },
+      {
+        "batch": 32,
+        "commits": 16,
+        "wall": 0.014586666991817765,
+        "cpu": 0.00875999999999999,
+        "journal_mode": "delete",
+        "synchronous": 2,
+        "digest": "6d003a6e1fcdb925244f4b2d69bdfcd255907081d5aa5c70247e490f322fbc80"
+      },
+      {
+        "batch": 128,
+        "commits": 4,
+        "wall": 0.004633583012036979,
+        "cpu": 0.0030230000000000534,
+        "journal_mode": "delete",
+        "synchronous": 2,
+        "digest": "6d003a6e1fcdb925244f4b2d69bdfcd255907081d5aa5c70247e490f322fbc80"
+      },
+      {
+        "batch": 128,
+        "commits": 4,
+        "wall": 0.0042068750044563785,
+        "cpu": 0.0028439999999999577,
+        "journal_mode": "delete",
+        "synchronous": 2,
+        "digest": "6d003a6e1fcdb925244f4b2d69bdfcd255907081d5aa5c70247e490f322fbc80"
+      },
+      {
+        "batch": 32,
+        "commits": 16,
+        "wall": 0.014216499999747612,
+        "cpu": 0.008545000000000025,
+        "journal_mode": "delete",
+        "synchronous": 2,
+        "digest": "6d003a6e1fcdb925244f4b2d69bdfcd255907081d5aa5c70247e490f322fbc80"
+      },
+      {
+        "batch": 1,
+        "commits": 512,
+        "wall": 0.31553945899941027,
+        "cpu": 0.175222,
+        "journal_mode": "delete",
+        "synchronous": 2,
+        "digest": "6d003a6e1fcdb925244f4b2d69bdfcd255907081d5aa5c70247e490f322fbc80"
+      }
+    ],
+    "connection": [
+      {
+        "reuse": false,
+        "count": 512,
+        "wall": 0.14602791699871887,
+        "cpu": 0.144563
+      },
+      {
+        "reuse": true,
+        "count": 512,
+        "wall": 0.003200166000169702,
+        "cpu": 0.003198000000000034
+      },
+      {
+        "reuse": true,
+        "count": 512,
+        "wall": 0.002666249987669289,
+        "cpu": 0.002646999999999955
+      },
+      {
+        "reuse": false,
+        "count": 512,
+        "wall": 0.14928741699259263,
+        "cpu": 0.147204
+      }
+    ]
+  },
+  "scripts": {
+    "runner.py": "a00b2576683a6a64c83c8decdb42b3ec581f178a71b1574a3a151d91ab1ba8dc",
+    "micro.py": "9ca08b29d9256b351665a9f78c8b2131aaa2f84b372fbdaafd91dbfda3e445bb",
+    "probe_support.py": "822c699c4d61617c77394ef002e0b74a65221113c22cc47597254827b262271d"
+  }
+}

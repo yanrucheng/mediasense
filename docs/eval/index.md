@@ -4,7 +4,7 @@ title: "Evaluation Documents"
 type: index
 status: active
 created: 2026-08-23
-updated: 2026-09-12
+updated: 2026-09-14
 timezone: "Asia/Shanghai"
 parent: "index-docs"
 depends-on: []
@@ -15,6 +15,7 @@ superseded-by: ""
 
 | ID | Title | Status | Created | Summary |
 | --- | --- | --- | --- | --- |
+| [260914-1359-tool-execution-efficiency](../../eval/sessions/260914-1359-tool-execution-efficiency/report.md) | 工具执行效率专项调研 | review | 2026-09-14 | 复用8192项成本证据，以512项暖Run区分事务、连接、验证和测量开销；提出保持契约的分批优化与恢复验收，未实施产品改造。 |
 | [eval-260912-0224-plan-memory-risk-audit](eval-260912-0224-plan-memory-risk-audit.md) | 真实 Plan 运行取证：耗时、餐厅识别与记忆确认 | review | 2026-09-12 | 核实迟到提交、位置匹配、视觉误读和 Tool 存储边界；区分主动交互与可恢复草稿需求，比较完整候选、可选快照和过程托管的取舍。 |
 | [260911-2128-precheck-throughput-recovery](../../eval/sessions/260911-2128-precheck-throughput-recovery/report.md) | PreCheck 吞吐与有效帧修复验收 | active | 2026-09-11 | 固定本机预算下核对2,134项metadata、843个有效帧、零重复提取、只读来源及隔离wheel的真实Run/Read；保留原性能基线和未认证范围。 |
 | [eval-260911-1851-agent-capability-commercialization](eval-260911-1851-agent-capability-commercialization.md) | Agent 能力产品商业化调研：定位、呈现、收费与核心价值保护 | review | 2026-09-11 | 对照能力商业化、摄影工作流与宿主扩展案例，区分任务可用性、呈现方式、采用证据、收费与源码边界。 |

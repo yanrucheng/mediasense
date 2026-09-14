@@ -4,7 +4,7 @@ title: "Design Documents"
 type: index
 status: active
 created: 2026-08-23
-updated: 2026-09-13
+updated: 2026-09-14
 timezone: "Asia/Shanghai"
 parent: "index-docs"
 depends-on: []
@@ -17,6 +17,7 @@ Read the applicable [basic concept model](../model/index.md) before proposing ne
 
 | ID | Title | Status | Created | Summary |
 | --- | --- | --- | --- | --- |
+| [design-260914-1450-precheck-execution-efficiency](design-260914-1450-precheck-execution-efficiency.md) | PreCheck工具执行效率工程设计 | review | 2026-09-14 | 限定连接复用、Store批量操作、准备/结果数据访问和验证器复用；按S0–S5验证正确性并最终实测，无强制提速门槛，尚未开发。 |
 | [design-260911-1834-manufacturer-information-system](design-260911-1834-manufacturer-information-system.md) | 厂商信息维护体系：能力边界与演进设计 | active | 2026-09-11 | User-selected bundled YAML plus personal overlays; the file contract owns fields and application, with frozen knowledge, actual provenance and evidence in the existing ledger. |
 | [design-260910-1726-geo-recovery](design-260910-1726-geo-recovery.md) | Geo 业务阻塞诊断与恢复方案 | implemented | 2026-09-10 | 0.10.0 regional routing, network pause/recovery and cumulative effects implemented; synthetic legacy accounting and isolated installed CLI/MCP verified. Live business recovery remains separate. |
 | [design-260830-1626-geo-capability-evolution](design-260830-1626-geo-capability-evolution.md) | MediaSense Geo Capability Evolution | superseded | 2026-09-05 | Historical public-Geo/Plan-enrichment design, superseded when production evidence returned Geo acquisition to PreCheck. |
