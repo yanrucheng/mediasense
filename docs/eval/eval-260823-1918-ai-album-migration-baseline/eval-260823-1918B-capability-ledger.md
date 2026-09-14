@@ -4,7 +4,7 @@ title: "Migration Capability Ledger"
 type: eval
 status: active
 created: 2026-08-23
-updated: 2026-09-13
+updated: 2026-09-14
 timezone: "Asia/Shanghai"
 parent: "eval-260823-1918-ai-album-migration-baseline"
 depends-on:
@@ -14,6 +14,43 @@ tags: ["migration", "capability", "parity"]
 ---
 
 # Migration Capability Ledger
+
+## 2026-09-14：0.11.0 合并发布与日常安装
+
+用户明确授权将当前 Plan、PreCheck 两条开发线的最新功能一起发布、递增小版本并切换日常安装；真实数据验收由用户另行执行。本次已从 **0.10.2 升级到 0.11.0**，没有停在 wheel 构建阶段，也未等待或中断其他开发。此前各包“未切换日常安装”的记录描述其当时的范围；此次安装事实以本条为准，不把发布授权改写为业务或成本验收通过。
+
+| 项目 | 已完成的结果与范围 |
+| --- | --- |
+| 源快照 | `c5936ca8fc81f4a44839fad775509e09c5577e17` 加 2026-09-14 10:39:39 +08:00 冻结的完整工作区内容，847 个文件，包含当时所有 tracked/nonignored untracked 文件；后续开发未写入快照。版本、uv.lock、CHANGELOG 与四个 Skill 的兼容版本统一为 0.11.0/0.11.x |
+| 稳定产物 | `.local/releases/0.11.0-20260914/`：完整源码/归档、diff、文件摘要、wheel、校验清单、安装收据、检查与恢复材料。wheel SHA-256 **`7216e4936459a220a4f708508a3835103b87cf9ee3fa8a8d96ddf3e0bf65c0d7`**；源码归档 SHA-256 `bcf8cbce495299b8b404b6b38797adf88763ff572192e2c0a7d9f643853a400d` |
+| 日常安装 | `/Users/chengyanru/.local/bin/mediasense` → `/Users/chengyanru/.local/share/uv/tools/mediasense/bin/mediasense`；原 uv 离线 force 安装，仅替换 MediaSense 一个包。保留 CPython 3.13.5、embeddings 和全部 59 个依赖版本，依赖变化为 0 |
+| 配套 Skills | 原操作项目 `/Users/chengyanru/Downloads/ai-album-hk-representative-v1/.agents/skills`；原 `skills@1.5.25`、Codex、四名 allowlist、离线且禁用遥测。4 个 Skills 共 13 个文件与 wheel 逐字节一致，管理器 computedHash/source 全部核对；未覆盖定制或无关锁条目 |
+| 配置与能力 | 原 MCP 凭据包装、用户模型配置及凭据文件 SHA-256 不变；凭据值未输出或复制。原 DINO 配置保留，doctor 为 ok、prerequisites=prepared、execution=not_checked；未下载模型、执行推理、调用地图或其他外部 Provider |
+| 发布检查 | 固定源 Ruff、离线 uv lock 检查、artifact-only 字节/资源一致性、相同日常 Python/extras/约束的完整离线 distribution smoke 通过。141 个包文件在源码、wheel 和实际日常安装中一致 |
+| 实际普通入口 | 日常 CLI 显示 0.11.0；global CLI smoke 在临时空源执行 Dataset Open/PreCheck Start 成功。原项目注册的包装启动新 MCP Host，初始化 0.11.0、7 个 Tool 的 contract ID/digest 匹配。另以一张临时合成图完成 Read、Work create/update，返回 ready 页面，HTTP HTML=200，overview 与 Work/Result/revision 一致；仅做入口检查，未重跑浏览器功能套件 |
+| 当前会话 | 保留原已加载会话的旧空闲 MCP 进程，未见数据库打开句柄，未终止 Agent。新的诊断 Host 已验证；**用户仍需在原操作项目新开会话**，让客户端加载新版四个 Skills 与 MCP Host。磁盘升级不等于旧会话热更新 |
+| 恢复条件 | `before/` 保留旧 wheel（SHA-256 `1c454027d2f6b5217e3c3b4f0f6a0f86a7e523bdc4ea282565e0008ce2a4e5e7`）、receipt、依赖、Skills/lock；`checks/rollback.sh` 使用原安装与 Skill 管理器恢复。本次未打开或迁移业务 Dataset。之后若有格式升级/新写入，先按 runbook 核对一致性和旧版格式支持，不能仅回退包或丢弃新状态 |
+
+已有功能证据沿用[第 6 包记录](../../../openspec/changes/review-plan-preview-delivery/acceptance.md)与[普通 Run 记录](../../../openspec/changes/simplify-precheck-run-composition/acceptance.md)，**本次没有重跑此前 1453/1462 项全量功能测试**。`evidence/prior-source-comparison.json` 保留与已测构建的源码差异，最新冻结准备完整性检查随当前代码发布；不将旧全量数字冒充本构建测试结果。既有 PreCheck 8192 项 RSS 增幅约 25.1% 的成本限制继续保留；真实材料、模型质量和用户业务 Plan 的验收没有在本次完成。弱模型比较已由用户跳过。
+
+发布前在原 [Plan 使用报告](../../../eval/sessions/260913-2352-plan-delivery-use/report.md#2026-09-14-发布前记录更正)与 metrics 更正两处计数：关系引用成员不能记成 0（五组应为 3/2/1/3/2），1 次 create 加 3 次 update 共 4 个保存版本。没有改动原始调用轨迹。补充入口检查首次脚本把 working_notes 放进 create，被现行合约以 invalid_request 拒绝；改成 create 后 update，在新临时数据上通过。首次脚本/日志与后续成功记录均保留。一次 sandbox npm 缓存读取报 ENOTCACHED，在获准访问既有缓存后用同一固定版本和 offline 命令成功，无在线下载。
+
+本条的详细收据见 `.local/releases/0.11.0-20260914/installation-receipt.json` 和 `evidence/`，原始日志、wheel 与合成 Dataset 均不进入 Git。
+
+
+## 2026-09-14：普通 Run 与局部准备
+
+本次正式契约、功能实现和隔离入口自验已完成，整体成本验收未通过（8192 项 RSS 较接手基线增加约 25.1%），按用户指示暂停后续改造，等待讨论；依据为[实施验收](../../../openspec/changes/simplify-precheck-run-composition/acceptance.md#实施验收记录2026-09-14)。最终 wheel SHA-256 `1835e3e904ee75b4e5f442ecd1b177edb1abb5e68d0de8e1eadb1e95d37f6b86`；默认回归 1462 项通过，实际安装的 47 次 MCP 与 5 次 CLI 调用通过。源码/资源/约束/日志在 `.local/acceptance-releases/260914-0034-run-composition/` 保留；未升级日常安装或发布。
+
+| 能力 | 迁移判断 | 配置、执行、交付证据及界限 |
+| --- | --- | --- |
+| 有效本地计算复用 | `preserved`；有效性规则 `intentionally_changed` | 延续 AI Album 的低成本缓存目的，按实际源、模型及配方依赖复用；不按整个 Run/Profile 清空。实际后继 Host 复用全部 metadata，仅补缺少的定向图像；合成暖运行零新解码 |
+| 局部处理要求与完整回读 | `intentionally_changed` | 完整 Profile、配置 guard 和固定 S；T 单独参数，其余按声明。100 项跨界用例只准备选中输入和必要替换代表，保留基础关联与真实成员；公开 preparation/profile_scope 已由安装版交付 |
+| 不可变结果与来源对应 | `not_comparable` 于旧原生缓存/输出树 | 原生 AI Album 没有对等的不可变 Result 和逐 occurrence 直接输入证明。本实现保留旧字节、独立封存配置和绑定，缺历史为 unproven；只有声明的普通变化检测强度 |
+| Plan 接续与确认 | `intentionally_changed` | 公开旧 Work inspect、对应、新 Evidence、新 Work 与新组织审阅闭环；不转移原确认，不把来源对应当作语义等价 |
+
+4096/8192 的 MediaSense 内部前后成本比较不冒充 AI Album 同输出耗时或真实媒体质量比较。精确分项、查询/写计数、RSS、最终 r6 的缓存内存修正及复验与方法限制均见实施验收；不扩大此前香港、模型或外部 provider 的认证范围。
+
 
 ## 2026-09-13 运行验收 1—3 项：独立复核补修与持久产物
 

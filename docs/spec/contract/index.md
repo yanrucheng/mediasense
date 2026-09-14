@@ -4,7 +4,7 @@ title: "MediaSense 当前合约"
 type: index
 status: active
 created: 2026-09-09
-updated: 2026-09-13
+updated: 2026-09-14
 timezone: "Asia/Shanghai"
 parent: "index-spec"
 depends-on:
@@ -26,7 +26,11 @@ superseded-by: ""
 
 2026-09-13 本地敏感性扩展已按用户授权落定：逐模型启停、Freepik 四类/累计概率、NudeNet 640 完整区域实例、实际输入归属、停用缓存排除与无模型历史读取。源码及最终 wheel 的隔离 CLI/MCP 验收通过，见[实施验收记录](../../../openspec/changes/extend-local-sensitivity-observations/acceptance.md#实施验收记录2026-09-13)。本次未切换日常安装；原 Result 字节和 V1 阈值含义不变。 后续用户独立复核发现Read输入关联、未知加载错误分类和公共执行信息三项缺口；现已补修并通过定向及隔离自检，**整体验收待用户独立复验**，不以先前正常路径证据冒充边界已被用户接受。
 
+2026-09-14 发布补记：用户授权合并当前两条开发线并升级日常安装，**0.11.0 已完成本地发布、日常 CLI 升级、原项目四个 Skills 同步及新 MCP Host 入口检查**。确切快照、资源摘要、依赖/配置保留、检查与回退边界见[能力台账](../../eval/eval-260823-1918-ai-album-migration-baseline/eval-260823-1918B-capability-ledger.md#2026-09-140110-合并发布与日常安装)。下述各包自验时点的“未发布/未切换”不代表当前安装状态；发布不扩大用户数据或成本验收范围，已加载 Agent 会话需要重新开启。
+
 2026-09-13 第 6 包按已定案设计进入实现：Plan Work 当前接口统一保存 draft/candidate，普通 Tool 自动交付持续页面，并严格绑定 Work/revision 的最终确认。现行机器定义、Skill 与发布资源同步；源码、隔离安装和浏览器验证见[本包实施记录](../../../openspec/changes/review-plan-preview-delivery/acceptance.md)。日常安装未切换，Human 页面审阅和较弱 Agent 效果不由自动化检查代替。
+
+2026-09-14，用户授权的普通 Run 与局部准备改造已落实到 Run/Read 正式契约、实现及隔离 CLI/MCP：完整 Profile、固定全量输入、互斥局部参数、按依赖复用、不可变准备回读和直接来源对应。Profile 仍是配置值，改要求创建新 Run，恢复继续原 Run；Plan 创建新 Work 并重新确认。功能和隔离入口自验已通过，但规模成本门槛尚未关闭：8192 项 RSS 较接手基线增加约 25.1%，待讨论进一步定位。确切构建、规模成本及验收界限见[实施验收](../../../openspec/changes/simplify-precheck-run-composition/acceptance.md)。这里的实现自验不宣称用户独立验收、日常安装升级或发布。
 
 ## 阅读入口
 

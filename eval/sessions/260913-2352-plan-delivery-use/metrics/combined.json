@@ -72,35 +72,40 @@
         "0620",
         "1-书展"
       ],
-      "count": 0
+      "count": 3,
+      "count_basis": "retained MCP review represents.source_count"
     },
     {
       "path": [
         "0620",
         "2-河边散步"
       ],
-      "count": 0
+      "count": 2,
+      "count_basis": "retained MCP review represents.source_count"
     },
     {
       "path": [
         "0621",
         "1-北岸文化中心看展"
       ],
-      "count": 1
+      "count": 1,
+      "count_basis": "explicit Source Items"
     },
     {
       "path": [
         "0621",
         "2-陶艺体验课"
       ],
-      "count": 3
+      "count": 3,
+      "count_basis": "explicit Source Items"
     },
     {
       "path": [
         "0621",
         "3-傍晚河边散步"
       ],
-      "count": 2
+      "count": 2,
+      "count_basis": "explicit Source Items"
     }
   ],
   "other_outcomes": [
@@ -130,5 +135,7 @@
   "complete_profile_read_event_lines": [
     30
   ],
-  "agent_session_id": "01a09b88-3764-7eb0-8933-221e0c0bece5"
+  "agent_session_id": "01a09b88-3764-7eb0-8933-221e0c0bece5",
+  "successful_creates": 1,
+  "saved_versions": 4
 }

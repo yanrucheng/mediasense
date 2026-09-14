@@ -12,7 +12,7 @@ Apply semantics in their independently loadable Skills.
 
 ## Establish readiness
 
-This Skill set targets the MediaSense `0.10.x` CLI and its bundled Tool contracts.
+This Skill set targets the MediaSense `0.11.x` CLI and its bundled Tool contracts.
 For installation, upgrade, repair, or unknown readiness, read the
 [installation and upgrade runbook](references/installation.md) before changing
 state. It is the offline release snapshot of the single authoring source,

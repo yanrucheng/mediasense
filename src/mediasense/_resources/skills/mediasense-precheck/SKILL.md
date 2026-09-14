@@ -13,7 +13,7 @@ goal.
 ## Tool Host prerequisite
 
 Proceed only when the current Honeycomb session exposes a compatible MediaSense
-`0.10.x` Tool Host and `mediasense.dataset.open`, `mediasense.precheck.run`,
+`0.11.x` Tool Host and `mediasense.dataset.open`, `mediasense.precheck.run`,
 `mediasense.precheck.read`, and `mediasense.geo.query` are discoverable. A CLI found in `PATH` or an MCP table
 present on disk is not sufficient. If the Host is absent or incompatible, stop
 PreCheck work and use the `mediasense` product entry Skill's local Honeycomb

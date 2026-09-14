@@ -6,6 +6,36 @@ Versioning, with documented breaking changes permitted in minor releases before
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-09-14
+
+- Deliver continuous Plan pages from saved Work and its bound PreCheck Result,
+  including notes-only work, partial drafts, nested groups, unassigned members,
+  paginated evidence and frozen versions. Ordinary CLI/MCP replies supply the
+  runtime-managed local page; Agents do not author HTML or host a separate app.
+- Bind final acceptance to the exact saved Work revision. Every new save invalidates
+  earlier acceptance; refresh, paging and idempotent replay do not. Retain saved
+  work when page delivery fails and distinguish unreadable evidence from defects.
+- Deliver ordinary successor PreCheck Runs with complete Profile snapshots,
+  scoped preparation, dependency-based reuse and immutable preparation readback.
+  Preserve direct source correspondence without transferring Plan confirmation.
+- Include the current Google quota/retry classification, GPX resource diagnostics
+  and compression-evidence corrections, plus the current Plan interaction Skills.
+- Update all four packaged Skills and public contract resources together.
+
+### Compatibility and verification scope
+
+- Private Dataset manifest 3; stores: Apply 2, Geo 2, Plan 4, PreCheck 19. Supported
+  migrations preserve retained evidence; older Hosts cannot write newer stores.
+  Follow the installation runbook before opening retained Datasets, finish pending
+  old Plan seals and back up stores consistently before migration. Package rollback
+  alone is not a rollback of subsequently migrated or modified Dataset state.
+- Existing model settings, credentials and compatible dependencies are retained.
+  Installation does not run models, call external providers or modify business Plans.
+- Reuse the recorded Plan and PreCheck functional checks; this local release checks
+  packaging, the retained dependency combination and actual installed CLI/MCP/Skills.
+  Real-data acceptance remains with the user. The recorded PreCheck scale memory
+  increase remains an open cost limitation; release does not claim it is resolved.
+
 ## [0.10.2] - 2026-09-12
 
 - Deliver bundled manufacturer knowledge and personal YAML additions, full

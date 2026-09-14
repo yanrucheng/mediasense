@@ -35,7 +35,7 @@ baseline_ref: "review-plan-preview-delivery/acceptance.md"
 
 实际消费者是无父上下文的 `/root/plan_consumer_low`，模型 **gpt-6-astra，low**。它只拿到安装后 Skill、自然语言请求、case.json 和公开 MCP 转发入口；未读取实现、测试、评测配置或本 review-guide。原始会话标识为 `01a09b88-3764-7eb0-8933-221e0c0bece5`。
 
-从实际执行事件核对：完整读取 Plan Skill（事件行 25）及默认 Profile（行 30），真正打开 **9 张**准备图卡；保存 **3 个新修订**（部分草案、完整候选、说明修订），最后冻结。Agent 文件只有请求 JSON，没有 HTML。详细小型指标见 [metrics/combined.json](metrics/combined.json)。
+从实际执行事件核对：完整读取 Plan Skill（事件行 25）及默认 Profile（行 30），真正打开 **9 张**准备图卡；创建 **1 次**并更新 **3 次**（部分草案、完整候选、说明修订），共 **4 个保存版本**，最后冻结。Agent 文件只有请求 JSON，没有 HTML。详细小型指标见 [metrics/combined.json](metrics/combined.json)。
 
 首次 create 把 MCP 的外层 request 又嵌套了一次，返回 host_operation_failed，Agent 自行查清转发器采用业务请求平铺输入后恢复；保留该错误，不称为零错误首轮成功。模拟用户还纠正了最终说明里的过程状态。因此本轮证明可通过讨论收敛，不证明 Agent 一次就能完美规划。
 
@@ -80,3 +80,12 @@ rtk proxy <isolated-python> <fixed-source>/tests/run_plan_preview_delivery_smoke
 实际使用原始数据在 `/private/tmp/mediasense-p6-agent-use/review-loop`，完整副本保留于本会话 `outputs/case/`；浏览器操作和截图在 `outputs/page-review/`。最终大集合回归原始目录为 `/tmp/mediasense-p6-final-delivery-smoke`，结论与截图另保留到 `outputs/final-smoke/`。便于独立验收的当前本机页面为 `http://127.0.0.1:50564/v/kJUvonVqb7-NDcWoBHQ1ATiOHs6MpQLJZlhIGsSuSBk`；传输地址不是永久 Plan 身份，宿主退出后通过普通 inspect 重取。
 
 完成状态：页面实际使用与发布工程核查完成；独立验收 Agent 尚未复核本轮。弱模型比较按用户决定跳过。未切换日常 CLI、项目 Skill 或既有会话；本轮冻结是合成评测 Plan，不是业务 Plan，也没有 Apply 授权。
+
+## 2026-09-14 发布前记录更正
+
+复核原始 `outputs/case/outputs/mcp.jsonl`，更正两处统计，不重跑评测：
+
+- `metrics/combined.json` 曾只数 explicit 成员，把关系引用的书展和第一次散步误记为 0。按同一 Result 的 `review.items[].represents.source_count` 回填为 3、2；五组为 3/2/1/3/2，共 11 项，另 1 项保留原处。
+- 保存次数明确区分 create 与 update：1 次 create、3 次 update，共 4 个版本；封存仍绑定第四版，没有新增保存。原文“3 个新修订”只计了 update，现已补全口径。
+
+本节只修正原评测记录。0.11.0 合并发布及日常安装的实际结果以现有能力台账中的发布条目为准。
