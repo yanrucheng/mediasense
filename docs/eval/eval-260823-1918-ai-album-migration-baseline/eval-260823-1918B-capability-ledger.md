@@ -4,7 +4,7 @@ title: "Migration Capability Ledger"
 type: eval
 status: active
 created: 2026-08-23
-updated: 2026-09-14
+updated: 2026-09-16
 timezone: "Asia/Shanghai"
 parent: "eval-260823-1918-ai-album-migration-baseline"
 depends-on:
@@ -14,6 +14,75 @@ tags: ["migration", "capability", "parity"]
 ---
 
 # Migration Capability Ledger
+
+## 2026-09-16：重缓存闲置回收延长为 1 小时（0.11.0）
+
+用户报告慢加载和 view_resource_busy。对所指实际服务的只读诊断记录同一版本 overview 冷重建 27.628 秒、紧接复用 0.056 秒；这是本次调整前的真实测量，不是新参数测试。用户接受内存保留代价，明确要求 cache_idle 从 120 秒延长为 3,600 秒，且不运行测试，确保本地安装生效。服务闲置仍为 259,200 秒，全局上下文数 2、同 Work 重请求数 1、等待 5 秒和最多 16 等待者保持不变。此调整减少闲置重建，不宣称消除首次加载或容量淘汰后的 busy。
+
+基于已安装 72 小时源码隔离构建，wheel SHA-256 为 `6e5f8529ca8fcaa2317178fe368bc1e2a963af9545893aa30ceebded5075acbd`，留存于 `.local/releases/0.11.0-plan-cache-1h-20260916-135952/wheel/mediasense-0.11.0-py3-none-any.whl`。包内只有 `_view_lifecycle.py` 与安装说明发布快照变化。原 uv 全局 CLI 和项目四个 Skills 已离线更新，143 个包文件匹配 wheel，Python 3.13.5、embeddings、59 项依赖、配置及无关锁保留；manager hash 已核验。
+
+旧服务 PID 37846 已通过原控制入口停止并核验退出，中断请求数 0。安装后从实际安装启动新预览进程，只读取 health/status 即确认 cache_idle=3600、service_idle=259200、contexts=2，未绑定真实 Dataset，也未修改 Plan、重跑 PreCheck 或运行功能／并发／长时测试。现有测试参数同步但未执行。没有重启用户原 Agent／MCP 会话；新会话使用新安装并通过普通 Plan 读取获得新页面入口。
+
+[安装收据](../../../.local/releases/0.11.0-plan-cache-1h-20260916-135952/installation-receipt.json)、[新进程实际策略](../../../.local/releases/0.11.0-plan-cache-1h-20260916-135952/checks/actual-runtime-policy.json)、[包内差异](../../../.local/releases/0.11.0-plan-cache-1h-20260916-135952/package.diff)与 before／rollback 脚本保留证据及恢复材料。旧参数历史保持原义。
+
+## 2026-09-16：预览闲置退出延长为 72 小时（0.11.0）
+
+用户选择保留现有页面服务，明确将 6 小时闲置退出延长为 72 小时，并询问并发客户端的单例范围。默认 service_idle 现为 259,200 秒；重缓存仍在 120 秒后回收，每个共享服务最多两份上下文。多个 CLI／MCP 在同一用户、data home、确切安装构建范围共用一个预览进程；跨进程生命周期锁、进程寿命锁和已验证 health 身份保证复用及互斥启动。MCP 会话本身仍可以有多个。不同版本、安装环境（含解释器路径）或 data home 分别隔离，不承诺整机全局唯一。
+
+从前次已安装 6 小时合并源码隔离构建，wheel SHA-256 为 `6bdb7179e2776a02c9e75e42886bb90aab1cf24eebfa9de090992c1e201d2e68`，保存在 `.local/releases/0.11.0-plan-view-72h-20260916-110723/wheel/mediasense-0.11.0-py3-none-any.whl`。仅 `_view_lifecycle.py` 与安装说明发布快照两个包文件变化；原 uv 全局 CLI 和原项目四个 Skills 已离线同步，143 个包文件匹配 wheel，原 Python 3.13.5、embeddings、59 项依赖和配置／凭据摘要保持不变。四个 Skill manager hash 及无关锁保留已核验。
+
+安装前当前构建状态为 stopped／idle_timeout，进程检查中日常 data home 无预览实例。系统另有 16 个分别使用临时 data home 的旧测试预览进程，本次没有关闭这些隔离实例，不能声称整台机器只有一个预览进程。用户前次参数调整不测试的要求沿用，本次仅核验源码／构建／实际安装内容，未运行功能、浏览器、并发或 72 小时长跑测试；原单例机制的既有并发验收证据不冒记为本次重跑。未访问真实 Dataset、修改 Plan 或重启 Agent／MCP；全新会话采用此次安装。
+
+[安装收据](../../../.local/releases/0.11.0-plan-view-72h-20260916-110723/installation-receipt.json)、[包内差异](../../../.local/releases/0.11.0-plan-view-72h-20260916-110723/package.diff)、[构建核验](../../../.local/releases/0.11.0-plan-view-72h-20260916-110723/checks/artifact.json)及 `before/`／`checks/rollback.sh` 保留来源和恢复材料。前文所有 6 小时和 10 分钟记录保持历史含义。
+
+## 2026-09-16：预览闲置退出延长为 6 小时（0.11.0）
+
+用户明确要求把 10 分钟服务闲置改为 6 小时、无需测试并完成安装。Runtime 的默认 service_idle 现为 21,600 秒；重展示上下文仍在闲置 120 秒后回收，全局最多两份。基于前次已安装合并源码做隔离构建，包内仅 `_view_lifecycle.py` 与安装说明发布快照两处变化，其余 141 个包文件保留，既有 PreCheck 修复没有回退。
+
+wheel SHA-256：`1675cc0b079398b17583387c84396af95e32417179b9580041fcfc7bfe94b291`，留存于 `.local/releases/0.11.0-plan-view-6h-20260916-015303/wheel/mediasense-0.11.0-py3-none-any.whl`。原 uv 路径已离线更新，Python 3.13.5、embeddings 与全部 59 项依赖版本保留。实际 143 个包文件和项目四个 Skills 逐字节匹配 wheel，原 `skills@1.5.25` 更新对应 source/hash，四个 manager hash 已复核，无关锁和配置／凭据摘要不变。旧预览 PID 27375 通过自身控制接口停止并核验实际退出，中断请求数为 0。
+
+按本次明确授权不运行功能、浏览器、MCP 或闲置长跑测试，仅核验构建及安装内容，直接读取实际安装的 Policy 确认为 21,600／120 秒；没有把此前 120／600 秒证据记成 6 小时验收。现有测试时钟和生产长跑参数已同步但未执行。未访问或修改真实 Dataset／Plan，未重启现有 Agent／MCP 会话；全新会话使用此次安装，新预览实例应用该默认值。
+
+[安装收据](../../../.local/releases/0.11.0-plan-view-6h-20260916-015303/installation-receipt.json)、[包内差异](../../../.local/releases/0.11.0-plan-view-6h-20260916-015303/package.diff)、[构建内容核验](../../../.local/releases/0.11.0-plan-view-6h-20260916-015303/checks/artifact.json)与 `before/`／`checks/rollback.sh` 保留来源和恢复材料。没有发布远程版本。
+
+## 2026-09-15：Plan 预览生命周期日常安装（0.11.0）
+
+用户明确要求依据安装 runbook 完成日常安装，并确认已有半成品的查看方式。本次已完成日常 CLI、原操作项目四个 Skills 和原注册包装下的新 MCP Host 验证；此前“仅隔离安装、未切换日常环境”属于当时记录。版本仍为 0.11.0，本次是用户授权的本机安装更新，没有发布远程 release 或改动真实方案。
+
+| 项目 | 当前安装事实 |
+| --- | --- |
+| 合并构建 | 基点 `e10abe8ed78a10205f6e00e1d70906f786ae74b2` 加固定源码快照；143 个包文件。保留已安装 candidate-3 的全部 PreCheck 效率修复，与原安装相比仅 13 个 Plan／页面／运行时相关文件新增或变化，避免直接安装 Plan-only wheel 回退既有功能 |
+| 确切 wheel | `.local/releases/0.11.0-plan-view-20260915-203644/wheel/mediasense-0.11.0-py3-none-any.whl`；SHA-256 **`d9e3d11b2f5a4edeec8d09aab8990d537539c2029980c03f378b460633f322fe`** |
+| 日常安装 | `/Users/chengyanru/.local/bin/mediasense` → `/Users/chengyanru/.local/share/uv/tools/mediasense/bin/mediasense`。uv 离线仅替换 MediaSense 一个包；保留 CPython 3.13.5、embeddings 和全部 59 项依赖版本 |
+| 项目资源 | `/Users/chengyanru/Downloads/ai-album-hk-representative-v1/.agents/skills` 中四个 Skills、13 个文件与 wheel 一致。沿用 `skills@1.5.25`、Codex、copy 和四名 allowlist；管理器更新这四条 lock 的留存 source/hash，无关条目不变。未发现本地定制 |
+| 配置与模型 | 原项目 MCP 注册、用户配置、凭据文件摘要不变。原包装下 doctor=ok；DINOv3 准备状态维持 prepared，推理未执行。无模型下载、远端 Provider 请求或真实媒体准备 |
+| 入口验证 | 相同 Python/extras/依赖的隔离安装基线通过：artifact、doctor、七个 Tools、Dataset 幂等打开、Skill 快照和最小 MCP 分发。隔离包与实际日常入口的九项真实浏览器恢复场景各通过，浏览器阶段数据摘要一致；global CLI smoke 通过 |
+| 注册 MCP | 从原 `/bin/sh` 凭据包装新启动的 Host 初始化为 0.11.0；七个 Tool 的 contract ID/digest 与新 wheel 相同。实际安装的 143 个包文件逐字节匹配 wheel |
+| 旧预览与会话 | 通过 control health 逐一核验 build/UID/PID/instance 后，控制接口停止 15 个旧只读预览实例并核验退出；未按名称杀进程，未中断 Agent、MCP 或业务 Run。旧 Agent 会话未热更新，须在原项目新开会话使用新版 |
+| 数据与兼容性 | Dataset=3、Plan=4、PreCheck=19 等格式声明与原日常安装相同。对已有 Plan 仅只读检查格式、数量及写入锁：1 个 Work、无待完成封存、无更新锁；未读取方案正文、执行真实 Dataset Open、迁移、保存、冻结或 Apply |
+| 恢复材料 | `before/` 保留原 wheel（`9c14ca0a…`）、uv receipt、59 项依赖、四个 Skills 和 lock；`checks/rollback.sh` 使用原安装器和 Skill 管理器恢复。回退前仍需核对格式并保留后续业务写入 |
+
+现有保存的 Plan（包括 draft、仅部分分组、尚未确认的候选）可通过普通 `plan.work inspect` 取得新入口；无需额外 start/render/stop。旧 URL 不保证跨服务重启存活，这不是 Work 或 Result 被删除／不兼容。若“跑一半”指 PreCheck 尚未发布可供 Plan 使用的 Result，当前只有运行状态，不能把未完成 Run 冒充整理方案页面。
+
+[安装收据](../../../.local/releases/0.11.0-plan-view-20260915-203644/installation-receipt.json)、[实际包和原启动链路核验](../../../.local/releases/0.11.0-plan-view-20260915-203644/checks/actual-installation-verification.json)、[日常浏览器报告](../../../.local/releases/0.11.0-plan-view-20260915-203644/checks/browser-actual/report.json)、[四个 Skill 与 lock 核验](../../../.local/releases/0.11.0-plan-view-20260915-203644/checks/skills-verified.json)保留完整证据。隔离浏览器第一次因未解析 uv 入口软链接而找不到旁边的 Python；改用真实环境路径后九项通过，未修改产品逻辑。
+
+原 243 项及生产 120/600 秒证据沿用[Plan 生命周期报告](../../../eval/sessions/260915-1647-plan-view-lifecycle/report.md)；本次没有重跑全量功能或性能矩阵，也不把新诊断 Host 的成功说成用户旧会话已重载。另有 11 个旧 pytest 预览进程的临时 connection 文件已不存在，无法通过控制接口验证，未对它们发信号或宣称全部历史测试进程已清理。
+
+
+## 2026-09-15：工具执行效率补修日常安装（0.11.0）
+
+用户接受 candidate-3 的补修验收及已披露的内存取舍，明确要求按 [installation runbook](../../../readme/installation.md) 安装最新逻辑。本次已将现有日常安装切换至该确切候选，版本号保持 0.11.0。此前评测记录中的“未安装／内存取舍待接受”保留其当时含义；当前安装事实以本条为准。candidate-3 未重新测量性能，candidate-2 的提速和 RSS 数字仍只属于原样本。
+
+| 项目 | 本次核验结果 |
+| --- | --- |
+| 源码与产物 | 基点 `e10abe8ed78a10205f6e00e1d70906f786ae74b2` 加 candidate-3 留存快照／diff；wheel SHA-256 **`9c14ca0ab2a9c008f459d7440362a68594c7b4bdac92086d55d6a5e8280a4eac`**。当前源码、wheel 与实际安装的 141 个包文件逐字节一致，包含普通 Run 补修及本轮工具内部效率改动 |
+| 日常入口与依赖 | `/Users/chengyanru/.local/bin/mediasense` → `/Users/chengyanru/.local/share/uv/tools/mediasense/bin/mediasense`；使用原 uv 离线安装，仅替换 MediaSense 一个包。保留 CPython 3.13.5、embeddings 和全部 59 项依赖版本，变化为 0 |
+| 项目 Skills 与配置 | 原项目 `/Users/chengyanru/Downloads/ai-album-hk-representative-v1` 的四个 Skills 共 13 个文件已与新 wheel 一致；核对原 `skills@1.5.25` 的 computedHash 和留存 source，保留原锁与管理方式。项目 MCP 配置、用户配置和凭据文件摘要不变，未输出或复制凭据值 |
+| 安装及实际路径验证 | 原日常 Python／extras／约束的完整离线 distribution smoke、实际 global CLI smoke 通过；日常安装执行 8 张合成图的 **72 次 MCP、6 次 CLI** 组合验证通过，覆盖普通／局部 Run、完整 Read、旧 Result／Plan Work、重启回放及准备缺失／损坏、来源变化故障。来源字节不变，provider 请求为 0，模型执行关闭 |
+| 原注册启动链路 | 从原项目凭据包装新启动 MCP Host，初始化版本 0.11.0，七个 Tool 的 contract ID／digest 与所选 wheel 一致；该包装下 doctor 为 ok，DINOv3 本地准备状态为 prepared、推理为 not_checked |
+| 当前会话与恢复 | 替换前页面 Host 已停止，旧 MCP 进程未见数据库打开句柄，保留已有 Agent 会话。**用户需在原操作项目新开 Agent 会话**加载新版；新诊断 Host 的通过不代表旧会话热更新。格式声明与原安装相同，本次未打开或迁移业务 Dataset。旧 wheel `7216e493…`、收据、依赖、Skills／lock 与恢复命令保留；日后回退仍须核对 Dataset 格式并保留新写入 |
+
+安装收据与原始检查保存在 [本轮安装证据](../../../.local/precheck-efficiency/260914-1826/daily-install-260915-005528/installation-receipt.json)。源码／wheel 的针对性正确性验收沿用 [candidate-3 补修记录](../../../eval/sessions/260914-1826-precheck-efficiency/report.md#2026-09-15-复核补修candidate-3)；本次未重跑全量测试或性能矩阵，未开展真实媒体、模型质量或远端服务验收。产品源码和并行开发改动保持原状。
 
 ## 2026-09-14：0.11.0 合并发布与日常安装
 
@@ -1032,3 +1101,25 @@ Dataset 显式 embedding 表仍有更高优先级，已有 Run 快照和已封�
 上述用户配置继承 DINOv3 384；Run 实际生成 768 维单位 embedding 并完成 Result，
 压缩 Work 的 content_distance_scale 依赖实录为 `0.311`。源副本未变，网络尝试为 0。
 具体证据为该目录 `verification.json`；无需重装软件或重建任何既有 Dataset。
+
+### 2026-09-16：首次真实 Apply 使用复核
+
+用户要求对指定 cmux 会话的首次 Apply 做独立验收。完整证据见
+[首次 Apply 验收](../../../eval/sessions/260916-2258-first-apply-acceptance/report.md)。
+安装版 `0.11.0` 的 14 个相关文件与验收工作区逐字节一致，具体摘要保存在该评测目录。
+
+- **本次结果通过核对：** 一个冻结 Plan、一个 Run、一个不可变 Receipt；50 个组，
+  2,138 个移动文件的路径、成员、完整 SHA-256 与准备记录及备份一致；另外 4,235 项
+  原位文件与备份一致。实际移动与关闭约 28.63 秒，无失败或不确定项。
+- **整体验收未通过：** 隔离真实 Result 反例中，冻结后普通字节/尺寸/指纹变化仍得到
+  `ready_for_authorization`；MCP 反例中，普通 caller arguments 的 `authority`
+  在无 Human context 时直接进入 runtime。前者是来源连续性检查回归，后者是可信确认
+  的生产装配缺口。本次真实用户已明确授权，未发现这批真实文件发生来源替换。
+- **迁移处置：** 原件移动、名称和层级遵循冻结方案为 `preserved`；缩略图查看由 Plan
+  预览承担仍为既定 `intentionally_changed`；完整字节证明后移到 Apply 是已记录的
+  `intentionally_changed`，但不能免除与 Result 普通变化依据的比对。缺失的比对为
+  `regression`；可信 Human context 没有对应的 AI Album 保证，其迁移对比为
+  `not_comparable`，对 MediaSense 自身契约仍是未通过项。
+- **交付和边界：** 首次 seal 响应过大并截断，后续需要重取；最终说明遗漏一小时 rewind
+  期限。8 项既有执行/恢复/幂等/回执定向测试通过，但不替代新增反例。本次没有产品修复、
+  安装升级、真实 rewind 或跨卷认证；历史受控测试记录保留，不扩写为本次全链路已通过。

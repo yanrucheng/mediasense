@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from contextlib import contextmanager
+from contextlib import closing, contextmanager
 from collections.abc import Callable
 from dataclasses import dataclass
 import json
@@ -70,10 +70,28 @@ class SealReservation:
 
 
 class SQLitePlanStore:
-    def __init__(self, database_path: Path) -> None:
+    def __init__(self, database_path: Path, *, readonly: bool = False) -> None:
         self.database_path = Path(database_path)
-        self.database_path.parent.mkdir(parents=True, exist_ok=True)
-        self._initialize()
+        self.readonly = readonly
+        if not readonly:
+            self.database_path.parent.mkdir(parents=True, exist_ok=True)
+            self._initialize()
+
+    @staticmethod
+    def read_binding(database_path: Path, work_ref: str) -> dict[str, str | None]:
+        """Read only identity/version/publication; never initialize or load content."""
+        with closing(
+            sqlite3.connect(database_path.as_uri() + "?mode=ro", uri=True)
+        ) as db:
+            db.row_factory = sqlite3.Row
+            row = db.execute(
+                "SELECT work_ref, result_ref, revision, state, published_path "
+                "FROM plan_works WHERE work_ref = ?",
+                (work_ref,),
+            ).fetchone()
+            if row is None:
+                raise WorkNotFound(work_ref)
+            return dict(row)
 
     def replay(self, request_id: str, request_digest: str) -> dict[str, Any] | None:
         with self._connect() as connection:
@@ -88,6 +106,14 @@ class SQLitePlanStore:
         return json.loads(row["response_json"])
 
     def cursor_signing_key(self) -> bytes:
+        if self.readonly:
+            with closing(self._connect()) as connection:
+                row = connection.execute(
+                    "SELECT cursor_signing_key FROM plan_secrets WHERE singleton = 1"
+                ).fetchone()
+                if row is None:
+                    raise PlanStoreError("Missing existing cursor key")
+                return bytes(row[0])
         with self._transaction() as connection:
             row = connection.execute(
                 "SELECT cursor_signing_key FROM plan_secrets WHERE singleton = 1"
@@ -208,7 +234,7 @@ class SQLitePlanStore:
     def snapshot(
         self, work_ref: str, *, include_candidate: bool = True
     ) -> WorkSnapshot:
-        with self._connect() as connection:
+        with closing(self._connect()) as connection:
             row = self._row(connection, work_ref, include_candidate=include_candidate)
         return _snapshot(row)
 
@@ -452,7 +478,13 @@ class SQLitePlanStore:
             connection.close()
 
     def _connect(self) -> sqlite3.Connection:
-        connection = sqlite3.connect(self.database_path)
+        connection = (
+            sqlite3.connect(
+                self.database_path.resolve().as_uri() + "?mode=ro", uri=True
+            )
+            if self.readonly
+            else sqlite3.connect(self.database_path)
+        )
         connection.row_factory = sqlite3.Row
         connection.execute("PRAGMA foreign_keys = ON")
         return connection

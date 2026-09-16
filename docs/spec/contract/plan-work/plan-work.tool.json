@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:mediasense:tool:plan-work",
   "name": "mediasense.plan.work",
-  "description": "Save optional notes, preferences and one draft or complete candidate in revisioned Plan Work; deliver its continuous derived view and seal exact revision-bound Human-confirmed content.",
+  "description": "Save optional notes, preferences and one draft or complete candidate in revisioned Plan Work; deliver its collapsible group preview, retain complete bounded content reads, and seal exact revision-bound Human-confirmed content after page and same-revision conversational review.",
   "inputSchema": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "$id": "urn:mediasense:tool:plan-work-input",

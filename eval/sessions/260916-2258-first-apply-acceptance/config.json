@@ -1,0 +1,8 @@
+{
+  "workspace": "/Users/chengyanru/Library/Application Support/MediaSense/datasets/dataset-b9f71c8826d891a534c33b7e",
+  "dataset_ref": "dataset:c9e8ae22f35d48b8860e07caf1381a93",
+  "receipt_ref": "apply-receipt:fe55d2965a854783819567ce93c05ad5",
+  "frozen_plan": "plan/frozen/8f86c2ceb2d4ac8801f0bf18653ebca9a95a5efb41a0d4b0893979540be99778.json",
+  "source_root": "/Users/chengyanru/Downloads/ai-album-hk-representative-v1/test-260831",
+  "backup_root": "/Users/chengyanru/Downloads/ai-album-hk-representative-v1/test-260831-original-backup-20260916"
+}

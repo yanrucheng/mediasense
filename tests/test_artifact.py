@@ -307,3 +307,160 @@ def test_published_bytes_are_rechecked_before_work_is_marked_successful(
     assert work.get_work(lease.work_id).status is WorkStatus.RUNNING
     assert artifacts.artifacts_for_work(lease.work_id) == ()
     assert len(artifacts.audit().orphan_paths) == 1
+
+
+def _published_work(tmp_path):
+    database, media, run_id, work, lease = _prepared_work(tmp_path)
+    artifacts = ArtifactStore(database)
+    draft = artifacts.create_draft(lease, suffix=".jpg")
+    draft.path.write_bytes(b"valid artifact")
+    completed, artifact = artifacts.publish(lease, draft, suffix=".jpg", media_type="image/jpeg", role="rendition")
+    return database, media, run_id, work, artifacts, completed, artifact
+
+
+def test_reuse_attaches_only_after_verification_and_rechecks_work(tmp_path, monkeypatch):
+    from mediasense.precheck import InvalidWorkTransition
+    import sqlite3
+    database, media, _, work, artifacts, completed, artifact = _published_work(tmp_path)
+    accounting = AccountingStore(database)
+    run_id = accounting.start_or_resume_run("dataset-a", media.parent)
+    accounting.process_run(run_id)
+    SourceValidityStore(database).prove(run_id, Path("photo.jpg"))
+    original = artifacts._observe_artifacts
+    def inspect(ids, *args):
+        assert work.list_run_work(run_id) == ()
+        observations = original(ids, *args)
+        with sqlite3.connect(database) as connection:
+            connection.execute("UPDATE work_records SET status = 'invalidated' WHERE work_id = ?", (completed.work_id,))
+        return observations
+    monkeypatch.setattr(artifacts, "_observe_artifacts", inspect)
+    with pytest.raises(InvalidWorkTransition, match="qualification changed"):
+        artifacts.ensure_artifact_work_many(run_id, (completed.spec,))
+    assert work.list_run_work(run_id) == ()
+    assert artifact.path.read_bytes() == b"valid artifact"
+
+
+def test_reuse_batch_deduplicates_material_and_reports_committed_work(tmp_path, monkeypatch):
+    database, media, _, work, artifacts, completed, artifact = _published_work(tmp_path)
+    accounting = AccountingStore(database)
+    run_id = accounting.start_or_resume_run("dataset-a", media.parent)
+    accounting.process_run(run_id)
+    SourceValidityStore(database).prove(run_id, Path("photo.jpg"))
+    from mediasense.precheck import _artifact_sqlite
+    original = _artifact_sqlite._digest_file
+    calls = []
+    def digest(path):
+        assert work.list_run_work(run_id) == ()
+        calls.append(path)
+        return original(path)
+    monkeypatch.setattr(_artifact_sqlite, "_digest_file", digest)
+    values = artifacts.ensure_artifact_work_many(run_id, (completed.spec, completed.spec))
+    assert values == ((completed, (artifact,)),) * 2
+    assert calls == [artifact.path]
+    assert work.list_run_work(run_id) == (completed,)
+    assert artifacts.verify_many(()) == ()
+    with pytest.raises(KeyError):
+        artifacts.artifacts_for_works(("unknown",))
+
+
+def test_artifact_replacement_after_hash_is_reverified_once(tmp_path, monkeypatch):
+    _, _, _, work, artifacts, completed, artifact = _published_work(tmp_path)
+    from mediasense.precheck import _artifact_sqlite
+    original = _artifact_sqlite._digest_file
+    calls = []
+    def replace_after_hash(path):
+        observed = original(path)
+        calls.append(path)
+        if len(calls) == 1:
+            replacement = path.with_suffix(".replacement")
+            replacement.write_bytes(b"changed artifact")
+            replacement.replace(path)
+        return observed
+    monkeypatch.setattr(_artifact_sqlite, "_digest_file", replace_after_hash)
+    assert artifacts.verify_many((artifact.artifact_id, artifact.artifact_id))[0].integrity is ArtifactIntegrity.CORRUPT
+    assert len(calls) == 2
+    assert work.get_work(completed.work_id).status is WorkStatus.INVALIDATED
+
+
+def test_artifact_batch_error_rolls_back_invalidation_and_attachment(tmp_path, monkeypatch):
+    import sqlite3
+    database, media, _, work, artifacts, completed, artifact = _published_work(tmp_path)
+    accounting = AccountingStore(database)
+    run_id = accounting.start_or_resume_run("dataset-a", media.parent)
+    accounting.process_run(run_id)
+    SourceValidityStore(database).prove(run_id, Path("photo.jpg"))
+    artifact.path.chmod(0o644)
+    artifact.path.write_bytes(b"corrupt")
+    original = artifacts._record_verifications
+    def fail(connection, observations):
+        original(connection, observations)
+        raise RuntimeError("unknown database failure")
+    monkeypatch.setattr(artifacts, "_record_verifications", fail)
+    with pytest.raises(RuntimeError, match="unknown database failure"):
+        artifacts.ensure_artifact_work_many(run_id, (completed.spec,))
+    assert work.get_work(completed.work_id).status is WorkStatus.SUCCEEDED
+    assert work.list_run_work(run_id) == ()
+    with sqlite3.connect(database) as connection:
+        assert connection.execute("SELECT integrity_status FROM artifacts").fetchone()[0] == "available"
+
+
+def test_successful_artifact_work_without_binding_is_an_error(tmp_path):
+    import sqlite3
+    database, _, run_id, _, artifacts, completed, _ = _published_work(tmp_path)
+    with sqlite3.connect(database) as connection:
+        connection.execute("DELETE FROM work_artifacts WHERE work_id = ?", (completed.work_id,))
+    with pytest.raises(ArtifactIntegrityError, match="no material binding"):
+        artifacts.ensure_artifact_work_many(run_id, (completed.spec,))
+
+
+def test_corrupt_artifact_invalidates_same_batch_dependent_before_return(tmp_path):
+    from mediasense.precheck import upstream_dependency
+    from dataclasses import replace
+    database, _, run_id, work, artifacts, completed, artifact = _published_work(tmp_path)
+    spec = replace(completed.spec, producer_identity="dependent", dependencies=(*completed.spec.dependencies, upstream_dependency(completed)))
+    dependent = work.ensure_work(run_id, spec)
+    lease = work.claim_ready_work(run_id, "dependent", lease_duration=timedelta(minutes=1), work_id=dependent.work_id)[0]
+    draft = artifacts.create_draft(lease, suffix=".jpg")
+    draft.path.write_bytes(b"healthy dependent")
+    succeeded, healthy = artifacts.publish(lease, draft, suffix=".jpg", media_type="image/jpeg", role="rendition")
+    artifact.path.chmod(0o644)
+    artifact.path.write_bytes(b"corrupt")
+    values = artifacts.ensure_artifact_work_many(run_id, (succeeded.spec, completed.spec))
+    assert [record.status for record, _ in values] == [WorkStatus.BLOCKED, WorkStatus.READY]
+    assert all(not materials for _, materials in values)
+    assert work.get_work(succeeded.work_id).status is WorkStatus.INVALIDATED
+    assert healthy.path.read_bytes() == b"healthy dependent"
+
+
+def test_public_progress_does_not_count_unverified_reuse(tmp_path, monkeypatch):
+    from mediasense.precheck import PrecheckRunTool
+    database, media, _, work, artifacts, completed, _ = _published_work(tmp_path)
+    tool = PrecheckRunTool(database)
+    created = tool.run({"dataset_ref": "dataset:dataset-a", "action": "start", "request_id": "progress"})
+    run_ref = created["run_ref"]
+    accounting = AccountingStore(database)
+    run_id = accounting.start_or_resume_run("dataset-a", media.parent)
+    accounting.process_run(run_id)
+    tool.bind_working_run(run_ref, run_id)
+    # Use the rendition capability so the ordinary public phase counts it.
+    from dataclasses import replace
+    spec = replace(completed.spec, capability="image-rendition")
+    # Seed that capability through the same publisher, before attaching to this Run.
+    previous = work.get_attempts(completed.work_id)[0].run_id
+    record = work.ensure_work(previous, spec)
+    lease = work.claim_ready_work(previous, "seed", lease_duration=timedelta(minutes=1), work_id=record.work_id)[0]
+    draft = artifacts.create_draft(lease, suffix=".jpg")
+    draft.path.write_bytes(b"valid artifact")
+    record, _ = artifacts.publish(lease, draft, suffix=".jpg", media_type="image/jpeg", role="rendition")
+    SourceValidityStore(database).prove(run_id, Path("photo.jpg"))
+    tool.record_phase(run_ref, "renditions", total="unknown")
+    original = artifacts._observe_artifacts
+    def observe(*args, **kwargs):
+        status = tool.run({"dataset_ref": "dataset:dataset-a", "action": "status", "run_ref": run_ref})
+        assert status["progress"]["processed"] == 0
+        return original(*args, **kwargs)
+    monkeypatch.setattr(artifacts, "_observe_artifacts", observe)
+    artifacts.ensure_artifact_work_many(run_id, (spec,))
+    status = tool.run({"dataset_ref": "dataset:dataset-a", "action": "status", "run_ref": run_ref})
+    assert status["progress"]["processed"] == 1
+    assert len(work.get_attempts(record.work_id)) == 1

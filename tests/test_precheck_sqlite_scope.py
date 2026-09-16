@@ -67,3 +67,38 @@ def test_heartbeat_thread_has_its_own_connection_and_scope(tmp_path: Path) -> No
         with ThreadPoolExecutor(max_workers=1) as executor:
             assert executor.submit(heartbeat).result() == 1
         assert main.execute("SELECT 2").fetchone()[0] == 2
+
+
+def test_timeout_is_preserved_and_read_snapshot_released(tmp_path: Path) -> None:
+    from mediasense.precheck import AccountingStore
+    from mediasense.precheck._run_sqlite import SQLiteRunStore
+
+    database = tmp_path / "working.sqlite3"
+    AccountingStore(database).register_dataset("test")
+    store = SQLiteRunStore(database, sqlite_timeout=0.025)
+    record, _ = store.start(
+        {"request_id": "scope"}, dataset_ref="dataset:test", prior_result_ref=None
+    )
+    run_ref = record["run_ref"]
+    with connection_scope(database):
+        with store._connect() as first:
+            assert first.execute("PRAGMA busy_timeout").fetchone()[0] == 25
+        with connect(database) as default:
+            assert default is not first
+            assert default.execute("PRAGMA busy_timeout").fetchone()[0] == 30000
+        assert store.observe(run_ref)["state"] == "running"
+        assert not first.in_transaction
+
+        def writer():
+            with sqlite3.connect(database, timeout=0.025) as connection:
+                connection.execute(
+                    "UPDATE precheck_runs SET state = 'paused' WHERE run_ref = ?",
+                    (run_ref,),
+                )
+
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            executor.submit(writer).result()
+        assert store.observe(run_ref)["state"] == "paused"
+        assert store.current_state(run_ref) == "paused"
+        with store._connect() as reused:
+            assert reused is first

@@ -1,0 +1,216 @@
+{
+  "candidate": "1057d44a34fff1b0d1f5794095d1a02f89c8e42a4200ae5c43902eabdf6cb2cb",
+  "classification": "superseded after reproducible RSS regression and graph-retention fix",
+  "warm_8192": "not run; corrected candidate is measured instead",
+  "samples": [
+    {
+      "case": "varied",
+      "label": "baseline-cold",
+      "version": "baseline",
+      "wall_seconds": 20.084531000000425,
+      "cpu_seconds": 9.966701,
+      "rss_peak_bytes": 107102208,
+      "result_digest": "7832eb332de3de1116458c1a4741ee44de0984bbe462e66ff26ec86a653cc97b",
+      "semantic_digest": "a0f5bbef415a8fea1a67fed10a6cf33000a0bea9c25bda91d59014eed87ce520",
+      "evidence": "/Users/chengyanru/repos/personal/mediasense/.local/precheck-efficiency/260914-1826/final-cost/samples/varied/baseline-cold"
+    },
+    {
+      "case": "varied",
+      "label": "candidate-cold",
+      "version": "candidate",
+      "wall_seconds": 13.442121458007023,
+      "cpu_seconds": 6.9306350000000005,
+      "rss_peak_bytes": 103448576,
+      "result_digest": "e3e792eb3482c6822c9cfef79af2ddfc75380f1c1c883f4930afb412e6faa86f",
+      "semantic_digest": "a0f5bbef415a8fea1a67fed10a6cf33000a0bea9c25bda91d59014eed87ce520",
+      "evidence": "/Users/chengyanru/repos/personal/mediasense/.local/precheck-efficiency/260914-1826/final-cost/samples/varied/candidate-cold"
+    },
+    {
+      "case": "varied",
+      "label": "baseline-warm-1",
+      "version": "baseline",
+      "wall_seconds": 11.872795542003587,
+      "cpu_seconds": 6.387116000000001,
+      "rss_peak_bytes": 116047872,
+      "result_digest": "ba8222021ebeaf078e116c0c1bd190971e7a611ba8b5b5b825780643bd7d8bd8",
+      "semantic_digest": "2d1dd2df54a19362c3dd1a38dd221483d7481edf2355dbce2b613ed7533cfa20",
+      "evidence": "/Users/chengyanru/repos/personal/mediasense/.local/precheck-efficiency/260914-1826/final-cost/samples/varied/baseline-warm-1"
+    },
+    {
+      "case": "varied",
+      "label": "candidate-warm-1",
+      "version": "candidate",
+      "wall_seconds": 5.121202459005872,
+      "cpu_seconds": 2.6898400000000002,
+      "rss_peak_bytes": 117440512,
+      "result_digest": "5de2acd98c18a7c5a4d15154e6c8c3bab3b824e1e38f6d0025684ae2724d5bd2",
+      "semantic_digest": "2d1dd2df54a19362c3dd1a38dd221483d7481edf2355dbce2b613ed7533cfa20",
+      "evidence": "/Users/chengyanru/repos/personal/mediasense/.local/precheck-efficiency/260914-1826/final-cost/samples/varied/candidate-warm-1"
+    },
+    {
+      "case": "varied",
+      "label": "baseline-discovery",
+      "version": "baseline",
+      "wall_seconds": 12.06981870799791,
+      "cpu_seconds": 6.871906,
+      "rss_peak_bytes": 123731968,
+      "result_digest": "88e17e604d72de46a6a1f1c2480a866da48591af4769af5bd5313d2880ef4058",
+      "semantic_digest": "a0f5bbef415a8fea1a67fed10a6cf33000a0bea9c25bda91d59014eed87ce520",
+      "evidence": "/Users/chengyanru/repos/personal/mediasense/.local/precheck-efficiency/260914-1826/final-cost/samples/varied/baseline-discovery"
+    },
+    {
+      "case": "varied",
+      "label": "candidate-discovery",
+      "version": "candidate",
+      "wall_seconds": 5.346519083002931,
+      "cpu_seconds": 2.689064,
+      "rss_peak_bytes": 121503744,
+      "result_digest": "1db2b7c3af7d6b31fdf3f17577564a3d83a3c81908bb92494a6a73638cc46601",
+      "semantic_digest": "a0f5bbef415a8fea1a67fed10a6cf33000a0bea9c25bda91d59014eed87ce520",
+      "evidence": "/Users/chengyanru/repos/personal/mediasense/.local/precheck-efficiency/260914-1826/final-cost/samples/varied/candidate-discovery"
+    },
+    {
+      "case": "local",
+      "label": "baseline-cold",
+      "version": "baseline",
+      "wall_seconds": 5.186467709005228,
+      "cpu_seconds": 3.2142329999999997,
+      "rss_peak_bytes": 83935232,
+      "result_digest": "8e76193bcf9ff53b2105aa97f4554c875c4afd2d9c60accc98527d820b68f7a1",
+      "semantic_digest": "d8bfe6bd725329e988207a5187bcf193eabcf53ffdebd8bd65be74a8cd92c4a0",
+      "evidence": "/Users/chengyanru/repos/personal/mediasense/.local/precheck-efficiency/260914-1826/final-cost/samples/local/baseline-cold"
+    },
+    {
+      "case": "local",
+      "label": "baseline-warm-1-audit-fixed",
+      "version": "baseline",
+      "wall_seconds": 3.493376124999486,
+      "cpu_seconds": 2.2788660000000003,
+      "rss_peak_bytes": 95666176,
+      "result_digest": "aafd90ddb4f533845f7f5ec2a885ce5e4065dc2a5312cd43025f3721d321f526",
+      "semantic_digest": "54e0e3b476f9364c4c969c1c203dfd7bb9b4a038c857911bc2dab530381e037c",
+      "evidence": "/Users/chengyanru/repos/personal/mediasense/.local/precheck-efficiency/260914-1826/final-cost/samples/local/baseline-warm-1-audit-fixed"
+    },
+    {
+      "case": "local",
+      "label": "candidate-warm-1-audit-fixed",
+      "version": "candidate",
+      "wall_seconds": 1.6088913749990752,
+      "cpu_seconds": 1.190932,
+      "rss_peak_bytes": 97452032,
+      "result_digest": "72b119d25c53c14f31061bb71dc56de1d0ef472cd9ac3cc61a2016e31b5cd584",
+      "semantic_digest": "54e0e3b476f9364c4c969c1c203dfd7bb9b4a038c857911bc2dab530381e037c",
+      "evidence": "/Users/chengyanru/repos/personal/mediasense/.local/precheck-efficiency/260914-1826/final-cost/samples/local/candidate-warm-1-audit-fixed"
+    },
+    {
+      "case": "diagnostic",
+      "label": "baseline-cold",
+      "version": "baseline",
+      "wall_seconds": 19.417388749992824,
+      "cpu_seconds": 10.062548,
+      "rss_peak_bytes": 106823680,
+      "result_digest": "ff6dce346588606abe265fac823f456f7a67082663467384ea42c33b8c8f78e2",
+      "semantic_digest": "03ba7405b03131ec386b612239e74634ee07d29fd1e121c2978a6b39f86954ba",
+      "evidence": "/Users/chengyanru/repos/personal/mediasense/.local/precheck-efficiency/260914-1826/final-cost/samples/diagnostic/baseline-cold"
+    },
+    {
+      "case": "diagnostic",
+      "label": "baseline-warm-1",
+      "version": "baseline",
+      "wall_seconds": 10.611974417013698,
+      "cpu_seconds": 6.218607,
+      "rss_peak_bytes": 118194176,
+      "result_digest": "de67fc9ead0ef0d9f3139c47cf19e30b04a1f38baca196715a23db081b96e82e",
+      "semantic_digest": "b125a3b467756889e558dcc143fd7722ac940e2cf2c086476ed3e4d84f2700ee",
+      "evidence": "/Users/chengyanru/repos/personal/mediasense/.local/precheck-efficiency/260914-1826/final-cost/samples/diagnostic/baseline-warm-1"
+    },
+    {
+      "case": "diagnostic",
+      "label": "candidate-warm-1",
+      "version": "candidate",
+      "wall_seconds": 5.138440292008454,
+      "cpu_seconds": 2.6168889999999996,
+      "rss_peak_bytes": 118210560,
+      "result_digest": "1f6a2b4256b56ed4113e7465c9713769283197d2e802e04a03b4925369e4f9e0",
+      "semantic_digest": "b125a3b467756889e558dcc143fd7722ac940e2cf2c086476ed3e4d84f2700ee",
+      "evidence": "/Users/chengyanru/repos/personal/mediasense/.local/precheck-efficiency/260914-1826/final-cost/samples/diagnostic/candidate-warm-1"
+    },
+    {
+      "case": "warm-4096",
+      "label": "baseline-cold",
+      "version": "baseline",
+      "wall_seconds": 207.4181755000027,
+      "cpu_seconds": 130.492852,
+      "rss_peak_bytes": 340082688,
+      "result_digest": "668223addce663ee7ec02f327b4d389c93718a8527b61a80ea6abdc6b9736825",
+      "semantic_digest": "77b76971dbddadbb2770a44aee89e6866ac5b1a715cc7e35bde2ceef03fb0b03",
+      "evidence": "/Users/chengyanru/repos/personal/mediasense/.local/precheck-efficiency/260914-1826/final-cost/samples/warm-4096/baseline-cold"
+    },
+    {
+      "case": "warm-4096",
+      "label": "baseline-warm-1",
+      "version": "baseline",
+      "wall_seconds": 108.71783191600116,
+      "cpu_seconds": 73.350545,
+      "rss_peak_bytes": 353878016,
+      "result_digest": "cc2f3c87b5c4ae53dc6a6736995a5df65bc1cc2a1a98b089bc5e18799da51fb8",
+      "semantic_digest": "74904733ac9ec5b6b305f9e954de90faf8b009e3e5ecf28b7482e8ff02c89ee2",
+      "evidence": "/Users/chengyanru/repos/personal/mediasense/.local/precheck-efficiency/260914-1826/final-cost/samples/warm-4096/baseline-warm-1"
+    },
+    {
+      "case": "warm-4096",
+      "label": "candidate-warm-1",
+      "version": "candidate",
+      "wall_seconds": 27.26432154199574,
+      "cpu_seconds": 26.698377,
+      "rss_peak_bytes": 404668416,
+      "result_digest": "84a6fd5dccea9bafeb81723a751ed1262d219066ec227324b14638f59321fa8c",
+      "semantic_digest": "74904733ac9ec5b6b305f9e954de90faf8b009e3e5ecf28b7482e8ff02c89ee2",
+      "evidence": "/Users/chengyanru/repos/personal/mediasense/.local/precheck-efficiency/260914-1826/final-cost/samples/warm-4096/candidate-warm-1"
+    },
+    {
+      "case": "warm-4096",
+      "label": "candidate-warm-2",
+      "version": "candidate",
+      "wall_seconds": 26.7673079160013,
+      "cpu_seconds": 26.448586000000002,
+      "rss_peak_bytes": 484065280,
+      "result_digest": "aaa0ba0a2cb36eeee624c3adb8b8095b082dc033cba031fab19bd63773dedf41",
+      "semantic_digest": "74904733ac9ec5b6b305f9e954de90faf8b009e3e5ecf28b7482e8ff02c89ee2",
+      "evidence": "/Users/chengyanru/repos/personal/mediasense/.local/precheck-efficiency/260914-1826/final-cost/samples/warm-4096/candidate-warm-2"
+    },
+    {
+      "case": "warm-4096",
+      "label": "baseline-warm-2",
+      "version": "baseline",
+      "wall_seconds": 103.3337378330034,
+      "cpu_seconds": 71.214319,
+      "rss_peak_bytes": 356925440,
+      "result_digest": "6caf93e7c3a23c687f899096b0e44cee000f7a919694110e4c82ee35fcddc51a",
+      "semantic_digest": "74904733ac9ec5b6b305f9e954de90faf8b009e3e5ecf28b7482e8ff02c89ee2",
+      "evidence": "/Users/chengyanru/repos/personal/mediasense/.local/precheck-efficiency/260914-1826/final-cost/samples/warm-4096/baseline-warm-2"
+    },
+    {
+      "case": "warm-4096",
+      "label": "baseline-warm-3",
+      "version": "baseline",
+      "wall_seconds": 98.76476345899573,
+      "cpu_seconds": 68.763284,
+      "rss_peak_bytes": 353173504,
+      "result_digest": "8b27a20017351acf91b9ac42fdc357d898c9b4e119f78e2efb5a1ca562674fee",
+      "semantic_digest": "74904733ac9ec5b6b305f9e954de90faf8b009e3e5ecf28b7482e8ff02c89ee2",
+      "evidence": "/Users/chengyanru/repos/personal/mediasense/.local/precheck-efficiency/260914-1826/final-cost/samples/warm-4096/baseline-warm-3"
+    },
+    {
+      "case": "warm-4096",
+      "label": "candidate-warm-3",
+      "version": "candidate",
+      "wall_seconds": 26.81776412499312,
+      "cpu_seconds": 26.900462,
+      "rss_peak_bytes": 408272896,
+      "result_digest": "4e56278d0f785dcbf363f6e67bd2bca4f4e2bfafbf93aa435081dd640bcfd78a",
+      "semantic_digest": "74904733ac9ec5b6b305f9e954de90faf8b009e3e5ecf28b7482e8ff02c89ee2",
+      "evidence": "/Users/chengyanru/repos/personal/mediasense/.local/precheck-efficiency/260914-1826/final-cost/samples/warm-4096/candidate-warm-3"
+    }
+  ]
+}

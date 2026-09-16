@@ -1,0 +1,161 @@
+{
+  "trace": "/Users/chengyanru/.codex/sessions/2026/09/16/rollout-2026-09-16T12-51-28-01a0a88e-3a94-74c1-abf2-e8a283910da3.jsonl",
+  "trace_line_interval": [
+    198,
+    432
+  ],
+  "result_ref": "precheck-result:0ce9b26fda788c858dff1ff8416c34964a5c069cf51139f682afd0a08e7e2ed1",
+  "result_file_sha256": "3c3227e7561daffc59655f4d0bdd5a76edf7eba16bdba66007df6120141db2aa",
+  "result_digest_verified": true,
+  "work_ref": "plan-work:91a68a41-ca10-4c2b-b365-9adda8b052b4",
+  "final_revision": "work-revision:ec6e52c0-eb98-485b-9794-0bafd9eabbb4",
+  "work_state": "closed",
+  "frozen_plan_ref": "frozen-plan:615f97ba-9593-4349-b2d3-054c0bc6596d",
+  "same_frozen_result": true,
+  "runs": [
+    [
+      "precheck-run:355f8f8eb36542e194f4df500e3dcee7",
+      null,
+      "completed",
+      "2026-09-15T02:23:03.429668+00:00"
+    ]
+  ],
+  "profile": {
+    "compression": {
+      "content_distance_scale": 0.311,
+      "spatial_scale_meters": 3000.0,
+      "target_entries": 200,
+      "temporal_scale_seconds": 86400.0
+    },
+    "configuration_identity": "sha256:e5751887f4cc2634c4db9954566f8baef389c4bc473a358e75c754b546cc5b4c",
+    "overrides": []
+  },
+  "call_sites_in_recorded_js": {
+    "mcp__mediasense__mediasense_plan_work": 4,
+    "mcp__context_mode__ctx_fetch_and_index": 2,
+    "mcp__context_mode__ctx_search": 1,
+    "mcp__mediasense__mediasense_precheck_read": 9,
+    "exec_command": 5,
+    "view_image": 5,
+    "write_stdin": 1
+  },
+  "image_deliveries": 56,
+  "unique_image_payloads": 56,
+  "old_group_count": 4,
+  "new_group_count": 20,
+  "original_representation_sets": 37,
+  "old_source_count": 663,
+  "new_source_count": 663,
+  "same_source_scope": true,
+  "duplicate_assignments": 0,
+  "representation_sets_split_between_groups": 0,
+  "source_conditions": {
+    "usable": 662,
+    "invalid": 1
+  },
+  "sources_with_prepared_visual_lineage": 76,
+  "selected_boundary_sources": 12,
+  "boundary_sources_with_prepared_visual_lineage": 0,
+  "groups": [
+    {
+      "name": "01-入席、餐桌与当餐菜单",
+      "source_count": 28,
+      "sources_with_prepared_visual_lineage": 7
+    },
+    {
+      "name": "02-餐前饮品与举杯",
+      "source_count": 26,
+      "sources_with_prepared_visual_lineage": 4
+    },
+    {
+      "name": "03-季节迎宾小食（虾与白色酱汁）",
+      "source_count": 59,
+      "sources_with_prepared_visual_lineage": 3
+    },
+    {
+      "name": "04-Sawara生鱼配腌萝卜、梨与紫苏",
+      "source_count": 75,
+      "sources_with_prepared_visual_lineage": 5
+    },
+    {
+      "name": "05-Aka Uni海胆鱼子酱配椰菜花与龙虾",
+      "source_count": 84,
+      "sources_with_prepared_visual_lineage": 8
+    },
+    {
+      "name": "06-蘑菇清汤与黑松露饺",
+      "source_count": 29,
+      "sources_with_prepared_visual_lineage": 5
+    },
+    {
+      "name": "07-炭烤萤火鱿配豌豆（厨房体验菜）",
+      "source_count": 55,
+      "sources_with_prepared_visual_lineage": 2
+    },
+    {
+      "name": "08-厨房参观、发酵食材讲解与厨师合照",
+      "source_count": 53,
+      "sources_with_prepared_visual_lineage": 5
+    },
+    {
+      "name": "09-招牌酸种面包与味噌抹酱",
+      "source_count": 48,
+      "sources_with_prepared_visual_lineage": 5
+    },
+    {
+      "name": "10-Kinmedai金目鲷配蛤蜊与豆乳",
+      "source_count": 37,
+      "sources_with_prepared_visual_lineage": 3
+    },
+    {
+      "name": "11-Axuria羊腰脊与羊肩配青芦笋",
+      "source_count": 48,
+      "sources_with_prepared_visual_lineage": 5
+    },
+    {
+      "name": "12-覆盆子、甜椒与洛神花清口甜品",
+      "source_count": 35,
+      "sources_with_prepared_visual_lineage": 3
+    },
+    {
+      "name": "13-咖啡",
+      "source_count": 14,
+      "sources_with_prepared_visual_lineage": 6
+    },
+    {
+      "name": "14-Ceiba 64%朱古力甜点",
+      "source_count": 20,
+      "sources_with_prepared_visual_lineage": 3
+    },
+    {
+      "name": "15-餐后小点、冰镇水果与Ambershu组合展示",
+      "source_count": 34,
+      "sources_with_prepared_visual_lineage": 3
+    },
+    {
+      "name": "16-Ambershu倒酒",
+      "source_count": 1,
+      "sources_with_prepared_visual_lineage": 1
+    },
+    {
+      "name": "17-Petit Fours贝壳形小点",
+      "source_count": 13,
+      "sources_with_prepared_visual_lineage": 4
+    },
+    {
+      "name": "18-餐后水果与饮品品尝",
+      "source_count": 2,
+      "sources_with_prepared_visual_lineage": 2
+    },
+    {
+      "name": "19-席间交流",
+      "source_count": 1,
+      "sources_with_prepared_visual_lineage": 1
+    },
+    {
+      "name": "20-离店",
+      "source_count": 1,
+      "sources_with_prepared_visual_lineage": 1
+    }
+  ]
+}

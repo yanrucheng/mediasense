@@ -63,7 +63,10 @@ preserve the new state and use an explicitly verified recovery procedure.
 
 The normal plan.work create/update/inspect/seal path now returns a local page
 entry. The runtime starts a read-only loopback host on demand, verifies exact
-build identity and keeps it alive after the CLI exits. Transient connection data
+build identity and keeps it available after the CLI exits. Idle heavy display
+contexts are reclaimed after 1 hour (3,600 seconds; at most two globally); the process exits
+after 72 hours (259,200 seconds) without effective use and with no in-flight content requests.
+Background polling, health checks and a merely visible page do not renew use. Transient connection data
 and diagnostics live below the selected user data home at runtime/plan-views;
 only explicitly bound Dataset/Work/Result resources can be read. There is no
 login service, remote hosting, media upload or HTTP planning/confirmation API.
@@ -71,9 +74,23 @@ Page projection remains disposable; authoritative planning remains in the Datase
 
 Use the selected executable's `mediasense views status --json` to inspect its
 actual build/process and `mediasense views stop --json` to stop it. Before replacing
-an installation, stop the old build's page host with that executable. The next
+an installation, stop the old build's page host with that exact executable and the
+same MEDIASENSE_DATA_HOME used to start it, then verify actual exit. Status is
+read-only and does not start/renew the service; unreachable with an owned lifetime
+lock is unknown, not stopped. Stop closes admission, drains reads for at most five
+seconds, and reports verified exit or an incomplete bounded verification. It does
+not stop PreCheck, MCP, Agent or Apply processes. Pre-lifecycle builds do not gain
+automatic exit until replaced; retire their identified host through their own
+supported control, never by a process-name sweep. The next
 ordinary Work inspect automatically restarts/rebinds the current build and returns
-fresh URLs, without changing revision. A dead URL does not imply lost planning.
+fresh URLs, without changing revision. A dead URL does not imply lost planning. Entries are stable per binding in one
+process, and transient across restart; old links cannot wake a stopped process.
+Diagnostics are exceptional recovery, not routine steps before/after each Plan.
+The private activity POST only updates in-memory use time. Runtime logs rotate
+at 1 MiB plus one backup; subsequent ordinary delivery best-effort removes known,
+current-user diagnostic files of proven-stopped builds older than seven days.
+Work, Result, Frozen Plan, prepared images, receipts and exported files are outside
+this cleanup scope.
 A ready descriptor does not prove all images are readable; inspect the reported
 limits and actual page. Saving and display failures are separate.
 

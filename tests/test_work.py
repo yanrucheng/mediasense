@@ -129,6 +129,37 @@ def test_work_cannot_be_registered_before_source_accounting_closes(
         work.ensure_work(run_id, _source_spec())
 
 
+@pytest.mark.parametrize("request_count", [1, 32])
+def test_work_candidate_lookup_uses_current_semantic_key_index(tmp_path, monkeypatch, request_count):
+    database = tmp_path / "work.sqlite3"
+    run_id = _completed_accounting_run(database, tmp_path / "source")
+    store = WorkStore(database)
+    specs = tuple(replace(_source_spec(), producer_identity=f"producer-{index}")
+                  for index in range(request_count))
+    expected = store.ensure_work_many(run_id, specs)
+    original, plans = store._work_candidates, []
+
+    def inspect_candidates(connection, *args):
+        class InspectConnection:
+            def execute(self, sql, parameters=()):
+                if sql.startswith("SELECT * FROM work_records WHERE semantic_key IN"):
+                    plans.append(tuple(row[3] for row in connection.execute(
+                        "EXPLAIN QUERY PLAN " + sql, parameters,
+                    ).fetchall()))
+                return connection.execute(sql, parameters)
+
+        return original(InspectConnection(), *args)
+
+    monkeypatch.setattr(store, "_work_candidates", inspect_candidates)
+    actual = ((store.ensure_work(run_id, specs[0]),) if request_count == 1
+              else store.ensure_work_many(run_id, specs))
+    assert actual == expected
+    assert plans
+    for plan in plans:
+        assert any("SEARCH work_records USING INDEX work_records_current_semantic_key" in step for step in plan), plan
+        assert not any("SCAN work_records" in step for step in plan), plan
+
+
 def test_semantic_change_creates_distinct_work_without_global_version(
     tmp_path: Path,
 ) -> None:
@@ -497,3 +528,30 @@ def test_invalidation_retains_history_and_invalidates_dependents(
     assert work.get_work(dependent.work_id).status is WorkStatus.INVALIDATED
     assert replacement.work_id != upstream.work_id
     assert len(work.get_attempts(upstream.work_id)) == 1
+
+
+def test_batch_work_identity_order_collisions_and_atomic_failure(tmp_path, monkeypatch):
+    from mediasense.precheck import WorkIdentityCollision
+    from mediasense.precheck import _work_sqlite
+    database = tmp_path / "work.sqlite3"
+    run_id = _completed_accounting_run(database, tmp_path / "source")
+    store = WorkStore(database)
+    assert store.ensure_work_many(run_id, ()) == ()
+    assert store.get_work_many(()) == ()
+    spec = _source_spec()
+    other = replace(spec, producer_identity="other-producer")
+    first, second, repeat = store.ensure_work_many(run_id, (spec, other, spec))
+    assert first == repeat
+    assert first.work_id != second.work_id
+    assert store.get_work_many((second.work_id, first.work_id, second.work_id), run_id=run_id) == (second, first, second)
+    with pytest.raises(KeyError):
+        store.get_work_many((first.work_id, "unknown"))
+    with pytest.raises(InvalidWorkSpec, match="retry policy"):
+        store.ensure_work_many(run_id, (spec,), max_attempts=5)
+    with pytest.raises(InvalidWorkSpec):
+        store.ensure_work_many(run_id, (replace(spec, producer_identity="uncommitted"), _source_spec("2")))
+    assert len(store.list_run_work(run_id)) == 2
+    monkeypatch.setattr(_work_sqlite, "_semantic_key", lambda descriptor: "work-sha256-v1:collision")
+    with pytest.raises(WorkIdentityCollision):
+        store.ensure_work_many(run_id, (spec, other))
+    assert len(store.list_run_work(run_id)) == 2

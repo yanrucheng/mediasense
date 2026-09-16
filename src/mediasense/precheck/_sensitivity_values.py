@@ -192,26 +192,6 @@ def validate_input_links(sources, evidence, derivations):
         edges.setdefault(origin, []).append(target)
     resolved = {}
 
-    def source_refs(ref, visiting):
-        if ref in sources:
-            return {ref}
-        if ref not in evidence:
-            raise ValueError("Sensitivity input lineage leaves this Result")
-        if ref in visiting:
-            raise ValueError("Sensitivity input lineage is cyclic")
-        if ref not in resolved:
-            found = set()
-            access = evidence[ref].get("access", {})
-            if access.get("kind") == "source_item":
-                source = access.get("source_item_ref")
-                if source not in sources:
-                    raise ValueError("Sensitivity input source is outside this Result")
-                found.add(source)
-            for target in edges.get(ref, ()):
-                found.update(source_refs(target, visiting | {ref}))
-            resolved[ref] = found
-        return resolved[ref]
-
     for subject_ref, subject in (*sources.items(), *evidence.items()):
         for observation in subject.get("observations", ()):
             if observation["name"] != "content_sensitivity" or observation[
@@ -221,8 +201,8 @@ def validate_input_links(sources, evidence, derivations):
             input_ref = observation["provenance"]["input_evidence_ref"]
             if input_ref not in evidence:
                 raise ValueError("Sensitivity input Evidence is outside this Result")
-            if subject_ref not in sources or subject_ref not in source_refs(
-                input_ref, set()
+            if subject_ref not in sources or subject_ref not in _input_source_refs(
+                input_ref, set(), sources, evidence, edges, resolved
             ):
                 raise ValueError(
                     "Sensitivity input does not derive from its Source Item"
@@ -243,3 +223,28 @@ def validate_input_links(sources, evidence, derivations):
                     raise ValueError(
                         "Sensitivity region dimensions disagree with actual input Evidence"
                     )
+
+
+def _input_source_refs(ref, visiting, sources, evidence, edges, resolved):
+    # Explicit call-local maps avoid a recursive closure keeping a complete
+    # sealed graph alive after validation. The memo remains invocation-local.
+    if ref in sources:
+        return {ref}
+    if ref not in evidence:
+        raise ValueError("Sensitivity input lineage leaves this Result")
+    if ref in visiting:
+        raise ValueError("Sensitivity input lineage is cyclic")
+    if ref not in resolved:
+        found = set()
+        access = evidence[ref].get("access", {})
+        if access.get("kind") == "source_item":
+            source = access.get("source_item_ref")
+            if source not in sources:
+                raise ValueError("Sensitivity input source is outside this Result")
+            found.add(source)
+        for target in edges.get(ref, ()):
+            found.update(_input_source_refs(
+                target, visiting | {ref}, sources, evidence, edges, resolved
+            ))
+        resolved[ref] = found
+    return resolved[ref]

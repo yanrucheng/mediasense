@@ -15,6 +15,7 @@ from uuid import uuid4
 from mediasense.dataset_reference import dataset_ref_from_id
 
 from ._working_schema import SCHEMA_VERSION
+from ._sqlite_scope import connect
 
 
 class RunAlreadyActive(RuntimeError):
@@ -1122,13 +1123,10 @@ class SQLiteRunStore:
 
     @contextmanager
     def _connect(self) -> Iterator[sqlite3.Connection]:
-        connection = sqlite3.connect(self.database_path, timeout=self.sqlite_timeout)
-        connection.row_factory = sqlite3.Row
-        connection.execute("PRAGMA foreign_keys = ON")
-        try:
+        # connect ends even read-only BEGIN snapshots before returning an idle
+        # connection to the scope. observe's next call must see new commits.
+        with connect(self.database_path, timeout=self.sqlite_timeout) as connection:
             yield connection
-        finally:
-            connection.close()
 
     @contextmanager
     def _transaction(self) -> Iterator[sqlite3.Connection]:

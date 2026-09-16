@@ -31,23 +31,28 @@ def connection_scope(database_path: Path) -> Iterator[None]:
     key = Path(database_path).absolute()
     if not hasattr(_thread, "slots"):
         _thread.slots = {}
-    slots: dict[Path, _ConnectionSlot] = _thread.slots
+    slots: dict[Path, dict[float, _ConnectionSlot]] = _thread.slots
     if key in slots:
         yield
         return
-    slot = slots[key] = _ConnectionSlot()
+    connections = slots[key] = {}
     try:
         yield
     finally:
         del slots[key]
-        if slot.connection is not None:
-            slot.connection.close()
+        for slot in connections.values():
+            if slot.connection is not None:
+                slot.connection.close()
 
 
 @contextmanager
-def connect(database_path: Path) -> Iterator[sqlite3.Connection]:
+def connect(database_path: Path, *, timeout: float = 30) -> Iterator[sqlite3.Connection]:
     key = Path(database_path).absolute()
-    slot = getattr(_thread, "slots", {}).get(key)
+    connections = getattr(_thread, "slots", {}).get(key)
+    slot = (
+        None if connections is None
+        else connections.setdefault(timeout, _ConnectionSlot())
+    )
     reusable = (
         slot is not None
         and not slot.borrowed
@@ -55,7 +60,7 @@ def connect(database_path: Path) -> Iterator[sqlite3.Connection]:
     )
     connection = slot.connection if reusable else None
     if connection is None:
-        connection = sqlite3.connect(database_path, timeout=30)
+        connection = sqlite3.connect(database_path, timeout=timeout)
         connection.row_factory = sqlite3.Row
         connection.execute("PRAGMA foreign_keys = ON")
     if reusable:

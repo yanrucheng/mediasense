@@ -1726,3 +1726,123 @@ def test_low_level_work_and_artifact_are_reused_across_public_runs(
     assert second_status["state"] == "completed"
     assert second_status["result"]["ref"] != first_status["result"]["ref"]
     assert second_renditions == first_renditions
+
+
+def test_small_rendition_batches_preserve_parallelism_and_resource_claims(tmp_path, monkeypatch):
+    from threading import Barrier
+    from mediasense.precheck import ImageRenditionProducer
+    from mediasense.precheck.resources import ResourceBudget, ResourceClaim
+    source = tmp_path / "source"
+    source.mkdir()
+    for index in range(4):
+        Image.new("RGB", (8, 8), "blue").save(source / f"{index}.jpg")
+    database = tmp_path / "work.sqlite3"
+    accounting = AccountingStore(database)
+    accounting.register_dataset("dataset-a")
+    run_id = accounting.start_or_resume_run("dataset-a", source)
+    accounting.process_run(run_id)
+    class Control:
+        def current_state(self, ref):
+            return "running"
+    rendezvous = Barrier(4)
+    batches = []
+    def produce(self, run, paths, **kwargs):
+        batch = tuple(paths)
+        batches.append(batch)
+        rendezvous.wait(timeout=10)
+        return ()
+    monkeypatch.setattr(ImageRenditionProducer, "produce_many", produce)
+    budget = ResourceBudget(ResourceClaim(
+        source_io_slots=4, workspace_io_slots=4, cpu_slots=4,
+        memory_bytes=512 * 1024**2, temporary_bytes=128 * 1024**2,
+        decoder_slots=4, encoder_slots=4), max_workers=4, max_pending=4)
+    executor = BoundedWorkExecutor(budget)
+    PrecheckOrchestrator(database, Control())._renditions(
+        "run", run_id, tuple(accounting.get_run_items(run_id)),
+        PrecheckExecutionConfig(), executor)
+    assert len(batches) == 4 and all(len(batch) == 1 for batch in batches)
+    assert executor.admission.usage() == ResourceClaim()
+    assert executor.admission.peak_usage().memory_bytes == 512 * 1024**2
+
+
+def test_real_rendition_batches_keep_pixels_members_and_identity_when_interleaved(tmp_path, monkeypatch):
+    from threading import Barrier
+    from mediasense.precheck import (
+        AdaptiveCompressionProducer, AdaptiveCompressionProfile, CompressionInput,
+        ImageRenditionProducer, WorkStatus,
+    )
+    from mediasense.precheck import rendition
+    from mediasense.precheck.resources import ResourceBudget, ResourceClaim
+
+    source = tmp_path / "source"
+    source.mkdir()
+    for index in range(6):
+        Image.new("RGB", (800, 700), (index * 30, 40, 150)).save(source / f"{index}.jpg")
+    database = tmp_path / "work.sqlite3"
+    accounting = AccountingStore(database)
+    accounting.register_dataset("dataset-a")
+
+    class Control:
+        def current_state(self, ref):
+            return "running"
+
+    original_decode = rendition._decode_rgb
+    original_profiles = ImageRenditionProducer._produce_profiles
+    barrier, last_first = Barrier(3), Event()
+    decoded, finished = [], []
+    workers = 1
+
+    def decode(path):
+        decoded.append(path.name)
+        if workers == 3 and path.name in {"0.jpg", "2.jpg", "4.jpg"}:
+            barrier.wait(timeout=10)
+            if path.name == "0.jpg":
+                assert last_first.wait(timeout=10)
+        return original_decode(path)
+
+    def profiles(self, run_id, path, **kwargs):
+        result = original_profiles(self, run_id, path, **kwargs)
+        finished.append(path.name)
+        if workers == 3 and path.name == "4.jpg":
+            last_first.set()
+        return result
+
+    monkeypatch.setattr(rendition, "_decode_rgb", decode)
+    monkeypatch.setattr(ImageRenditionProducer, "_produce_profiles", profiles)
+    snapshots, sealed = [], []
+    store = ResultStore(database)
+    for workers in (1, 3):
+        decoded.clear()
+        finished.clear()
+        run_id = accounting.start_or_resume_run("dataset-a", source)
+        accounting.process_run(run_id)
+        budget = ResourceBudget(ResourceClaim(
+            source_io_slots=workers, workspace_io_slots=workers, cpu_slots=workers,
+            memory_bytes=512 * 1024**2, temporary_bytes=128 * 1024**2,
+            decoder_slots=workers, encoder_slots=workers), max_workers=workers, max_pending=workers)
+        outcomes = PrecheckOrchestrator(database, Control())._renditions(
+            "run", run_id, tuple(accounting.get_run_items(run_id)),
+            PrecheckExecutionConfig(), BoundedWorkExecutor(budget))
+        assert all(outcome.work.status is WorkStatus.SUCCEEDED for outcome in outcomes)
+        assert sorted(decoded) == [f"{index}.jpg" for index in range(6)]
+        snapshots.append(sorted((outcome.work.semantic_key, outcome.artifact.path.read_bytes()) for outcome in outcomes))
+        inputs = []
+        for outcome in outcomes:
+            if outcome.work.output["value"]["profile"]["name"] != "ordinary":
+                continue
+            path = next(json.loads(d.key)[1] for d in outcome.work.spec.dependencies if d.kind == "source_content")
+            inputs.append(CompressionInput(relative_path=Path(path), visual_work_id=outcome.work.work_id))
+        groups = AdaptiveCompressionProducer(database).produce(
+            run_id, inputs, profile=AdaptiveCompressionProfile(target_entries=2))
+        draft = store.build_minimal(run_id, [o.work.work_id for o in outcomes],
+                                    compression_work_ids=[group.work.work_id for group in groups])
+        sealed.append(store.seal(draft))
+        if workers == 1:
+            for outcome in outcomes:
+                WorkStore(database).invalidate_work(outcome.work.work_id, "test cold interleaved rebuild")
+        else:
+            assert finished.index("4.jpg") < finished.index("0.jpg")
+    assert snapshots[0] == snapshots[1]
+    comparison = store.compare(sealed[0].result_ref, sealed[1].result_ref)
+    assert comparison["source_boundary"]["same"]
+    assert comparison["representation"]["identical_group_count"] == 2

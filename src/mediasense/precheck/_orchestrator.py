@@ -458,6 +458,17 @@ class PrecheckOrchestrator:
         accounting_run_id: str,
         config: PrecheckExecutionConfig,
     ) -> SealedResult | dict[str, object]:
+        from ._sqlite_scope import connection_scope
+
+        with connection_scope(self.database_path):
+            return self._advance(run_ref, accounting_run_id, config)
+
+    def _advance(
+        self,
+        run_ref: str,
+        accounting_run_id: str,
+        config: PrecheckExecutionConfig,
+    ) -> SealedResult | dict[str, object]:
         if not self._running(run_ref):
             return self.run_control.sync_accounting(run_ref)
         if config.preparation is None:
@@ -907,33 +918,43 @@ class PrecheckOrchestrator:
         if not config.image_renditions:
             return ()
         producer = ImageRenditionProducer(self.database_path)
-        calls = (
-            ScheduledCall(
-                f"rendition:{item.relative_path.as_posix()}",
-                ResourceClaim(
-                    source_io_slots=1,
-                    workspace_io_slots=1,
-                    cpu_slots=1,
-                    memory_bytes=128 * 1024 * 1024,
-                    temporary_bytes=32 * 1024 * 1024,
-                    decoder_slots=1,
-                    encoder_slots=1,
-                ),
-                lambda item=item: producer.produce_profiles(
-                    run_id,
-                    item.relative_path,
-                    profiles=(
-                        ORDINARY_RENDITION_PROFILE,
-                        HIGH_RESOLUTION_RENDITION_PROFILE,
+        from itertools import islice
+
+        stills = (item for item in media if item.kind in _STILL_KINDS)
+        count = sum(item.kind in _STILL_KINDS for item in media)
+        budget = executor.budget
+        # Keep small inputs parallel. Each batch still reserves a full single
+        # decode plus bounded metadata; only one decoded source lives at a time.
+        parallel = max(1, min(budget.max_workers, budget.capacity.decoder_slots,
+                              budget.capacity.encoder_slots, budget.capacity.cpu_slots,
+                              budget.capacity.source_io_slots, budget.capacity.workspace_io_slots,
+                              budget.capacity.memory_bytes // (128 * 1024**2)))
+        batch_size = min(32, max(1, count // parallel))
+        extra_per_source = 64 * 1024
+        spare = budget.capacity.memory_bytes // parallel - 128 * 1024**2
+        batch_size = min(batch_size, max(1, spare // extra_per_source))
+
+        def calls():
+            while batch := tuple(islice(stills, batch_size)):
+                # A single source uses the original claim and path when there
+                # is no room for additional batch metadata.
+                extra = len(batch) * extra_per_source if len(batch) > 1 else 0
+                yield ScheduledCall(
+                    f"rendition:{batch[0].relative_path.as_posix()}",
+                    ResourceClaim(
+                        source_io_slots=1, workspace_io_slots=1, cpu_slots=1,
+                        memory_bytes=128 * 1024**2 + extra,
+                        temporary_bytes=32 * 1024**2, decoder_slots=1, encoder_slots=1,
                     ),
-                ),
-            )
-            for item in media
-            if item.kind in _STILL_KINDS
-        )
+                    lambda batch=batch: producer.produce_many(
+                        run_id, (item.relative_path for item in batch),
+                        profiles=(ORDINARY_RENDITION_PROFILE, HIGH_RESOLUTION_RENDITION_PROFILE),
+                        should_continue=lambda: self._running(run_ref),
+                    ),
+                )
+
         return tuple(
-            outcome
-            for _key, values in self._execute(run_ref, executor, calls)
+            outcome for _key, values in self._execute(run_ref, executor, calls())
             for outcome in values
         )
 
@@ -1543,11 +1564,14 @@ class PrecheckOrchestrator:
     ) -> Iterator[tuple[str, _T]]:
         def guarded(call: ScheduledCall[_T]) -> ScheduledCall[_T]:
             def invoke() -> _T:
-                if not self._running(run_ref):
-                    raise ResourceAdmissionCancelled(
-                        "Run stopped before scheduled Work began"
-                    )
-                return call.function()
+                from ._sqlite_scope import connection_scope
+
+                with connection_scope(self.database_path):
+                    if not self._running(run_ref):
+                        raise ResourceAdmissionCancelled(
+                            "Run stopped before scheduled Work began"
+                        )
+                    return call.function()
 
             return ScheduledCall(call.key, call.claim, invoke)
 

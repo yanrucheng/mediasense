@@ -101,11 +101,14 @@ class PlanWorkTool:
         id_factory: Callable[[str], str] | None = None,
         frozen_plan_schema: Path | None = None,
         view_delivery: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
+        readonly: bool = False,
     ) -> None:
         precheck_boundary = require_precheck_read_boundary(precheck_read)
         self.view_delivery = view_delivery
         self.plan_store = Path(plan_store)
-        self.store = SQLitePlanStore(self.plan_store / "work-v3.sqlite3")
+        self.store = SQLitePlanStore(
+            self.plan_store / "work-v3.sqlite3", readonly=readonly
+        )
         self.frozen_dir = self.plan_store / "frozen"
         self.precheck_read = precheck_boundary
         self._id_factory = id_factory or (lambda prefix: f"{prefix}:{uuid4()}")

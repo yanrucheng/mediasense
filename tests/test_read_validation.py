@@ -16,6 +16,31 @@ def errors(validator, value):
     ]
 
 
+def test_observation_validator_reuses_definition_and_resets_with_root_cache():
+    from concurrent.futures import ThreadPoolExecutor
+    from mediasense.runtime.resources import contract_validator, observation_validator
+
+    first = observation_validator()
+    assert isinstance(first, ReadValidator)
+    assert first.format_checker is FORMAT_CHECKER
+    assert observation_validator() is first
+    expected = contract_validator("mediasense.precheck.read", "review").evolve(
+        schema={"$defs": first.schema["$defs"], "$ref": "#/$defs/observation"}
+    )
+    for value in (
+        {"name": "capture_time", "status": "available", "value": "2026-09-11"},
+        {"name": "capture_time", "status": "available", "value": "2026-09-11T01:00:00+08:00"},
+        {"name": "extension", "status": "available", "value": {"nested": [True, 3]}},
+        {"name": "iso", "status": "available", "value": True},
+    ):
+        assert errors(first, value) == errors(expected, value)
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        child = executor.submit(observation_validator).result()
+        assert child is not first
+    contract_validator.cache_clear()
+    assert observation_validator() is not first
+
+
 @pytest.mark.parametrize(
     "schema",
     [

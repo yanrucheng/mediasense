@@ -50,22 +50,52 @@ class SourceValidityStore:
         self._verify_schema()
 
     def prove(self, run_id: str, relative_path: Path) -> SourceContentProof:
-        relative = _validated_relative_path(relative_path)
+        return self.prove_many(run_id, (relative_path,))[0]
+
+    def prove_many(self, run_id: str, relative_paths) -> tuple[SourceContentProof, ...]:
+        """Observe at most 128 occurrences, then commit their proofs together."""
+        from itertools import islice
+
+        paths = tuple(_validated_relative_path(p) for p in islice(relative_paths, 129))
+        if len(paths) > 128:
+            raise ValueError("source proof batch exceeds 128 occurrences")
+        if not paths:
+            return ()
         with self._connect() as connection:
-            row = connection.execute(
-                """
-                SELECT working_runs.dataset_id, working_runs.source_root,
-                       working_runs.reuse_domain, working_runs.status,
-                       run_items.source_revision, run_items.condition,
-                       run_items.size_bytes, run_items.mtime_ns,
-                       run_items.device_id, run_items.inode, run_items.mode,
-                       run_items.fingerprint_algorithm, run_items.fingerprint
-                FROM working_runs
-                JOIN run_items ON run_items.run_id = working_runs.run_id
-                WHERE working_runs.run_id = ? AND run_items.relative_path = ?
-                """,
-                (run_id, relative.as_posix()),
-            ).fetchone()
+            rows = self._source_rows(connection, run_id, paths)
+        proofs = tuple(self._observe(rows.get(path.as_posix()), path) for path in paths)
+        with self._transaction() as connection:
+            current = self._source_rows(connection, run_id, paths)
+            for path, proof in zip(paths, proofs, strict=True):
+                row = current.get(path.as_posix())
+                if row is None or dict(row) != dict(rows[path.as_posix()]):
+                    raise SourceChangedDuringRead(
+                        f"source accounting changed while proving: {path}"
+                    )
+                # Recheck this occurrence's stat at the commit boundary. A batch
+                # must not stretch an earlier observation into authorization.
+                self._observe(row, path)
+                self._record_proof(connection, proof)
+        return proofs
+
+    def _source_rows(self, connection, run_id, paths):
+        names = tuple(dict.fromkeys(path.as_posix() for path in paths))
+        rows = connection.execute(
+            f"""
+            SELECT run_items.relative_path, working_runs.dataset_id,
+                   working_runs.source_root, working_runs.reuse_domain,
+                   working_runs.status, run_items.source_revision,
+                   run_items.condition, run_items.size_bytes, run_items.mtime_ns,
+                   run_items.device_id, run_items.inode, run_items.mode,
+                   run_items.fingerprint_algorithm, run_items.fingerprint
+            FROM working_runs JOIN run_items USING (run_id)
+            WHERE working_runs.run_id = ?
+              AND run_items.relative_path IN ({','.join('?' for _ in names)})
+            """, (run_id, *names),
+        ).fetchall()
+        return {row["relative_path"]: row for row in rows}
+
+    def _observe(self, row, relative):
         if row is None:
             raise KeyError(f"source is not accounted by Working Run: {relative}")
         if WorkingRunStatus(row["status"]) not in {
@@ -116,7 +146,6 @@ class SourceValidityStore:
             observed_at=observed_at,
             source_path=source_path,
         )
-        self._record(run_id, proof)
         return proof
 
     def verify(self, run_id: str, expected: SourceContentProof) -> SourceContentProof:
@@ -127,77 +156,54 @@ class SourceValidityStore:
             )
         return observed
 
-    def _record(self, run_id: str, proof: SourceContentProof) -> None:
+    def _record_proof(self, connection, proof: SourceContentProof) -> None:
         dependency = proof.dependency()
         timestamp = proof.observed_at.isoformat(timespec="microseconds")
-        with self._transaction() as connection:
-            current = connection.execute(
-                """
-                SELECT working_runs.dataset_id, working_runs.reuse_domain,
-                       working_runs.status, run_items.source_revision,
-                       run_items.condition
-                FROM working_runs
-                JOIN run_items ON run_items.run_id = working_runs.run_id
-                WHERE working_runs.run_id = ? AND run_items.relative_path = ?
-                """,
-                (run_id, proof.relative_path.as_posix()),
-            ).fetchone()
-            if (
-                current is None
-                or str(current["dataset_id"]) != proof.dataset_id
-                or str(current["reuse_domain"]) != proof.reuse_domain
-                or int(current["source_revision"]) != proof.source_revision
-                or SourceCondition(current["condition"])
-                not in {SourceCondition.USABLE, SourceCondition.UNRESOLVED}
-            ):
-                raise SourceChangedDuringRead(
-                    f"source accounting changed while proving: {proof.relative_path}"
-                )
-            previous = connection.execute(
-                """
-                SELECT proof_value FROM source_content_proofs
-                WHERE dataset_id = ? AND relative_path = ? AND reuse_domain = ?
-                """,
-                (
-                    proof.dataset_id,
-                    proof.relative_path.as_posix(),
-                    proof.reuse_domain,
-                ),
-            ).fetchone()
-            if previous is not None and previous["proof_value"] != dependency.value:
-                invalidate_source_dependencies(
-                    connection,
-                    proof.dataset_id,
-                    {proof.relative_path.as_posix()},
-                    reason="exact_source_content_changed",
-                    observed_at=timestamp,
-                )
-            connection.execute(
-                """
-                INSERT INTO source_content_proofs (
-                    dataset_id, relative_path, reuse_domain, source_revision,
-                    algorithm, digest, size_bytes, proof_value, observed_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT (dataset_id, relative_path, reuse_domain) DO UPDATE SET
-                    source_revision = excluded.source_revision,
-                    algorithm = excluded.algorithm,
-                    digest = excluded.digest,
-                    size_bytes = excluded.size_bytes,
-                    proof_value = excluded.proof_value,
-                    observed_at = excluded.observed_at
-                """,
-                (
-                    proof.dataset_id,
-                    proof.relative_path.as_posix(),
-                    proof.reuse_domain,
-                    proof.source_revision,
-                    proof.algorithm,
-                    proof.digest,
-                    proof.size_bytes,
-                    dependency.value,
-                    timestamp,
-                ),
+        previous = connection.execute(
+            """
+            SELECT proof_value FROM source_content_proofs
+            WHERE dataset_id = ? AND relative_path = ? AND reuse_domain = ?
+            """,
+            (
+                proof.dataset_id,
+                proof.relative_path.as_posix(),
+                proof.reuse_domain,
+            ),
+        ).fetchone()
+        if previous is not None and previous["proof_value"] != dependency.value:
+            invalidate_source_dependencies(
+                connection,
+                proof.dataset_id,
+                {proof.relative_path.as_posix()},
+                reason="exact_source_content_changed",
+                observed_at=timestamp,
             )
+        connection.execute(
+            """
+            INSERT INTO source_content_proofs (
+                dataset_id, relative_path, reuse_domain, source_revision,
+                algorithm, digest, size_bytes, proof_value, observed_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT (dataset_id, relative_path, reuse_domain) DO UPDATE SET
+                source_revision = excluded.source_revision,
+                algorithm = excluded.algorithm,
+                digest = excluded.digest,
+                size_bytes = excluded.size_bytes,
+                proof_value = excluded.proof_value,
+                observed_at = excluded.observed_at
+            """,
+            (
+                proof.dataset_id,
+                proof.relative_path.as_posix(),
+                proof.reuse_domain,
+                proof.source_revision,
+                proof.algorithm,
+                proof.digest,
+                proof.size_bytes,
+                dependency.value,
+                timestamp,
+            ),
+        )
 
     def _verify_schema(self) -> None:
         with self._connect() as connection:

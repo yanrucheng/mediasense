@@ -13,6 +13,7 @@ from importlib.resources import files
 from pathlib import Path
 import re
 from typing import Any
+from threading import local
 
 FORMAT_CHECKER = FormatChecker()
 
@@ -90,6 +91,26 @@ def contract_validator(name: str, action: str | None = None) -> Draft202012Valid
 
 def contract_digest(name: str) -> str:
     return "sha256:" + hashlib.sha256(contract_path(name).read_bytes()).hexdigest()
+
+
+_observation_validators = local()
+
+
+def observation_validator() -> Draft202012Validator:
+    """Reuse the loaded Read definition, with no shared validation iterator.
+
+    Keeping the root object alongside its child makes clearing the existing
+    contract cache also invalidate the child on the next access in each thread.
+    """
+    root = contract_validator("mediasense.precheck.read", "review")
+    cached = getattr(_observation_validators, "current", None)
+    if cached is None or cached[0] is not root:
+        child = root.evolve(
+            schema={"$defs": root.schema["$defs"], "$ref": "#/$defs/observation"}
+        )
+        _observation_validators.current = (root, child)
+        return child
+    return cached[1]
 
 
 def skill_roots() -> tuple[Path, ...]:

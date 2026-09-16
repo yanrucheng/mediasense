@@ -4,7 +4,7 @@ title: "Design Documents"
 type: index
 status: active
 created: 2026-08-23
-updated: 2026-09-14
+updated: 2026-09-15
 timezone: "Asia/Shanghai"
 parent: "index-docs"
 depends-on: []
@@ -17,6 +17,8 @@ Read the applicable [basic concept model](../model/index.md) before proposing ne
 
 | ID | Title | Status | Created | Summary |
 | --- | --- | --- | --- | --- |
+| [design-260915-1519-plan-view-lifecycle](design-260915-1519-plan-view-lifecycle.md) | Plan 预览生命周期：自动交付与资源回收 | active | 2026-09-15 | 设计已定稿并按授权实施：轻路由、重上下文回收、自动退出、版本隔离和诊断清理；源码／隔离构建及图片／慢读取补修证据见实施记录，未发布或切换日常安装。 |
+| [design-260915-1244-plan-preview-simplification](design-260915-1244-plan-preview-simplification.md) | Plan 整理结果浏览：设计计划 | review | 2026-09-15 | 分组浏览已实现并获用户观感认可，源码、隔离构建及浏览器验证见文末，未发布；后续生命周期见专门设计。[生产记录](design-260915-1244-plan-preview-simplification.reasoning.md)归属于本计划。 |
 | [design-260914-1450-precheck-execution-efficiency](design-260914-1450-precheck-execution-efficiency.md) | PreCheck工具执行效率工程设计 | review | 2026-09-14 | 限定连接复用、Store批量操作、准备/结果数据访问和验证器复用；按S0–S5验证正确性并最终实测，无强制提速门槛，尚未开发。 |
 | [design-260911-1834-manufacturer-information-system](design-260911-1834-manufacturer-information-system.md) | 厂商信息维护体系：能力边界与演进设计 | active | 2026-09-11 | User-selected bundled YAML plus personal overlays; the file contract owns fields and application, with frozen knowledge, actual provenance and evidence in the existing ledger. |
 | [design-260910-1726-geo-recovery](design-260910-1726-geo-recovery.md) | Geo 业务阻塞诊断与恢复方案 | implemented | 2026-09-10 | 0.10.0 regional routing, network pause/recovery and cumulative effects implemented; synthetic legacy accounting and isolated installed CLI/MCP verified. Live business recovery remains separate. |

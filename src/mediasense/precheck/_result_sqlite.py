@@ -387,82 +387,30 @@ class SQLiteResultStore:
             )
 
         artifact_ids: list[str] = []
-        for item in draft.evidence:
-            if item.artifact_id is None:
-                continue
-            if item.work_id is None:
-                raise ResultSealError("Artifact Evidence must retain producing Work")
-            artifact = self.artifacts.require_available(item.artifact_id)
+        for item, artifact, work in self._artifact_evidence(draft):
             if item.access != {
                 "kind": "local_artifact",
                 "locator": {"kind": "local_file_path", "value": str(artifact.path)},
             }:
                 raise ResultSealError("Evidence access does not match its Artifact")
-            with self._connect() as connection:
-                linked = connection.execute(
-                    """
-                    SELECT 1 FROM work_artifacts
-                    JOIN work_records USING (work_id)
-                    JOIN run_work_records USING (work_id)
-                    WHERE work_artifacts.work_id = ?
-                      AND work_artifacts.artifact_id = ?
-                      AND work_records.status = ?
-                      AND run_work_records.run_id = ?
-                    """,
-                    (
-                        item.work_id,
-                        item.artifact_id,
-                        WorkStatus.SUCCEEDED,
-                        draft.run_id,
-                    ),
-                ).fetchone()
-                source_dependencies: set[str] = set()
-                for row in connection.execute(
-                    """
-                        SELECT dependency_key FROM work_dependencies
-                        WHERE work_id = ? AND dependency_kind = ?
-                        """,
-                    (item.work_id, DependencyKind.SOURCE_CONTENT),
-                ):
-                    try:
-                        source_dataset, source_path = json.loads(row["dependency_key"])
-                    except (TypeError, ValueError) as error:
-                        raise ResultSealError(
-                            "Artifact Work has an invalid source dependency"
-                        ) from error
-                    if source_dataset != draft.dataset_id:
-                        raise ResultSealError(
-                            "Artifact Work source dependency is outside this Dataset"
-                        )
-                    source_dependencies.add(str(source_path))
-            if linked is None:
-                raise ResultSealError("Artifact is not bound to successful Work")
-
-            def lineage(ref, active=frozenset()):
-                if ref in active:
-                    raise ResultSealError("derived_from contains a cycle")
-                if ref in sources:
-                    return {sources[ref].relative_path.as_posix()}
-                return set().union(
-                    *(
-                        lineage(target, active | {ref})
-                        for target in derived_by_evidence.get(ref, ())
-                    )
-                )
-
-            derived_sources = lineage(item.ref)
+            source_dependencies = set()
+            for dependency in work.spec.dependencies:
+                if dependency.kind is not DependencyKind.SOURCE_CONTENT:
+                    continue
+                try:
+                    source_dataset, source_path = json.loads(dependency.key)
+                except (TypeError, ValueError) as error:
+                    raise ResultSealError("Artifact Work has an invalid source dependency") from error
+                if source_dataset != draft.dataset_id:
+                    raise ResultSealError("Artifact Work source dependency is outside this Dataset")
+                source_dependencies.add(str(source_path))
+            derived_sources = _source_lineage(item.ref, sources, derived_by_evidence)
             direct_evidence = [
                 ref for ref in derived_by_evidence.get(item.ref, ()) if ref in evidence
             ]
             if direct_evidence:
-                with self._connect() as connection:
-                    upstream = {
-                        row[0]
-                        for row in connection.execute(
-                            "SELECT dependency_key FROM work_dependencies WHERE work_id = ? AND dependency_kind = ?",
-                            (item.work_id, DependencyKind.UPSTREAM_WORK),
-                        )
-                    }
+                upstream = {dependency.key for dependency in work.spec.dependencies
+                            if dependency.kind is DependencyKind.UPSTREAM_WORK}
                 if any(
                     evidence[ref].work_id not in upstream for ref in direct_evidence
                 ):
@@ -474,36 +422,61 @@ class SQLiteResultStore:
             artifact_ids.append(item.artifact_id)
         return tuple(sorted(set(artifact_ids)))
 
-    def _validate_source_verifications(self, draft: ResultDraft) -> None:
-        for source in draft.sources:
-            observations = tuple(
-                observation
-                for observation in source.observations
-                if observation.get("name") == "source_content_verification"
-            )
-            if not observations:
-                continue
-            if len(observations) != 1:
-                raise ResultSealError(
-                    "Source Item has multiple content verification observations"
-                )
-            value = observations[0].get("value")
-            if not isinstance(value, Mapping):
-                raise ResultSealError("source verification value is invalid")
+    def _artifact_evidence(self, draft):
+        from itertools import islice
+        from ._artifact_types import ArtifactIntegrity, ArtifactIntegrityError
+
+        selected = (item for item in draft.evidence if item.artifact_id is not None)
+        while block := tuple(islice(selected, 64)):
+            if any(item.work_id is None for item in block):
+                raise ResultSealError("Artifact Evidence must retain producing Work")
+            ids = tuple(dict.fromkeys(item.work_id for item in block))
+            materials = self.artifacts.artifacts_for_works(ids)
             try:
-                current = self.source_validity.prove(draft.run_id, source.relative_path)
+                works = {work.work_id: work for work in self.artifacts.get_work_many(ids, run_id=draft.run_id)}
+            except KeyError as error:
+                # Preserve the more specific cross-Dataset rejection before
+                # the generic attachment error, as the single-item path did.
+                for work in self.artifacts.get_work_many(ids):
+                    if any(dependency.kind is DependencyKind.SOURCE_CONTENT
+                           and json.loads(dependency.key)[0] != draft.dataset_id
+                           for dependency in work.spec.dependencies):
+                        raise ResultSealError("Artifact Work source dependency is outside this Dataset") from error
+                raise ResultSealError("Artifact is not bound to successful Work") from error
+            for item in block:
+                work = works[item.work_id]
+                artifact = next((value for value in materials[item.work_id] if value.artifact_id == item.artifact_id), None)
+                if artifact is None or work.status is not WorkStatus.SUCCEEDED:
+                    raise ResultSealError("Artifact is not bound to successful Work")
+                if artifact.integrity is not ArtifactIntegrity.AVAILABLE:
+                    raise ArtifactIntegrityError(f"Artifact {artifact.artifact_id} is {artifact.integrity}")
+                yield item, artifact, work
+
+    def _validate_source_verifications(self, draft: ResultDraft) -> None:
+        from itertools import islice
+
+        selected = (source for source in draft.sources if any(
+            observation.get("name") == "source_content_verification" for observation in source.observations))
+        while block := tuple(islice(selected, 128)):
+            values = []
+            for source in block:
+                observations = tuple(observation for observation in source.observations
+                                     if observation.get("name") == "source_content_verification")
+                if len(observations) != 1:
+                    raise ResultSealError("Source Item has multiple content verification observations")
+                value = observations[0].get("value")
+                if not isinstance(value, Mapping):
+                    raise ResultSealError("source verification value is invalid")
+                values.append(value)
+            try:
+                proofs = self.source_validity.prove_many(draft.run_id, (source.relative_path for source in block))
             except (KeyError, OSError, ValueError, SourceChangedDuringRead) as error:
-                raise ResultSealError(
-                    f"source verification failed at seal: {source.relative_path}"
-                ) from error
-            if (
-                value.get("profile") != current.algorithm
-                or value.get("value") != f"sha256:{current.digest}"
-                or value.get("size_bytes") != current.size_bytes
-            ):
-                raise ResultSealError(
-                    f"source verification changed before seal: {source.relative_path}"
-                )
+                raise ResultSealError(f"source verification failed at seal: {error}") from error
+            for source, value, current in zip(block, values, proofs, strict=True):
+                if (value.get("profile") != current.algorithm
+                        or value.get("value") != f"sha256:{current.digest}"
+                        or value.get("size_bytes") != current.size_bytes):
+                    raise ResultSealError(f"source verification changed before seal: {source.relative_path}")
 
     def _validate_final_pins(
         self,
@@ -514,29 +487,7 @@ class SQLiteResultStore:
 
         self._validate_supporting_work(connection, draft)
         verified_artifacts: set[str] = set()
-        for item in draft.evidence:
-            if item.artifact_id is None or item.work_id is None:
-                continue
-            row = connection.execute(
-                """
-                SELECT artifacts.*
-                FROM work_artifacts
-                JOIN artifacts USING (artifact_id)
-                JOIN work_records USING (work_id)
-                JOIN run_work_records USING (work_id)
-                WHERE artifacts.artifact_id = ?
-                  AND work_artifacts.work_id = ?
-                  AND artifacts.integrity_status = 'available'
-                  AND work_records.status = ?
-                  AND run_work_records.run_id = ?
-                """,
-                (
-                    item.artifact_id,
-                    item.work_id,
-                    WorkStatus.SUCCEEDED,
-                    draft.run_id,
-                ),
-            ).fetchone()
+        for item, row in self._final_pin_rows(connection, draft):
             if row is None:
                 raise ResultSealError(
                     "Artifact-producing Work is no longer eligible for this Result: "
@@ -556,6 +507,25 @@ class SQLiteResultStore:
                     f"Artifact integrity changed during Result seal: {item.artifact_id}"
                 )
             verified_artifacts.add(item.artifact_id)
+
+    def _final_pin_rows(self, connection, draft):
+        from itertools import islice
+
+        selected = (item for item in draft.evidence if item.artifact_id is not None and item.work_id is not None)
+        while block := tuple(islice(selected, 128)):
+            ids = tuple(dict.fromkeys(item.work_id for item in block))
+            rows = connection.execute(
+                f"""SELECT a.*, wa.work_id FROM artifacts a
+                JOIN work_artifacts wa USING (artifact_id)
+                JOIN work_records w USING (work_id)
+                JOIN run_work_records r USING (work_id)
+                WHERE r.run_id = ? AND w.status = ? AND a.integrity_status = 'available'
+                  AND w.work_id IN ({','.join('?' for _ in ids)})""",
+                (draft.run_id, WorkStatus.SUCCEEDED, *ids),
+            ).fetchall()
+            eligible = {(row["work_id"], row["artifact_id"]): row for row in rows}
+            for item in block:
+                yield item, eligible.get((item.work_id, item.artifact_id))
 
     def _validate_supporting_work(
         self,
@@ -627,6 +597,20 @@ class SQLiteResultStore:
             output.write(encoded)
             output.flush()
             os.fsync(output.fileno())
+
+
+def _source_lineage(ref, sources, derived_by_evidence, active=frozenset()):
+    # A self-recursive local closure retains the entire source/evidence graph
+    # until cyclic GC, even after the draft itself has been released. Keep the
+    # same lineage checks without retaining publication data across full Read.
+    if ref in active:
+        raise ResultSealError("derived_from contains a cycle")
+    if ref in sources:
+        return {sources[ref].relative_path.as_posix()}
+    return set().union(*(
+        _source_lineage(target, sources, derived_by_evidence, active | {ref})
+        for target in derived_by_evidence.get(ref, ())
+    ))
 
 
 def _validate_result_ref(result_ref: str) -> None:
@@ -1066,13 +1050,10 @@ def _validate_source_locator(value: object, relative_path: Path) -> None:
 
 
 def _validate_observations(observations: tuple[dict[str, object], ...]) -> None:
-    from mediasense.runtime.resources import contract_validator
+    from mediasense.runtime.resources import observation_validator
     from jsonschema import ValidationError
 
-    validator = contract_validator("mediasense.precheck.read", "review")
-    validator = validator.evolve(
-        schema={"$defs": validator.schema["$defs"], "$ref": "#/$defs/observation"}
-    )
+    validator = observation_validator()
     seen = set()
     for observation in observations:
         try:

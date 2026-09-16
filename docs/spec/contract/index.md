@@ -4,7 +4,7 @@ title: "MediaSense 当前合约"
 type: index
 status: active
 created: 2026-09-09
-updated: 2026-09-14
+updated: 2026-09-15
 timezone: "Asia/Shanghai"
 parent: "index-spec"
 depends-on:
@@ -34,6 +34,13 @@ superseded-by: ""
 
 ## 阅读入口
 
+2026-09-15，Plan 页面按用户确认的“整理方案”参照收敛为独立折叠分组与横向预览；
+完整审阅由精确版本页面和同版本对话交代共同完成，权威数据、有界读取与确认权限保留。
+当前合约、Skill 和包内快照已同步，源码及隔离构建验证见[设计实施记录](../../design/design-260915-1244-plan-preview-simplification.md#实施与验证2026-09-15)。
+此次未发布、未切换日常安装；分组界面观感已由用户认可。
+同日按后续授权实施[预览生命周期](../../design/design-260915-1519-plan-view-lifecycle.md#实施记录2026-09-15)，
+同步自动回收、闲置退出及异常恢复承诺；工程自验、用户确认和安装发布分别记录。
+
 | 当前合约 | 用途 | 本轮变化 |
 | --- | --- | --- |
 | [厂商知识](manufacturer-knowledge/index.md) | 随包知识、用户 YAML 增量及运行快照 | 用户授权 B 方案；固定文件字段、替换/停用、条件、处理和交付语义，实际验证另记台账 |
@@ -41,7 +48,7 @@ superseded-by: ""
 | [PreCheck Run](precheck-run/index.md) | 启动、控制和观察准备过程 | 控制接口沿用；补齐本期准备深度与生产接通要求 |
 | [Geo Query](geo-query/index.md) | 有界、受授权的地理候选获取 | 输入和效果语义沿用；明确采集策略与证据投影的责任 |
 | [Dataset Open](dataset-open/index.md) | 打开明确的 Dataset | 迁入稳定位置，语义沿用 |
-| [Plan Work](plan-work/index.md) | 保存草案/候选、交付持续页面、按版本确认并冻结 | 第 6 包当前接口已同步；验证范围见本包实施记录，未切换日常安装 |
+| [Plan Work](plan-work/index.md) | 保存草案/候选、交付持续页面、按版本确认并冻结 | 分组浏览与自动生命周期承诺已同步；源码／隔离构建验证见生命周期设计实施记录，未发布或切换日常安装 |
 | [Frozen Plan](frozen-plan/index.md) | 冻结后的组织意图 | 迁入稳定位置，Source Set 含义沿用 |
 | [组织 Profile](default-organization-profile/index.md) | 默认组织和命名策略 | 迁入稳定位置；明确翻译属于 Plan 判断 |
 | [Apply](apply/index.md) | 已冻结计划的执行合约 | 仅迁入稳定位置，本轮不作全量审计 |

@@ -58,27 +58,99 @@ class SQLiteWorkStore:
     ) -> WorkRecord:
         """Reuse one current semantic record or create and attach a new one."""
 
+        return self.ensure_work_many(run_id, (spec,), max_attempts=max_attempts, now=now)[0]
+
+    def ensure_work_many(self, run_id, specs, *, max_attempts=3, now=None):
+        requests = self._work_requests(specs, max_attempts)
+        if not requests:
+            return ()
+        with self._transaction(immediate=True) as connection:
+            return self._ensure_work_many(connection, run_id, requests, max_attempts, _utc(now))
+
+    def _work_requests(self, specs, max_attempts):
+        from itertools import islice
+
         if max_attempts < 1:
             raise ValueError("max_attempts must be positive")
-        observed_at = _utc(now)
-        descriptor = _descriptor_json(spec)
-        semantic_key = _semantic_key(descriptor)
-        with self._transaction(immediate=True) as connection:
-            run = self._require_run_ready(connection, run_id)
-            self._validate_source_dependencies(
-                connection,
-                run_id,
-                str(run["dataset_id"]),
-                spec,
-            )
-            self._validate_upstream_dependencies(connection, spec)
-            existing = connection.execute(
-                """
-                SELECT * FROM work_records
-                WHERE semantic_key = ? AND status <> ? AND status <> ?
-                """,
-                (semantic_key, WorkStatus.INVALIDATED, WorkStatus.CANCELLED),
-            ).fetchone()
+        specs = tuple(islice(specs, 257))
+        if len(specs) > 256:
+            raise ValueError("Work batch exceeds 256 requests")
+        return tuple((spec, descriptor, _semantic_key(descriptor))
+                     for spec in specs for descriptor in (_descriptor_json(spec),))
+
+    def _work_candidates(self, connection, run_id, requests, max_attempts):
+        run = self._require_run_ready(connection, run_id)
+        dataset_id = str(run["dataset_id"])
+        # All maps live only in this read/write transaction; duplicate requests
+        # still pass the same descriptor, policy and dependency rules.
+        sources, proofs, upstream = self._dependency_rows(connection, run_id, requests)
+        keys = tuple(dict.fromkeys(key for _, _, key in requests))
+        # Match the current-semantic-key partial index predicate. SQLite does
+        # not infer that NOT IN is equivalent and otherwise scans Work history.
+        rows = connection.execute(
+            f"SELECT * FROM work_records WHERE semantic_key IN ({','.join('?' for _ in keys)}) AND status <> ? AND status <> ?",
+            (*keys, WorkStatus.INVALIDATED, WorkStatus.CANCELLED),
+        ).fetchall() if keys else ()
+        candidates = {row["semantic_key"]: row for row in rows}
+        for spec, descriptor, key in requests:
+            self._validate_source_dependencies(connection, run_id, dataset_id, spec, sources=sources, proofs=proofs)
+            self._validate_upstream_dependencies(connection, spec, upstream=upstream)
+            existing = candidates.get(key)
+            if existing is not None:
+                if existing["descriptor_json"] != descriptor:
+                    raise WorkIdentityCollision(f"semantic key collision for {key}")
+                if int(existing["max_attempts"]) != max_attempts:
+                    raise InvalidWorkSpec("equivalent work already exists with a different retry policy")
+        return candidates
+
+    def _dependency_rows(self, connection, run_id, requests):
+        paths, work_ids, proof_keys = set(), set(), set()
+        for spec, _, _ in requests:
+            for dependency in spec.dependencies:
+                if dependency.kind in {DependencyKind.SOURCE_REVISION, DependencyKind.SOURCE_CONTENT}:
+                    try:
+                        _dataset, path = json.loads(dependency.key)
+                        if not isinstance(path, str):
+                            raise ValueError("invalid path")
+                        paths.add(path)
+                        if dependency.kind is DependencyKind.SOURCE_CONTENT:
+                            proof_keys.add((path, str(json.loads(dependency.value)["reuse_domain"])))
+                    except (KeyError, TypeError, ValueError) as error:
+                        raise InvalidWorkSpec("invalid source revision dependency key") from error
+                elif dependency.kind is DependencyKind.UPSTREAM_WORK:
+                    work_ids.add(dependency.key)
+        sources, proofs, upstream = {}, {}, {}
+        # A spec can have many dependencies; bound SQL parameters independently
+        # of the number of requested Work records.
+        names = tuple(paths)
+        for start in range(0, len(names), 256):
+            block = names[start:start + 256]
+            marks = ','.join('?' for _ in block)
+            for row in connection.execute(f"SELECT relative_path, source_revision FROM run_items WHERE run_id = ? AND relative_path IN ({marks})", (run_id, *block)).fetchall():
+                sources[row["relative_path"]] = row
+        selected_proofs = tuple(proof_keys)
+        for start in range(0, len(selected_proofs), 128):
+            block = selected_proofs[start:start + 128]
+            marks = ','.join('(?, ?)' for _ in block)
+            parameters = tuple(value for pair in block for value in pair)
+            for row in connection.execute(
+                f"SELECT p.* FROM source_content_proofs p JOIN working_runs r ON p.dataset_id = r.dataset_id WHERE r.run_id = ? AND (p.relative_path, p.reuse_domain) IN ({marks})",
+                (run_id, *parameters),
+            ).fetchall():
+                proofs[(row["relative_path"], row["reuse_domain"])] = row
+        names = tuple(work_ids)
+        for start in range(0, len(names), 256):
+            block = names[start:start + 256]
+            for row in connection.execute(f"SELECT work_id, semantic_key, status FROM work_records WHERE work_id IN ({','.join('?' for _ in block)})", block).fetchall():
+                upstream[row["work_id"]] = row
+        return sources, proofs, upstream
+
+    def _ensure_work_many(self, connection, run_id, requests, max_attempts, observed_at):
+        candidates = self._work_candidates(connection, run_id, requests, max_attempts)
+        work_ids = []
+        changed_capabilities = set()
+        for spec, descriptor, semantic_key in requests:
+            existing = candidates.get(semantic_key)
             if existing is not None:
                 if existing["descriptor_json"] != descriptor:
                     raise WorkIdentityCollision(
@@ -133,12 +205,17 @@ class SQLiteWorkStore:
                 (run_id, work_id, observed_at),
             )
             if attached.rowcount:
-                from ._run_sqlite import record_work_scope_change
+                changed_capabilities.add(spec.capability)
+            candidates[semantic_key] = {
+                "work_id": work_id, "descriptor_json": descriptor,
+                "max_attempts": max_attempts,
+            }
+            work_ids.append(work_id)
+        from ._run_sqlite import record_work_scope_change
 
-                record_work_scope_change(
-                    connection, run_id, spec.capability, observed_at
-                )
-            return self._get_work(connection, work_id)
+        for capability in sorted(changed_capabilities):
+            record_work_scope_change(connection, run_id, capability, observed_at)
+        return self._get_work_many(connection, work_ids)
 
     def claim_ready_work(
         self,
@@ -923,11 +1000,12 @@ class SQLiteWorkStore:
         self,
         connection: sqlite3.Connection,
         spec: WorkSpec,
+        *, upstream=None,
     ) -> None:
         for dependency in spec.dependencies:
             if dependency.kind is not DependencyKind.UPSTREAM_WORK:
                 continue
-            row = connection.execute(
+            row = upstream.get(dependency.key) if upstream is not None else connection.execute(
                 "SELECT semantic_key FROM work_records WHERE work_id = ?",
                 (dependency.key,),
             ).fetchone()
@@ -944,6 +1022,7 @@ class SQLiteWorkStore:
         run_id: str,
         dataset_id: str,
         spec: WorkSpec,
+        *, sources=None, proofs=None,
     ) -> None:
         for dependency in spec.dependencies:
             if dependency.kind not in {
@@ -961,7 +1040,7 @@ class SQLiteWorkStore:
                 raise InvalidWorkSpec(
                     "source revision dependency is outside the Working Run Dataset"
                 )
-            row = connection.execute(
+            row = sources.get(relative_path) if sources is not None else connection.execute(
                 """
                 SELECT source_revision FROM run_items
                 WHERE run_id = ? AND relative_path = ?
@@ -985,7 +1064,7 @@ class SQLiteWorkStore:
                 raise InvalidWorkSpec(
                     "invalid source content dependency value"
                 ) from error
-            proof = connection.execute(
+            proof = proofs.get((relative_path, reuse_domain)) if proofs is not None else connection.execute(
                 """
                 SELECT source_revision, proof_value
                 FROM source_content_proofs
@@ -1211,28 +1290,44 @@ class SQLiteWorkStore:
         connection: sqlite3.Connection,
         work_id: str,
     ) -> WorkRecord:
-        row = connection.execute(
-            "SELECT * FROM work_records WHERE work_id = ?", (work_id,)
-        ).fetchone()
-        if row is None:
-            raise KeyError(f"unknown Work Record: {work_id}")
-        dependencies = tuple(
-            WorkDependency(
-                kind=dependency["dependency_kind"],
-                key=str(dependency["dependency_key"]),
-                value=str(dependency["dependency_value"]),
-            )
-            for dependency in connection.execute(
-                """
-                SELECT dependency_kind, dependency_key, dependency_value
-                FROM work_dependencies WHERE work_id = ?
-                ORDER BY dependency_kind, dependency_key
-                """,
-                (work_id,),
-            )
-        )
+        return self._get_work_many(connection, (work_id,))[0]
+
+    def get_work_many(self, work_ids, *, run_id=None):
+        ids = tuple(work_ids)
+        with self._connect() as connection:
+            connection.execute("BEGIN")
+            if run_id is not None:
+                for start in range(0, len(ids), 256):
+                    block = ids[start:start + 256]
+                    attached = {row[0] for row in connection.execute(
+                        f"SELECT work_id FROM run_work_records WHERE run_id = ? AND work_id IN ({','.join('?' for _ in block)})", (run_id, *block)
+                    ).fetchall()}
+                    for work_id in block:
+                        if work_id not in attached:
+                            raise KeyError(f"Work Record is not attached to Working Run: {work_id}")
+            return self._get_work_many(connection, ids)
+
+    def _get_work_many(self, connection, work_ids):
+        ids = tuple(work_ids)
+        records = {}
+        for start in range(0, len(ids), 256):
+            block = tuple(dict.fromkeys(ids[start:start + 256]))
+            marks = ','.join('?' for _ in block)
+            rows = connection.execute(f"SELECT * FROM work_records WHERE work_id IN ({marks})", block).fetchall()
+            dependencies = {row["work_id"]: [] for row in rows}
+            for row in connection.execute(f"SELECT * FROM work_dependencies WHERE work_id IN ({marks}) ORDER BY work_id, dependency_kind, dependency_key", block).fetchall():
+                dependencies[row["work_id"]].append(WorkDependency(
+                    kind=row["dependency_kind"], key=str(row["dependency_key"]), value=str(row["dependency_value"])))
+            for row in rows:
+                records[row["work_id"]] = self._work_from_row(row, tuple(dependencies[row["work_id"]]))
+        for work_id in ids:
+            if work_id not in records:
+                raise KeyError(f"unknown Work Record: {work_id}")
+        return tuple(records[work_id] for work_id in ids)
+
+    def _work_from_row(self, row, dependencies):
         return WorkRecord(
-            work_id=work_id,
+            work_id=str(row["work_id"]),
             semantic_key=str(row["semantic_key"]),
             spec=WorkSpec(
                 capability=str(row["capability"]),

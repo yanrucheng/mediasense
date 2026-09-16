@@ -264,13 +264,26 @@ def test_note_resolution_errors_keep_their_meaning_at_the_page_boundary(
         view.page(state["revision"], collection)
 
     responses = []
+    from contextlib import nullcontext
+
+    route = SimpleNamespace(
+        work_ref=state["work_ref"], database=tool.store.database_path
+    )
+    lifecycle = SimpleNamespace(
+        current=lambda *a, **kw: {"revision": state["revision"], "state": "open"},
+        heavy=lambda *a, **kw: nullcontext(view),
+        last_failure=None,
+    )
     handler = SimpleNamespace(
         path="/v/test/page?"
         + urlencode({"revision": state["revision"], "collection": collection}),
-        server=SimpleNamespace(routes={"test": view}, origin="http://127.0.0.1:12345"),
+        server=SimpleNamespace(
+            routes={"test": route}, lifecycle=lifecycle, origin="http://127.0.0.1:12345"
+        ),
         _allowed=lambda: True,
         send=lambda *args: responses.append(args),
     )
+    handler.failure = lambda *args: Handler.failure(handler, *args)
     Handler.do_GET(handler)
     status, body = responses.pop()
     assert status == (500 if failure else 503)

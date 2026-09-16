@@ -17,6 +17,7 @@ from mcp.client.stdio import stdio_client
 
 
 def run(args):
+    args.host = args.host.resolve(strict=True)
     root = args.output.resolve()
     root.mkdir(parents=True, exist_ok=False)
     source, workspace = root / "source", root / "dataset"
@@ -84,10 +85,15 @@ print(result.result_ref)
         "result_ref": result_ref,
         "browser": str(args.browser),
         "playwright": str(args.playwright),
-        "env": {key: environment[key] for key in (
-            "MEDIASENSE_CONFIG_HOME", "MEDIASENSE_DATA_HOME",
-            "HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE",
-        )},
+        "env": {
+            key: environment[key]
+            for key in (
+                "MEDIASENSE_CONFIG_HOME",
+                "MEDIASENSE_DATA_HOME",
+                "HF_HUB_OFFLINE",
+                "TRANSFORMERS_OFFLINE",
+            )
+        },
     }
     config_path = root / "config.json"
     config_path.write_text(json.dumps(config))
@@ -98,7 +104,18 @@ print(result.result_ref)
             check=True,
             timeout=600,
         )
-        anyio.run(mcp_check, args.host, root, environment, config)
+        anyio.run(mcp_check, args.host, root, environment, config, args.skip_seal)
+        if args.lifecycle:
+            subprocess.run(
+                [
+                    "node",
+                    str(Path(__file__).with_name("run_plan_view_lifecycle_smoke.cjs")),
+                    str(config_path),
+                ],
+                env=environment,
+                check=True,
+                timeout=72 * 60 * 60 + 1000,
+            )
     finally:
         subprocess.run(
             [str(args.host), "views", "stop", "--json"], env=environment, check=True
@@ -120,11 +137,14 @@ print(result.result_ref)
     for exchange in trace:
         inputs.validate(exchange["request"])
         outputs.validate(exchange["response"])
-    outputs.validate(json.loads((root / "mcp-seal.json").read_text()))
+    if not args.skip_seal:
+        outputs.validate(json.loads((root / "mcp-seal.json").read_text()))
     report["validated_actual_cli_exchanges"] = len(trace)
     report.update(
         source_items_unchanged=1200,
-        mcp="inspect and seal via installed stdio verified",
+        mcp="inspect via stdio verified"
+        if args.skip_seal
+        else "inspect and seal via stdio verified",
         human_review="not_performed",
         weaker_agent="not_performed",
     )
@@ -135,7 +155,7 @@ print(result.result_ref)
     print(json.dumps(report, ensure_ascii=False, indent=2))
 
 
-async def mcp_check(host, root, environment, config):
+async def mcp_check(host, root, environment, config, skip_seal=False):
     async def no_popup(*args):
         raise AssertionError("Plan introduced a confirmation popup")
 
@@ -164,6 +184,11 @@ async def mcp_check(host, root, environment, config):
 
         inspected = await plan({"action": "inspect", "work_ref": state["work_ref"]})
         assert inspected["sections"]["view"]["status"] in {"ready", "degraded"}
+        (root / "mcp-inspect.json").write_text(
+            json.dumps(inspected, ensure_ascii=False, indent=2)
+        )
+        if skip_seal:
+            return
         identity = inspected["candidate_content_identity"]
         request = {
             "action": "seal",
@@ -209,4 +234,14 @@ if __name__ == "__main__":
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--browser", type=Path, required=True)
     parser.add_argument("--playwright", type=Path, required=True)
+    parser.add_argument(
+        "--lifecycle",
+        action="store_true",
+        help="Also observe real 1-hour cache reclamation, 72-hour exit and ordinary recovery",
+    )
+    parser.add_argument(
+        "--skip-seal",
+        action="store_true",
+        help="Verify read-only MCP delivery without sealing the synthetic Plan",
+    )
     run(parser.parse_args())

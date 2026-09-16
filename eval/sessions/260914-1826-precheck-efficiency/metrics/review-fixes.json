@@ -1,0 +1,31 @@
+{
+  "date": "2026-09-15",
+  "candidate": "candidate-3",
+  "wheel_sha256": "9c14ca0ab2a9c008f459d7440362a68594c7b4bdac92086d55d6a5e8280a4eac",
+  "source_manifest_sha256": "2aacd5503c3bff7315e76b0917e1c745aa4c801fe66a2df16240e6a0fce120c1",
+  "python": "3.11.13",
+  "sqlite": "3.47.1",
+  "changed_product_files": [
+    "src/mediasense/precheck/rendition.py",
+    "src/mediasense/precheck/_work_sqlite.py"
+  ],
+  "tests": {
+    "before_new_regressions": {
+      "failed": 5
+    },
+    "after_new_regressions": {
+      "passed": 5
+    },
+    "installed_targeted": {
+      "passed": 120,
+      "seconds": 40.73
+    },
+    "artifact_only": "passed",
+    "cli_mcp": "passed",
+    "ruff": "passed"
+  },
+  "performance_remeasured": false,
+  "full_default_suite_rerun": false,
+  "memory_tradeoff_accepted": false,
+  "evidence_root": ".local/precheck-efficiency/260914-1826/review-fixes-260915"
+}

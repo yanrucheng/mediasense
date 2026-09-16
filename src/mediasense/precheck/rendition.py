@@ -124,9 +124,54 @@ class ImageRenditionProducer:
             if decoded is not None:
                 decoded.close()
 
-    def _produce(self, run_id, relative_path, *, profile, owner, render):
-        proof = self.validity.prove(run_id, relative_path)
-        spec = WorkSpec(
+    def produce_many(self, run_id, relative_paths, *, profiles, should_continue=lambda: True):
+        """Check bounded warm candidates; execute gaps in the original source lifecycle."""
+        from itertools import islice
+        from ._sqlite_scope import connection_scope
+        from .resources import ResourceAdmissionCancelled
+
+        paths = tuple(islice(relative_paths, 129))
+        if len(paths) > 128:
+            raise ValueError("rendition batch exceeds 128 sources")
+        if not paths or not profiles:
+            return ()
+        if any(not should_continue() for _ in paths):
+            return ()
+        with connection_scope(self.database_path):
+            proofs = self.validity.prove_many(run_id, paths)
+            try:
+                candidates = self.artifacts.ensure_artifact_work_many(
+                    run_id, (self._spec(proof, profile) for proof in proofs for profile in profiles),
+                    should_continue=should_continue,
+                )
+            except ResourceAdmissionCancelled:
+                return ()
+            outcomes = []
+            for index, path in enumerate(paths):
+                if not should_continue():
+                    break
+                selected = candidates[index * len(profiles):(index + 1) * len(profiles)]
+                # Processing an earlier source can invalidate a later Work
+                # through shared material. Batch observations do not retain
+                # qualification: read current attached Work before consuming it.
+                current = (
+                    self.work.get_work_many((work.work_id for work, _ in selected), run_id=run_id)
+                    if all(work.status is WorkStatus.SUCCEEDED for work, _ in selected)
+                    else ()
+                )
+                if current and all(work.status is WorkStatus.SUCCEEDED for work in current):
+                    outcomes.extend(RenditionOutcome(work, materials[0], True)
+                                    for work, (_, materials) in zip(current, selected, strict=True))
+                else:
+                    # Waiting in a batch never authorizes execution: _produce
+                    # proves the current occurrence and claims its current Work.
+                    # Both profiles still share one lazy decode and release it
+                    # before moving to the next source.
+                    outcomes.extend(self._produce_profiles(run_id, path, profiles=profiles))
+            return tuple(outcomes)
+
+    def _spec(self, proof, profile):
+        return WorkSpec(
             capability="image-rendition",
             producer_identity=PRODUCER_IDENTITY,
             dependencies=(
@@ -166,14 +211,13 @@ class ImageRenditionProducer:
                 ),
             ),
         )
-        record = self.work.ensure_work(run_id, spec)
+
+    def _produce(self, run_id, relative_path, *, profile, owner, render):
+        proof = self.validity.prove(run_id, relative_path)
+        spec = self._spec(proof, profile)
+        ((record, artifacts),) = self.artifacts.ensure_artifact_work_many(run_id, (spec,))
         if record.status is WorkStatus.SUCCEEDED:
-            artifacts = self.artifacts.artifacts_for_work(record.work_id)
-            if artifacts and all(
-                artifact.integrity.value == "available" for artifact in artifacts
-            ):
-                return RenditionOutcome(record, artifacts[0], True)
-            record = self.work.ensure_work(run_id, spec)
+            return RenditionOutcome(record, artifacts[0], True)
         if record.status not in {WorkStatus.READY, WorkStatus.RETRYABLE_FAILURE}:
             return RenditionOutcome(record, None, False)
 

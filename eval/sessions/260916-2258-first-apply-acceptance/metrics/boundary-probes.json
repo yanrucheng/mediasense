@@ -1,0 +1,24 @@
+{
+  "observed_at": "2026-09-16T15:06:46.739271+00:00",
+  "authority": {
+    "caller_authored_authority_forwarded": true,
+    "context": "None; no Human elicitation or authenticated confirmation supplied",
+    "host_result": {
+      "outcome": "observed_at_recording_boundary"
+    },
+    "execution_boundary": "recording stub; no real Run or filesystem effects"
+  },
+  "source_drift": {
+    "precheck_profile": "candidate-sha256-full-or-3x4k-v1",
+    "precheck_size": 689,
+    "current_size": 949,
+    "ordinary_fingerprint_changed": true,
+    "full_content_changed": true,
+    "prepare_state": "ready_for_authorization",
+    "blockers": 0,
+    "prepared_proof_equals_changed_bytes": true,
+    "prepared_producer": "builtin-apply-source-verification-v1",
+    "zero_apply_media_effects": true,
+    "temporary_fixture_removed_on_return": true
+  }
+}

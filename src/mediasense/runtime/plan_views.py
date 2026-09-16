@@ -1,10 +1,6 @@
 """Installation/user-scoped lifecycle for the read-only local Plan view process."""
 
-from __future__ import annotations
-
-from contextlib import contextmanager
 from functools import lru_cache
-import fcntl
 import hashlib
 import json
 import os
@@ -13,9 +9,17 @@ import subprocess
 import sys
 import time
 from urllib.error import URLError, HTTPError
+from urllib.parse import urlsplit
 from urllib.request import Request, build_opener, ProxyHandler
 
 from mediasense.plan.view import unavailable_view
+from ._view_files import (
+    PROTOCOL,
+    lifecycle_lock,
+    private_directory,
+    process_state,
+    read_json,
+)
 
 
 @lru_cache(maxsize=1)
@@ -29,7 +33,7 @@ def build_identity():
     return digest.hexdigest()
 
 
-def runtime_directory():
+def runtime_directory(*, create=True):
     from .dataset import default_local_dataset_root
 
     root = (
@@ -38,12 +42,17 @@ def runtime_directory():
         / "plan-views"
         / build_identity()
     )
-    root.mkdir(parents=True, exist_ok=True, mode=0o700)
-    root.chmod(0o700)
+    if create:
+        private_directory(root.parent, create=True)
+        private_directory(root, create=True)
     return root
 
 
-def rpc(info, action, value=None):
+class Retiring(OSError):
+    pass
+
+
+def rpc(info, action, value=None, *, timeout=60):
     request = Request(
         info["origin"] + "/control/" + action,
         data=json.dumps(value or {}).encode(),
@@ -53,10 +62,15 @@ def rpc(info, action, value=None):
         },
     )
     try:
-        with build_opener(ProxyHandler({})).open(request, timeout=60) as response:
+        with build_opener(ProxyHandler({})).open(
+            request, timeout=max(0.001, timeout)
+        ) as response:
             result = json.load(response)
     except HTTPError as error:
-        value = json.load(error)
+        with error:
+            value = json.load(error)
+        if value.get("error") == "retiring":
+            raise Retiring("Plan view host is retiring") from error
         if value.get("operation_failed"):
             raise RuntimeError(value["operation_failed"]) from error
         raise
@@ -65,95 +79,177 @@ def rpc(info, action, value=None):
     return result
 
 
-@contextmanager
-def _lifecycle_lock(root):
-    with (root / "launch.lock").open("a") as stream:
-        fcntl.flock(stream, fcntl.LOCK_EX)
-        yield
-
-
-def _info(root):
+def _info(root, *, timeout=1):
     try:
-        value = json.loads((root / "connection.json").read_text())
-        # Never contact a remotely substituted origin.
-        if not value["origin"].startswith("http://127.0.0.1:"):
-            return None
-        healthy = rpc(value, "health")
+        value = read_json(root / "connection.json")
+        origin = urlsplit(value["origin"])
         if (
-            healthy.get("build") == build_identity()
-            and healthy.get("uid") == os.getuid()
-            and healthy.get("instance") == value.get("instance")
+            origin.scheme != "http"
+            or origin.hostname != "127.0.0.1"
+            or not origin.port
+            or origin.username
+            or origin.password
+            or origin.path
+            or origin.query
+            or origin.fragment
+            or value.get("protocol") != PROTOCOL
         ):
-            return value
+            return None
+        healthy = rpc(value, "health", timeout=min(1, timeout))
+        if (
+            healthy.get("build") == build_identity() == value.get("build")
+            and healthy.get("uid") == os.getuid() == value.get("uid")
+            and healthy.get("instance") == value.get("instance")
+            and healthy.get("pid") == value.get("pid")
+            and healthy.get("protocol") == PROTOCOL
+        ):
+            return value | {"health": healthy}
     except (OSError, URLError, ValueError, KeyError):
         pass
     return None
 
 
-def ensure_host():
+def ensure_host(*, deadline=None, retiring_instance=None):
+    deadline = deadline or time.monotonic() + 60
     root = runtime_directory()
-    with _lifecycle_lock(root):
-        info = _info(root)
-        if info:
-            return info
-        with (root / "host.log").open("ab") as log:
-            process = subprocess.Popen(
-                [
-                    sys.executable,
-                    "-m",
-                    "mediasense.runtime._view_server",
-                    str(root),
-                    build_identity(),
-                ],
-                stdin=subprocess.DEVNULL,
-                stdout=log,
-                stderr=log,
-                start_new_session=True,
-                close_fds=True,
-            )
-        deadline = time.monotonic() + 15
-        while time.monotonic() < deadline:
-            if process.poll() is not None:
-                raise OSError(
-                    "Plan view host exited during startup; see "
-                    + str(root / "host.log")
-                )
-            info = _info(root)
-            if info:
+    while time.monotonic() < deadline:
+        with lifecycle_lock(root, deadline=deadline):
+            info = _info(root, timeout=max(0.001, deadline - time.monotonic()))
+            if info and info["health"]["lifecycle"] == "accepting":
                 return info
-            time.sleep(0.05)
-        process.terminate()
-        raise OSError("Plan view host did not become ready within 15 seconds")
+            ownership, owner = process_state(root)
+            if ownership == "held":
+                if (not info or info["health"]["lifecycle"] != "draining") and not (
+                    retiring_instance and owner.get("instance") == retiring_instance
+                ):
+                    raise OSError(
+                        "Plan view process owns its lifetime lock but is unreachable"
+                    )
+                # Release parent lock before waiting for the old instance cleanup.
+            elif ownership == "unknown":
+                raise OSError("Cannot verify Plan view process ownership")
+            else:
+                process = subprocess.Popen(
+                    [
+                        sys.executable,
+                        "-m",
+                        "mediasense.runtime._view_server",
+                        str(root),
+                        build_identity(),
+                    ],
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    start_new_session=True,
+                    close_fds=True,
+                )
+                startup_deadline = min(deadline, time.monotonic() + 15)
+                while time.monotonic() < startup_deadline:
+                    if process.poll() is not None:
+                        raise OSError(
+                            "Plan view host exited during startup; see "
+                            + str(root / "host.log")
+                        )
+                    info = _info(
+                        root, timeout=max(0.001, startup_deadline - time.monotonic())
+                    )
+                    if info:
+                        return info
+                    time.sleep(0.05)
+                # Never kill a possibly published/working instance on an RPC deadline.
+                raise TimeoutError(
+                    "Plan view host did not become ready within startup deadline"
+                )
+        time.sleep(min(0.05, max(0, deadline - time.monotonic())))
+    raise TimeoutError("Plan view delivery deadline exceeded")
+
+
+def _retryable(error):
+    reason = error.reason if isinstance(error, URLError) else error
+    return isinstance(reason, (Retiring, ConnectionRefusedError))
 
 
 def deliver(opened, receipt):
-    try:
-        info = ensure_host()
-        return rpc(
-            info,
-            "bind",
-            {
-                "workspace": str(opened.workspace),
-                "dataset_ref": opened.manifest.dataset_ref,
-                "work_ref": receipt["work_ref"],
-                "revision": receipt["revision"],
-            },
-        )
-    except (OSError, URLError) as error:
-        return unavailable_view(receipt, "view_service_unavailable", str(error))
+    deadline = time.monotonic() + 60
+    retiring_instance = None
+    for attempt in range(2):
+        try:
+            info = ensure_host(deadline=deadline, retiring_instance=retiring_instance)
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise TimeoutError("Plan view delivery deadline exceeded")
+            return rpc(
+                info,
+                "bind",
+                {
+                    "workspace": str(opened.workspace),
+                    "dataset_ref": opened.manifest.dataset_ref,
+                    "work_ref": receipt["work_ref"],
+                    "revision": receipt["revision"],
+                },
+                timeout=remaining,
+            )
+        except (OSError, URLError) as error:
+            if attempt == 0 and _retryable(error) and time.monotonic() < deadline:
+                if isinstance(error, Retiring):
+                    retiring_instance = info["instance"]
+                continue
+            return unavailable_view(receipt, "view_service_unavailable", str(error))
 
 
 def control(action):
-    root = runtime_directory()
-    with _lifecycle_lock(root):
+    root = runtime_directory(create=False)
+    if not root.exists():
+        return {"state": "stopped", "build": build_identity(), "exit_reason": None}
+    private_directory(root.parent)
+    private_directory(root)
+    with lifecycle_lock(root, deadline=time.monotonic() + 5):
         info = _info(root)
+        ownership, header = process_state(root)
         if info is None:
-            return {"state": "stopped", "build": build_identity()}
-        result = rpc(info, "stop" if action == "stop" else "health")
-        if action == "stop":
-            for _ in range(100):
-                if _info(root) is None:
-                    return {"state": "stopped", "build": build_identity()}
-                time.sleep(0.05)
-            raise OSError("View host has not stopped")
-        return {"state": "running", **result}
+            proven = ownership == "released" or (
+                ownership == "absent" and not (root / "connection.json").exists()
+            )
+            return {
+                "state": "stopped" if proven else "unknown/unreachable",
+                "build": build_identity(),
+                "instance": header.get("instance"),
+                "pid": header.get("pid"),
+                "exit_reason": header.get("exit_reason"),
+                "diagnostics": str(root / "host.log"),
+            }
+        if action != "stop":
+            return {
+                "state": "running"
+                if info["health"]["lifecycle"] == "accepting"
+                else "draining",
+                **info["health"],
+                "diagnostics": str(root / "host.log"),
+            }
+    # Do not hold the parent lock while stop drains or finally removes connection.
+    try:
+        rpc(info, "stop", timeout=1)
+    except (OSError, URLError):
+        pass  # Verify the actual instance below; port failure proves nothing.
+    deadline = time.monotonic() + 7
+    while time.monotonic() < deadline:
+        with lifecycle_lock(root, deadline=deadline):
+            ownership, header = process_state(root)
+            if ownership == "released" and header.get("instance") == info["instance"]:
+                return {
+                    "state": "stopped",
+                    "build": build_identity(),
+                    "instance": info["instance"],
+                    "pid": info["pid"],
+                    "exit_verified": True,
+                    "exit_reason": header.get("exit_reason"),
+                    "interrupted_requests": header.get("interrupted_requests", 0),
+                }
+        time.sleep(0.05)
+    return {
+        "state": "unknown/unreachable",
+        "build": build_identity(),
+        "instance": info["instance"],
+        "exit_verified": False,
+        "problem": "Bounded exit verification did not complete",
+    }

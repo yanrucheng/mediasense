@@ -43,6 +43,49 @@ def test_result_encoding_preserves_exact_canonical_bytes():
         _encode_package({"value": float("nan")})
 
 
+def test_seal_releases_source_graph_without_waiting_for_cyclic_gc(tmp_path):
+    import gc
+    import weakref
+    from dataclasses import fields
+    from mediasense.precheck._result_types import ResultSourceItem
+
+    class TrackedSource(ResultSourceItem):
+        pass
+
+    class TrackedObservation(dict):
+        pass
+
+    database, _source, _before, run_id, first, second = _prepared(tmp_path)
+    store = ResultStore(database)
+    draft = store.build_minimal(run_id, [first.work.work_id, second.work.work_id])
+    draft = replace(draft, sources=tuple(
+        TrackedSource(**{
+            **{field.name: getattr(source, field.name) for field in fields(source)},
+            "observations": tuple(TrackedObservation(o) for o in source.observations),
+        })
+        for source in draft.sources
+    ))
+    draft = replace(draft, evidence=tuple(
+        replace(item, observations=tuple(TrackedObservation(o) for o in item.observations))
+        for item in draft.evidence
+    ))
+    refs = [weakref.ref(source) for source in draft.sources] + [
+        weakref.ref(observation) for subject in (*draft.sources, *draft.evidence)
+        for observation in subject.observations
+    ]
+    gc.collect()
+    was_enabled = gc.isenabled()
+    gc.disable()
+    try:
+        store.seal(draft)
+        del draft
+        assert all(ref() is None for ref in refs)
+    finally:
+        if was_enabled:
+            gc.enable()
+        gc.collect()
+
+
 def test_ordinary_rendition_is_frontier_and_high_resolution_expands_from_it(
     tmp_path: Path,
 ) -> None:
@@ -1067,3 +1110,140 @@ def test_byte_trusted_invalid_result_is_rejected(tmp_path: Path) -> None:
 
     _assert_response_conforms(response)
     assert response["error"]["code"] == "result_untrusted"
+
+
+@pytest.mark.parametrize("stop", ["source_changed", "pause", "unknown_failure"])
+def test_rendition_batch_checks_each_execution_and_retains_committed_prefix(tmp_path, monkeypatch, stop):
+    from mediasense.precheck._fingerprint import SourceChangedDuringRead
+    from mediasense.precheck import WorkStore
+    database, source = tmp_path / "work.sqlite3", tmp_path / "source"
+    source.mkdir()
+    for name in ("a.jpg", "b.jpg"):
+        Image.new("RGB", (24, 16), "blue").save(source / name)
+    accounting = AccountingStore(database)
+    accounting.register_dataset("dataset-a")
+    run_id = accounting.start_or_resume_run("dataset-a", source)
+    accounting.process_run(run_id)
+    producer = ImageRenditionProducer(database)
+    original = producer._produce_profiles
+    running = True
+    def controlled(run, path, **kwargs):
+        nonlocal running
+        if path == Path("b.jpg") and stop == "unknown_failure":
+            raise RuntimeError("injected unexpected failure")
+        result = original(run, path, **kwargs)
+        if path == Path("a.jpg"):
+            if stop == "source_changed":
+                Image.new("RGB", (20, 10), "red").save(source / "b.jpg")
+            elif stop == "pause":
+                running = False
+        return result
+    monkeypatch.setattr(producer, "_produce_profiles", controlled)
+    args = dict(profiles=(ORDINARY_RENDITION_PROFILE, HIGH_RESOLUTION_RENDITION_PROFILE), should_continue=lambda: running)
+    if stop == "pause":
+        result = producer.produce_many(run_id, (Path("a.jpg"), Path("b.jpg")), **args)
+        assert len(result) == 2
+    else:
+        with pytest.raises(SourceChangedDuringRead if stop == "source_changed" else RuntimeError):
+            producer.produce_many(run_id, (Path("a.jpg"), Path("b.jpg")), **args)
+    works = WorkStore(database).list_run_work(run_id)
+    assert sum(work.status is WorkStatus.SUCCEEDED for work in works) == 2
+    assert sum(work.status is WorkStatus.READY for work in works) == 2
+    assert sum(work.attempt_count for work in works) == 2
+
+
+def test_rendition_batch_shares_decode_and_keeps_known_failure_local(tmp_path, monkeypatch):
+    from mediasense.precheck import rendition
+    database, source = tmp_path / "work.sqlite3", tmp_path / "source"
+    source.mkdir()
+    Image.new("RGB", (800, 700), "blue").save(source / "a.jpg")
+    (source / "b.jpg").write_bytes(b"not a JPEG")
+    accounting = AccountingStore(database)
+    accounting.register_dataset("dataset-a")
+    run_id = accounting.start_or_resume_run("dataset-a", source)
+    accounting.process_run(run_id)
+    original, calls = rendition._decode_rgb, []
+    def decode(path):
+        calls.append(path.name)
+        return original(path)
+    monkeypatch.setattr(rendition, "_decode_rgb", decode)
+    producer = ImageRenditionProducer(database)
+    profiles = (ORDINARY_RENDITION_PROFILE, HIGH_RESOLUTION_RENDITION_PROFILE)
+    result = producer.produce_many(run_id, (Path("a.jpg"), Path("b.jpg")), profiles=profiles)
+    assert calls.count("a.jpg") == 1
+    assert [o.work.status for o in result] == [WorkStatus.SUCCEEDED] * 2 + [WorkStatus.TERMINAL_FAILURE] * 2
+    assert result[0].artifact.digest != result[1].artifact.digest
+    again = producer.produce_many(run_id, (Path("a.jpg"),), profiles=profiles)
+    assert all(outcome.reused for outcome in again)
+    assert calls.count("a.jpg") == 1
+    assert [o.work.semantic_key for o in again] == [o.work.semantic_key for o in result[:2]]
+
+
+@pytest.mark.parametrize("invalidated_profiles", [(0,), (1,), (0, 1)])
+def test_rendition_batch_rechecks_later_work_after_shared_artifact_invalidation(
+    tmp_path, monkeypatch, invalidated_profiles,
+):
+    from mediasense.precheck import (
+        AdaptiveCompressionProducer, AdaptiveCompressionProfile, CompressionInput,
+    )
+    from mediasense.precheck import rendition
+
+    database, source = tmp_path / "work.sqlite3", tmp_path / "source"
+    source.mkdir()
+    paths = tuple(Path(name) for name in ("a.jpg", "b.jpg", "c.jpg"))
+    for path, color in zip(paths, ("blue", "blue", "green"), strict=True):
+        Image.new("RGB", (800, 700), color).save(source / path)
+    source_before = {path: (source / path).read_bytes() for path in paths}
+    accounting = AccountingStore(database)
+    accounting.register_dataset("dataset-a")
+    run_id = accounting.start_or_resume_run("dataset-a", source)
+    accounting.process_run(run_id)
+    producer = ImageRenditionProducer(database)
+    profiles = (ORDINARY_RENDITION_PROFILE, HIGH_RESOLUTION_RENDITION_PROFILE)
+    prior = {path: producer.produce_profiles(run_id, path, profiles=profiles) for path in paths[1:]}
+    assert prior[paths[1]][0].artifact.digest != prior[paths[1]][1].artifact.digest
+
+    original, decode, decoded_paths = producer._produce_profiles, rendition._decode_rgb, []
+
+    def invalidate_during_first_source(run, path, **kwargs):
+        if path == paths[0]:
+            # The batch has already verified b. Processing a discovers shared
+            # material loss and invalidates b's Work through the real Store.
+            for index in invalidated_profiles:
+                artifact = prior[paths[1]][index].artifact
+                artifact.path.unlink()
+                producer.artifacts.verify(artifact.artifact_id)
+        return original(run, path, **kwargs)
+
+    def record_decode(path):
+        decoded_paths.append(path.name)
+        return decode(path)
+
+    monkeypatch.setattr(producer, "_produce_profiles", invalidate_during_first_source)
+    monkeypatch.setattr(rendition, "_decode_rgb", record_decode)
+    outcomes = producer.produce_many(run_id, paths, profiles=profiles)
+    assert len(outcomes) == 6
+    for outcome in outcomes:
+        current = producer.work.get_work(outcome.work.work_id)
+        assert outcome.work.status is current.status is WorkStatus.SUCCEEDED
+        assert producer.artifacts.require_available(outcome.artifact.artifact_id)
+    for index, outcome in enumerate(outcomes[2:4]):
+        old = prior[paths[1]][index]
+        assert outcome.work.semantic_key == old.work.semantic_key
+        assert outcome.reused is (index not in invalidated_profiles)
+        assert (outcome.work.work_id == old.work.work_id) is (index not in invalidated_profiles)
+        if index in invalidated_profiles:
+            assert producer.work.get_work(old.work.work_id).status is WorkStatus.INVALIDATED
+    assert all(outcome.reused for outcome in outcomes[4:])
+    assert decoded_paths == ["a.jpg", "b.jpg"]
+
+    # Exercise the consumer which rejected the stale succeeded Work before.
+    compressed = AdaptiveCompressionProducer(database).produce(
+        run_id,
+        tuple(CompressionInput(path, outcomes[index * 2].work.work_id)
+              for index, path in enumerate(paths)),
+        profile=AdaptiveCompressionProfile(target_entries=2),
+    )
+    assert all(outcome.work.status is WorkStatus.SUCCEEDED for outcome in compressed)
+    assert {member for outcome in compressed for member in outcome.group.members} == set(paths)
+    assert {path: (source / path).read_bytes() for path in paths} == source_before

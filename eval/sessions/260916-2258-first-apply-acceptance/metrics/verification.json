@@ -1,0 +1,95 @@
+{
+  "observed_at": "2026-09-16T15:08:41.686276+00:00",
+  "receipt_ref": "apply-receipt:fe55d2965a854783819567ce93c05ad5",
+  "receipt_identity": "sha256:f4c7c416f9dd0c2a79359dadf36de9b5edb9e81d36176bb879dbdad2b469250a",
+  "receipt_inspect": {
+    "receipt_ref": "apply-receipt:fe55d2965a854783819567ce93c05ad5",
+    "run_ref": "apply-run:fe55d2965a854783819567ce93c05ad5",
+    "frozen_plan_ref": "frozen-plan:615f97ba-9593-4349-b2d3-054c0bc6596d",
+    "effect": "move_originals",
+    "execution_binding": {
+      "kind": "forward",
+      "source_root_count": 1,
+      "destination_parent": "/Users/chengyanru/Downloads/ai-album-hk-representative-v1",
+      "resolved_logical_root": "/Users/chengyanru/Downloads/ai-album-hk-representative-v1/Media"
+    },
+    "completion": "complete",
+    "closure": "automatic",
+    "accounting": {
+      "completed_and_verified": 2138,
+      "excluded_without_effect": 4233,
+      "failed": 0,
+      "indeterminate": 0,
+      "materialization_operations": 2138,
+      "not_attempted": 0,
+      "plan_scope_items": 6373,
+      "refused": 0,
+      "retained_without_effect": 2
+    },
+    "verification": {
+      "unplanned_targets": 0,
+      "unplanned_renames": 0,
+      "unverified_items": 0
+    },
+    "metadata_preservation": {
+      "profile": "same_filesystem_rename_v1",
+      "content_verification_result": "verified",
+      "unpreserved_attribute_count": 0,
+      "accepted_discrepancy_count": 0
+    },
+    "integrity": "valid",
+    "rewind_window_ends_at": "2026-09-16T14:46:04.026685+00:00"
+  },
+  "receipt_operation_pages": 3,
+  "receipt_section_counts": {
+    "exceptions": 0,
+    "metadata_discrepancies": 0,
+    "created_directories": 59
+  },
+  "plan_ref": "frozen-plan:615f97ba-9593-4349-b2d3-054c0bc6596d",
+  "frozen_plan_identity": "sha256:a049b76ba3449b7b36179a572ba6a0ad0d0643118180b2a9ca147e2c92cdaf1f",
+  "frozen_plan_bytes": 465692,
+  "plan_groups": 50,
+  "scope_items": 6373,
+  "outcome_counts": {
+    "retain_current_organization": 2,
+    "exclude_from_logical_organization": 4233
+  },
+  "moved_files": 2138,
+  "moved_bytes": 1095090414,
+  "moved_extensions": {
+    ".jpg": 1851,
+    ".mp4": 283,
+    ".gpx": 2,
+    ".dng": 1,
+    ".arw": 1
+  },
+  "backup_files": 6373,
+  "backup_bytes": 1424933315,
+  "remaining_files_verified": 4235,
+  "source_files_now": 4235,
+  "target_files_now": 2143,
+  "unplanned_current_source_files": [],
+  "unplanned_current_target_files": [
+    ".DS_Store",
+    "260501-香港美食之旅/.DS_Store",
+    "260501-香港美食之旅/0501-出发前/.DS_Store",
+    "260501-香港美食之旅/0504-Amber晚餐/.DS_Store",
+    "260501-香港美食之旅/0504-太子与中环/.DS_Store"
+  ],
+  "missing_backup_paths": [],
+  "metadata_differences_against_backup": {
+    "birthtime": 2138
+  },
+  "precheck_verification_profiles": {
+    "candidate-sha256-full-or-3x4k-v1": 2138
+  },
+  "anomalies": [],
+  "resource_facts": {
+    "bytes_moved": 1095090414,
+    "ended_at": "2026-09-16T13:46:04.027081+00:00",
+    "started_at": "2026-09-16T13:45:35.394241+00:00"
+  },
+  "audit_seconds": 51.196,
+  "media_mutations": 0
+}

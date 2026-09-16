@@ -69,7 +69,7 @@ class _RunSourcePaths(Set[str]):
             for row in self._connection.execute(
                 "SELECT relative_path FROM run_items WHERE run_id = ?",
                 (self._run_id,),
-            )
+            ).fetchall()
         )
 
     def __len__(self) -> int:
@@ -178,35 +178,27 @@ def build_minimal_result(
             """,
             (run_id,),
         ).fetchall()
-        work_rows: dict[str, list[sqlite3.Row]] = {}
-        for work_id in selected_ids:
-            work = connection.execute(
-                """
-                SELECT work_records.* FROM run_work_records
-                JOIN work_records USING (work_id)
-                WHERE run_work_records.run_id = ?
-                  AND work_records.work_id = ?
-                  AND work_records.capability = 'image-rendition'
-                """,
-                (run_id, work_id),
-            ).fetchone()
-            if work is None:
-                raise ResultSealError(
-                    f"selected rendition Work is not attached to this run: {work_id}"
-                )
-            dependency = connection.execute(
-                """
-                SELECT dependency_key FROM work_dependencies
-                WHERE work_id = ? AND dependency_kind = ?
-                """,
-                (work_id, DependencyKind.SOURCE_CONTENT),
-            ).fetchone()
-            if dependency is None:
-                raise ResultSealError(
-                    f"rendition Work lacks exact source proof: {work_id}"
-                )
-            _dataset, relative_path = json.loads(dependency["dependency_key"])
-            work_rows.setdefault(relative_path, []).append(work)
+        work_rows: dict[str, list[str]] = {}
+        for start in range(0, len(selected_ids), 128):
+            block = selected_ids[start:start + 128]
+            marks = ','.join('?' for _ in block)
+            works = {row["work_id"]: row for row in connection.execute(
+                f"SELECT w.work_id, w.capability FROM work_records w JOIN run_work_records r USING (work_id) WHERE r.run_id = ? AND w.work_id IN ({marks})",
+                (run_id, *block),
+            ).fetchall()}
+            dependencies = {}
+            for row in connection.execute(
+                f"SELECT work_id, dependency_key FROM work_dependencies WHERE work_id IN ({marks}) AND dependency_kind = ? ORDER BY dependency_key",
+                (*block, DependencyKind.SOURCE_CONTENT),
+            ).fetchall():
+                dependencies.setdefault(row["work_id"], row["dependency_key"])
+            for work_id in block:
+                if work_id not in works or works[work_id]["capability"] != "image-rendition":
+                    raise ResultSealError(f"selected rendition Work is not attached to this run: {work_id}")
+                if work_id not in dependencies:
+                    raise ResultSealError(f"rendition Work lacks exact source proof: {work_id}")
+                _dataset, relative_path = json.loads(dependencies[work_id])
+                work_rows.setdefault(relative_path, []).append(work_id)
         metadata_rows = {}
         for work_id in selected_metadata_ids:
             work = connection.execute(
@@ -351,7 +343,7 @@ def build_minimal_result(
     relationships: list[ResultRelationship] = []
     entry_evidence: list[str] = []
     primary_evidence_by_path: dict[str, str] = {}
-    for row in rows:
+    for row, rendition_works, rendition_materials in _rendition_source_blocks(database_path, artifacts, run_id, rows, work_rows):
         relative_path = str(row["relative_path"])
         scope = str(row["scope"])
         condition = str(row["condition"])
@@ -360,7 +352,6 @@ def build_minimal_result(
         if verification is not None:
             observations.append(_source_verification_observation(verification))
         qualifications: list[dict[str, object]] = []
-        rendition_works = work_rows.get(relative_path, [])
         metadata_work = metadata_rows.get(relative_path)
         gpx_work = gpx_rows.get(relative_path)
         sensitivity_works = sensitivity_rows.get(relative_path, [])
@@ -576,7 +567,7 @@ def build_minimal_result(
                 condition = "invalid"
         for work in rendition_works:
             if WorkStatus(work["status"]) is WorkStatus.SUCCEEDED:
-                produced = artifacts.artifacts_for_work(str(work["work_id"]))
+                produced = rendition_materials[str(work["work_id"])]
                 if produced and produced[0].integrity is ArtifactIntegrity.AVAILABLE:
                     output = json.loads(work["output_json"])
                     rendition_outputs.append(
@@ -907,6 +898,31 @@ def build_minimal_result(
             )
         ),
     )
+
+
+def _rendition_source_blocks(database_path, artifacts, run_id, rows, work_ids_by_path):
+    """Release each metadata snapshot before material verification writes back."""
+    for start in range(0, len(rows), 32):
+        block = rows[start:start + 32]
+        ids = tuple(work_id for row in block for work_id in work_ids_by_path.get(row["relative_path"], ()))
+        # The Store checks material once per unique Artifact in this boundary.
+        materials = artifacts.artifacts_for_works(ids)
+        with _connect(database_path) as connection:
+            connection.execute("BEGIN")
+            works = {}
+            for offset in range(0, len(ids), 128):
+                selected = ids[offset:offset + 128]
+                for work in connection.execute(
+                    f"SELECT w.* FROM work_records w JOIN run_work_records r USING (work_id) WHERE r.run_id = ? AND w.work_id IN ({','.join('?' for _ in selected)})",
+                    (run_id, *selected),
+                ).fetchall():
+                    works[work["work_id"]] = work
+            for work_id in ids:
+                if work_id not in works:
+                    raise ResultSealError(f"selected rendition Work is not attached to this run: {work_id}")
+        # Never project a pre-verification succeeded row after invalidation.
+        for row in block:
+            yield row, [works[key] for key in work_ids_by_path.get(row["relative_path"], ())], materials
 
 
 def _source_verification_observation(row: sqlite3.Row) -> dict[str, object]:

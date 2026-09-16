@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from datetime import datetime
 import hashlib
 import json
@@ -27,6 +28,7 @@ from ._work_sqlite import SQLiteWorkStore, _as_datetime, _output_json, _utc
 from ._work_types import (
     AttemptOutcome,
     DependencyKind,
+    InvalidWorkTransition,
     WorkLease,
     WorkRecord,
     WorkStatus,
@@ -212,67 +214,155 @@ class SQLiteArtifactStore(SQLiteWorkStore):
             )
         return work, artifact
 
-    def artifacts_for_work(
-        self,
-        work_id: str,
-        *,
-        verify: bool = True,
-    ) -> tuple[ArtifactRecord, ...]:
-        with self._connect() as connection:
-            self._get_work(connection, work_id)
+    def artifacts_for_work(self, work_id: str, *, verify: bool = True):
+        return self.artifacts_for_works((work_id,), verify=verify)[work_id]
+
+    def _artifact_bindings(self, connection, work_ids):
+        ids = tuple(dict.fromkeys(work_ids))
+        bindings = {work_id: [] for work_id in ids}
+        for start in range(0, len(ids), 256):
+            block = ids[start:start + 256]
+            marks = ','.join('?' for _ in block)
+            found = {row[0] for row in connection.execute(
+                f"SELECT work_id FROM work_records WHERE work_id IN ({marks})", block
+            ).fetchall()}
+            for work_id in block:
+                if work_id not in found:
+                    raise KeyError(f"unknown Work Record: {work_id}")
             rows = connection.execute(
-                """
-                SELECT artifacts.* FROM work_artifacts
-                JOIN artifacts USING (artifact_id)
-                WHERE work_artifacts.work_id = ?
-                ORDER BY work_artifacts.role, work_artifacts.position
-                """,
-                (work_id,),
+                f"SELECT * FROM work_artifacts WHERE work_id IN ({marks}) ORDER BY work_id, role, position", block
             ).fetchall()
-        records = tuple(self._artifact_from_row(row) for row in rows)
-        if verify:
-            return tuple(self.verify(record.artifact_id) for record in records)
-        return records
+            for row in rows:
+                bindings[row["work_id"]].append((row["role"], row["position"], row["artifact_id"]))
+        return {key: tuple(value) for key, value in bindings.items()}
+
+    def artifacts_for_works(self, work_ids, *, verify=True):
+        ids = tuple(work_ids)
+        with self._connect() as connection:
+            connection.execute("BEGIN")
+            bindings = self._artifact_bindings(connection, ids)
+            rows = self._artifact_rows(connection, (item[2] for values in bindings.values() for item in values))
+        if verify and rows:
+            with self._verification(tuple(rows)) as (connection, observations):
+                if self._artifact_bindings(connection, ids) != bindings:
+                    raise ArtifactIntegrityError("Work Artifact bindings changed during verification")
+                records = self._record_verifications(connection, observations)
+        else:
+            records = {key: self._artifact_from_row(row) for key, row in rows.items()}
+        return {work_id: tuple(records[item[2]] for item in values) for work_id, values in bindings.items()}
+
+    def ensure_artifact_work_many(self, run_id, specs, *, max_attempts=3, should_continue=lambda: True):
+        """Attach successful candidates only after material and Work revalidation.
+
+        Candidate lookup is read-only. Artifact owns material judgment; Work's
+        shared transaction rules own identity, dependencies and attachment.
+        """
+        requests = self._work_requests(specs, max_attempts)
+        if not requests:
+            return ()
+        with self._connect() as connection:
+            connection.execute("BEGIN")
+            candidates = self._work_candidates(connection, run_id, requests, max_attempts)
+            succeeded = tuple(row["work_id"] for row in candidates.values() if row["status"] == WorkStatus.SUCCEEDED)
+            bindings = self._artifact_bindings(connection, succeeded)
+        for work_id, values in bindings.items():
+            if not values:
+                raise ArtifactIntegrityError(f"successful Artifact Work has no material binding: {work_id}")
+        artifact_ids = tuple(dict.fromkeys(item[2] for values in bindings.values() for item in values))
+        with self._verification(artifact_ids, should_continue=should_continue) as (connection, observations):
+            current = self._work_candidates(connection, run_id, requests, max_attempts)
+            if ({key: _work_identity(row) for key, row in current.items()}
+                    != {key: _work_identity(row) for key, row in candidates.items()}):
+                raise InvalidWorkTransition("Artifact Work qualification changed during reuse verification")
+            if self._artifact_bindings(connection, succeeded) != bindings:
+                raise ArtifactIntegrityError("Work Artifact bindings changed during reuse verification")
+            # Invalidate all affected siblings before returning any final Work.
+            materials = self._record_verifications(connection, observations)
+            works = self._ensure_work_many(connection, run_id, requests, max_attempts, _utc(None))
+            result = tuple((work, tuple(materials[item[2]] for item in bindings.get(work.work_id, ()))
+                            if work.status is WorkStatus.SUCCEEDED else ()) for work in works)
+        return result
 
     def verify(self, artifact_id: str) -> ArtifactRecord:
+        return self.verify_many((artifact_id,))[0]
+
+    def verify_many(self, artifact_ids):
+        ids = tuple(artifact_ids)
+        if not ids:
+            return ()
+        with self._verification(ids) as (connection, observations):
+            records = self._record_verifications(connection, observations)
+        return tuple(records[artifact_id] for artifact_id in ids)
+
+    def _artifact_rows(self, connection, artifact_ids):
+        ids = tuple(dict.fromkeys(artifact_ids))
+        rows = {}
+        for start in range(0, len(ids), 256):
+            block = ids[start:start + 256]
+            for row in connection.execute(
+                f"SELECT * FROM artifacts WHERE artifact_id IN ({','.join('?' for _ in block)})", block
+            ).fetchall():
+                rows[row["artifact_id"]] = row
+        for artifact_id in ids:
+            if artifact_id not in rows:
+                raise KeyError(f"unknown Artifact: {artifact_id}")
+        return rows
+
+    def _observe_artifacts(self, artifact_ids, should_continue=lambda: True):
         with self._connect() as connection:
-            row = connection.execute(
-                "SELECT * FROM artifacts WHERE artifact_id = ?", (artifact_id,)
-            ).fetchone()
-        if row is None:
-            raise KeyError(f"unknown Artifact: {artifact_id}")
-        path = self.workspace / str(row["relative_path"])
-        integrity = ArtifactIntegrity.AVAILABLE
-        try:
-            digest, size_bytes = _digest_file(path)
-        except (FileNotFoundError, OSError):
-            integrity = ArtifactIntegrity.MISSING
-        else:
-            if digest != row["digest"] or size_bytes != int(row["size_bytes"]):
-                integrity = ArtifactIntegrity.CORRUPT
-        timestamp = _utc(None)
-        with self._transaction(immediate=True) as connection:
+            rows = self._artifact_rows(connection, artifact_ids)
+        observations = {}
+        for artifact_id, row in rows.items():
+            self._check_control(should_continue)
+            path = self.workspace / str(row["relative_path"])
+            stamp = _file_stamp(path)
+            integrity = ArtifactIntegrity.AVAILABLE
+            try:
+                digest, size_bytes = _digest_file(path)
+            except OSError:
+                integrity = ArtifactIntegrity.MISSING
+            else:
+                if digest != row["digest"] or size_bytes != int(row["size_bytes"]):
+                    integrity = ArtifactIntegrity.CORRUPT
+            observations[artifact_id] = (row, stamp, integrity, _utc(None))
+        return observations
+
+    @contextmanager
+    def _verification(self, artifact_ids, *, should_continue=lambda: True):
+        # No file reading or hashing in the new write transaction. Retry only
+        # contested observations, once; errors after yielding always roll back.
+        observations = self._observe_artifacts(artifact_ids, should_continue)
+        for attempt in range(2):
+            self._check_control(should_continue)
+            with self._transaction(immediate=True) as connection:
+                rows = self._artifact_rows(connection, observations)
+                changed = tuple(key for key, (row, stamp, _, _) in observations.items()
+                                if _artifact_identity(rows[key]) != _artifact_identity(row)
+                                or _file_stamp(self.workspace / row["relative_path"]) != stamp)
+                if not changed:
+                    yield connection, observations
+                    return
+            if attempt:
+                raise ArtifactIntegrityError("Artifact did not remain stable during verification")
+            observations.update(self._observe_artifacts(changed, should_continue))
+
+    def _check_control(self, should_continue):
+        if not should_continue():
+            from .resources import ResourceAdmissionCancelled
+            raise ResourceAdmissionCancelled("Run stopped before Artifact verification committed")
+
+    def _record_verifications(self, connection, observations):
+        for artifact_id, (_row, _stamp, integrity, timestamp) in observations.items():
             connection.execute(
-                """
-                UPDATE artifacts
-                SET integrity_status = ?, last_verified_at = ?
-                WHERE artifact_id = ?
-                """,
+                "UPDATE artifacts SET integrity_status = ?, last_verified_at = ? WHERE artifact_id = ?",
                 (integrity, timestamp, artifact_id),
             )
             if integrity is not ArtifactIntegrity.AVAILABLE:
-                roots = {
-                    str(work["work_id"]): f"artifact_{integrity}:{artifact_id}"
-                    for work in connection.execute(
-                        "SELECT work_id FROM work_artifacts WHERE artifact_id = ?",
-                        (artifact_id,),
-                    )
-                }
+                roots = {str(work["work_id"]): f"artifact_{integrity}:{artifact_id}" for work in connection.execute(
+                    "SELECT work_id FROM work_artifacts WHERE artifact_id = ?", (artifact_id,)
+                ).fetchall()}
                 invalidate_work_tree(connection, roots, observed_at=timestamp)
-            updated = connection.execute(
-                "SELECT * FROM artifacts WHERE artifact_id = ?", (artifact_id,)
-            ).fetchone()
-        return self._artifact_from_row(updated)
+        return {key: self._artifact_from_row(row) for key, row in self._artifact_rows(connection, observations).items()}
 
     def require_available(self, artifact_id: str) -> ArtifactRecord:
         artifact = self.verify(artifact_id)
@@ -391,6 +481,28 @@ class SQLiteArtifactStore(SQLiteWorkStore):
         """Fault-injection seam after atomic bytes publication, before DB commit."""
 
 
+def _artifact_identity(row):
+    return tuple(row[key] for key in (
+        "artifact_id", "digest_algorithm", "digest", "size_bytes", "relative_path",
+        "media_type", "integrity_status", "created_at",
+    ))
+
+
+def _work_identity(row):
+    return tuple(row[key] for key in (
+        "work_id", "semantic_key", "descriptor_json", "status", "max_attempts",
+        "attempt_count", "output_json", "output_digest", "lease_token",
+    ))
+
+
+def _file_stamp(path):
+    try:
+        value = path.stat(follow_symlinks=False)
+    except OSError:
+        return None
+    return (*stat_identity(value), value.st_ctime_ns)
+
+
 def _validated_suffix(value: str) -> str:
     suffix = value.casefold()
     if _SAFE_SUFFIX.fullmatch(suffix) is None:
@@ -415,7 +527,8 @@ def _digest_file(path: Path) -> tuple[str, int]:
         after = os.fstat(descriptor)
     finally:
         os.close(descriptor)
-    if stat_identity(before) != stat_identity(after):
+    if (stat_identity(before) != stat_identity(after)
+            or before.st_ctime_ns != after.st_ctime_ns):
         raise OSError(f"Artifact changed while reading: {path}")
     return digest.hexdigest(), size_bytes
 

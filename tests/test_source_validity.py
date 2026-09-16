@@ -246,3 +246,96 @@ def test_new_source_does_not_invalidate_unrelated_existing_work(tmp_path: Path) 
 
     assert items["added.jpg"].change_kind is ChangeKind.NEW
     assert work.get_work(existing.work_id).status is WorkStatus.SUCCEEDED
+
+
+def test_batch_proofs_keep_occurrences_and_roll_back_unknown_failure(tmp_path, monkeypatch):
+    import sqlite3
+    database, source = tmp_path / "work.sqlite3", tmp_path / "source"
+    source.mkdir()
+    for name in ("a.jpg", "b.jpg"):
+        (source / name).write_bytes(b"same bytes")
+    run_id = _completed_run(database, source)
+    validity = SourceValidityStore(database)
+    assert validity.prove_many(run_id, ()) == ()
+    first = validity.prove(run_id, Path("a.jpg"))
+    original = validity._record_proof
+    def fail_second(connection, proof):
+        original(connection, proof)
+        if proof.relative_path == Path("b.jpg"):
+            raise RuntimeError("injected batch failure")
+    monkeypatch.setattr(validity, "_record_proof", fail_second)
+    with pytest.raises(RuntimeError, match="injected"):
+        validity.prove_many(run_id, (Path("a.jpg"), Path("b.jpg")))
+    with sqlite3.connect(database) as connection:
+        assert connection.execute("SELECT relative_path, observed_at FROM source_content_proofs").fetchall() == [
+            ("a.jpg", first.observed_at.isoformat(timespec="microseconds"))]
+    monkeypatch.setattr(validity, "_record_proof", original)
+    proofs = validity.prove_many(run_id, (Path("b.jpg"), Path("a.jpg"), Path("b.jpg")))
+    assert [p.relative_path.name for p in proofs] == ["b.jpg", "a.jpg", "b.jpg"]
+    assert proofs[0].dependency().key != proofs[1].dependency().key
+    with pytest.raises(KeyError):
+        validity.prove_many(run_id, (Path("absent.jpg"),))
+
+
+@pytest.mark.parametrize("mutation", ["file", "revision", "run_state"])
+def test_batch_proof_commit_rechecks_observed_source(tmp_path, monkeypatch, mutation):
+    from contextlib import contextmanager
+    import sqlite3
+    from mediasense.precheck._fingerprint import SourceChangedDuringRead
+    database, source = tmp_path / "work.sqlite3", tmp_path / "source"
+    source.mkdir()
+    (source / "a.jpg").write_bytes(b"first")
+    run_id = _completed_run(database, source)
+    validity = SourceValidityStore(database)
+    original = validity._transaction
+    @contextmanager
+    def raced():
+        if mutation == "file":
+            (source / "a.jpg").write_bytes(b"changed")
+        else:
+            with sqlite3.connect(database) as connection:
+                if mutation == "revision":
+                    connection.execute("UPDATE run_items SET source_revision = source_revision + 1 WHERE run_id = ?", (run_id,))
+                else:
+                    connection.execute("UPDATE working_runs SET status = 'paused' WHERE run_id = ?", (run_id,))
+        with original() as connection:
+            yield connection
+    monkeypatch.setattr(validity, "_transaction", raced)
+    with pytest.raises(SourceChangedDuringRead):
+        validity.prove_many(run_id, (Path("a.jpg"),))
+    with sqlite3.connect(database) as connection:
+        assert connection.execute("SELECT count(*) FROM source_content_proofs").fetchone()[0] == 0
+
+
+def test_process_exit_rolls_back_open_proof_batch_and_keeps_prior_commit(tmp_path):
+    import mediasense
+    import subprocess
+    import sys
+    import sqlite3
+    database, source = tmp_path / "work.sqlite3", tmp_path / "source"
+    source.mkdir()
+    for name in ("a.jpg", "b.jpg"):
+        (source / name).write_bytes(b"source")
+    run_id = _completed_run(database, source)
+    first = SourceValidityStore(database).prove(run_id, Path("a.jpg"))
+    script = """
+import os, sys
+from pathlib import Path
+from mediasense.precheck import SourceValidityStore
+store = SourceValidityStore(Path(sys.argv[1]))
+original = store._record_proof
+def terminate(connection, proof):
+    original(connection, proof)
+    os._exit(23)
+store._record_proof = terminate
+store.prove_many(sys.argv[2], (Path('a.jpg'), Path('b.jpg')))
+"""
+    env = dict(os.environ)
+    # The child must exercise the same source/installed package as its parent,
+    # including when release checks explicitly disable pytest's src injection.
+    env["PYTHONPATH"] = str(Path(mediasense.__file__).resolve().parents[1])
+    completed = subprocess.run([sys.executable, "-c", script, str(database), run_id], env=env, capture_output=True, timeout=15)
+    assert completed.returncode == 23, completed.stderr.decode()
+    with sqlite3.connect(database) as connection:
+        assert connection.execute("SELECT relative_path, observed_at FROM source_content_proofs").fetchall() == [
+            ("a.jpg", first.observed_at.isoformat(timespec="microseconds"))]

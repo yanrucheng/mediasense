@@ -423,10 +423,7 @@ def _load_source_observation_works(
 
 @contextmanager
 def _connect(database_path: Path) -> Iterator[sqlite3.Connection]:
-    connection = sqlite3.connect(database_path, timeout=30)
-    connection.row_factory = sqlite3.Row
-    connection.execute("PRAGMA foreign_keys = ON")
-    try:
+    from ._sqlite_scope import connect
+
+    with connect(database_path) as connection:
         yield connection
-    finally:
-        connection.close()

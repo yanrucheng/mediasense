@@ -4,7 +4,7 @@ title: "MediaSense Plan Working State Tool Contract"
 type: spec
 status: active
 created: 2026-08-27
-updated: 2026-09-13
+updated: 2026-09-15
 timezone: "Asia/Shanghai"
 parent: "index-contract"
 depends-on:
@@ -22,6 +22,10 @@ tags: ["mediasense", "plan", "tool-contract", "working-state"]
 包内草案不构成另一套已发布接口。源码、隔离安装、页面操作及 Human/Agent 验收
 分别见[实施记录](../../../../openspec/changes/review-plan-preview-delivery/acceptance.md)。
 此前 optional-work 记录保留在[原验收](../../../../openspec/changes/refine-plan-interaction/acceptance.md)。
+
+2026-09-15，用户授权按已确认的[整理方案参照](../../../design/design-260915-1244-plan-preview-simplification.md)
+实现分组浏览界面，并同步直接受影响的审阅交付约定。页面与同版本对话共同交付完整审阅；
+权威数据、有界读取及确认／冻结权限不变。本次实现验证不代表发布或日常安装升级。
 
 ## Authority and compatibility
 
@@ -106,6 +110,14 @@ Replay may recover unavailable delivery or report an old receipt as superseded
 after another save. It never rewrites the old receipt or creates a revision.
 Saving and display delivery have separate outcomes.
 
+Successful create/update/seal calls and default inspect automatically deliver the
+view. Runtime owns startup, reuse, bounded admission, idle cache reclamation and
+idle process exit. State-only inspect and diagnostics do not start or renew it.
+A retiring/refused connection may be rebound once within the original delivery
+deadline, against the original receipt, without repeating a business write.
+Resource contention, route capacity, service access, stale revision and individual
+image failures remain distinguishable in the existing view problems shape.
+
 The descriptor binds work_ref, result_ref, requested revision, observed_at,
 observed current_revision, current_uri, revision_uri, status and problems:
 
@@ -161,12 +173,22 @@ partial/full drafts, complete candidates, withdrawal and frozen Works. Agents
 do not author HTML, start temporary servers or maintain duplicate presentation
 business data. Views are regenerable from saved Work and bound Result.
 
-The page distinguishes working context from retained final decisions and exposes
-saved directory hierarchy, exact expanded counts, readable member filenames and
-source information, target naming, other outcomes, unassigned scope, note scopes
-and qualified actual Evidence. Groups and derived parents preserve saved
-first-appearance order; members use stable source-path/ref ordering. Functional
-bounded continuation must browse beyond the first 100 items to the true end.
+The page is titled “整理方案” and presents only saved groups and their selected
+prepared previews. Each group is an independently collapsible row, initially
+closed, showing its saved readable path and exact member count. Paths do not
+create nested parent boxes. Groups and previews preserve their existing order
+and selection; a group count is not an image count. Images and readable source
+filenames form a responsive horizontal grid. The page does not expose internal
+IDs, working notes, evidence panels, dashboards, search or editing controls.
+Empty content, failed images and stale versions have concise contextual states.
+
+Other outcomes, unassigned scope, target naming, note scopes, final decision
+explanations, working context and qualified Evidence remain authoritative and
+fully readable through the existing Tool and its Result/member continuations.
+They are not deleted or reclassified when omitted from the page. Group pages and
+exact member reads remain bounded and can continue beyond 100 items to the true
+end; members retain stable source-path/ref ordering. The browser continues group
+pages without resetting expanded groups. It does not add a member inspector.
 Truncation and image failure never imply unseen members were reviewed.
 
 A loaded page fixes Work/revision. Background detection only prompts; refresh
@@ -175,8 +197,9 @@ offer the current entry. New content is not appended to old lists. Closure
 updates actual frozen status under the same revision; projection dependencies
 include Work state and publication, not revision alone.
 
-Unreadable images retain explicit placeholders and provenance without invented
-substitutes or automatic reacquisition. Such gaps do not automatically invalidate
+Unreadable images retain explicit local placeholders and readable source labels;
+their full provenance remains available through the existing reads. There are no
+invented substitutes or automatic reacquisition. Such gaps do not automatically invalidate
 organization. Untrusted/unavailable Result or unresolved membership prevents
 claims of complete review and remains a seal barrier. Agent and Human assess
 image-gap significance and retain material final limitations in decision_notes.
@@ -186,8 +209,25 @@ health/build identity, stop and reconnection. It serves only explicitly bound
 Dataset/Work/Result resources, with no filesystem-root exposure or HTTP
 write/confirmation/Apply endpoint. Text is data, not executable code. There is
 no remote hosting/CDN/model dependency or login-service installation side effect.
-Old drafts need not be permanently retained; old entries explicitly report
-obsolescence. Closed Works never silently follow another Work.
+Bindings are isolated by physical workspace, Dataset and Work. A binding retains
+its entry within a process, including after cache reclamation; entries are
+transient across exit/restart. The next ordinary view delivery returns a new entry.
+Reclamation never changes a revision or relaxes exact-page/cursor rejection.
+Closed Works never silently follow another Work.
+
+Actual content use and same-version browser interaction renew runtime use;
+background current polling, health checks and visibility alone do not keep it
+alive. The private same-origin activity POST updates only in-memory display
+accounting, with no planning, confirmation or Apply authority. Current checks use
+minimal read-only bindings and never reconstruct the Result projection. Heavy
+contexts and concurrency are bounded and reclaimed separately from process idle
+exit; in-flight content requests pin resources through response completion.
+
+A disconnected page preserves loaded content and stops automatic retries. Further
+reads offer a concise Agent-reopen prompt. Resource busy responses remain
+retryable and are not reported as missing images; only established local image
+failures use image placeholders. Diagnostics and explicit stop are recovery or
+maintenance actions, not normal Agent workflow steps.
 
 ## Strict revision-bound acceptance and seal
 
@@ -208,7 +248,17 @@ it. Refresh, pagination, re-rendering and idempotent replay do not create revisi
 and therefore do not invalidate matching acceptance. Agent stops sealing after
 Human withdrawal and saves the appropriate draft/withdrawal.
 
-After exact-page review and explicit chat acceptance, the Agent conveys that
+Complete review combines the exact revision's page with same-revision explanation
+in conversation. Before requesting acceptance, the Agent discloses every omitted
+fact that could change acceptance: material scope/coverage limits, unassigned
+items, other dispositions, naming changes, exceptions, note applicability,
+Evidence gaps and unresolved uncertainty. Retained final explanations belong in
+the Candidate's decision_notes or outcome reasons, with exact scopes; working
+notes are not a substitute. If that disclosure cannot be completed, the Agent
+must not claim whole-Plan review. Viewing or expanding groups never establishes
+complete review or acceptance by itself.
+
+After that exact-version review and explicit chat acceptance, the Agent conveys that
 actual scope through the existing trusted local-client transport and seals
 directly. No new popup or digest recital is required. Saving a redundant
 confirmation note after acceptance would create a new revision requiring review.

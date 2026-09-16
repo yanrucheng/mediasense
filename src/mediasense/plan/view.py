@@ -53,6 +53,14 @@ class PlanView:
     def current(self):
         return self.tool.store.snapshot(self.work_ref)
 
+    def close(self):
+        """Release the whole projection, including the Reader captured by its boundary."""
+        self.analysis = self.resolver = self.renderer = self.tool = None
+        self.members.clear()
+        self.source_details.clear()
+        self.directory_totals.clear()
+        self._binding = None
+
     def _load(self, revision):
         snapshot = self.current()
         if snapshot.revision != revision:
@@ -66,7 +74,7 @@ class PlanView:
         )["result"]
         if result["readiness"] != "plan_ready":
             raise PreviewError("Bound Result is not plan-ready")
-        binding = (snapshot.revision, snapshot.state)
+        binding = (snapshot.revision, snapshot.state, snapshot.published_path)
         if self._binding != binding:
             snapshot, self.analysis = self.tool.snapshot_for_preview(
                 self.work_ref, revision
@@ -113,9 +121,11 @@ class PlanView:
         return tuple(sorted(refs, key=key))
 
     def _check(self, revision):
-        current = self.current()
-        if current.revision != revision:
-            raise RevisionConflict(current.revision)
+        current = self.tool.store.read_binding(
+            self.tool.store.database_path, self.work_ref
+        )
+        if current["revision"] != revision:
+            raise RevisionConflict(current["revision"])
 
     def _member_details(self, result_ref, refs):
         missing = [ref for ref in refs if ref not in self.source_details]
