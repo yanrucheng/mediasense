@@ -71,10 +71,21 @@ revision, prepared content identity, effect, destination, route, operation
 counts, and consequential warnings. State that authorization can move originals
 and that an accepted response is not proof of completion.
 
-Only after the Human confirms that exact prepared content, call `execute` with a
-fresh request ID and the unchanged coordinates. Pass confirmation through the
-trusted host context. If any coordinate changed, inspect the current status and
-ask again; never adapt an old confirmation.
+Call `execute` with a fresh request ID and the unchanged coordinates to let the
+trusted Host obtain one whole-preparation Human confirmation through the client.
+Do not require a duplicate chat confirmation or ask the Human to copy a digest.
+Reuse the same request ID for an exact accepted retry; matching durable authority
+is reused without another prompt. If any coordinate changed, inspect the current
+status and obtain new confirmation; never adapt an old confirmation. An absent
+client confirmation capability, decline or dismissal grants no authority.
+
+Normal same-filesystem execution compares the Result's finite fingerprint (at
+most 12 KiB per item), then checks prepared file identity/state and final location.
+Explain its warning: this is not full-byte verification and can miss unsampled or
+hidden changes. Missing, unsupported or mismatched old evidence blocks preparation;
+a fresh current hash cannot repair it. Cross-filesystem transfer remains a
+separately disclosed copy/verify/delete route; never treat same-volume consent as
+permission to take that route.
 
 ## Observe and control
 
@@ -127,5 +138,7 @@ the new Receipt after closure; both forward and reverse Receipts remain history.
 
 Report the Frozen Plan, Run, prepared identity that was authorized, selected
 effect and route, completion/closure, Receipt, exceptions, recovery facts,
-accepted metadata discrepancies, and any remaining upstream or Human action.
+accepted metadata discrepancies, the Receipt rewind deadline and current conditions,
+and any remaining upstream or Human action. State that the deadline is not a
+guarantee of safe rewind, and distinguish finite verification from full-byte proof.
 Distinguish requested, accepted, executing, needs-attention, and closed states.

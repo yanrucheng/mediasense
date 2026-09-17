@@ -220,14 +220,32 @@ class DatasetRuntime:
                 authorization=_geo_authorization(context),
             )
         elif name == "mediasense.apply.run":
+            if payload.get("action") == "status" and isinstance(
+                payload.get("run_ref"), str
+            ):
+                with self._worker_lock:
+                    worker = self._workers.get(f"apply:{payload['run_ref']}")
+                    if worker is None or not worker.is_alive():
+                        try:
+                            self.apply_run.executor.mark_owner_interrupted(
+                                payload["run_ref"]
+                            )
+                        except KeyError as error:
+                            if error.args != (payload["run_ref"],):
+                                raise
+                            # The Tool owns missing-Run validation.
             response = self.apply_run.handle(
                 payload,
                 confirmation=_confirmation(context, ApplyConfirmationContext),
             )
             run_ref = response.get("run_ref")
-            if isinstance(run_ref, str) and (
-                response.get("state") == "executing"
-                or response.get("target_state") == "executing"
+            if (
+                isinstance(run_ref, str)
+                and payload.get("action") in {"execute", "resume"}
+                and (
+                    response.get("target_state") == "executing"
+                    and response.get("observed_state") != "closed"
+                )
             ):
                 self._schedule_apply(run_ref)
         elif name == "mediasense.apply.read":
@@ -256,12 +274,19 @@ class DatasetRuntime:
             sensitivity_profiles=tuple(d.profile for d in detectors),
             sensitivity_detector_identities=tuple(d.identity for d in detectors),
             sensitivity_configuration=updated.sensitivity,
-            embedding_profile=None if updated.embedding is None else EmbeddingProfile(
-                name=updated.embedding["model_id"] + "@" + updated.embedding["revision"],
-                dimensions=updated.embedding["dimensions"], normalization="unit_length",
+            embedding_profile=None
+            if updated.embedding is None
+            else EmbeddingProfile(
+                name=updated.embedding["model_id"]
+                + "@"
+                + updated.embedding["revision"],
+                dimensions=updated.embedding["dimensions"],
+                normalization="unit_length",
             ),
             embedding_encoder_identity=None if encoder is None else encoder.identity,
-            model_batch_size=None if updated.embedding is None else updated.embedding["batch_size"],
+            model_batch_size=None
+            if updated.embedding is None
+            else updated.embedding["batch_size"],
         )
         if updated.geo_network != self.config.geo_network:
             self.geo_query = _geo_tool(self.opened.workspace / "geo", updated)
@@ -294,7 +319,12 @@ class DatasetRuntime:
             try:
                 canonical(request)
             except (ValueError, TypeError):
-                return {"error": {"code": "invalid_request", "message": "Start inputs must be finite canonical JSON."}}
+                return {
+                    "error": {
+                        "code": "invalid_request",
+                        "message": "Start inputs must be finite canonical JSON.",
+                    }
+                }
             try:
                 replay = self.precheck_run._store.replay_start(request)
             except RunIdempotencyConflict:
@@ -557,6 +587,21 @@ class DatasetRuntime:
     def _advance_apply(self, worker_ref: str, run_ref: str) -> None:
         try:
             self.apply_run.run_pending(run_ref)
+        except Exception:
+            # Unexpected implementation failures are not ordinary recoverable waits.
+            with self.apply_run.run_store._connect() as connection:
+                connection.execute(
+                    "UPDATE runs SET state = 'failed' WHERE run_ref = ?", (run_ref,)
+                )
+                connection.execute(
+                    "INSERT OR IGNORE INTO findings VALUES (?, 'executor_failed', '', ?)",
+                    (
+                        run_ref,
+                        "The execution owner failed unexpectedly; possible effects require diagnosis.",
+                    ),
+                )
+                connection.commit()
+            raise
         finally:
             with self._worker_lock:
                 self._workers.pop(worker_ref, None)

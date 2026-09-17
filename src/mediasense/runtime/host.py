@@ -105,6 +105,33 @@ class RuntimeHost:
             contract_validator(name, str(request["action"])).validate(result)
         return result
 
+    def apply_discrepancies(
+        self, dataset_ref: str, run_ref: str
+    ) -> list[dict[str, object]]:
+        with self._lock:
+            runtime = self._datasets[dataset_ref]
+        values = []
+        cursor = ""
+        size = 0
+        import json
+
+        while True:
+            page = runtime.apply_run.run_store.iter_metadata_discrepancies(
+                run_ref,
+                after_discrepancy_ref=cursor,
+                limit=100,
+            )
+            if not page:
+                return values
+            size += len(json.dumps(page, ensure_ascii=False).encode())
+            if size > 524288:
+                raise HostRequestError(
+                    "Client cannot display the complete Apply discrepancy disclosure",
+                    code="confirmation_unavailable",
+                )
+            values.extend(page)
+            cursor = str(page[-1]["discrepancy_ref"])
+
     def precheck_confirmation(
         self, dataset_ref: str, run_ref: str
     ) -> Mapping[str, Any] | None:

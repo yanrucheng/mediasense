@@ -72,6 +72,8 @@ def create_mcp_server(host: RuntimeHost | None = None) -> Server[Any]:
                     in {
                         "mediasense.precheck.run",
                         "mediasense.geo.query",
+                        "mediasense.apply.run",
+                        "mediasense.apply.read",
                     }
                     and "authority" in arguments
                 ):
@@ -114,6 +116,24 @@ def create_mcp_server(host: RuntimeHost | None = None) -> Server[Any]:
                     if authority is None:
                         result = preflight
                         return _tool_result(result)
+                if (
+                    params.name == "mediasense.apply.run"
+                    and request.get("action") == "execute"
+                ):
+                    # First try the exact durable authorization. A successful
+                    # replay does not need another Human interaction.
+                    prior = await anyio.to_thread.run_sync(
+                        lambda: runtime.call_tool(
+                            params.name, dataset_ref=dataset_ref, request=request
+                        )
+                    )
+                    if prior.get("error", {}).get("code") != "access_denied":
+                        return _tool_result(prior)
+                    authority = await _elicit_apply_authority(
+                        _context, runtime, dataset_ref, request
+                    )
+                    if authority is None:
+                        return _tool_result(prior, is_error=True)
                 if (
                     params.name == "mediasense.plan.work"
                     and request.get("action") == "update"
@@ -238,6 +258,8 @@ def _mcp_tool(descriptor: ToolDescriptor) -> types.Tool:
         if descriptor.name not in {
             "mediasense.precheck.run",
             "mediasense.geo.query",
+            "mediasense.apply.run",
+            "mediasense.apply.read",
         }:
             properties["authority"] = {
                 "type": "object",
@@ -262,6 +284,79 @@ def _mcp_tool(descriptor: ToolDescriptor) -> types.Tool:
             "contract_digest": descriptor.contract_digest,
         },
     )
+
+
+async def _elicit_apply_authority(
+    context: Any,
+    runtime: RuntimeHost,
+    dataset_ref: str,
+    request: Mapping[str, Any],
+) -> Mapping[str, object] | None:
+    status = await anyio.to_thread.run_sync(
+        lambda: runtime.call_tool(
+            "mediasense.apply.run",
+            dataset_ref=dataset_ref,
+            request={"action": "status", "run_ref": request["run_ref"]},
+        )
+    )
+    if (
+        "execute" not in status.get("allowed_actions", [])
+        or status.get("prepared_revision") != request.get("prepared_revision")
+        or status.get("prepared_content_identity")
+        != request.get("prepared_content_identity")
+    ):
+        return None
+    session = getattr(context, "session", None)
+    elicitation = getattr(
+        getattr(session, "client_capabilities", None), "elicitation", None
+    )
+    if getattr(elicitation, "form", None) is None:
+        return None
+    summary = status["summary"]
+    disclosure = {
+        "run_ref": status["run_ref"],
+        "prepared_revision": status["prepared_revision"],
+        "prepared_content_identity": status["prepared_content_identity"],
+        "summary": summary,
+        "warnings": status.get("warnings", []),
+    }
+    if status.get("metadata_loss_authorization"):
+        disclosure["metadata_loss_authorization"] = status[
+            "metadata_loss_authorization"
+        ]
+        disclosure["discrepancies"] = await anyio.to_thread.run_sync(
+            lambda: runtime.apply_discrepancies(dataset_ref, request["run_ref"])
+        )
+    if len(json.dumps(disclosure, ensure_ascii=False).encode()) > 524288:
+        return None
+    message = (
+        "Authorize this complete MediaSense Apply preparation to move originals.\n"
+        f"Files: {summary['materialization_operations']}; route: {summary['execution_route']}.\n"
+        "Same-filesystem execution uses bounded source fingerprints and file identity/location checks, "
+        "not full byte verification. Cross-filesystem execution copies and verifies bytes before deletion.\n"
+        "Accept authorizes the exact roots, destinations, effect and verification shown below. "
+        "Decline or dismiss leaves this Run without new authorization.\n"
+        + json.dumps(disclosure, ensure_ascii=False, sort_keys=True)
+    )
+    try:
+        result = await session.elicit_form(
+            message,
+            {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {},
+            },
+            related_request_id=getattr(context, "request_id", None),
+        )
+    except NoBackChannelError:
+        return None
+    if result.action != "accept":
+        return None
+    return {
+        "principal_ref": "human:mcp-elicitation",
+        "confirmed_content_identity": status["prepared_content_identity"],
+        "confirmed_at": datetime.now(timezone.utc).isoformat(),
+    }
 
 
 async def _elicit_precheck_authority(

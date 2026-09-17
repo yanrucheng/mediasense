@@ -2,6 +2,7 @@
 title: "Amber 逐菜细分与局部 PreCheck 准备使用复核"
 service_version: "MediaSense 0.11.0；以留存请求、Result 与 Frozen Plan 为行为证据"
 date: 2026-09-16
+updated: 2026-09-17
 environment: "macOS；用户实际 cmux 会话；只读复核"
 model_id: "gpt-6-astra / low（被评估会话）"
 dataset_version: "test-260831；precheck-result:0ce9b26fda788c858dff1ff8416c34964a5c069cf51139f682afd0a08e7e2ed1"
@@ -16,6 +17,8 @@ baseline_ref: "docs/spec/contract/precheck-run/index.md；docs/spec/contract/pre
 用户随后明确：期望 Agent 自主理解并判断压缩的价值，而非强制二次 PreCheck。直接调查原始材料、重新压缩后阅读较少的代表，或组合两种方法，都可能是合理选择。未调用二次 PreCheck 本身不作为缺陷；本报告区分路径是否被执行、方法选择是否有可核实依据，以及哪些指导可能过度约束方法。
 
 本复核遵循 `yanru-guidelines`：检查目的、权威与必要边界；不把某一套调用顺序当作所有细分请求必须执行的流程。
+
+2026-09-17 补记：下文对旧 Skill 的措辞分析保留当时依据；用户随后授权本任务负责 Skill 修改与安装，现已完成末尾所记的两份 Skill 更新。原运行事实和未开展的行为验收范围没有改变。
 
 ## 实际调用与结果
 
@@ -166,3 +169,19 @@ rtk proxy python3 eval/sessions/260916-2024-amber-local-preparation/run.py \
 ```
 
 [run.py](run.py) 只解析目标交互、读取封存文件、验证已登记摘要并计算集合交集。它依赖本次保存结构，属于会话内复核工具，不是新的产品 Tool 或稳定通用读取接口。复算结果与 [metrics/combined.json](metrics/combined.json) 一致；报告引用与文件格式另作静态核对。没有为文档调研运行媒体处理或生产测试套件。
+
+## 2026-09-17：Skill 修改与安装
+
+本次按用户的明确分工完成 Skill 修改和安装，改动落在既有 Plan／PreCheck Skill，未新建 Skill、Tool、实体或固定重跑流程。Plan 将封存事实读取与原材料调查分开，明确现成证据、选定原件／字段及局部重新准备均可使用和组合；按当前检索目的比较准备、I/O、模型阅读、耗时、发布／接续及 Human 注意力。临时缩略图、视频帧与联系表是调查材料，不替代 Tool 交付的权威方案页面。成员解析可服务于尚未完成的语义决策；原代表集合不再被描述为必须整体接受的组织边界。
+
+PreCheck 同步直接原件调查属于 Plan 的合法方法，并将改变准备明确为已作方法选择后的操作。缺少细节不自动改变已发布 Result 的 readiness。原有完整 Profile、固定全量输入、局部互斥范围、配置身份、来源对应、新 Work 及重新确认要求保留。基础设计和 Tool Schema 的后续说明改进不属于本次 Skill 安装交付，不宣称已经修改。
+
+人工审阅检查了三种方法均保持可用：现成材料足够时直接组织；少量缺口可通过原件调查解决；大量相似输入可考虑局部准备以减少阅读。此项是指引审阅，**没有运行独立 Agent 的自然请求评估**，也没有将某个固定 Tool 调用序列作为行为通过标准。
+
+交付基点 `cc3354db1f132be0d44e85ceb8272339c5f3f241`；隔离导出只覆盖上述两份 Skill 文本。当前 143 个安装包文件与源码一致后构建，新 wheel 仅这两个文件变化，SHA-256 为 `8df92b3fd0a293aec580aefa91fd4715ece77ac29e78f2409210eebf5c2e6a75`。日常 uv 包同步其发布快照，原 `skills@1.5.25` 从固定 wheel 导出同步香港素材项目四个 Skill；13 个文件逐字节相同，管理器 source/hash 核对通过。Python 3.13.5、embeddings、59 项依赖和原配置保持。
+
+验证包括两份 Skill 的 quick_validate、30 项 Skill／安装／契约一致性检查、artifact-only 和完整离线 distribution smoke。第一轮仓库 `.venv` 仍登记旧 0.10.2，出现 3 项版本检查失败、27 项通过；在真实安装 0.11.0 的隔离环境重跑相同检查后 30 项全过。未更改测试或版本承诺迁就旧环境。安装后按原 MCP 包装启动的全新诊断连接返回 0.11.0，七个 Tool 摘要匹配，doctor=ok，业务 Tool 调用数 0。
+
+安装按 runbook 正常停止旧的空闲预览服务，中断请求数 0。已有用户 Agent／MCP 未被重启；磁盘更新不证明这些对话已读取新版 Skill。使用新会话或明确重新读取更新后的 Skill 才能应用新指引。未重跑业务 PreCheck、Plan 或 Apply。
+
+确切 wheel、原包、Skill／lock 备份、约束、固定 source.diff、验证与恢复命令保留在 `.local/releases/0.11.0-evidence-choice-skills-20260917-021402/`；[安装收据](../../../.local/releases/0.11.0-evidence-choice-skills-20260917-021402/installation-receipt.json)记录实际范围。安装步骤和恢复边界沿用 [readme/installation.md](../../../readme/installation.md)。原始输出和 wheel 保持本地忽略，仓库只保留 Skill 改动和必要记录。

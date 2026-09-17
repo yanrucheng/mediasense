@@ -145,8 +145,8 @@ def test_prepare_resolves_and_verifies_one_real_sealed_precheck_result(
     assert prepared.state == "ready_for_authorization"
     item = apply.iter_items(prepared.run_ref, limit=1)[0]
     assert item["source_item_ref"] == source_item_ref
-    assert item["verification_profile"] == "sha256-full-v1"
-    assert item["verification_producer"] == "builtin-apply-source-verification-v1"
+    assert item["verification_profile"] == "candidate-sha256-full-or-3x4k-v1"
+    assert item["verification_producer"] == verification["value"]["producer"]
     assert item["expected_verification"] == item["observed_verification"]
     assert (source / "original.jpg").read_bytes() == source_before
     assert list(destination.iterdir()) == []
@@ -236,4 +236,7 @@ def test_real_sealed_precheck_result_executes_controlled_move_and_receipt(
     receipt = executor.receipt_store.read(status["published_receipt"]["receipt_ref"])
     operation = receipt["sealed_content"]["operation_ledger"]["items"][0]
     assert operation["source_item_ref"] == source_item_ref
-    assert operation["source_verification"]["profile"] == "sha256-full-v1"
+    assert (
+        operation["source_verification"]["profile"]
+        == "candidate-sha256-full-or-3x4k-v1"
+    )

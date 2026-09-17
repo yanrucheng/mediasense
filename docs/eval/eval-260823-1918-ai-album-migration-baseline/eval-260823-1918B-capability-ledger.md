@@ -4,7 +4,7 @@ title: "Migration Capability Ledger"
 type: eval
 status: active
 created: 2026-08-23
-updated: 2026-09-16
+updated: 2026-09-17
 timezone: "Asia/Shanghai"
 parent: "eval-260823-1918-ai-album-migration-baseline"
 depends-on:
@@ -14,6 +14,20 @@ tags: ["migration", "capability", "parity"]
 ---
 
 # Migration Capability Ledger
+
+## 2026-09-17：Plan／PreCheck 调查方法指引与 Skill 安装（0.11.0）
+
+用户授权按开放方法的方案修改并安装 Skill。Plan 现明确区分封存 Result 的权威读取与原材料调查，允许通过已有能力查看选定原件／字段和制作临时调查材料；根据当前检索目标比较已有证据、直接调查和局部重新准备的总成本。`represents` 不成为不可拆的组织单元，缺少准备图不自动关闭原件调查或强制新 Run。PreCheck 同步这些方法选择，并保持发布结果的真实 coverage/readiness。移除固定业务优先级示例与不必要的调查顺序限制，保留源只读、快照对应、来源归属、旧 Result／Work 不改写及确切版本确认。
+
+本次只修改包内 `mediasense-plan/SKILL.md`、`mediasense-precheck/SKILL.md` 两个文件，未改算法、Tool 契约、基础模型或 Foundation。源码基点 `cc3354db1f132be0d44e85ceb8272339c5f3f241` 加这两份 Skill 的固定补丁；构建前确认其他 141 个包文件与日常安装相同。确切 wheel 留存于 `.local/releases/0.11.0-evidence-choice-skills-20260917-021402/wheel/mediasense-0.11.0-py3-none-any.whl`，SHA-256 为 **`8df92b3fd0a293aec580aefa91fd4715ece77ac29e78f2409210eebf5c2e6a75`**。
+
+原 uv 日常包与 `/Users/chengyanru/Downloads/ai-album-hk-representative-v1` 的四个项目 Skills 已离线同步。保留 Python 3.13.5、embeddings、全部 59 项依赖、原 MCP 包装与配置；npx 沿用 `skills@1.5.25`、Codex、copy 和四名 allowlist，由管理器将 source 更新为本次固定 wheel 导出并重算 hash。实际 143 个包文件、13 个 Skill 文件逐字节匹配，四项 manager hash 正确，无关锁记录不变。
+
+两份 Skill 的 quick_validate、版本匹配隔离环境下的 **30 项相关检查**、artifact-only 核验和相同 Python／extras／依赖约束的离线 distribution smoke 通过。最初仓库 `.venv` 的旧 0.10.2 元数据造成 3 项版本检查失败；未修改规范或测试绕过，在隔离 0.11.0 环境重跑原检查全部通过。没有新增以文案匹配代替行为的测试；本轮不声称独立 Agent 已验证更好的选择效果。
+
+按安装 runbook 正常停止原预览 PID 57181，确认退出、中断请求数 0；未重启已有业务 Agent／MCP。安装后按原项目注册启动新诊断 Host，doctor=ok，初始化 0.11.0，七个 Tool 的合约身份与摘要匹配；未调用业务 Tool 或打开业务 Dataset。**现有对话不因磁盘安装自动重载 Skill，需新会话或明确重新读取新版指引。**
+
+[安装收据](../../../.local/releases/0.11.0-evidence-choice-skills-20260917-021402/installation-receipt.json)、[固定源码补丁](../../../.local/releases/0.11.0-evidence-choice-skills-20260917-021402/source.diff)、[安装后核对](../../../.local/releases/0.11.0-evidence-choice-skills-20260917-021402/checks/actual-installation.json)及 before／rollback.sh 保留恢复材料；详细背景见[原实际使用复核](../../../eval/sessions/260916-2024-amber-local-preparation/report.md#2026-09-17skill-修改与安装)。这次没有运行香港素材重新分类或二次 PreCheck。
 
 ## 2026-09-16：重缓存闲置回收延长为 1 小时（0.11.0）
 
@@ -1123,3 +1137,14 @@ Dataset 显式 embedding 表仍有更高优先级，已有 Run 快照和已封�
 - **交付和边界：** 首次 seal 响应过大并截断，后续需要重取；最终说明遗漏一小时 rewind
   期限。8 项既有执行/恢复/幂等/回执定向测试通过，但不替代新增反例。本次没有产品修复、
   安装升级、真实 rewind 或跨卷认证；历史受控测试记录保留，不扩写为本次全链路已通过。
+
+
+### 2026-09-17：已选 Apply B 的本地开发与验证
+
+[本地验证记录](../../../eval/sessions/260917-1357-apply-b-validation/report.md)独立记录本轮实现、构建及合成负载证据，保留上面的首次真实使用未通过结论。
+
+- 来源旧有限指纹不再丢弃；缺失、失败、未知或不匹配依据阻塞准备。首次使用发现的 `regression` 已在源码中修复，并由真实合成 PreCheck Result 到 Host/Apply 的反例验证。旧 Result 不回填状态或完整摘要。
+- B 的有限读取及对象/位置核验是用户选择的 `intentionally_changed`：降低正常同卷内容 I/O，保留逐项意图和结果提交、SQLite FULL、不覆盖 rename、恢复与回执，并补齐两端目录同步。完整字节变化检测保证有所降低；不宣称所有安全维度都增强。
+- MCP/CLI 自填 authority 被拒绝，可信客户端整批确认和匹配请求的持久授权复用已接通；这与效率优化分别验收。AI Album 无同等确认/回执责任，历史对比仍为 `not_comparable`。
+- 原件移动、名称与目录层级仍为 `preserved`；C 批量提交、file_state 和 transfer_policy 未加入。大量小文件的逐项路径和记账成本仍在，实测不按读字节下降比例宣称提速。
+- 本轮仅源码及隔离 wheel 自验，未发布或切换日常安装，未执行真实媒体 Apply。私有 Apply store 格式 3 拒绝直接接管旧格式 2；保留 Dataset 的发布过渡需另行处理。测试的进程退出/同步窗口不认证突然断电、重启或物理损坏恢复。

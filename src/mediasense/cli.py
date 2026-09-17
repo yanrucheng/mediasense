@@ -231,6 +231,14 @@ def _call_tool(args: argparse.Namespace) -> int:
             }
             _emit(value, json_output=args.json, human=json.dumps(value, indent=2))
             return 2
+        if (
+            args.name in {"mediasense.apply.run", "mediasense.apply.read"}
+            and args.authority is not None
+        ):
+            raise HostRequestError(
+                "Apply authority is supplied only by a trusted Host Human confirmation",
+                code="access_denied",
+            )
         host = RuntimeHost()
         opened = host.open_dataset(args.source, args.workspace)
         if opened.get("outcome") != "ok":

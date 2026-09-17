@@ -4,7 +4,7 @@ title: "MediaSense 当前合约"
 type: index
 status: active
 created: 2026-09-09
-updated: 2026-09-15
+updated: 2026-09-17
 timezone: "Asia/Shanghai"
 parent: "index-spec"
 depends-on:
@@ -51,7 +51,7 @@ superseded-by: ""
 | [Plan Work](plan-work/index.md) | 保存草案/候选、交付持续页面、按版本确认并冻结 | 分组浏览与自动生命周期承诺已同步；源码／隔离构建验证见生命周期设计实施记录，未发布或切换日常安装 |
 | [Frozen Plan](frozen-plan/index.md) | 冻结后的组织意图 | 迁入稳定位置，Source Set 含义沿用 |
 | [组织 Profile](default-organization-profile/index.md) | 默认组织和命名策略 | 迁入稳定位置；明确翻译属于 Plan 判断 |
-| [Apply](apply/index.md) | 已冻结计划的执行合约 | 仅迁入稳定位置，本轮不作全量审计 |
+| [Apply](apply/index.md) | 已冻结计划的执行合约 | 已选 B：有限来源指纹、同卷身份与位置核验、逐项持久化；可信 Host 授权修复单列。[本地验证](../../../eval/sessions/260917-1357-apply-b-validation/report.md)，未发布或切换安装 |
 
 ## 一份权威，三个表达用途
 

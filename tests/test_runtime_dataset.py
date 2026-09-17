@@ -301,7 +301,7 @@ def test_open_migrates_supported_v1_manifest_without_touching_private_stores(
     assert opened.created is False
     assert migrated["format_version"] == 3
     assert migrated["stores"] == {
-        "apply": 2,
+        "apply": 3,
         "geo": 2,
         "plan": 4,
         "precheck": 19,

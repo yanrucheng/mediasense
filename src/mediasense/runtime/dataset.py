@@ -637,6 +637,15 @@ def _read_manifest(path: Path, *, migrate: bool = False) -> DatasetManifest:
             "manifest_invalid", f"Dataset manifest cannot be read: {error}", path=path
         ) from error
     if migrate and _is_supported_legacy_manifest(value):
+        if (
+            value["stores"].get("apply") != DATASET_STORE_VERSIONS["apply"]
+            and (path.parent / "apply" / "work.sqlite3").exists()
+        ):
+            raise DatasetOpenError(
+                "store_unsupported",
+                "Retained Apply Runs require their original build; no automatic Apply store migration is supported.",
+                path=path,
+            )
         migrated = dict(value)
         migrated["format_version"] = DATASET_MANIFEST_VERSION
         migrated["stores"] = dict(DATASET_STORE_VERSIONS)

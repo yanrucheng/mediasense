@@ -1,0 +1,210 @@
+{
+  "large": {
+    "baseline": {
+      "samples": [
+        "baseline-large-1",
+        "baseline-large-2",
+        "baseline-large-3"
+      ],
+      "source_bytes": 1073741824,
+      "media_read_bytes": 3221225472,
+      "max_item_read_bytes": 402653184,
+      "prepare_seconds": 0.48610749997897074,
+      "execute_seconds": 0.9281465000240132,
+      "total_seconds": 1.4066523329820484,
+      "cpu_seconds": 1.144174,
+      "peak_rss_bytes": 71925760,
+      "commits": 34,
+      "commit_seconds": 0.004509502206929028,
+      "intent_commits": 8,
+      "result_commits": 8,
+      "intent_commit_seconds": 0.0007632090128026903,
+      "result_commit_seconds": 0.0011163319577462971,
+      "directory_syncs": 10,
+      "directory_sync_seconds": 0.0015962899778969586,
+      "read_calls": 9
+    },
+    "B": {
+      "samples": [
+        "B-large-final-1",
+        "B-large-final-2",
+        "B-large-final-3"
+      ],
+      "source_bytes": 1073741824,
+      "media_read_bytes": 98304,
+      "max_item_read_bytes": 12288,
+      "prepare_seconds": 0.07264633302111179,
+      "execute_seconds": 0.09630754200043157,
+      "total_seconds": 0.171661333006341,
+      "cpu_seconds": 0.05434899999999998,
+      "peak_rss_bytes": 69238784,
+      "commits": 34,
+      "commit_seconds": 0.00478528905659914,
+      "intent_commits": 8,
+      "result_commits": 8,
+      "intent_commit_seconds": 0.0009593749418854713,
+      "result_commit_seconds": 0.0012634560698643327,
+      "directory_syncs": 18,
+      "directory_sync_seconds": 0.0010517921764403582,
+      "read_calls": 1
+    },
+    "native": {
+      "samples": [
+        "native-large"
+      ],
+      "source_bytes": 1073741824,
+      "media_read_bytes": 0,
+      "max_item_read_bytes": 0,
+      "prepare_seconds": 0,
+      "execute_seconds": 0.002291542012244463,
+      "total_seconds": 0.0022921250201761723,
+      "cpu_seconds": 0.0011099999999999999,
+      "peak_rss_bytes": 60751872,
+      "commits": 0,
+      "commit_seconds": 0,
+      "intent_commits": 0,
+      "result_commits": 0,
+      "intent_commit_seconds": 0,
+      "result_commit_seconds": 0,
+      "directory_syncs": 0,
+      "directory_sync_seconds": 0,
+      "read_calls": 0
+    }
+  },
+  "small": {
+    "baseline": {
+      "samples": [
+        "baseline-small-1"
+      ],
+      "source_bytes": 10240000,
+      "media_read_bytes": 30720000,
+      "max_item_read_bytes": 1536,
+      "prepare_seconds": 83.15827070799423,
+      "execute_seconds": 260.6049887500121,
+      "total_seconds": 343.86070933303563,
+      "cpu_seconds": 184.02356500000002,
+      "peak_rss_bytes": 525631488,
+      "commits": 60010,
+      "commit_seconds": 7.427627157012466,
+      "intent_commits": 20000,
+      "result_commits": 20000,
+      "intent_commit_seconds": 2.4173292020568624,
+      "result_commit_seconds": 2.235006241942756,
+      "directory_syncs": 20002,
+      "directory_sync_seconds": 0.6985293827601708,
+      "read_calls": 20020
+    },
+    "B": {
+      "samples": [
+        "B-small-final"
+      ],
+      "source_bytes": 10240000,
+      "media_read_bytes": 10240000,
+      "max_item_read_bytes": 512,
+      "prepare_seconds": 83.68281974998536,
+      "execute_seconds": 244.61284241598332,
+      "total_seconds": 328.4299143329845,
+      "cpu_seconds": 162.703124,
+      "peak_rss_bytes": 550813696,
+      "commits": 60010,
+      "commit_seconds": 6.553361306258012,
+      "intent_commits": 20000,
+      "result_commits": 20000,
+      "intent_commit_seconds": 2.3787264427519403,
+      "result_commit_seconds": 1.89243160787737,
+      "directory_syncs": 40002,
+      "directory_sync_seconds": 1.1365391440340318,
+      "read_calls": 20
+    },
+    "native": {
+      "samples": [
+        "native-small"
+      ],
+      "source_bytes": 10240000,
+      "media_read_bytes": 0,
+      "max_item_read_bytes": 0,
+      "prepare_seconds": 0,
+      "execute_seconds": 3.817963666981086,
+      "total_seconds": 3.817963999987114,
+      "cpu_seconds": 1.813425,
+      "peak_rss_bytes": 102875136,
+      "commits": 0,
+      "commit_seconds": 0,
+      "intent_commits": 0,
+      "result_commits": 0,
+      "intent_commit_seconds": 0,
+      "result_commit_seconds": 0,
+      "directory_syncs": 0,
+      "directory_sync_seconds": 0,
+      "read_calls": 0
+    }
+  },
+  "mixed": {
+    "baseline": {
+      "samples": [
+        "baseline-mixed-1"
+      ],
+      "source_bytes": 266752000,
+      "media_read_bytes": 800256000,
+      "max_item_read_bytes": 786432,
+      "prepare_seconds": 43.09487737499876,
+      "execute_seconds": 103.24514774995623,
+      "total_seconds": 146.3858173750341,
+      "cpu_seconds": 67.868899,
+      "peak_rss_bytes": 316456960,
+      "commits": 30010,
+      "commit_seconds": 3.6124078608700074,
+      "intent_commits": 10000,
+      "result_commits": 10000,
+      "intent_commit_seconds": 1.1771097124437802,
+      "result_commit_seconds": 1.0999369973433204,
+      "directory_syncs": 10002,
+      "directory_sync_seconds": 0.3671222671982832,
+      "read_calls": 10010
+    },
+    "B": {
+      "samples": [
+        "B-mixed-1"
+      ],
+      "source_bytes": 266752000,
+      "media_read_bytes": 16896000,
+      "max_item_read_bytes": 12288,
+      "prepare_seconds": 42.44810287497239,
+      "execute_seconds": 94.8161859170068,
+      "total_seconds": 137.3197002079687,
+      "cpu_seconds": 60.704529,
+      "peak_rss_bytes": 330481664,
+      "commits": 30010,
+      "commit_seconds": 3.2926385333412327,
+      "intent_commits": 10000,
+      "result_commits": 10000,
+      "intent_commit_seconds": 1.0634789594914764,
+      "result_commit_seconds": 0.9820276374230161,
+      "directory_syncs": 20002,
+      "directory_sync_seconds": 0.5348983405274339,
+      "read_calls": 10
+    },
+    "native": {
+      "samples": [
+        "native-mixed-1"
+      ],
+      "source_bytes": 266752000,
+      "media_read_bytes": 0,
+      "max_item_read_bytes": 0,
+      "prepare_seconds": 0,
+      "execute_seconds": 1.777628583018668,
+      "total_seconds": 1.7776288749882951,
+      "cpu_seconds": 0.8617869999999999,
+      "peak_rss_bytes": 80871424,
+      "commits": 0,
+      "commit_seconds": 0,
+      "intent_commits": 0,
+      "result_commits": 0,
+      "intent_commit_seconds": 0,
+      "result_commit_seconds": 0,
+      "directory_syncs": 0,
+      "directory_sync_seconds": 0,
+      "read_calls": 0
+    }
+  }
+}

@@ -41,11 +41,7 @@ from test_apply_preparation import _fixture, _plan, _prepare, _tree_facts
 ROOT = Path(__file__).parents[1]
 APPLY_SPEC = ROOT / "docs" / "spec" / "contract/apply"
 FROZEN_PLAN_SCHEMA = (
-    ROOT
-    / "docs"
-    / "spec"
-    / "contract/frozen-plan"
-    / "frozen-plan.schema.json"
+    ROOT / "docs" / "spec" / "contract/frozen-plan" / "frozen-plan.schema.json"
 )
 
 
@@ -726,6 +722,7 @@ def test_effect_reservation_prevents_overlap_across_run_stores(tmp_path: Path) -
                     observed.st_dev,
                     observed.st_ino,
                     observed.st_mtime_ns,
+                    observed.st_ctime_ns,
                 ),
             )
         assert error.value.global_risk is True
@@ -1297,9 +1294,7 @@ def test_public_prepare_rejects_incomplete_result_resolution(tmp_path: Path) -> 
                             "locator": {"kind": "test"},
                             "scope": "source_media",
                             "condition": "usable",
-                            "source_content_verification": {
-                                "status": "not_checked"
-                            },
+                            "source_content_verification": {"status": "not_checked"},
                         }
                     ],
                     "page": {
@@ -1744,6 +1739,7 @@ def test_storage_errors_are_normalized_as_global_risk(
                 observed.st_dev,
                 observed.st_ino,
                 observed.st_mtime_ns,
+                observed.st_ctime_ns,
             ),
         )
     assert captured.value.code == expected_code
@@ -1778,6 +1774,7 @@ def test_target_race_is_normalized_as_local_collision(
                 observed.st_dev,
                 observed.st_ino,
                 observed.st_mtime_ns,
+                observed.st_ctime_ns,
             ),
         )
     assert captured.value.code == "target_collision"
@@ -1886,6 +1883,7 @@ def test_generated_large_file_move_has_verified_local_throughput(
             observed.st_dev,
             observed.st_ino,
             observed.st_mtime_ns,
+            observed.st_ctime_ns,
         ),
     )
     elapsed = time.monotonic() - started

@@ -1,6 +1,6 @@
 ---
 name: mediasense-plan
-description: "Turns one exact MediaSense PreCheck Result into a complete, retrieval-oriented, previewed, Human-confirmed Frozen Organization Plan. Use for Organization Profile selection, evidence-guided grouping, naming, exception handling, revision, and Plan-stage interaction; not for producing PreCheck evidence or executing Apply effects."
+description: "Turns one exact MediaSense PreCheck Result into a complete, retrieval-oriented, previewed, Human-confirmed Frozen Organization Plan. Use for evidence investigation, grouping, naming, local detail requests, exception handling, revision, and Plan-stage interaction; not for publishing PreCheck Results or executing Apply effects."
 ---
 
 # MediaSense Plan
@@ -18,7 +18,7 @@ or claim the current session reloaded a newly written project configuration.
 
 ## Boundaries
 
-- Read bound Result facts and prepared Evidence only through `mediasense.precheck.read`; never inspect PreCheck databases or caches. Human knowledge, background, supplementary files and authorized investigative results may also inform Plan. Keep their actual sources and affected scope; they do not rewrite the Result or expand its media scope.
+- Read sealed Result facts, recorded source attributes, memberships and prepared Evidence through `mediasense.precheck.read`; never reconstruct them from PreCheck databases or caches. This authority boundary leaves original-media investigation open: the Agent may read selected source files through available, authorized readers. Human knowledge, background, supplementary files and investigative results retain their actual sources and affected scope; they do not rewrite the Result or expand its media scope.
 - Treat `review`, `expand`, and `resolve` as factual consumption boundaries. They expose coverage, observations, Evidence, and exact membership; they do not select a Profile or prove retrieval value.
 - The Agent selects and applies the Profile, interprets evidence, proposes groups and names, and chooses what to ask. `mediasense.plan.work` stores and validates decisions already made; it makes no semantic fallback.
 - Keep Observations, Candidate Relations, Agent judgment, Human preferences, and Human confirmation distinguishable.
@@ -64,11 +64,19 @@ pagination continues. Do not count it as inspected evidence. MCP structuredConte
 is the single business payload; obtaining a path, opening the image and using it
 in judgment are separate steps.
 
-Use `expand` selectively on representative, boundary, outlier, conflict, unassigned prepared Evidence, or member observations that can change chapter boundaries, scene groups, names, exceptions, or Profile fit. Evidence roles describe review functions inside a compression claim; they are not semantic truth. Inspect enough actual visual Evidence to support the semantic distinctions used in the Candidate. Use `resolve` for exact membership only after the semantic decision requires it; exact resolution proves no retrieval value.
+Use `expand` for prepared detail, member observations, relationship bases and limitations that can change a decision. Use `resolve` when exact members, source locators or verification evidence help the investigation or organization; these reads may inform the decision before groups are chosen. A member list does not establish that its files have been viewed. Evidence roles and `represents` describe a compression claim, not semantic equivalence or an indivisible unit of organization.
 
-Choose further investigation by the decisions still at stake, not just by uncertainty in an individual fact. A plausible generic label can hide a missing retrieval cue: on a food trip, identifying a meal or distinguishing a hotel activity from dinner may matter more than identifying every dish. A venue visible in a menu or sign with matching context can already be sufficient; an unreadable venue name is not evidence that the Human cannot supply it. Time adjacency and a shared representative do not establish one activity.
+Choose investigation depth from the Human's current retrieval goal. A compression result that supported an earlier broad grouping may hide distinctions needed by a finer request. Evaluate its actual members, basis and limitations for that decision; a threshold is a processing setting, not semantic confidence. Time adjacency and a shared representative do not establish one activity.
 
-Stop when the available support is sufficient for the proposed level of organization and further information is unlikely to change a material decision. Consider prepared detail, Human knowledge and authorized investigation without prescribing their order. If a useful distinction remains unsupported, investigate it or propose a supported coarser placement with its retrieval limitation visible. Merely avoiding a guessed name does not establish sufficiency; neither does a large count of inspected images. Do not substitute a fixed image count, confidence threshold or question quota.
+Available methods can be combined in any useful order:
+
+- Reuse prepared Evidence and recorded attributes when they already support the required distinction.
+- Inspect selected original media or source fields with available readers when direct investigation is worthwhile. Result-linked locators from `resolve` keep this investigation scoped; use available verification evidence to assess correspondence to the recorded source snapshot. A path alone does not prove unchanged content. Temporary renditions, sampled frames or contact sheets may aid investigation; keep them outside source media and retain their source and sampling limits.
+- Choose new local PreCheck preparation when reusable computation and compression can reduce the expected reading burden. `review include=["preparation"]` exposes the recorded Processing Profile and complete input Source Set; use its actual settings and the Tool's supported controls to assess a change. More detailed compression can yield more entries than before while still requiring fewer reads than the original subset.
+
+Weigh local preparation and I/O, model reading, elapsed time and Human attention against the value of the unresolved decision. New preparation also has source validation, publication and Plan continuation costs; do not assume its total cost scales only with the selected subset. Estimates and unknowns remain distinguishable from measurements. Reading every item in a selected scope is valid when its value warrants the cost within existing authority and budgets. Missing prepared imagery neither prohibits original-media inspection nor requires a new Run. Explain the choice briefly when it materially affects cost, completion or retained uncertainty; routine reads need no separate approval or cost report.
+
+Stop when the available support meets the current organization goal and further investigation is unlikely to change a material decision. Human knowledge and authorized background research can supply missing context. If a useful distinction remains unsupported, investigate it or offer a supported coarser placement with the unmet retrieval detail visible. Avoiding a guessed name or inspecting many images does not establish sufficiency; no fixed image count, confidence threshold, question quota or mandatory recompression sequence decides it.
 
 Preserve failure meanings:
 
@@ -78,7 +86,7 @@ Preserve failure meanings:
 - `result_untrusted` or `result_inconsistent` requires repair or a new Result; and
 - a material factual rival requires further information or a supported coarser disposition. Actively seek information that can change the decision, including Human knowledge, background and corrections, as well as preferences. Do not invent an answer when the Human cannot remember or has not replied; continue independent work while dependent decisions remain unresolved.
 
-Reopen PreCheck when Result integrity, accounting or preparation obligations need correction. Ordinary semantic uncertainty, a recorded location gap or a supplementary input form does not by itself require reopening. Choose available, authorized capabilities to read or compute over supplementary material; receiving a path, reading its contents and establishing an interpretation are distinct. If the needed capability or retained original is unavailable, disclose the limitation. A path in notes is not MediaSense custody of that original. `evidence_refs` remains limited to Evidence in the bound Result.
+Result integrity, accounting or preparation obligations that need correction still require their PreCheck remedy; local investigation cannot bypass a broken handoff. Publishing revised PreCheck observations or compression relationships requires a new immutable Result. Ordinary semantic uncertainty or a finer retrieval goal can instead be resolved within Plan using sufficient existing or newly investigated information. Keep original-file and supplementary observations as attributed Plan investigation, not fabricated observations in the bound Result; `evidence_refs` remains limited to Evidence already in that Result. If a needed reader or original is unavailable, disclose the actual limitation. A path in notes does not establish MediaSense custody of that original.
 
 ## Profile conformance checkpoint
 
@@ -132,7 +140,7 @@ observation.
 
 ## Save and review the evolving Work
 
-When a supported local preparation change is material, read the old Result's
+When new local preparation is the chosen method, read the old Result's
 preparation and send a complete ordinary PreCheck start request with its explicit
 input Source Set and chosen overrides. The Processing Profile is a configuration
 value, distinct from this stage's Organization Profile. Other declared parameters
@@ -154,7 +162,7 @@ Establish or restore a Work when discussion begins from a usable Result. Share t
 
 `update` also accepts working_notes (string replacement, `""` clears) and organization_preferences (object replacement, `{}` clears). All supplied changes commit together using work_ref, base_revision and request_id. Rejected organization saves none of them. Notes and preferences remain discussion context; transfer necessary final rationale into decision_notes.
 
-Every successful save returns `view` with current_uri and revision_uri, or explicit delivery limitations. Use these entries; do not write HTML, start a temporary server, build mosaics or maintain separate presentation business data. The Tool owns rendering, images and bounded group/member reads. The “整理方案” page shows only saved groups, initially collapsed and independently expandable, with readable paths, exact counts and horizontal responsive previews. Working context, other dispositions, unassigned scope and decision explanations remain readable through existing Tools; they are not additional page panels. Page visits, refresh, pagination and re-rendering do not save a revision.
+Every successful save returns `view` with current_uri and revision_uri, or explicit delivery limitations. Use these entries for organization review; do not replace the saved Work's page with Agent-authored HTML, a temporary presentation server or separately maintained planning data. Temporary investigative images remain investigation aids, not a second Plan authority. The Tool owns rendering, images and bounded group/member reads. The “整理方案” page shows only saved groups, initially collapsed and independently expandable, with readable paths, exact counts and horizontal responsive previews. Working context, other dispositions, unassigned scope and decision explanations remain readable through existing Tools; they are not additional page panels. Page visits, refresh, pagination and re-rendering do not save a revision.
 
 Default inspect includes overview, preferences, working_notes, content, validation and view. An absent organization or draft is a normal saved state, even though validation says candidate_missing or draft_not_candidate. If display fails, state that the planning revision was saved and the page is unavailable. Use state-only inspect without view to recover authority; use inspect with view or identical request replay to restore delivery. Unexpected operation_failed may carry committed_receipt. Do not repeat the semantic write after a known commit. Replay retains its original business receipt but observes current delivery anew; superseded means its old revision is no longer current.
 

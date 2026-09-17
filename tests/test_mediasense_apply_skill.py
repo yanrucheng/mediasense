@@ -175,19 +175,19 @@ def test_skill_forward_workflow_reaches_receipt_and_freshly_authorized_rewind(
     assert checkpoints == expected["expected_agent_checkpoints"]
 
 
-def test_skill_accepts_fresh_apply_proof_without_precheck_exact_proof(
+def test_skill_blocks_missing_precheck_proof(
     tmp_path: Path,
 ) -> None:
-    expected = _scenario("prepare_without_precheck_exact_proof")
+    expected = _scenario("prepare_without_precheck_proof")
     tool, frozen_plan, source, destination, _files, precheck = _new_tool(tmp_path)
     precheck.views["source-item:a"].pop("observations")
     checkpoints = []
 
     status = _prepare(tool, frozen_plan, source, destination)
-    assert status["state"] == "ready_for_authorization"
+    assert status["state"] == "blocked"
     assert not (destination / "Media").exists()
     assert (source / "a.jpg").exists()
-    checkpoints.append("request_exact_confirmation")
+    checkpoints.append("explain_missing_source_evidence")
     cancelled = tool.handle({"action": "cancel", "run_ref": status["run_ref"]})
     assert cancelled["target_state"] == "cancelled"
     assert not (destination / "Media").exists()

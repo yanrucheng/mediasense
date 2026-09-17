@@ -68,7 +68,7 @@ class FilesystemBoundary(Protocol):
         route: str,
         temporary_path: Path | None,
         accepted_discrepancies: tuple[MetadataDiscrepancy, ...] = (),
-        expected_source_stat: tuple[int, int, int] | None = None,
+        expected_source_stat: tuple[int, int, int, int] | None = None,
     ) -> EffectObservation: ...
 
     def reconcile(
@@ -81,7 +81,7 @@ class FilesystemBoundary(Protocol):
         route: str,
         temporary_path: Path | None,
         accepted_discrepancies: tuple[MetadataDiscrepancy, ...] = (),
-        expected_source_stat: tuple[int, int, int] | None = None,
+        expected_source_stat: tuple[int, int, int, int] | None = None,
     ) -> EffectObservation: ...
 
 
@@ -103,6 +103,13 @@ def _with_effect_reservation(
             expected_source_stat=kwargs.get("expected_source_stat"),
         ):
             try:
+                for path in (source, target):
+                    if path.parent.resolve(strict=True) != path.parent:
+                        raise FilesystemEffectError(
+                            "location_rebound",
+                            "effect path traverses a rebound or symlink directory",
+                            global_risk=True,
+                        )
                 return method(self, **kwargs)
             except FilesystemEffectError:
                 raise
@@ -126,14 +133,17 @@ class LocalFilesystem:
         route: str,
         temporary_path: Path | None,
         accepted_discrepancies: tuple[MetadataDiscrepancy, ...] = (),
-        expected_source_stat: tuple[int, int, int] | None = None,
+        expected_source_stat: tuple[int, int, int, int] | None = None,
     ) -> EffectObservation:
-        verify_file(
-            source,
-            expected_digest,
-            expected_size,
-            expected_stat=expected_source_stat,
-        )
+        if route == "same_filesystem_atomic_move":
+            verify_object(source, expected_size, expected_source_stat)
+        else:
+            verify_file(
+                source,
+                expected_digest,
+                expected_size,
+                expected_stat=expected_source_stat,
+            )
         if _lexists(target):
             raise FilesystemEffectError(
                 "target_collision", f"final target already exists: {target}"
@@ -146,19 +156,33 @@ class LocalFilesystem:
                     global_risk=True,
                 )
             rename_exclusive(source, target)
-            _fsync_directory(target.parent)
-            verify_file(target, expected_digest, expected_size)
-            if _lexists(source):
-                raise FilesystemEffectError(
-                    "postcondition_failed", "source still exists after atomic move"
+            sync_move_directories(source, target)
+            try:
+                if (
+                    source.parent.resolve(strict=True) != source.parent
+                    or target.parent.resolve(strict=True) != target.parent
+                ):
+                    raise FilesystemEffectError(
+                        "location_rebound", "move path changed during the effect"
+                    )
+                observed = verify_object(
+                    target, expected_size, expected_source_stat, after_move=True
                 )
+                if _lexists(source):
+                    raise FilesystemEffectError(
+                        "postcondition_failed", "source still exists after atomic move"
+                    )
+            except FilesystemEffectError as error:
+                raise FilesystemEffectError(
+                    "postcondition_failed", str(error), global_risk=True
+                ) from error
             return EffectObservation(
                 status="completed",
                 bytes_moved=expected_size,
                 source_after="absent",
                 target_after="verified_present",
                 verification_profile="same_filesystem_identity_and_location",
-                verification_basis="Target bytes matched and original location was absent.",
+                verification_basis=object_basis(observed),
             )
         if route != "verified_cross_filesystem_transfer":
             raise FilesystemEffectError(
@@ -184,8 +208,12 @@ class LocalFilesystem:
         route: str,
         temporary_path: Path | None,
         accepted_discrepancies: tuple[MetadataDiscrepancy, ...] = (),
-        expected_source_stat: tuple[int, int, int] | None = None,
+        expected_source_stat: tuple[int, int, int, int] | None = None,
     ) -> EffectObservation:
+        if route == "same_filesystem_atomic_move":
+            return self._reconcile_same_filesystem(
+                source, target, expected_size, expected_source_stat
+            )
         source_exists = _lexists(source)
         target_exists = _lexists(target)
         if not source_exists and target_exists:
@@ -265,6 +293,47 @@ class LocalFilesystem:
             global_risk=True,
         )
 
+    def _reconcile_same_filesystem(
+        self,
+        source: Path,
+        target: Path,
+        size: int,
+        expected: tuple[int, int, int, int] | None,
+    ) -> EffectObservation:
+        source_exists, target_exists = _lexists(source), _lexists(target)
+        if source_exists and not target_exists:
+            verify_object(source, size, expected)
+            return EffectObservation(
+                "retryable",
+                0,
+                "present",
+                "absent",
+                "effect_boundary_source_verification",
+                "Prepared source object and state matched; target is absent.",
+            )
+        if not source_exists and target_exists:
+            try:
+                observed = verify_object(target, size, expected, after_move=True)
+            except FilesystemEffectError as error:
+                raise FilesystemEffectError(
+                    "postcondition_failed", str(error), global_risk=True
+                ) from error
+            # The process may have died between rename and either directory sync.
+            sync_move_directories(source, target)
+            return EffectObservation(
+                "completed",
+                size,
+                "absent",
+                "verified_present",
+                "same_filesystem_identity_and_location",
+                object_basis(observed),
+            )
+        raise FilesystemEffectError(
+            "duplicate_presence" if source_exists else "effect_indeterminate",
+            "Recovery requires exactly one matching source or target; no automatic deletion is safe.",
+            global_risk=True,
+        )
+
     def _cross_filesystem_move(
         self,
         *,
@@ -325,12 +394,74 @@ class LocalFilesystem:
         )
 
 
+def verify_object(
+    path: Path,
+    expected_size: int,
+    expected: tuple[int, int, int, int] | None,
+    *,
+    after_move: bool = False,
+) -> os.stat_result:
+    """Check the prepared regular object without reading any media content.
+
+    ctime is checked before an effect, but rename can change it. Recovery from
+    an unrecorded rename therefore compares device/inode/size/mtime/type only.
+    """
+    if expected is None or len(expected) != 4:
+        raise FilesystemEffectError(
+            "source_unverifiable",
+            "prepared object binding is required",
+            global_risk=True,
+        )
+    try:
+        info = path.stat(follow_symlinks=False)
+    except FileNotFoundError as error:
+        raise FilesystemEffectError(
+            "source_missing", f"file is missing: {path}"
+        ) from error
+    if not stat.S_ISREG(info.st_mode):
+        raise FilesystemEffectError("source_unsafe_type", f"not a regular file: {path}")
+    actual = (info.st_dev, info.st_ino, info.st_mtime_ns, info.st_ctime_ns)
+    if actual[:3] != expected[:3] or (not after_move and actual[3] != expected[3]):
+        raise FilesystemEffectError(
+            "source_stale", f"prepared object or state changed: {path}"
+        )
+    if info.st_size != expected_size:
+        raise FilesystemEffectError(
+            "source_size_mismatch", f"prepared size changed: {path}"
+        )
+    return info
+
+
+def object_basis(info: os.stat_result) -> str:
+    # Existing Receipt verification.basis carries the actual post-rename facts.
+    # Strings preserve exact integer values across JSON consumers.
+    return json.dumps(
+        {
+            "device": str(info.st_dev),
+            "inode": str(info.st_ino),
+            "size_bytes": str(info.st_size),
+            "mtime_ns": str(info.st_mtime_ns),
+            "ctime_ns": str(info.st_ctime_ns),
+            "type": "regular",
+            "statement": "Prepared object, size and mtime matched at target; source absent. No full content scan.",
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+
+
+def sync_move_directories(source: Path, target: Path) -> None:
+    _fsync_directory(target.parent)
+    if source.parent != target.parent:
+        _fsync_directory(source.parent)
+
+
 def verify_file(
     path: Path,
     expected_digest: str,
     expected_size: int,
     *,
-    expected_stat: tuple[int, int, int] | None = None,
+    expected_stat: tuple[int, int, int, int] | None = None,
 ) -> None:
     """Verify one regular non-symlink file without accepting a read-time drift."""
 
@@ -350,6 +481,7 @@ def verify_file(
             before.st_dev,
             before.st_ino,
             before.st_mtime_ns,
+            before.st_ctime_ns,
         )
         != expected_stat
     ):
@@ -587,7 +719,7 @@ def _effect_reservation(
     *,
     source: Path,
     target: Path,
-    expected_source_stat: tuple[int, int, int] | None,
+    expected_source_stat: tuple[int, int, int, int] | None,
 ):
     """Serialize overlapping effects across Run stores for this OS account."""
 

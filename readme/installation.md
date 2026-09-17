@@ -46,6 +46,14 @@ and format declarations. The 0.9 Read change uses `review.items` and one MCP
 The 0.10 Geo journal migration preserves retained evidence but excludes old Host
 writers. No version number alone proves compatibility with a retained Dataset.
 
+The unreleased Apply B development snapshot uses private Apply store format 3.
+It does not migrate retained format 2 Runs or reinterpret their authorizations.
+Do not replace a Host owning an active Apply Run with this snapshot. Finish or
+recover that Run using its exact original build, preserve the Dataset and all
+immutable artifacts, and resolve the retained-store transition separately before
+any release upgrade. This local development validation is not an installation
+or a certification of power-loss recovery.
+
 The continuous Plan view release uses private Plan store format 4. On a supported
 v3 Dataset, it keeps the existing database filename, Work/Result/Plan references,
 notes, preferences, cursor key, request history and Frozen Plan bytes. Nonempty

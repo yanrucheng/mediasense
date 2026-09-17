@@ -257,9 +257,11 @@ PreCheck owns compression, the Run checkpoint, and Result projection.
 
 ## Diagnose before revising compression
 
-If the user dislikes the observed frontier, first ask what is wrong with its
-content or distribution. A large or small count alone is not evidence of a bad
-Result. `review` the exact Result, select Evidence refs from review items, and request only advertised `expand` includes needed to compare the
+Identify which current decision or requested detail the observed frontier does
+not support, using the Human's request and available evidence; ask only for
+material missing context. A changed retrieval goal may justify different
+preparation without making the earlier Result wrong. A large or small count
+alone is not evidence of a bad Result. `review` the exact Result, select Evidence refs from review items, and request only advertised `expand` includes needed to compare the
 complaint with representation bases, coverage, outliers, boundaries,
 qualifications, processing provenance, and cost. Use `resolve` when exact member
 identity is required; do not substitute review summaries for membership proof.
@@ -270,7 +272,16 @@ could affect coverage, fragmentation, over-merging, local work, later model
 cost, and user attention. Apply only a revision that the current Tool host can
 actually configure; otherwise report the capability gap.
 
-Start the revised work as a successor from the exact prior `result_ref` through
+For a trusted Plan-ready Result, finer semantic investigation can remain in
+Plan: the Agent may use existing detail, inspect selected originals through
+available authorized readers, or choose new preparation. Compare the expected
+reading saved by compression with preparation, source validation, publication
+and Plan continuation costs. Valid work may be reused, but neither lower total
+cost nor sufficient semantic detail follows from a new Run alone. Read the
+recorded settings through `review include=["preparation"]`; choose controls by
+their supported meaning rather than treating a threshold as semantic confidence.
+
+If revised preparation is chosen, start a successor from the exact prior `result_ref` through
 `mediasense.precheck.run`. Each run publishes a distinct immutable Result and
 the Tool decides which still-valid work can be reused. If successive revisions
 happen to produce 500, then 3, then 200 entry Evidence objects, those numbers are
@@ -315,12 +326,17 @@ honest next step that can change it:
 - while still deciding whether PreCheck can hand off, inspect relevant
   Result-local Evidence through `mediasense.precheck.read`; once Plan is active,
   ordinary Result-local expansion remains Plan-owned;
+- for a trusted Plan-ready Result, let Plan investigate selected original media
+  or fields when that is the useful method. Use recorded source locators and
+  verification evidence, preserve source bytes and the provenance of new
+  observations; missing prepared imagery does not close this route;
 - read `review include=["preparation"]` and use its complete `source_set` and
   Processing Profile to propose an ordinary new Run with explicit local overrides;
   each override selects a nonempty, disjoint processable Source Set and declares
   all four compression parameters, or null to bypass final compression; or
-- retain an explicit partial or blocked Result when more work is unavailable or
-  not worth its cost.
+- retain the published Result with its actual coverage and readiness when
+  further work is unavailable or not worth its cost, and disclose the unsupported
+  detail. Semantic insufficiency alone does not change a Result's readiness.
 
 A valid partial Result may proceed when readiness is `plan_ready`; explain the
 material qualifications first. A Result whose readiness is `blocked` is not

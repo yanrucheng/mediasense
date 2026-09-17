@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime
 import hashlib
 import json
 import os
@@ -28,11 +28,12 @@ from mediasense.frozen_plan import (
     validate_frozen_plan,
 )
 from mediasense.precheck.read import PrecheckReadBoundary
+from mediasense.precheck._fingerprint import FINGERPRINT_ALGORITHM, hash_regular_file
 
-from .filesystem import FilesystemEffectError, has_nontrivial_acl
+from .filesystem import FilesystemEffectError, has_nontrivial_acl, verify_object
 
 
-_SCHEMA_VERSION = 2
+_SCHEMA_VERSION = 3
 _VERIFICATION_OBSERVATION = "source_content_verification"
 _SUPPORTED_VERIFICATION_PROFILE = "sha256-full-v1"
 
@@ -66,7 +67,7 @@ class VerificationBasis:
     limitations: tuple[object, ...] = ()
 
     def __post_init__(self) -> None:
-        if self.profile != _SUPPORTED_VERIFICATION_PROFILE:
+        if self.profile not in {_SUPPORTED_VERIFICATION_PROFILE, FINGERPRINT_ALGORITHM}:
             raise SourceEvidenceError(
                 "source_verification_profile_unsupported",
                 f"unsupported source verification profile: {self.profile}",
@@ -153,46 +154,44 @@ class SourceItemEvidence:
                 "source_verification_ambiguous",
                 f"{source_item_ref} has multiple verification observations",
             )
-        verification = None
-        if matches and matches[0].get("status") == "available":
-            observation = matches[0]
-            value = _mapping(observation.get("value"), "verification value")
-            if value.get("profile") == _SUPPORTED_VERIFICATION_PROFILE:
-                limitations = observation.get("qualifications", [])
-                if not isinstance(limitations, list) or not all(
-                    isinstance(item, Mapping) for item in limitations
-                ):
-                    raise SourceEvidenceError(
-                        "source_verification_invalid",
-                        "verification qualifications must be structured objects",
-                    )
-                try:
-                    verification = VerificationBasis(
-                        profile=_nonempty_string(
-                            value.get("profile"), "verification profile"
-                        ),
-                        value=_nonempty_string(
-                            value.get("value"), "verification value"
-                        ),
-                        size_bytes=_nonnegative_int(
-                            value.get("size_bytes"), "verification size"
-                        ),
-                        observed_at=_nonempty_string(
-                            value.get("observed_at"),
-                            "verification observation time",
-                        ),
-                        producer=_nonempty_string(
-                            value.get("producer"), "verification producer"
-                        ),
-                        basis=observation.get("basis"),
-                        limitations=tuple(limitations),
-                    )
-                except ApplyPreparationError as error:
-                    if isinstance(error, SourceEvidenceError):
-                        raise
-                    raise SourceEvidenceError(
-                        "source_verification_invalid", str(error)
-                    ) from error
+        if not matches or matches[0].get("status") != "available":
+            raise SourceEvidenceError(
+                "source_verification_unavailable",
+                f"{source_item_ref} has no available immutable verification evidence",
+            )
+        observation = matches[0]
+        value = _mapping(observation.get("value"), "verification value")
+        limitations = observation.get("qualifications", [])
+        if not isinstance(limitations, list) or not all(
+            isinstance(item, Mapping) for item in limitations
+        ):
+            raise SourceEvidenceError(
+                "source_verification_invalid",
+                "verification qualifications must be structured objects",
+            )
+        try:
+            verification = VerificationBasis(
+                profile=_nonempty_string(value.get("profile"), "verification profile"),
+                value=_nonempty_string(value.get("value"), "verification value"),
+                size_bytes=_nonnegative_int(
+                    value.get("size_bytes"), "verification size"
+                ),
+                observed_at=_nonempty_string(
+                    value.get("observed_at"),
+                    "verification observation time",
+                ),
+                producer=_nonempty_string(
+                    value.get("producer"), "verification producer"
+                ),
+                basis=observation.get("basis"),
+                limitations=tuple(limitations),
+            )
+        except ApplyPreparationError as error:
+            if isinstance(error, SourceEvidenceError):
+                raise
+            raise SourceEvidenceError(
+                "source_verification_invalid", str(error)
+            ) from error
         return cls(
             result_ref=_nonempty_string(result_ref, "PreCheck Result ref"),
             source_item_ref=source_item_ref,
@@ -265,7 +264,7 @@ class ApplyRunStore:
                     singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
                     version INTEGER NOT NULL
                 );
-                INSERT INTO internal_schema (singleton, version) VALUES (1, 2);
+                INSERT INTO internal_schema (singleton, version) VALUES (1, 3);
 
                 CREATE TABLE runs (
                     run_ref TEXT PRIMARY KEY,
@@ -343,6 +342,8 @@ class ApplyRunStore:
                     observed_inode INTEGER,
                     observed_size INTEGER,
                     observed_mtime_ns INTEGER,
+                    observed_ctime_ns INTEGER,
+                    transfer_digest TEXT,
                     preparation_status TEXT NOT NULL DEFAULT 'pending' CHECK (
                         preparation_status IN ('pending', 'verified', 'blocked')
                     ),
@@ -433,6 +434,7 @@ class ApplyRunStore:
         destination_parent: Path,
         resolve_source_set: SourceSetResolver,
         precheck_read: PrecheckReadBoundary,
+        resolved_source_views: Mapping[str, Mapping[str, object]] | None = None,
     ) -> PreparedRun:
         """Create or resume one deterministic, zero-media-effect forward Run.
 
@@ -517,6 +519,7 @@ class ApplyRunStore:
                     precheck_read=precheck_read,
                     result_ref=result_ref,
                     source_item_ref=source_item_ref,
+                    resolved_source_views=resolved_source_views,
                 )
             except SourceEvidenceError as error:
                 self._block_item(
@@ -691,6 +694,10 @@ class ApplyRunStore:
                 expected_size = _nonnegative_int(
                     expected.get("size_bytes"), "source verification size"
                 )
+                verification_profile = str(operation["source_verification"]["profile"])
+                receipt_basis = {
+                    "receipt_postcondition": operation["verification"]["basis"]
+                }
                 issue_code: str | None = None
                 if source_before.exists() or source_before.is_symlink():
                     issue_code = "rewind_target_collision"
@@ -708,6 +715,11 @@ class ApplyRunStore:
                         ),
                     )
                 try:
+                    if (
+                        sealed["preflight"]["execution_route"]
+                        == "same_filesystem_atomic_move"
+                    ):
+                        _verify_receipt_object(target_before, receipt_basis)
                     observed = _verify_source(
                         target_before,
                         parent,
@@ -722,8 +734,10 @@ class ApplyRunStore:
                             size_bytes=expected_size,
                             observed_at=observed_now.isoformat(),
                             producer="receipt-rewind-v1",
-                            basis="Exact source verification basis sealed by the Receipt.",
+                            basis=receipt_basis,
                         ),
+                        allow_full=sealed["preflight"]["execution_route"]
+                        == "verified_cross_filesystem_transfer",
                     )
                 except (OSError, ApplyPreparationError) as error:
                     issue_code = "rewind_source_unverifiable"
@@ -733,6 +747,7 @@ class ApplyRunStore:
                         "inode": -1,
                         "size": expected_size,
                         "mtime_ns": -1,
+                        "ctime_ns": -1,
                     }
                     connection.execute(
                         """
@@ -752,11 +767,11 @@ class ApplyRunStore:
                         verification_observed_at, verification_producer,
                         verification_basis_json, verification_limitations_json,
                         observed_verification, observed_device, observed_inode,
-                        observed_size, observed_mtime_ns, preparation_status,
+                        observed_size, observed_mtime_ns, observed_ctime_ns, transfer_digest, preparation_status,
                         issue_code
                     ) VALUES (?, ?, ?, 'materialize', '[]', ?, ?, ?, ?, ?,
-                              'sha256-full-v1', ?, ?, 'receipt-rewind-v1', ?, '[]',
-                              ?, ?, ?, ?, ?, ?, ?)
+                              ?, ?, ?, 'receipt-rewind-v1', ?, '[]',
+                              ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         run_ref,
@@ -767,16 +782,17 @@ class ApplyRunStore:
                         str(target_before),
                         str(source_before),
                         _target_comparison_key(source_before),
+                        verification_profile,
                         expected_digest,
                         observed_now.isoformat(),
-                        json.dumps(
-                            "Exact source verification basis sealed by the Receipt."
-                        ),
+                        json.dumps(receipt_basis),
                         observed["digest"],
                         observed["device"],
                         observed["inode"],
                         observed["size"],
                         observed["mtime_ns"],
+                        observed["ctime_ns"],
+                        observed.get("transfer_digest"),
                         "blocked" if issue_code else "verified",
                         issue_code,
                     ),
@@ -964,7 +980,15 @@ class ApplyRunStore:
                 ),
             )
             try:
-                observed = _verify_source(Path(row["source_path"]), root, basis)
+                if run["execution_route"] == "same_filesystem_atomic_move":
+                    _verify_receipt_object(Path(row["source_path"]), basis.basis)
+                observed = _verify_source(
+                    Path(row["source_path"]),
+                    root,
+                    basis,
+                    allow_full=run["execution_route"]
+                    == "verified_cross_filesystem_transfer",
+                )
             except (OSError, ApplyPreparationError) as error:
                 self._block_item(
                     run_ref,
@@ -979,7 +1003,7 @@ class ApplyRunStore:
                     UPDATE run_items SET preparation_status = 'verified',
                         issue_code = NULL, observed_verification = ?,
                         observed_device = ?, observed_inode = ?,
-                        observed_size = ?, observed_mtime_ns = ?
+                        observed_size = ?, observed_mtime_ns = ?, observed_ctime_ns = ?, transfer_digest = ?
                     WHERE run_ref = ? AND source_item_ref = ?
                     """,
                     (
@@ -988,6 +1012,8 @@ class ApplyRunStore:
                         observed["inode"],
                         observed["size"],
                         observed["mtime_ns"],
+                        observed["ctime_ns"],
+                        observed.get("transfer_digest"),
                         run_ref,
                         source_item_ref,
                     ),
@@ -1214,7 +1240,7 @@ class ApplyRunStore:
             "verified_sources": verified_count,
             "unique_targets": operation_count,
             "blockers": len(findings),
-            "warnings": 0,
+            "warnings": 1 if route == "same_filesystem_atomic_move" else 0,
         }
         state = str(run["state"])
         reasons = findings + execution_reasons
@@ -1249,6 +1275,13 @@ class ApplyRunStore:
                     "summary": summary,
                 }
             )
+        if route == "same_filesystem_atomic_move":
+            response["warnings"] = [
+                {
+                    "code": "limited_source_verification",
+                    "message": "Source evidence uses at most 12 KiB per item; effects and recovery check file identity, size, mtime and location. This is not full byte verification and cannot detect every hidden content change.",
+                }
+            ]
         if state in {"blocked", "paused", "needs_attention", "failed"}:
             response["reasons"] = reasons or [
                 {
@@ -1706,8 +1739,41 @@ class ApplyRunStore:
             return
         root, _root_identity, _root_device = root_binding
         source_path = root.joinpath(*PurePath(item.relative_path).parts)
+        intended_target: str | None = None
+        target_key: str | None = None
+        if row["planned_outcome"] == "materialize":
+            basename = row["override_name"] or source_path.name
+            basename = _safe_segment(basename, "target basename")
+            relative_directory = json.loads(row["relative_directory"])
+            target = destination / logical_root
+            for segment in relative_directory:
+                target /= segment
+            target /= basename
+            intended_target = str(target)
+            target_key = _target_comparison_key(target)
+            if _lexically_overlaps(root, destination / logical_root):
+                self._block_item(
+                    run_ref,
+                    item.source_item_ref,
+                    "source_target_overlap",
+                )
+                return
+            if target.exists() or target.is_symlink():
+                self._block_item(
+                    run_ref,
+                    item.source_item_ref,
+                    "target_conflict",
+                )
+                return
+
         try:
-            observed = _verify_source(source_path, root, item.verification)
+            observed = _verify_source(
+                source_path,
+                root,
+                item.verification,
+                allow_full=source_path.stat(follow_symlinks=False).st_dev
+                != destination.stat().st_dev,
+            )
         except (OSError, ApplyPreparationError) as error:
             self._block_item(
                 run_ref,
@@ -1717,50 +1783,10 @@ class ApplyRunStore:
             )
             return
 
-        prepared_verification = VerificationBasis(
-            profile=_SUPPORTED_VERIFICATION_PROFILE,
-            value=str(observed["digest"]),
-            size_bytes=int(observed["size"]),
-            observed_at=datetime.now(timezone.utc).isoformat(),
-            producer="builtin-apply-source-verification-v1",
-            basis="Fresh exact source-byte proof established during Apply preparation.",
-        )
+        prepared_verification = item.verification
+        assert prepared_verification is not None
 
         with self._connect() as connection:
-            row = connection.execute(
-                """
-                SELECT planned_outcome, relative_directory, override_name
-                FROM run_items WHERE run_ref = ? AND source_item_ref = ?
-                """,
-                (run_ref, item.source_item_ref),
-            ).fetchone()
-            assert row is not None
-            intended_target: str | None = None
-            target_key: str | None = None
-            if row["planned_outcome"] == "materialize":
-                basename = row["override_name"] or source_path.name
-                basename = _safe_segment(basename, "target basename")
-                relative_directory = json.loads(row["relative_directory"])
-                target = destination / logical_root
-                for segment in relative_directory:
-                    target /= segment
-                target /= basename
-                intended_target = str(target)
-                target_key = _target_comparison_key(target)
-                if _lexically_overlaps(root, destination / logical_root):
-                    self._block_item(
-                        run_ref,
-                        item.source_item_ref,
-                        "source_target_overlap",
-                    )
-                    return
-                if target.exists() or target.is_symlink():
-                    self._block_item(
-                        run_ref,
-                        item.source_item_ref,
-                        "target_conflict",
-                    )
-                    return
             try:
                 connection.execute("BEGIN IMMEDIATE")
                 connection.execute(
@@ -1773,7 +1799,7 @@ class ApplyRunStore:
                         verification_producer = ?, verification_basis_json = ?,
                         verification_limitations_json = ?, observed_verification = ?,
                         observed_device = ?, observed_inode = ?, observed_size = ?,
-                        observed_mtime_ns = ?, preparation_status = 'verified',
+                        observed_mtime_ns = ?, observed_ctime_ns = ?, transfer_digest = ?, preparation_status = 'verified',
                         issue_code = NULL
                     WHERE run_ref = ? AND source_item_ref = ?
                     """,
@@ -1796,6 +1822,8 @@ class ApplyRunStore:
                         observed["inode"],
                         observed["size"],
                         observed["mtime_ns"],
+                        observed["ctime_ns"],
+                        observed.get("transfer_digest"),
                         run_ref,
                         item.source_item_ref,
                     ),
@@ -1957,6 +1985,16 @@ class ApplyRunStore:
                 if all(source_roots[ref][2] == destination_device for ref in used_roots)
                 else "verified_cross_filesystem_transfer"
             )
+            if route == "verified_cross_filesystem_transfer" and any(
+                source_roots[ref][2] == destination_device for ref in used_roots
+            ):
+                connection.execute(
+                    "INSERT OR IGNORE INTO findings VALUES (?, 'mixed_filesystem_routes', '', ?)",
+                    (
+                        run_ref,
+                        "Mixed same-filesystem and cross-filesystem effects require separate Runs.",
+                    ),
+                )
             if route == "verified_cross_filesystem_transfer":
                 if sys.platform != "darwin":
                     connection.execute(
@@ -2096,7 +2134,28 @@ def _read_source_item(
     precheck_read: PrecheckReadBoundary,
     result_ref: str,
     source_item_ref: str,
+    resolved_source_views: Mapping[str, Mapping[str, object]] | None = None,
 ) -> SourceItemEvidence:
+    view = (resolved_source_views or {}).get(source_item_ref)
+    if view is not None:
+        observations = view.get("observations", [])
+        if any(
+            isinstance(value, Mapping)
+            and value.get("name") == _VERIFICATION_OBSERVATION
+            and value.get("status") != "not_checked"
+            for value in observations
+        ):
+            try:
+                return SourceItemEvidence.from_precheck_view(
+                    result_ref=result_ref, view=view
+                )
+            except SourceEvidenceError:
+                raise
+            except ApplyPreparationError as error:
+                raise SourceEvidenceError(
+                    "source_verification_invalid", str(error)
+                ) from error
+
     request = {
         "result_ref": result_ref,
         "action": "expand",
@@ -2205,11 +2264,41 @@ def _observe_source_roots(
     return observed
 
 
+def _verify_receipt_object(path: Path, basis: object) -> None:
+    try:
+        fact = json.loads(basis["receipt_postcondition"])
+        if fact["type"] != "regular":
+            raise ValueError("unsupported object type")
+        verify_object(
+            path,
+            int(fact["size_bytes"]),
+            tuple(
+                int(fact[field])
+                for field in ("device", "inode", "mtime_ns", "ctime_ns")
+            ),
+        )
+    except (KeyError, TypeError, ValueError, FilesystemEffectError) as error:
+        raise ApplyPreparationError(
+            "current object does not match Receipt postcondition"
+        ) from error
+
+
 def _verify_source(
     source_path: Path,
     root: Path,
     basis: VerificationBasis | None,
-) -> dict[str, int | str]:
+    *,
+    allow_full: bool = False,
+) -> dict[str, int | str | None]:
+    if basis is None:
+        raise ApplyPreparationError(
+            "immutable source verification evidence is required"
+        )
+    if basis.profile == _SUPPORTED_VERIFICATION_PROFILE and not allow_full:
+        raise ApplyPreparationError(
+            "full-only evidence cannot be verified within the same-filesystem bounded-read profile; "
+            "produce a new compatible PreCheck Result and Frozen Plan"
+        )
     _require_exact_path_spelling(root, source_path)
     _reject_symlink_components(root, source_path)
     resolved = source_path.resolve(strict=True)
@@ -2222,10 +2311,31 @@ def _verify_source(
     before = source_path.stat(follow_symlinks=False)
     if not stat.S_ISREG(before.st_mode):
         raise ApplyPreparationError("source is not a regular file")
-    digest = hashlib.sha256()
-    with source_path.open("rb") as source:
-        for chunk in iter(lambda: source.read(1024 * 1024), b""):
-            digest.update(chunk)
+    if before.st_size != basis.size_bytes:
+        raise ApplyPreparationError(
+            "source size does not match immutable PreCheck evidence"
+        )
+    if basis.profile == FINGERPRINT_ALGORITHM:
+        observed = "sha256:" + hash_regular_file(source_path, before)
+    else:
+        digest = hashlib.sha256()
+        with source_path.open("rb") as source:
+            for chunk in iter(lambda: source.read(1024 * 1024), b""):
+                digest.update(chunk)
+        observed = "sha256:" + digest.hexdigest()
+    transfer_digest = None
+    if allow_full:
+        if basis.profile == _SUPPORTED_VERIFICATION_PROFILE:
+            transfer_digest = observed
+        else:
+            if observed != basis.value:
+                raise ApplyPreparationError(
+                    "source does not match immutable PreCheck evidence"
+                )
+            with source_path.open("rb") as source:
+                transfer_digest = (
+                    "sha256:" + hashlib.file_digest(source, "sha256").hexdigest()
+                )
     after = source_path.stat(follow_symlinks=False)
     stable = (
         before.st_dev,
@@ -2240,12 +2350,9 @@ def _verify_source(
         after.st_mtime_ns,
         after.st_ctime_ns,
     )
-    observed = "sha256:" + digest.hexdigest()
     if not stable:
         raise ApplyPreparationError("source changed while it was verified")
-    if basis is not None and (
-        before.st_size != basis.size_bytes or observed != basis.value
-    ):
+    if before.st_size != basis.size_bytes or observed != basis.value:
         raise ApplyPreparationError("source does not match immutable PreCheck evidence")
     return {
         "digest": observed,
@@ -2253,6 +2360,8 @@ def _verify_source(
         "inode": int(before.st_ino),
         "size": int(before.st_size),
         "mtime_ns": int(before.st_mtime_ns),
+        "ctime_ns": int(before.st_ctime_ns),
+        "transfer_digest": transfer_digest,
     }
 
 
@@ -2358,7 +2467,7 @@ def _prepared_identity(connection: sqlite3.Connection, run_ref: str, route: str)
                expected_verification, verification_producer, verification_basis_json,
                verification_limitations_json, observed_verification,
                observed_device, observed_inode, observed_size,
-               observed_mtime_ns, preparation_status, issue_code
+               observed_mtime_ns, observed_ctime_ns, transfer_digest, preparation_status, issue_code
         FROM run_items WHERE run_ref = ? ORDER BY ordinal
         """,
         (run_ref,),

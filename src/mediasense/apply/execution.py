@@ -21,7 +21,7 @@ from .filesystem import (
     ensure_directories,
     planned_directories,
 )
-from .preparation import ApplyRunStore
+from .preparation import ApplyRunStore, ApplyPreparationError
 from .receipt import ReceiptStore, content_identity
 
 
@@ -80,7 +80,7 @@ class ApplyExecutor:
         prepared_revision: str,
         prepared_content_identity: str,
         request_id: str,
-        authorization_binding: str,
+        authorization_binding: str | None,
     ) -> dict[str, object]:
         """Persist exact Human authorization without claiming completion."""
 
@@ -92,6 +92,7 @@ class ApplyExecutor:
             }
         )
         with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
             existing = self._run(connection, run_ref)
             if existing["execute_request_id"] is not None:
                 if (
@@ -106,14 +107,25 @@ class ApplyExecutor:
                     "observed_state": str(existing["state"]),
                     "target_state": "executing",
                 }
-        self.run_store.assert_authorization_binding(
-            run_ref=run_ref,
-            prepared_revision=prepared_revision,
-            prepared_content_identity=prepared_content_identity,
-        )
-        with self._connect() as connection:
-            connection.execute("BEGIN IMMEDIATE")
-            self._run(connection, run_ref)
+            if authorization_binding is None:
+                raise ApplyExecutionError("trusted Human confirmation is required")
+            if existing["prepared_revision"] != prepared_revision:
+                raise ApplyPreparationError("prepared revision mismatch")
+            if existing["prepared_content_identity"] != prepared_content_identity:
+                raise ApplyPreparationError("prepared content identity mismatch")
+            if existing["state"] not in {"ready_for_authorization", "needs_attention"}:
+                raise ApplyExecutionError("Run is not ready for authorization")
+            if (
+                existing["state"] == "needs_attention"
+                and not connection.execute(
+                    "SELECT 1 FROM metadata_discrepancies WHERE run_ref = ? "
+                    "AND accepted_authorization_ref IS NULL LIMIT 1",
+                    (run_ref,),
+                ).fetchone()
+            ):
+                raise ApplyExecutionError(
+                    "Run needs recovery rather than new authorization"
+                )
             now = self._timestamp()
             authorization_ref = f"authorization:{request_id.split(':', 1)[-1]}"
             connection.execute(
@@ -168,6 +180,15 @@ class ApplyExecutor:
                 "verifying",
             }:
                 raise ApplyExecutionError(f"Run cannot resume from {run['state']}")
+            if connection.execute(
+                "SELECT 1 FROM metadata_discrepancies WHERE run_ref = ? AND accepted_authorization_ref IS NULL LIMIT 1",
+                (run_ref,),
+            ).fetchone():
+                raise ApplyExecutionError("resume cannot authorize a metadata loss")
+            connection.execute(
+                "DELETE FROM findings WHERE run_ref = ? AND code = 'executor_interrupted'",
+                (run_ref,),
+            )
             connection.execute(
                 """
                 UPDATE runs SET state = 'executing', control_requested = NULL,
@@ -312,6 +333,36 @@ class ApplyExecutor:
             finally:
                 fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
+    def mark_owner_interrupted(self, run_ref: str) -> None:
+        """A Host with no local worker probes the cross-process owner lock.
+
+        This only records an interruption; status never starts media effects.
+        """
+        if self.run_store.get_run(run_ref).state not in {"executing", "verifying"}:
+            return
+        try:
+            with self._run_lock(run_ref):
+                with self._connect() as connection:
+                    connection.execute("BEGIN IMMEDIATE")
+                    run = self._run(connection, run_ref)
+                    if run["state"] not in {"executing", "verifying"}:
+                        return
+                    connection.execute(
+                        "UPDATE runs SET state = 'needs_attention' WHERE run_ref = ?",
+                        (run_ref,),
+                    )
+                    connection.execute(
+                        "INSERT OR IGNORE INTO findings VALUES (?, 'executor_interrupted', '', ?)",
+                        (
+                            run_ref,
+                            "No execution owner remains; resume to reconcile durable intent, or cancel.",
+                        ),
+                    )
+                    connection.commit()
+        except ApplyExecutionError as error:
+            if str(error) != "another executor is already advancing this Run":
+                raise
+
     def _has_pending_metadata_decision(self, run_ref: str) -> bool:
         with self._connect() as connection:
             return bool(
@@ -390,7 +441,9 @@ class ApplyExecutor:
             observation = self.filesystem.move(
                 source=source,
                 target=target,
-                expected_digest=str(item["expected_verification"]),
+                expected_digest=str(
+                    item["transfer_digest"] or item["expected_verification"]
+                ),
                 expected_size=int(item["observed_size"]),
                 route=str(run["execution_route"]),
                 temporary_path=temporary,
@@ -401,6 +454,7 @@ class ApplyExecutor:
                     int(item["observed_device"]),
                     int(item["observed_inode"]),
                     int(item["observed_mtime_ns"]),
+                    int(item["observed_ctime_ns"]),
                 ),
             )
             self.fault_hook("after_effect_before_record", source_item_ref)
@@ -425,10 +479,13 @@ class ApplyExecutor:
         for item in intents:
             source_item_ref = str(item["source_item_ref"])
             try:
+                self._verify_run_bindings(run_ref)
                 observation = self.filesystem.reconcile(
                     source=Path(item["source_path"]),
                     target=Path(item["intended_target"]),
-                    expected_digest=str(item["expected_verification"]),
+                    expected_digest=str(
+                        item["transfer_digest"] or item["expected_verification"]
+                    ),
                     expected_size=int(item["observed_size"]),
                     route=str(run["execution_route"]),
                     temporary_path=(
@@ -443,13 +500,13 @@ class ApplyExecutor:
                         int(item["observed_device"]),
                         int(item["observed_inode"]),
                         int(item["observed_mtime_ns"]),
+                        int(item["observed_ctime_ns"]),
                     ),
                 )
                 if observation.status == "completed":
                     observation = replace(
                         observation,
-                        verification_basis=observation.verification_basis
-                        + " Recovered after interruption.",
+                        verification_basis=observation.verification_basis,
                     )
                     self._record_observation(
                         run_ref, source_item_ref, observation, recovered=True
@@ -673,7 +730,7 @@ class ApplyExecutor:
         if run["direction"] == "forward":
             destination = Path(run["destination_parent"])
             try:
-                info = destination.stat()
+                info = destination.stat(follow_symlinks=False)
             except OSError as error:
                 raise FilesystemEffectError(
                     "destination_unavailable",
@@ -693,7 +750,7 @@ class ApplyExecutor:
         for root in roots:
             path = Path(root["current_root"])
             try:
-                info = path.stat()
+                info = path.stat(follow_symlinks=False)
             except OSError as error:
                 raise FilesystemEffectError(
                     "source_root_unavailable",
@@ -995,7 +1052,7 @@ class ApplyExecutor:
                 "execution_route": route,
                 "target_collisions": 0,
                 "blockers": 0,
-                "warnings": 0,
+                "warnings": 1 if route == "same_filesystem_atomic_move" else 0,
             },
             "completion": "complete" if complete else "incomplete",
             "closure": closure,

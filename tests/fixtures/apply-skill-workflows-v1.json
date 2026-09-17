@@ -14,11 +14,11 @@
       ]
     },
     {
-      "name": "prepare_without_precheck_exact_proof",
+      "name": "prepare_without_precheck_proof",
       "disturbance": "missing_selected_verification",
-      "human_decision": "review_fresh_apply_proof_then_cancel",
+      "human_decision": "review_missing_evidence_then_cancel",
       "expected_agent_checkpoints": [
-        "request_exact_confirmation",
+        "explain_missing_source_evidence",
         "cancel_without_effect"
       ]
     },

@@ -17,6 +17,9 @@ setup, local upgrades, verification, and rollback.
 [Troubleshooting and recovery](readme/troubleshooting.md) helps diagnose opening
 or connection failures.
 
+For Intel Mac setup followed by a separate Worker session and human acceptance,
+use the [Supervisor handoff](readme/intel-mac-supervisor-handoff.md).
+
 Local embedding remains opt-in. New enabled profiles recommend DINOv3 ViT-B/16
 at **384px** on the verified Apple Silicon Core ML route; explicit ChineseCLIP
 profiles keep their model selection. See the [installation runbook](readme/installation.md#dinov3-384-local-embedding)

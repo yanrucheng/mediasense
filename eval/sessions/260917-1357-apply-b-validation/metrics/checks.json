@@ -1,0 +1,48 @@
+{
+  "source_default": {
+    "result": "passed",
+    "passed": 1568,
+    "deselected": 17,
+    "seconds": 367.81,
+    "command": "PYTHONPATH=src:/private/tmp/mediasense-apply-b-final-wheel .venv/bin/python -m pytest -q --tb=short --maxfail=3",
+    "loopback_permission": "allowed for local tests"
+  },
+  "isolated_wheel_related": {
+    "result": "passed",
+    "passed": 165,
+    "deselected": 3,
+    "seconds": 22.25,
+    "pythonpath": "/private/tmp/mediasense-apply-b-final-wheel",
+    "pytest_options": "-o pythonpath=",
+    "test_files": [
+      "test_apply_b_safety.py",
+      "test_apply_preparation.py",
+      "test_apply_execution.py",
+      "test_apply_precheck_integration.py",
+      "test_apply_activation_gates.py",
+      "test_apply_contract.py",
+      "test_mediasense_apply_skill.py",
+      "test_mcp_subprocess.py",
+      "test_runtime_versioning.py"
+    ]
+  },
+  "prior_default_transient": {
+    "passed": 1567,
+    "failed": 1,
+    "deselected": 17,
+    "failure": "test_resume_refuses_damaged_frozen_requirements[missing]",
+    "retained_error": "artifact_publish_failed: Artifact changed while reading",
+    "followup": "21 tests in test_run_composition_recovery.py passed, then the frozen full suite passed; publication code unchanged"
+  },
+  "lint": "ruff check src tests and session recipes passed",
+  "diff_whitespace": "git diff --check passed",
+  "wheel_content_match": {
+    "source_resource_files": 143,
+    "mismatches": 0
+  },
+  "formal_apply_definitions": "unchanged from HEAD; all 3 packaged copies equal authoritative JSON",
+  "installation_runbook": "authoring source equals packaged snapshot",
+  "power_loss_reboot_physical_failure": "not tested",
+  "daily_installation": "not changed",
+  "real_media": "not used"
+}

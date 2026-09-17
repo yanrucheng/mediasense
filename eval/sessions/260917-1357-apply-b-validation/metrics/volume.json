@@ -1,0 +1,13 @@
+{
+  "FilesystemType": "apfs",
+  "FilesystemName": "APFS",
+  "FilesystemUserVisibleName": "APFS",
+  "SolidState": true,
+  "DeviceIdentifier": "disk3s1",
+  "BusProtocol": "Apple Fabric",
+  "APFSPhysicalStores": [
+    {
+      "APFSPhysicalStore": "disk0s2"
+    }
+  ]
+}

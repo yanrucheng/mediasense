@@ -198,6 +198,7 @@ class ApplyRunTool:
             destination_parent=Path(source["destination_parent"]),
             resolve_source_set=resolve_source_set,
             precheck_read=self.precheck_read,
+            resolved_source_views=resolver.source_views,
         )
         return {
             "outcome": "ok",
@@ -212,7 +213,14 @@ class ApplyRunTool:
         confirmation: ApplyConfirmationContext | None,
     ) -> dict[str, object]:
         if confirmation is None:
-            raise ApplyExecutionError("trusted Human confirmation is required")
+            # authorize only permits an exact durable replay without new context.
+            return self.executor.authorize(
+                run_ref=str(request["run_ref"]),
+                prepared_revision=str(request["prepared_revision"]),
+                prepared_content_identity=str(request["prepared_content_identity"]),
+                request_id=str(request["request_id"]),
+                authorization_binding=None,
+            )
         if confirmation.confirmed_at.tzinfo is None:
             raise ApplyExecutionError("trusted confirmation time requires a timezone")
         if (

@@ -5,17 +5,15 @@ import json
 from pathlib import Path
 
 from jsonschema import Draft202012Validator
+import pytest
+from mediasense.apply.preparation import SourceEvidenceError
 
 from mediasense.apply import SourceItemEvidence
 
 
 ROOT = Path(__file__).parents[1]
 PRECHECK_TOOL = (
-    ROOT
-    / "docs"
-    / "spec"
-    / "contract/precheck-read"
-    / "precheck-read.tool.json"
+    ROOT / "docs" / "spec" / "contract/precheck-read" / "precheck-read.tool.json"
 )
 
 
@@ -79,30 +77,21 @@ def test_apply_consumer_conforms_to_accepted_precheck_verification_shape() -> No
     assert evidence.verification.producer == "contract-gate-probe-v1"
 
 
-def test_apply_can_establish_exact_proof_when_precheck_has_no_verification() -> None:
+def test_apply_refuses_missing_old_evidence() -> None:
     item = _verified_source_item()
     item.pop("observations")
-
-    # PreCheck intentionally accounts for excluded, unsupported, invalid, error,
-    # unresolved, and otherwise non-selected Source Items without requiring proof.
     _validate_public_source_item(item)
-    evidence = SourceItemEvidence.from_precheck_view(
-        result_ref="precheck-result:gate-probe",
-        view=item,
-    )
-    assert evidence.verification is None
+    with pytest.raises(SourceEvidenceError, match="no available immutable"):
+        SourceItemEvidence.from_precheck_view(
+            result_ref="precheck-result:gate-probe", view=item
+        )
 
 
-def test_unknown_precheck_profile_does_not_block_fresh_apply_proof() -> None:
+def test_apply_refuses_unknown_old_evidence_profile() -> None:
     item = deepcopy(_verified_source_item())
     item["observations"][0]["value"]["profile"] = "future-proof-v2"
-
-    # The public contract leaves algorithms replaceable. An unsupported
-    # PreCheck profile is not treated as exact evidence; Apply establishes its
-    # own supported exact proof before authorization.
     _validate_public_source_item(item)
-    evidence = SourceItemEvidence.from_precheck_view(
-        result_ref="precheck-result:gate-probe",
-        view=item,
-    )
-    assert evidence.verification is None
+    with pytest.raises(SourceEvidenceError, match="unsupported"):
+        SourceItemEvidence.from_precheck_view(
+            result_ref="precheck-result:gate-probe", view=item
+        )

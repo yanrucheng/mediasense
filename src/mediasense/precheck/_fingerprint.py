@@ -69,10 +69,13 @@ def hash_regular_file(path: Path, observed: os.stat_result) -> str:
         hasher.update(str(observed.st_mode).encode("ascii"))
         return hasher.hexdigest()
 
-    with path.open("rb") as source:
+    # No Python read-ahead beyond the declared sample budget. Filesystem/device
+    # caching and physical read-ahead remain outside this logical byte count.
+    with path.open("rb", buffering=0) as source:
         if observed.st_size <= _FULL_HASH_LIMIT:
-            while chunk := source.read(64 * 1024):
-                hasher.update(chunk)
+            # A concurrent append must not turn a bounded observation into an
+            # unbounded scan. Callers check the file state after this read.
+            hasher.update(source.read(observed.st_size))
         else:
             offsets = sorted(
                 {

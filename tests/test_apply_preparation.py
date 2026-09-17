@@ -20,9 +20,7 @@ from mediasense.apply.preparation import SourceSetExpansion
 
 
 ROOT = Path(__file__).parents[1]
-APPLY_RUN_SCHEMA = (
-    ROOT / "docs" / "spec" / "contract/apply" / "apply-run.tool.json"
-)
+APPLY_RUN_SCHEMA = ROOT / "docs" / "spec" / "contract/apply" / "apply-run.tool.json"
 
 
 def _identity(value: object) -> str:
@@ -87,6 +85,17 @@ def _resolve(_result_ref: str, source_set: dict) -> SourceSetExpansion:
     return SourceSetExpansion(iter(source_set["source_item_refs"]), complete=True)
 
 
+def _candidate_digest(content: bytes) -> str:
+    digest = hashlib.sha256(str(len(content)).encode("ascii"))
+    if len(content) <= 12288:
+        digest.update(content)
+    else:
+        for offset in sorted({0, len(content) // 2, len(content) - 4096}):
+            digest.update(offset.to_bytes(8, "big"))
+            digest.update(content[offset : offset + 4096])
+    return "sha256:" + digest.hexdigest()
+
+
 def _precheck_view(source_item_ref: str, relative_path: str, content: bytes) -> dict:
     return {
         "kind": "source_item",
@@ -101,8 +110,8 @@ def _precheck_view(source_item_ref: str, relative_path: str, content: bytes) -> 
                 "name": "source_content_verification",
                 "status": "available",
                 "value": {
-                    "profile": "sha256-full-v1",
-                    "value": "sha256:" + hashlib.sha256(content).hexdigest(),
+                    "profile": "candidate-sha256-full-or-3x4k-v1",
+                    "value": _candidate_digest(content),
                     "size_bytes": len(content),
                     "observed_at": "2026-08-30T00:00:00+08:00",
                     "producer": "test-source-content-proof-v1",
@@ -484,10 +493,10 @@ def test_prepare_blocks_source_changed_from_precheck_evidence(tmp_path: Path) ->
 @pytest.mark.parametrize(
     ("case", "expected_code"),
     [
-        ("missing", None),
-        ("not_checked", None),
-        ("failed", None),
-        ("unknown_profile", None),
+        ("missing", "source_verification_unavailable"),
+        ("not_checked", "source_verification_unavailable"),
+        ("failed", "source_verification_unavailable"),
+        ("unknown_profile", "source_verification_profile_unsupported"),
         ("missing_basis", "source_verification_invalid"),
         ("missing_producer", "source_verification_invalid"),
         ("digest_mismatch", "source_unverifiable"),
@@ -498,7 +507,7 @@ def test_prepare_blocks_source_changed_from_precheck_evidence(tmp_path: Path) ->
         ("missing_source_item", "precheck_read_failed"),
     ],
 )
-def test_selected_move_establishes_exact_proof_or_blocks_invalid_evidence(
+def test_selected_move_compares_immutable_evidence_and_fails_closed(
     tmp_path: Path,
     case: str,
     expected_code: str | None,
@@ -547,7 +556,7 @@ def test_selected_move_establishes_exact_proof_or_blocks_invalid_evidence(
         assert run.state == "ready_for_authorization"
         assert status["summary"]["blockers"] == 0
         item = store.iter_items(run.run_ref, limit=1)[0]
-        assert item["verification_profile"] == "sha256-full-v1"
+        assert item["verification_profile"] == "candidate-sha256-full-or-3x4k-v1"
         assert item["expected_verification"] == item["observed_verification"]
     else:
         assert run.state == "blocked"
@@ -556,7 +565,7 @@ def test_selected_move_establishes_exact_proof_or_blocks_invalid_evidence(
     assert _tree_facts(destination) == before_destination
 
 
-def test_prepare_blocks_source_changed_during_full_content_read(
+def test_prepare_blocks_source_changed_during_bounded_content_read(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -578,7 +587,7 @@ def test_prepare_blocks_source_changed_during_full_content_read(
 
         def read(self, size=-1):
             chunk = self.handle.read(size)
-            if not chunk and not self.changed:
+            if not self.changed:
                 self.changed = True
                 with real_open(changing, "wb") as writer:
                     writer.write(b"changed during verification")
@@ -727,8 +736,8 @@ def test_source_evidence_uses_accepted_precheck_contract() -> None:
     )
     assert evidence.source_root_ref == "source-root:test"
     assert evidence.relative_path == "a.jpg"
-    assert evidence.verification.profile == "sha256-full-v1"
-    assert evidence.verification.value == "sha256:" + hashlib.sha256(b"a").hexdigest()
+    assert evidence.verification.profile == "candidate-sha256-full-or-3x4k-v1"
+    assert evidence.verification.value == _candidate_digest(b"a")
     assert evidence.verification.size_bytes == 1
 
 

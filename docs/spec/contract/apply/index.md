@@ -4,7 +4,7 @@ title: "MediaSense Apply Contract"
 type: spec
 status: active
 created: 2026-08-29
-updated: 2026-09-09
+updated: 2026-09-17
 timezone: "Asia/Shanghai"
 parent: "index-contract"
 depends-on:
@@ -32,10 +32,12 @@ mediasense.apply.read  -> immutable Apply Receipt
 
 [`apply-run.tool.json`](apply-run.tool.json), [`apply-receipt.schema.json`](apply-receipt.schema.json), and [`apply-read.tool.json`](apply-read.tool.json) are the active contracts. [`lifecycle.mock.json`](lifecycle.mock.json) remains a Human-authored exchange example; [`receipt.mock.json`](receipt.mock.json) remains a schema-conforming reference Receipt. The examples are not runtime output, actual authorization, or evidence that their illustrative paths were changed.
 
-Both activation dependencies have executable evidence recorded in [`../../../eval/eval-260829-1350-apply-activation-evidence.md`](../../../eval/eval-260829-1350-apply-activation-evidence.md):
+The original activation dependencies have historical executable evidence recorded in [`../../../eval/eval-260829-1350-apply-activation-evidence.md`](../../../eval/eval-260829-1350-apply-activation-evidence.md):
 
 1. each planned Source Item has an immutable Apply-grade verification basis reachable through its exact PreCheck Result; and
 2. the supported cross-filesystem transfer profile proves its byte and declared filesystem-metadata preservation behavior on supported platforms.
+
+The Human selected [B: bounded same-filesystem verification with per-item durable commits](../../../design/design-260917-1150-apply-safety-efficiency.md) on 2026-09-17. This reviewed change replaces the mandatory full-SHA source gate for normal same-filesystem moves. It does not change either formal Tool, actions, business parameters, response schemas, or historical artifacts. The independent Host authority repair removes the non-contractual caller-authored MCP `authority` field and rejects CLI `--authority` for Apply. Local implementation evidence is recorded in the [B validation session](../../../../eval/sessions/260917-1357-apply-b-validation/report.md); historical activation is not evidence that this build was installed or accepted on real media.
 
 The first production-capable `move_originals` runtime is implemented under `src/mediasense/apply/`. The contract itself never authorizes an operation: effects begin only after a trusted Human confirmation is bound to the exact prepared Run revision and content identity. Repository tests operate only on controlled temporary fixtures.
 
@@ -101,13 +103,13 @@ A Run never combines effect profiles.
 
 ## Source compatibility gate
 
-Path equality does not prove source identity. Before authorization and again at the individual effect boundary, Apply must resolve every planned Source Item and verify it against immutable evidence bound to the exact PreCheck Result.
+Path equality does not prove source continuity. Before authorization, Apply compares every selected Source Item against its exact immutable PreCheck Result. It binds the observed current regular file object and state only after that comparison succeeds. At the effect boundary it verifies this prepared binding again. A newly calculated digest cannot replace missing, unsupported, failed or mismatched old evidence.
 
 The active PreCheck Read contract permits open Source Item Observations because items outside dangerous effects need not carry Apply evidence. For every Source Item selected for `move_originals`, Apply requires the exact Result-scoped view to contain:
 
 - a `source_root_relative_path` locator with `source_root_ref` and root-relative `value`;
 - exactly one `source_content_verification` observation with `status: available`;
-- the supported `sha256-full-v1` profile, digest `value`, `size_bytes`, `observed_at`, and `producer`; and
+- the supported `candidate-sha256-full-or-3x4k-v1` profile, digest `value`, `size_bytes`, `observed_at`, and `producer` for the normal same-filesystem route; and
 - observation-level basis, with qualifications only when real limitations exist.
 
 Apply expands every Frozen Plan Source Set through a repository-owned deterministic
@@ -117,10 +119,15 @@ to the exact `result_ref`; and checks reference types, duplicates, pagination
 progress, declared totals, and complete traversal. A caller-supplied
 `complete=true` assertion is not production evidence of completeness.
 
-Apply obtains selected-item evidence only through exact
-`result_ref + source_item_ref` calls to `mediasense.precheck.read`, then binds the
-current root and re-reads size plus full SHA-256. It never reads PreCheck private
-SQLite or caches. The contract does not require Dataset-wide snapshots, permanent
+Apply reuses the exact public `resolve` locator and verification projection, requesting a selected Source Item's public expansion only when required information is absent. It never reads PreCheck private SQLite or caches.
+
+For `candidate-sha256-full-or-3x4k-v1`, comparison uses the declared byte length and existing algorithm: SHA-256 starts with the ASCII decimal size; files of at most 12 KiB contribute their whole contents; larger files contribute three 4 KiB samples at offsets 0, floor(size/2), and size−4096, each prefixed with its unsigned 8-byte big-endian offset. Each item's content reads are bounded by min(size, 12 KiB), including when a concurrent append occurs. A changed observable state during the read invalidates the comparison.
+
+This is ordinary change detection, not a proof of complete byte equality. An unsampled same-size change before preparation, or replacement by an object with the same finite evidence, may be undetected because the old Result has no comparable filesystem identity. A same-filesystem Result containing only `sha256-full-v1` is blocked under B: it does not imply a finite digest or old stat, and does not silently trigger a full scan. A new compatible Result and Frozen Plan are required. The explicitly disclosed cross-filesystem route still consumes supported old evidence (finite or full) and separately establishes a complete transfer digest, verifies all copied bytes, and follows its existing metadata-loss authorization rules. A single Run cannot flatten mixed routes into copying same-filesystem items.
+
+Preparation retains current device, inode, size, nanosecond mtime and ctime in the existing Run. Before rename those facts and regular-file type must match. After rename, the target must be the same object with the expected size and mtime and the old location must be absent; ctime is observed anew because rename may change it. Neither normal execution nor same-filesystem interruption recovery scans media contents. An unrecorded rename is reconciled using identity, size, mtime, type and location; it cannot compare an unavailable post-rename ctime. Receipt `verification.basis` retains the observed target facts for subsequent rewind checks. These local identifiers are not permanent Source Item identities and cannot prove continuity after an unverified remount or inode reuse.
+
+Existing summary `warnings` and per-item `source_verification` disclose the finite guarantee; `filesystem_identity_and_location` and `same_filesystem_identity_and_location` keep their existing locations. No `file_state`, transfer-policy parameter, new public status or Batch is introduced. Observable state changes may cause conservative refusal even without changed content. The supported operating condition excludes intentional external concurrent rewriting/replacement; reservations coordinate MediaSense effects, not all OS writers. Detected post-effect mismatch stops progress and preserves the uncertain intent. The contract does not require Dataset-wide snapshots, permanent
 identity across Results, a new Source Verify Tool, hash duplication in Frozen
 Plan, or exposure of PreCheck cache keys. Missing, unavailable, unsupported,
 mismatched, stale, escaping, rebound, ambiguous, or incompletely traversed evidence
@@ -153,7 +160,7 @@ Status never returns the complete operation ledger. That belongs to the Receipt 
 
 ### `execute`
 
-`execute` binds trusted Human confirmation to the exact `run_ref`, prepared revision, and prepared-content identity. It is safely retryable by `request_id`; request fields cannot self-assert the confirming Human. The same action is reused when a cross-filesystem copy exposes an exact user-relevant attribute loss: the source remains present, status identifies the Run-owned disclosure and new prepared revision, the Human can obtain the complete discrepancy set through bounded reads, and only a new `execute` authorization may permit deletion. `resume` cannot accept that risk.
+`execute` binds trusted Human confirmation to the exact `run_ref`, prepared revision, and prepared-content identity. It is safely retryable by `request_id`; request fields cannot self-assert the confirming Human. The MCP Host obtains one client-controlled Human elicitation over the exact Run, revision, identity, complete preparation summary (effect, roots, destination, route, verification and exceptions). Unsupported client confirmation, decline or cancel creates no authorization or media effect. The same accepted request reuses durable matching authorization; `resume` retains the same prepared authority. Changed preparation requires a new authorization. The CLI machine entry rejects caller-supplied Apply authority, but permits matching durable replay. Internal Python confirmation types are trusted adapter inputs, not an identity provider. The trusted local Host/client assumption does not defend against arbitrary malicious code under the same OS account. The same action is reused when a cross-filesystem copy exposes an exact user-relevant attribute loss: the source remains present, status identifies the Run-owned disclosure and new prepared revision, the Human can obtain the complete discrepancy set through bounded reads, and only a new `execute` authorization may permit deletion. `resume` cannot accept that risk.
 
 Acceptance means execution has been durably authorized and requested, not that a file has moved or that the Run completed. Before every effect, the Tool rechecks the relevant mutable preconditions and commits through a non-overwriting boundary.
 
@@ -182,13 +189,13 @@ An accepted control response is not proof that the target state has been reached
 | `cancelled` | Preparation ended before execution authorization with proven zero media effects. | none |
 | `failed` | The Tool cannot establish a trustworthy closed result; possible effects and takeover limits are explicit. | none |
 
-One localized item failure does not change `executing` to `failed`; independent safe work continues, then the Run enters `needs_attention` if unresolved items remain. A process crash is not a public state: restart reconciles durable intent with observed source and destination facts.
+One localized item failure does not change `executing` to `failed`; independent safe work continues, then the Run enters `needs_attention` if unresolved items remain. A process crash is not a public state. A Host with no local worker probes the cross-process execution lock and exposes an ownerless Run as `needs_attention` with an interruption reason; status never starts media effects. Explicit resume reconciles durable intent with source and destination facts. Unexpected worker exceptions surface and record `failed` with possible effects, rather than becoming an ordinary wait.
 
 Once `execute` is accepted, every ordinary terminal path publishes a Receipt, even if zero items completed. The exceptional `failed` state exists only when trustworthy accounting or Receipt publication cannot be recovered and must never be presented as completion.
 
 ## Operation and recovery invariants
 
-- Journal intent is durable before its file effect; observed outcome is durable before the next dependent effect.
+- Journal intent is durable before its file effect; observed outcome is durable before the next dependent effect. B keeps per-item intent/result commits and SQLite `synchronous=FULL`. Same-filesystem rename synchronizes both source and target parents; newly created directory links are synchronized. No batch commit or weaker synchronization is used for speed.
 - Repetition never creates a second effect for a completed item.
 - An existing target is recognized as prior completion only when it matches the exact operation verification basis and the source is absent.
 - Two active Runs cannot mutate overlapping sources or final targets.
@@ -205,6 +212,8 @@ The immutable Receipt binds the exact Run, Frozen Plan, prepared content, Human 
 Operation accounting partitions the planned operation set into exactly one result per item. `complete` requires every planned item to be completed and verified. A Human may cancel with residual items; the Receipt remains explicitly incomplete and lists every exception.
 
 A Receipt carries or binds an immutable operation ledger containing each Source Item's original resolved location, intended target, actual result, attempt facts, and verification conclusion. It may represent a large success set compactly as the deterministic planned set minus explicit exceptions, or use immutable physical segments. These representations remain one logical Receipt. Preservation discrepancies remain exact, addressable Receipt facts even when the ordinary success ledger is compact.
+
+For B, `source_verification` records the actual old finite digest comparison. `verification.profile=same_filesystem_identity_and_location` records object/state/location success, not full-byte success. Its existing text `basis` carries JSON-encoded target facts (device, inode, size_bytes, mtime_ns, ctime_ns as decimal strings, regular type and a statement); normal completion and recovered completion use the same encoding. Rewind checks these sealed facts and the finite evidence before creating a new prepared binding. Historical Receipts lacking usable facts stay immutable and readable, but cannot authorize a B rewind merely because current bytes match.
 
 The Receipt records a rewind deadline, not an eternal claim that rewind is currently safe. Rewind creates a new Run over the original Receipt's actual completed set and passes through the same preflight and Human authorization boundary. Both Receipts remain immutable.
 
@@ -276,6 +285,10 @@ The minimum local shape has one durable mutable Run authority and one immutable 
         ├── receipt.json
         └── <optional immutable operation segments>
 ```
+
+The B implementation uses private Apply store format 3 (including prepared ctime and the distinct cross-filesystem transfer digest). Existing format 2 Runs cannot be opened by this build or have their authorization silently reinterpreted; deployment and any retained-store transition require separate work after active Runs are handled with their original build. Historical Result, Plan and Receipt bytes remain unchanged.
+
+Tests cover controlled process interruption, journal errors and synchronization windows. They do not certify OS crash, reboot, sudden power loss, storage-controller caches or physical-media failure. Preserving `FULL` and synchronizing both directory parents does not itself establish those untested guarantees.
 
 The current runtime uses this layout, but it is not a portable contract. Table shape, journal encoding, file extension, segment threshold, locking, flush strategy, and garbage collection remain replaceable. The stable requirements are independent survival from media-volume loss, complete recovery semantics, independently readable Receipts, and no competing journal authority.
 
