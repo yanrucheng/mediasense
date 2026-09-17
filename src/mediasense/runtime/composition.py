@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import threading
 from collections.abc import Mapping
+from contextlib import ExitStack, nullcontext
 from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
@@ -15,6 +16,7 @@ from mediasense.apply import (
     ApplyReceiptReader,
     ApplyRunTool,
 )
+from mediasense.apply.execution import ApplyExecutorBusy
 from mediasense.capabilities.geo import (
     GeoAuthorization,
     GeoEffectEnvelope,
@@ -180,6 +182,7 @@ class DatasetRuntime:
             schema_path=contract_path_for("mediasense.apply.read"),
         )
         self._workers: dict[str, threading.Thread] = {}
+        self._apply_wakeups: set[str] = set()
         self._worker_lock = threading.Lock()
 
     def call(
@@ -220,34 +223,44 @@ class DatasetRuntime:
                 authorization=_geo_authorization(context),
             )
         elif name == "mediasense.apply.run":
-            if payload.get("action") == "status" and isinstance(
-                payload.get("run_ref"), str
-            ):
-                with self._worker_lock:
-                    worker = self._workers.get(f"apply:{payload['run_ref']}")
-                    if worker is None or not worker.is_alive():
-                        try:
-                            self.apply_run.executor.mark_owner_interrupted(
-                                payload["run_ref"]
-                            )
-                        except KeyError as error:
-                            if error.args != (payload["run_ref"],):
-                                raise
-                            # The Tool owns missing-Run validation.
-            response = self.apply_run.handle(
-                payload,
-                confirmation=_confirmation(context, ApplyConfirmationContext),
+            # Hold shared liveness before the Tool can accept a control, through
+            # scheduling. Worker liveness is acquired before this call releases
+            # its hold, so another Host cannot mistake startup for interruption.
+            activity = (
+                self.apply_run.executor.execution_activity(payload["run_ref"])
+                if payload.get("action") in {"execute", "resume", "cancel"}
+                and isinstance(payload.get("run_ref"), str)
+                else nullcontext()
             )
-            run_ref = response.get("run_ref")
-            if (
-                isinstance(run_ref, str)
-                and payload.get("action") in {"execute", "resume"}
-                and (
-                    response.get("target_state") == "executing"
-                    and response.get("observed_state") != "closed"
+            with activity:
+                if payload.get("action") == "status" and isinstance(
+                    payload.get("run_ref"), str
+                ):
+                    with self._worker_lock:
+                        worker = self._workers.get(f"apply:{payload['run_ref']}")
+                        if worker is None or not worker.is_alive():
+                            try:
+                                self.apply_run.executor.mark_owner_interrupted(
+                                    payload["run_ref"]
+                                )
+                            except KeyError as error:
+                                if error.args != (payload["run_ref"],):
+                                    raise
+                                # The Tool owns missing-Run validation.
+                response = self.apply_run.handle(
+                    payload,
+                    confirmation=_confirmation(context, ApplyConfirmationContext),
                 )
-            ):
-                self._schedule_apply(run_ref)
+                run_ref = response.get("run_ref")
+                if (
+                    isinstance(run_ref, str)
+                    and payload.get("action") in {"execute", "resume", "cancel"}
+                    and (
+                        response.get("target_state") in {"executing", "verifying"}
+                        and response.get("observed_state") != "closed"
+                    )
+                ):
+                    self._schedule_apply(run_ref)
         elif name == "mediasense.apply.read":
             response = self.apply_read.read(payload)
         else:
@@ -574,19 +587,54 @@ class DatasetRuntime:
         with self._worker_lock:
             current = self._workers.get(worker_ref)
             if current is not None and current.is_alive():
+                self._apply_wakeups.add(worker_ref)
                 return
-            worker = threading.Thread(
-                target=self._advance_apply,
-                args=(worker_ref, run_ref),
-                name=f"mediasense-{run_ref}",
-                daemon=True,
-            )
-            self._workers[worker_ref] = worker
-            worker.start()
+            activity = ExitStack()
+            try:
+                # Acquire in the caller, not in the thread after it starts.
+                activity.enter_context(
+                    self.apply_run.executor.execution_activity(run_ref)
+                )
+                worker = threading.Thread(
+                    target=self._advance_apply,
+                    args=(worker_ref, run_ref, activity),
+                    name=f"mediasense-{run_ref}",
+                    daemon=True,
+                )
+                self._workers[worker_ref] = worker
+                worker.start()
+            except BaseException:
+                self._workers.pop(worker_ref, None)
+                activity.close()
+                raise
 
-    def _advance_apply(self, worker_ref: str, run_ref: str) -> None:
+    def _advance_apply(
+        self, worker_ref: str, run_ref: str, activity: ExitStack
+    ) -> None:
         try:
-            self.apply_run.run_pending(run_ref)
+            while True:
+                with self._worker_lock:
+                    self._apply_wakeups.discard(worker_ref)
+                busy = False
+                try:
+                    self.apply_run.run_pending(run_ref)
+                except ApplyExecutorBusy:
+                    # This admission attempt has no effects. Retry only if a
+                    # distinct explicit control arrived while it was returning.
+                    busy = True
+                # run_pending has released the cross-Host owner lock. A control
+                # accepted as this worker was exiting must still have an owner.
+                # Serialize this handoff with local scheduling; another Host can
+                # now acquire the file lock itself if its control arrives later.
+                with self._worker_lock:
+                    if worker_ref in self._apply_wakeups or (
+                        not busy
+                        and self.apply_run.run_store.get_run(run_ref).state
+                        in {"executing", "verifying"}
+                    ):
+                        continue
+                    self._workers.pop(worker_ref, None)
+                    return
         except Exception:
             # Unexpected implementation failures are not ordinary recoverable waits.
             with self.apply_run.run_store._connect() as connection:
@@ -603,8 +651,13 @@ class DatasetRuntime:
                 connection.commit()
             raise
         finally:
-            with self._worker_lock:
-                self._workers.pop(worker_ref, None)
+            try:
+                with self._worker_lock:
+                    if self._workers.get(worker_ref) is threading.current_thread():
+                        self._workers.pop(worker_ref, None)
+                        self._apply_wakeups.discard(worker_ref)
+            finally:
+                activity.close()
 
 
 def _execution_start_error(

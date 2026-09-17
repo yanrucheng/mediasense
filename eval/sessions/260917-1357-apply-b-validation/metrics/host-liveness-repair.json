@@ -1,0 +1,44 @@
+{
+  "base_commit": "432559864d37bfb23a889e3418edb691d3d390fd",
+  "base_evidence": "host-control-repair.json",
+  "base_wheel_sha256": "54b5df13697f42b2f538b5d10c83f22a84e42f927494857f00424b3d3e3010d7",
+  "wheel_path": "/private/tmp/mediasense-apply-liveness-build/mediasense-0.11.0-py3-none-any.whl",
+  "wheel_sha256": "3a4dc6e97375baf8647e4142fed2edacf20cc775e028abbde32cd4a8d3296c9d",
+  "changed_source_sha256": {
+    "src/mediasense/apply/execution.py": "0469302530219ac28bdbc2893b17689d39d3d4eab5b8c1f2f760ede6bd2292b3",
+    "src/mediasense/runtime/composition.py": "790803ab70588149954dd2a3be14392f22849f3bf10a37c963b7fb8dd804c665"
+  },
+  "unchanged_source_resource_files": 141,
+  "source_wheel_matching_files": 143,
+  "before_regressions": {
+    "failed": 2,
+    "seconds": 1.94,
+    "windows": [
+      "control_committed_before_scheduling",
+      "cancel_response_returned_before_execution_lock"
+    ]
+  },
+  "host_tests": {
+    "passed": 15,
+    "additional_cases": 6,
+    "seconds": 12.79
+  },
+  "wheel_related_tests": {
+    "passed": 190,
+    "deselected": 3,
+    "seconds": 31.16
+  },
+  "stdio_probe": "host-liveness-stdio.json",
+  "full_suite": {
+    "passed": 1583,
+    "deselected": 17,
+    "seconds": 381.53,
+    "command": "PYTHONPATH=src:/private/tmp/mediasense-apply-liveness-wheel .venv/bin/python -m pytest -q --tb=short --maxfail=3"
+  },
+  "policy": "B; formal JSON interfaces and Run store format 3 unchanged",
+  "performance": "not remeasured; media verification and per-item commit paths unchanged",
+  "installation_and_real_media": "not performed",
+  "formal_apply_json": "unchanged",
+  "lint": "ruff check passed",
+  "doc_links": "4 authority/document tests passed"
+}

@@ -11,7 +11,7 @@ baseline_ref: "260916-2258-first-apply-acceptance"
 
 # Apply B 开发与隔离验证
 
-已完成[已选 B](../../../docs/design/design-260917-1150-apply-safety-efficiency.md)的本地开发、隔离安全测试和三类负载测量。正式保证维护于 [Apply 合约](../../../docs/spec/contract/apply/index.md)。原始工作区的设计、Plan/PreCheck Skill、验收报告及索引改动保留；过程中另出现的 README 和 Intel Mac 交接文档不属于本次修改。
+本页保留[已选 B](../../../docs/design/design-260917-1150-apply-safety-efficiency.md)的首轮本地开发、隔离安全测试和三类负载测量。用户独立验收确认主要实现与性能证据，但因下述两处 Host 控制问题暂不通过整体验收；后续补修及新构建见本页末节，首轮测试和摘要不覆盖该补修。正式保证维护于 [Apply 合约](../../../docs/spec/contract/apply/index.md)。原始工作区的设计、Plan/PreCheck Skill、验收报告及索引改动保留；过程中另出现的 README 和 Intel Mac 交接文档不属于本次修改。
 
 本次未发布、未升级日常安装，未执行真实媒体 Apply。所有源文件由测试生成，位于 `/private/tmp/mediasense-apply-b-*` 或 pytest 的独立临时目录。不存在真实媒体或香港 fixture 的读取/移动。
 
@@ -123,3 +123,62 @@ rtk proxy env PYTHONPATH=src:/private/tmp/mediasense-apply-b-final-wheel \
 ```
 
 全仓 Geo/Plan 的 loopback HTTP 测试需要相应本机权限；权限问题不能改写为产品通过。测试与基准入口都是已有 Python Tool / MCP stdio，无线上 API。`outputs/` 保留原始日志并被 Git 忽略；媒体、工作数据库和模型输出不进入 Git。Git 仅保留报告、复验配方和紧凑指标。
+
+
+## Host 控制补修（2026-09-17，待用户独立复验）
+
+用户复核指出两处原测试未覆盖的生产衔接：暂停后 `cancel` 没有执行者收尾；另一 Host 重试遇到已持有的 Run 锁，被错误写成 `failed`。本轮只修复执行控制，方案仍为 B，前述有限指纹、同卷无内容扫描、逐项 FULL 提交和三份正式 JSON 定义保持不变。
+
+修复如下：
+
+- Host 为已授权取消的 `verifying` 目标启动收尾。worker 离开前检查已接受的继续/收尾需求；对本 Host 在途 worker 的新调用保留一个内存唤醒标记，防止取消恰好落在退出窗口而丢失。它不持有业务授权，不新增队列状态、Batch 或 Run 存储字段。
+- 迟到的暂停状态写入只能在当前取消/恢复尚未替代该暂停请求时发生。取消中断后的 `resume` 保留 durable cancel 标记及原有逐项结果，不恢复尚未执行的移动，也不将失败结果重写成未尝试。取消不能被 pause 撤销。
+- 文件锁竞争使用明确的内部 `ApplyExecutorBusy` 类型。一次竞争失败的执行尝试直接结束；只有随后新收到的明确控制才触发下一次尝试，不对同一竞争自动忙重试，不写共享 Run 为失败。真正的实现异常仍记为 `failed` 并向运行边界暴露，即使异常文本恰好与锁竞争信息相同。
+
+新增 [test_apply_host_controls.py](../../../tests/test_apply_host_controls.py) 的 **9 项测试全部通过**。测试使用同一隔离 Dataset 上的两个独立 RuntimeHost、真实 SQLite、真实 flock 和临时文件；用事件卡住真实 worker 的边界。所有 execute/pause/cancel/resume 和结果读取均经过 Host，测试不调用 `advance()` 补做收尾。
+
+覆盖同 Host/另一 Host 在暂停后取消；第二 Host 的 execute 重放及 resume 锁竞争；暂停写入前、worker 正退出及竞争者正退出时的取消；子进程在取消回执生成前 `os._exit(42)` 后由新 Host resume；以及真正 worker 故障。取消场景均只完成已在途的第 1 项，余下第 2 项留在源位置，Receipt 为 `human_cancelled`、`incomplete`，逐项次数不重复。
+
+把两项直接反例放回 `432559864d37bfb23a889e3418edb691d3d390fd` 的源码快照，结果为 **2 failed**：一个无法关闭、一个仍在工作却变成 failed。这确认了测试对原问题敏感，而非依赖修复后的内部实现断言。
+
+新的隔离 wheel 相关回归 **184 passed，3 deselected，26.94 秒**；冻结源码的全仓回归 **1,577 passed，17 deselected，374.62 秒**。文档/合约链接检查 4 项通过，ruff 与 diff whitespace 检查通过。独立 stdio 探针记录见 [host-control-repair-stdio.json](metrics/host-control-repair-stdio.json)。补修指标与确切源码摘要见 [host-control-repair.json](metrics/host-control-repair.json)，原日志仍仅保留于 outputs。
+
+新 wheel SHA-256：`54b5df13697f42b2f538b5d10c83f22a84e42f927494857f00424b3d3e3010d7`，位于 `/private/tmp/mediasense-apply-host-control-build/mediasense-0.11.0-py3-none-any.whl`。与首轮 143 个源码/资源摘要比较，只有 `apply/execution.py` 与 `runtime/composition.py` 两份代码变化；其余 141 份不变，当前 143 份均与新 wheel 相同。旧 wheel 身份与性能数据保留，不能把它们当作新 wheel 的独立验收。本次未重测性能、未发布安装、未执行真实媒体操作，掉电恢复范围没有扩大。
+
+复验补修场景：
+
+```bash
+rtk proxy env PYTHONPATH=src .venv/bin/python -m pytest -q tests/test_apply_host_controls.py
+```
+
+
+## 跨 Host 启动窗口补修（2026-09-17，待独立复验）
+
+用户再次复核确认前一节的两处直接问题已修复，但固定交错发现：A 接受 cancel 后，收尾线程尚未取得执行锁；B 的 status 把空闲锁当成 owner 消失，将 Run 写成 needs_attention；A 随后退出，取消停住。前一节的 1,577/184 项通过记录和旧构建摘要保留，不代表已经覆盖这个启动窗口。
+
+本轮协调以既有 Run 为单位，区分两种事实：**控制调用/worker 仍然存活**，以及**当前正在独占执行效果**。在已有 locks 目录内增加 OS 共享存活锁：
+
+1. Host 在可能接受 execute/resume/cancel 的调用之前取得共享锁，并持有至调度完成。
+2. 调度方在 Thread.start 之前取得 worker 的共享锁，将句柄交给 worker；调用方与 worker 的持有期重叠。worker 持有至整个循环和退出清理结束，覆盖每次执行锁之间的空隙。线程启动失败会关闭已取得的句柄。
+3. status 只有在能排他取得存活锁、同时取得原执行锁，并重新核对当前状态时，才能记录中断。与观察者交错的新控制必须先取得共享锁，才能改变 Run 状态，因此不会在观察者判定期间悄悄变成“已接受但无保护”。
+4. 进程退出由内核释放锁；不依据文件存在、PID、宽限秒数或锁暂时空闲来猜测存活。真正的 needs_attention 仍按原恢复规则处理，没有绕过该状态继续移动。
+
+两把锁只承担同一 Run 的内部协调，存活锁不授予执行权限、不代替排他效果锁、不新增业务实体/Tool/公开状态，也不改变 Run 存储格式 3。源指纹、同卷无媒体内容扫描、逐项 FULL 提交、三份正式 JSON 定义及 B 方案保持不变。
+
+[Host 控制测试](../../../tests/test_apply_host_controls.py)现在 **15 项通过**，包含原 9 项和新增 6 个场景：
+
+| 固定交错或故障 | 结果 |
+| --- | --- |
+| A 已写入取消，尚未调度 worker；B 查询 status | 保持 verifying；释放 A 后自动产生取消 Receipt |
+| cancel 已返回，A 卡在取得执行锁之前；B 查询 status | 同进程第二 Host 和独立进程 Host 均保持 verifying；无需额外 resume，剩余文件不移动 |
+| execute/resume 已接受，worker 尚未取得执行锁；B 查询 status | 保持 executing，释放后由原请求完成 |
+| A 在取得执行锁之前真正 os._exit | 存活锁释放，B 能识别 needs_attention；显式 resume 保留取消意图并收尾 |
+| Thread.start 真正失败 | 调用报错、句柄清理；B 能识别无 owner，并在显式恢复后完成取消 |
+
+新增的两个启动窗口用上一节审阅过的源码快照运行均失败（**2 failed，1.94 秒**），直接复现 B 将正常启动错误改为 needs_attention；修复后通过。所有正常场景均由 Host 调度并取得最终回执，没有手动 advance 或额外 resume。只有真实退出/启动失败的恢复场景明确调用 resume。
+
+新的隔离 wheel 相关回归 **190 passed，3 deselected，31.16 秒**；冻结源码全仓回归 **1,583 passed，17 deselected，381.53 秒**。文档/合约检查 4 项通过，ruff 和 diff whitespace 检查通过。真正 stdio 子进程探针也通过：7 个 Tool、伪造 authority 拒绝、一次整批确认、重放不重复确认、原 Result 不变、回执与字节一致，见 [host-liveness-stdio.json](metrics/host-liveness-stdio.json)。
+
+新构建为 `/private/tmp/mediasense-apply-liveness-build/mediasense-0.11.0-py3-none-any.whl`，SHA-256：`3a4dc6e97375baf8647e4142fed2edacf20cc775e028abbde32cd4a8d3296c9d`。143 个源码/资源文件与该 wheel 一致，相比前次构建仍仅 execution.py、composition.py 两份实现变化，其余 141 份相同。详细摘要及验证记录见 [host-liveness-repair.json](metrics/host-liveness-repair.json)。原性能数据及历次构建摘要均保留，本轮未重测或扩大性能声明。
+
+这套跨 Host 协调要求参与的 Host 都运行本次修复；不能从相同版本字符串推断旧进程已支持。活着但挂起的 Host 不会因经过若干秒就被判死。本轮未发布安装、未执行真实媒体操作；进程退出测试不认证突然断电或物理存储故障。

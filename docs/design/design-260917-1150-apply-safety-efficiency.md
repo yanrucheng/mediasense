@@ -405,3 +405,9 @@ MCP 外层仍使用 `dataset_ref` 和 `request`。Agent 不负责逐项执行，
 实现复用有限指纹、既有身份/位置核验 profile、逐项意图和结果、原生不覆盖 rename 及不可变 Receipt；补齐 rename 两端父目录同步。MCP/CLI 普通 authority 的拒绝属于独立适配器安全修复，Host 客户端确认绑定整批内容，匹配请求重放复用持久授权。没有加入 C、file_state、transfer_policy、核验字段改名、Batch 或新 Tool。
 
 现有 Run 内保存准备时 ctime 和跨卷专用完整传输 digest，私有 Apply store 格式升为 3。旧格式 2 的活动 Run 不由新构建打开或迁移，旧 Result/Plan/Receipt 不改写；保留 Dataset 的部署过渡另行处理。正常同卷只对照旧有限指纹，后置核验的实际目标状态存入既有 Receipt verification.basis，供 rewind 检查。突然断电、系统重启和物理介质损坏未认证。
+
+
+独立验收随后确认 B 的主要实现和性能证据，但指出暂停后取消没有 Host 收尾，以及第二 Host 的正常锁竞争被误记为失败。后续补修只调整既有 worker 调度、取消意图保持与内部锁竞争分类，并补上真实 Host/跨进程恢复测试；没有重开 B 的核验保证或接口选择。当前构建、回归结果和待独立复验状态以 [Host 控制补修记录](../../eval/sessions/260917-1357-apply-b-validation/report.md#host-控制补修2026-09-17待用户独立复验) 为准，首轮自验不代表这两个边界已经验收通过。
+
+
+随后独立复核进一步指出接受控制至 worker 取锁之间的跨 Host 启动窗口。补修在既有 Run 的锁目录内区分共享存活证明与原排他执行锁，以重叠持有覆盖控制接受、线程启动、接管和退出；中断观察必须先排除两类活动，不能仅凭执行锁空闲判死。无超时猜测、无新公开状态、无 Run 格式变化。固定双 Host/独立进程交错、真实退出及启动失败的证据见 [跨 Host 启动窗口补修](../../eval/sessions/260917-1357-apply-b-validation/report.md#跨-host-启动窗口补修2026-09-17待独立复验)。

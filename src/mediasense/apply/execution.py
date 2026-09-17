@@ -32,6 +32,10 @@ class ApplyExecutionError(RuntimeError):
     """Execution cannot safely continue under the current Run facts."""
 
 
+class ApplyExecutorBusy(ApplyExecutionError):
+    """A live owner is accepting or advancing work; this contender made no effects."""
+
+
 class ApplyExecutor:
     """Execute prepared Runs while keeping all mutable truth in their store."""
 
@@ -61,17 +65,18 @@ class ApplyExecutor:
     ) -> dict[str, object]:
         """Authorize exact prepared content and synchronously advance the Run."""
 
-        response = self.authorize(
-            run_ref=run_ref,
-            prepared_revision=prepared_revision,
-            prepared_content_identity=prepared_content_identity,
-            request_id=request_id,
-            authorization_binding=authorization_binding,
-        )
-        if response["observed_state"] == "closed":
+        with self.execution_activity(run_ref):
+            response = self.authorize(
+                run_ref=run_ref,
+                prepared_revision=prepared_revision,
+                prepared_content_identity=prepared_content_identity,
+                request_id=request_id,
+                authorization_binding=authorization_binding,
+            )
+            if response["observed_state"] == "closed":
+                return self.run_store.status(run_ref)
+            self.advance(run_ref)
             return self.run_store.status(run_ref)
-        self.advance(run_ref)
-        return self.run_store.status(run_ref)
 
     def authorize(
         self,
@@ -180,10 +185,14 @@ class ApplyExecutor:
                 "verifying",
             }:
                 raise ApplyExecutionError(f"Run cannot resume from {run['state']}")
-            if connection.execute(
-                "SELECT 1 FROM metadata_discrepancies WHERE run_ref = ? AND accepted_authorization_ref IS NULL LIMIT 1",
-                (run_ref,),
-            ).fetchone():
+            cancelling = run["control_requested"] == "cancel"
+            if (
+                not cancelling
+                and connection.execute(
+                    "SELECT 1 FROM metadata_discrepancies WHERE run_ref = ? AND accepted_authorization_ref IS NULL LIMIT 1",
+                    (run_ref,),
+                ).fetchone()
+            ):
                 raise ApplyExecutionError("resume cannot authorize a metadata loss")
             connection.execute(
                 "DELETE FROM findings WHERE run_ref = ? AND code = 'executor_interrupted'",
@@ -191,22 +200,25 @@ class ApplyExecutor:
             )
             connection.execute(
                 """
-                UPDATE runs SET state = 'executing', control_requested = NULL,
+                UPDATE runs SET state = 'executing',
+                    control_requested = CASE WHEN control_requested = 'cancel'
+                        THEN 'cancel' ELSE NULL END,
                     resume_count = resume_count + 1
                 WHERE run_ref = ?
                 """,
                 (run_ref,),
             )
-            connection.execute(
-                """
-                UPDATE run_items SET execution_status = 'not_attempted'
-                WHERE run_ref = ? AND (
-                    execution_status = 'failed'
-                    OR (execution_status = 'indeterminate' AND attempts = 0)
+            if not cancelling:
+                connection.execute(
+                    """
+                    UPDATE run_items SET execution_status = 'not_attempted'
+                    WHERE run_ref = ? AND (
+                        execution_status = 'failed'
+                        OR (execution_status = 'indeterminate' AND attempts = 0)
+                    )
+                    """,
+                    (run_ref,),
                 )
-                """,
-                (run_ref,),
-            )
             connection.commit()
         return self._control_response("resume", run_ref, str(run["state"]), "executing")
 
@@ -214,6 +226,10 @@ class ApplyExecutor:
         with self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
             run = self._run(connection, run_ref)
+            if run["control_requested"] == "cancel":
+                raise ApplyExecutionError(
+                    "pause cannot revoke an accepted cancellation"
+                )
             if run["state"] == "paused":
                 connection.commit()
                 return self._control_response("pause", run_ref, "paused", "paused")
@@ -266,7 +282,7 @@ class ApplyExecutor:
     def advance(self, run_ref: str) -> None:
         """Reconcile pending intent, issue safe effects, and close when complete."""
 
-        with self._run_lock(run_ref):
+        with self.execution_activity(run_ref), self._run_lock(run_ref):
             self._advance_locked(run_ref)
 
     def _advance_locked(self, run_ref: str) -> None:
@@ -317,16 +333,35 @@ class ApplyExecutor:
 
     @contextmanager
     def _run_lock(self, run_ref: str):
+        with self._file_lock(run_ref, "lock", fcntl.LOCK_EX | fcntl.LOCK_NB):
+            yield
+
+    @contextmanager
+    def execution_activity(self, run_ref: str):
+        """Keep a live call/worker observable across execution-lock gaps.
+
+        Shared holders may accept controls while another worker has the effect
+        lock. An interruption observer briefly takes this lock exclusively.
+        The shared acquisition waits for such an observer to finish *before*
+        the caller can commit a new control. Never upgrade this lock in place.
+        """
+        with self._file_lock(run_ref, "activity.lock", fcntl.LOCK_SH):
+            yield
+
+    @contextmanager
+    def _file_lock(self, run_ref: str, suffix: str, operation: int):
         lock_root = self.run_store.database_path.parent / "locks"
         lock_root.mkdir(parents=True, exist_ok=True)
         token = canonical_identity(run_ref).removeprefix("sha256:")
-        lock_path = lock_root / f"{token}.lock"
+        lock_path = lock_root / f"{token}.{suffix}"
         with lock_path.open("a+b") as handle:
             try:
-                fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                fcntl.flock(handle.fileno(), operation)
             except BlockingIOError as error:
-                raise ApplyExecutionError(
+                raise ApplyExecutorBusy(
                     "another executor is already advancing this Run"
+                    if suffix == "lock"
+                    else "a live Host call or worker owns this Run"
                 ) from error
             try:
                 yield
@@ -334,14 +369,19 @@ class ApplyExecutor:
                 fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
     def mark_owner_interrupted(self, run_ref: str) -> None:
-        """A Host with no local worker probes the cross-process owner lock.
+        """Prove that no Host call, worker, or execution owns this Run.
 
         This only records an interruption; status never starts media effects.
         """
         if self.run_store.get_run(run_ref).state not in {"executing", "verifying"}:
             return
         try:
-            with self._run_lock(run_ref):
+            with (
+                self._file_lock(
+                    run_ref, "activity.lock", fcntl.LOCK_EX | fcntl.LOCK_NB
+                ),
+                self._run_lock(run_ref),
+            ):
                 with self._connect() as connection:
                     connection.execute("BEGIN IMMEDIATE")
                     run = self._run(connection, run_ref)
@@ -359,9 +399,8 @@ class ApplyExecutor:
                         ),
                     )
                     connection.commit()
-        except ApplyExecutionError as error:
-            if str(error) != "another executor is already advancing this Run":
-                raise
+        except ApplyExecutorBusy:
+            pass
 
     def _has_pending_metadata_decision(self, run_ref: str) -> bool:
         with self._connect() as connection:
@@ -832,6 +871,16 @@ class ApplyExecutor:
         self, run_ref: str, state: str, *, closure: str | None = None
     ) -> None:
         with self._connect() as connection:
+            if state == "paused":
+                # A newer resume/cancel can arrive after the worker read pause.
+                # Do not overwrite that control's state while leaving the loop.
+                connection.execute(
+                    "UPDATE runs SET state = 'paused' WHERE run_ref = ? "
+                    "AND control_requested = 'pause'",
+                    (run_ref,),
+                )
+                connection.commit()
+                return
             connection.execute(
                 "UPDATE runs SET state = ?, closure = COALESCE(?, closure) WHERE run_ref = ?",
                 (state, closure, run_ref),

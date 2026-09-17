@@ -1,0 +1,11 @@
+{
+  "server_version": "0.11.0",
+  "tool_count": 7,
+  "forged_authority_rejected": true,
+  "whole_preparation_confirmations": 1,
+  "replay_without_reconfirmation": true,
+  "immutable_result_unchanged": true,
+  "receipt_complete": true,
+  "isolated_result_bytes_match": true,
+  "fixture_sha256": "cc0dff82062dc04b21df7f138fdbb3923732a3e5154d686f20e609291b96e3bb"
+}

@@ -1,0 +1,41 @@
+{
+  "base_commit": "432559864d37bfb23a889e3418edb691d3d390fd",
+  "base_evidence": "code-identity.json",
+  "wheel_sha256": "54b5df13697f42b2f538b5d10c83f22a84e42f927494857f00424b3d3e3010d7",
+  "wheel_path": "/private/tmp/mediasense-apply-host-control-build/mediasense-0.11.0-py3-none-any.whl",
+  "changed_source_sha256": {
+    "src/mediasense/apply/execution.py": "de2e69b040d3dea113ba12c87e9bbf38b89098e0c37fd4d731b8eb622136b083",
+    "src/mediasense/runtime/composition.py": "7a633e5507b55ba471148122e54d2c85cd1838efa379d891e072011be9670c70"
+  },
+  "unchanged_source_resource_files": 141,
+  "source_wheel_matching_files": 143,
+  "before_regressions": {
+    "failed": 2,
+    "seconds": 14.28,
+    "cases": [
+      "paused_cancel_without_manual_advance",
+      "second_host_execute_while_first_owner_holds_lock"
+    ]
+  },
+  "new_host_control_tests": {
+    "passed": 9,
+    "seconds": 7.12
+  },
+  "wheel_related_tests": {
+    "passed": 184,
+    "deselected": 3,
+    "seconds": 26.94
+  },
+  "full_suite": {
+    "passed": 1577,
+    "deselected": 17,
+    "seconds": 374.62,
+    "command": "PYTHONPATH=src:/private/tmp/mediasense-apply-host-control-wheel .venv/bin/python -m pytest -q --tb=short --maxfail=3"
+  },
+  "performance": "not remeasured; original accepted measurements retained",
+  "release_installation_real_media": "not performed",
+  "formal_apply_json": "unchanged from base commit",
+  "lint": "ruff check passed",
+  "doc_links": "4 authority/document tests passed",
+  "stdio_probe": "host-control-repair-stdio.json"
+}
